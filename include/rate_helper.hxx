@@ -41,10 +41,19 @@ using RateFuncVariant = std::variant<OneDRateFunc, TwoDRateFunc>;
 
 /// Struct to hold final (possibly averaged) reaction rate and collision frequency fields that get returned by calc_rates()
 struct RateData {
+public:
+  RateData(const std::vector<std::string>& reactant_names)
+      : collision_frequencies(reactant_names.size()) {
+    for (size_t i = 0; i < reactant_names.size(); ++i) {
+      reactant_indices[reactant_names[i]] = i;
+    }
+  }
+
   /// The reaction rate Field3D
   Field3D rate;
+
   /// Collision frequencies keyed by reactant name
-  std::map<std::string, Field3D> collision_frequencies;
+  std::vector<Field3D> collision_frequencies;
 
   /**
    * @brief Extract collision frequency for a reactant.
@@ -54,13 +63,17 @@ struct RateData {
    * @throws BoutException if reactant name not found
    */
   const Field3D& coll_freq(const std::string& reactant_name) const {
-    auto it = this->collision_frequencies.find(reactant_name);
-    if (it == this->collision_frequencies.end()) {
+    auto it = this->reactant_indices.find(reactant_name);
+    if (it == this->reactant_indices.end()) {
       throw BoutException(
           fmt::format("Collision frequency not found for reactant '{}'", reactant_name));
     }
-    return it->second;
+    return collision_frequencies[it->second];
   }
+
+private:
+  /// Reactant indices keyed by reactant name
+  std::map<std::string, size_t> reactant_indices;
 };
 
 // This is a workaround before CWG2518/P2593R1, taken from cppreference.com
@@ -130,10 +143,11 @@ struct RateHelper {
                       bool do_averaging = true) {
 
     // Initialize result data structure
-    RateData result;
+    RateData result(reactant_names);
     result.rate = emptyFrom(*this->rate_params[0]);
-    for (const std::string& reactant : this->reactant_names) {
-      result.collision_frequencies[reactant] = emptyFrom(*this->rate_params[0]);
+    for (std::size_t reactant_idx = 0; reactant_idx < this->reactant_names.size();
+         ++reactant_idx) {
+      result.collision_frequencies[reactant_idx] = emptyFrom(*this->rate_params[0]);
     }
 
     // Temporary storage for densities, rate and collision frequencies associated with a cell
@@ -205,9 +219,7 @@ struct RateHelper {
                                + (Ji + Jp) / (12. * Ji) * cell_props.rate.right;
               for (std::size_t reactant_idx = 0; reactant_idx < this->num_reactants;
                    reactant_idx++) {
-
-                const std::string& reactant_name = this->reactant_names[reactant_idx];
-                result.collision_frequencies[reactant_name][i] =
+                result.collision_frequencies[reactant_idx][i] =
                     4. / 6 * cell_props.collision_freqs[reactant_idx].centre
                     + (Ji + Jm) / (12. * Ji)
                           * cell_props.collision_freqs[reactant_idx].left
@@ -219,8 +231,7 @@ struct RateHelper {
               result.rate[i] = cell_props.rate.centre;
               for (std::size_t reactant_idx = 0; reactant_idx < this->num_reactants;
                    reactant_idx++) {
-                const std::string& reactant_name = this->reactant_names[reactant_idx];
-                result.collision_frequencies[reactant_name][i] =
+                result.collision_frequencies[reactant_idx][i] =
                     cell_props.collision_freqs[reactant_idx].centre;
               }
             }

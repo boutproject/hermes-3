@@ -238,7 +238,7 @@ void Reaction::transform_impl(GuardedOptions& state) {
                                   .getRegion("RGN_NOBNDRY");
 
   // Create rate helper and compute reaction rate, collision frequencies
-  RateData rate_calc_results;
+  RateData rate_calc_results(reactant_names);
   RateParamsTypes rate_params_type = this->rate_data->get_fit_type();
   if (rate_params_type == RateParamsTypes::ET) {
     throw BoutException("RateParamsTypes::ET not implemented");
