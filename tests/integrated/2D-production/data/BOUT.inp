@@ -114,7 +114,14 @@ bndry_all = neumann   # All boundaries neumann
 
 [d]
 type = neutral_mixed, neutral_boundary
-flux_limit = true
+flux_limit = 1.0
+
+# The case was generated with these values, but later
+# the defaults were changed to 10 and 100, respectively.
+# Setting them to the old values for now - please remove
+# options on next regenerate to restore default values.
+limiter_gradient_floor = 9.787
+limiter_gradient_ceiling = 97.87
 
 AA = 2
 diagnose = true

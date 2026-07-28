@@ -302,6 +302,12 @@ auto runDnnTest(Options options, bool with_collisions = false) {
     state["species"]["d"]["collision_frequencies"]["d_d+_cx"] = 100.0;
   }
 
+  // Effectively disable the gradient floors - this is necessary because
+  // those are tuned to realistic conditions and the tests only check limiter
+  // behaviour at the moment.
+  state["species"]["d"]["limiter_gradient_floor"] = 1e-10;
+  state["species"]["d"]["limiter_gradient_ceiling"] = 1e10;
+
   component.finally(state);
 
   // Construct state with norms for outputVars to add diagnostics to
@@ -357,7 +363,7 @@ TEST_F(NeutralMixedTest, DnnLooseLimit) {
                                         {{"type", "neutral_mixed"},
                                          {"diagnose", true},
                                          {"AA", 2.0},
-                                         {"flux_limit", 1000}}}});
+                                         {"flux_limit", 1e6}}}});
 
   BOUT_FOR_SERIAL(i, Dnn.getRegion("RGN_NOBNDRY")) {
     EXPECT_GT(Dmax[i], Dunl[i]);

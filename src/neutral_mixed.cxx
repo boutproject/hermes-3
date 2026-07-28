@@ -109,14 +109,16 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
           .doc("Floor for |grad log Pn| in the D limiter "
                "denominator in SI [1/m]. Higher values improve robustness "
                "in shallow Pn gradients but may affect the answer. ")
-          .withDefault(10.0 * meters);
+          .withDefault(10.0)
+      * meters;
 
   limiter_gradient_ceiling =
       options["limiter_gradient_ceiling"]
           .doc("Ceiling for |grad log Pn| in the D limiter "
                "denominator in SI [1/m]. Lower values can improve robustness "
                "in steep Pn gradients but may affect the answer. ")
-          .withDefault(100.0 * meters);
+          .withDefault(100.0)
+      * meters;
 
   flux_limit =
       options["flux_limit"]
