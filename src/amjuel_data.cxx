@@ -13,7 +13,7 @@ namespace hermes {
 
 /**
  * @brief Evaluate an Amjuel double polynomial fit in n and T.
- * This function user's Honer's method rather than the formulation on page 20 of amjuel.pdf.
+ * This function user's Horner's method rather than the formulation on page 20 of amjuel.pdf.
  *
  * @param T temperature in eV
  * @param n number density in m^-3
