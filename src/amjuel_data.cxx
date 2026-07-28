@@ -43,6 +43,7 @@ eval_amjuel_nT_fit(BoutReal T, BoutReal n,
     result = result * logT + row_result;
   }
 
+  // Note: convert cm^3 to m^3
   return exp(result) * 1e-6;
 }
 

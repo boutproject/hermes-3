@@ -145,14 +145,15 @@ struct RateHelper {
           auto J = result.rate.getCoordinates()->J;
           BOUT_FOR(i, region) {
             // Get densities for this cell
-            add_densities(i, cell_props, do_averaging);
+            collect_densities(i, cell_props, do_averaging);
 
             using RateFuncType = std::decay_t<decltype(rate_calc_func)>;
             if constexpr (std::is_same_v<RateFuncType, OneDRateFunc>) {
               // 1D rate function
               if constexpr (RateParamsType == RateParamsTypes::T) {
                 // Get rate params
-                DataTriple T_data = compute_rate_param(0, i, do_averaging);
+                constexpr std::size_t T_idx = 0;
+                DataTriple T_data = compute_rate_param(T_idx, i, do_averaging);
 
                 // Compute rate(s)
                 cell_props.rate.centre = rate_calc_func(T_data.centre);
@@ -167,9 +168,11 @@ struct RateHelper {
             } else if constexpr (std::is_same_v<RateFuncType, TwoDRateFunc>) {
               // 2D rate function
               if constexpr (RateParamsType == RateParamsTypes::nT) {
+                constexpr std::size_t ne_idx = 0;
+                constexpr std::size_t Te_idx = 1;
                 // Get rate params
-                DataTriple ne_data = compute_rate_param(0, i, do_averaging);
-                DataTriple Te_data = compute_rate_param(1, i, do_averaging);
+                DataTriple ne_data = compute_rate_param(ne_idx, i, do_averaging);
+                DataTriple Te_data = compute_rate_param(Te_idx, i, do_averaging);
 
                 // Compute rate(s)
                 cell_props.rate.centre = rate_calc_func(ne_data.centre, Te_data.centre);
@@ -189,7 +192,7 @@ struct RateHelper {
             }
 
             // Apply density factors to rate and compute collision frequencies
-            add_density_factors(cell_props, do_averaging);
+            apply_density_factors(cell_props, do_averaging);
 
             if (do_averaging) {
               // Compute averaged rate, collision frequencies and store in result
@@ -203,7 +206,7 @@ struct RateHelper {
               for (std::size_t reactant_idx = 0; reactant_idx < this->num_reactants;
                    reactant_idx++) {
 
-                std::string reactant_name = this->reactant_names[reactant_idx];
+                const std::string& reactant_name = this->reactant_names[reactant_idx];
                 result.collision_frequencies[reactant_name][i] =
                     4. / 6 * cell_props.collision_freqs[reactant_idx].centre
                     + (Ji + Jm) / (12. * Ji)
@@ -216,7 +219,7 @@ struct RateHelper {
               result.rate[i] = cell_props.rate.centre;
               for (std::size_t reactant_idx = 0; reactant_idx < this->num_reactants;
                    reactant_idx++) {
-                std::string reactant_name = this->reactant_names[reactant_idx];
+                const std::string& reactant_name = this->reactant_names[reactant_idx];
                 result.collision_frequencies[reactant_name][i] =
                     cell_props.collision_freqs[reactant_idx].centre;
               }
@@ -293,7 +296,7 @@ private:
    * @param cell_props[inout] temporary struct already containing rates, collision freqs, densities
    * @param do_averaging[in] whether to compute left and right values for averaging
    */
-  inline void add_density_factors(CellProps& cell_props, bool do_averaging = true) {
+  inline void apply_density_factors(CellProps& cell_props, bool do_averaging = true) {
     // Save <sigma.v> (before any density factors are applied)
     const DataTriple sigma_v = cell_props.rate;
 
@@ -324,7 +327,7 @@ private:
     }
   }
 
-  inline void add_densities(Ind3D i, CellProps& cell_props, bool do_averaging) {
+  inline void collect_densities(Ind3D i, CellProps& cell_props, bool do_averaging) {
     // Store interpolated densities
     for (std::size_t reactant_idx = 0; reactant_idx < this->num_reactants;
          ++reactant_idx) {
