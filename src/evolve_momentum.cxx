@@ -84,21 +84,38 @@ EvolveMomentum::EvolveMomentum(std::string name, Options& alloptions, Solver* so
 void EvolveMomentum::transform_impl(GuardedOptions& state) {
   mesh->communicate(NV);
 
+  if (NV.isFci()) {
+    NV.applyParallelBoundary();
+  }
+  
   auto species = state["species"][name];
 
   // Not using density boundary condition
   auto N = getNoBoundary<Field3D>(species["density"]);
-  const Field3D Nlim = softFloor(N, density_floor);
+
+  const Field3D Nlim = NV.isFci()?
+    floor(N.asField3DParallel(), density_floor)
+    :softFloor(N.asField3DParallel(), density_floor);
+  
   const BoutReal AA = get<BoutReal>(species["AA"]); // Atomic mass
 
-  V = NV / (AA * Nlim);
+  V = NV.asField3DParallel() / (AA * Nlim.asField3DParallel());
   V.applyBoundary();
+
+  if (NV.isFci()) {
+    ASSERT2(V.hasParallelSlices());
+  }
   set(species["velocity"], V);
 
   NV_solver = NV;  // Save the momentum as calculated by the solver
-  NV = AA * N * V; // Re-calculate consistent with V and N
+  NV = (AA * N.asField3DParallel()) * V.asField3DParallel(); // Re-calculate consistent with V and N
   // Note: Now NV and NV_solver will differ when N < density_floor
-  NV_err = NV - NV_solver; // This is used in the finally() function
+  NV_err = NV.asField3DParallel() - NV_solver.asField3DParallel(); // This is used in the finally() function
+
+  if (NV.isFci()) {
+    ASSERT2(NV.hasParallelSlices());
+  }
+  
   set(species["momentum"], NV);
 }
 
@@ -114,8 +131,10 @@ void EvolveMomentum::finally(const Options& state) {
   // Get the species density
   const Field3D N = get<Field3D>(species["density"]);
   // Apply a floor to the density
-  const Field3D Nlim = softFloor(N, density_floor);
-
+  const Field3D Nlim = NV.isFci()?
+    floor(N.asField3DParallel(), density_floor)
+    :softFloor(N.asField3DParallel(), density_floor);
+  
   // Typical wave speed used for numerical diffusion
   Field3D fastest_wave;
   if (state.isSet("fastest_wave")) {
@@ -184,14 +203,22 @@ void EvolveMomentum::finally(const Options& state) {
   //  - Density floor should be consistent with calculation of V
   //    otherwise energy conservation is affected
   //  - using the same operator as in density and pressure equations doesn't work
-  ddt(NV) -= AA
-             * FV::Div_par_fvv<hermes::Limiter>(Nlim, V, fastest_wave,
-                                                fix_momentum_boundary_flux);
 
+  if (NV.isFci()) {
+    ddt(NV) -= Div_par(NV.asField3DParallel() * V);
+  } else {
+    ddt(NV) -= AA
+      * FV::Div_par_fvv<hermes::Limiter>(Nlim, V, fastest_wave,
+					 fix_momentum_boundary_flux);
+  }
+  
   // Parallel pressure gradient
   if (species.isSet("pressure")) {
     const Field3D P = get<Field3D>(species["pressure"]);
-    ddt(NV) -= Grad_par(P);
+    if (NV.isFci()) {
+      ASSERT2(P.hasParallelSlices());
+    }
+    ddt(NV) -= Grad_par(P.asField3DParallel());
   }
 
   if (state.isSection("fields") and state["fields"].isSet("Apar_flutter")) {
