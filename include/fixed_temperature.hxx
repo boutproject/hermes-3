@@ -27,6 +27,11 @@ struct FixedTemperature : public NamedComponent<FixedTemperature> {
     T = options["temperature"].doc("Constant temperature [eV]").as<Field3D>()
         / Tnorm; // Normalise
 
+    if (T.isFci()) {
+      bout::globals::mesh->communicate(T);
+      T.applyParallelBoundary("parallel_neumann_o2");
+    }
+    
     diagnose = options["diagnose"]
                    .doc("Save additional output diagnostics")
                    .withDefault<bool>(false);
@@ -94,7 +99,7 @@ private:
     if (isSetFinalNoBoundary(species["density"])) {
       // Note: The boundary of N may not be set yet
       auto N = GET_NOBOUNDARY(Field3D, species["density"]);
-      P = N * T;
+      P = N.asField3DParallel() * T;
       set(species["pressure"], P);
     }
   }
