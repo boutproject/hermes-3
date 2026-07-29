@@ -368,6 +368,75 @@ if(HERMES_TESTS)
   hermes_add_integrated_test(2D-energy)
   hermes_add_integrated_test(2D-recycling)
 
+  # Fci tests
+  function(hermes_add_fci_test TESTNAME)
+    set(oneValueArgs DOWNLOAD DOWNLOAD_NAME)
+    set(multiValueArgs REQUIRES CONFLICTS)
+    cmake_parse_arguments(HERMES_TEST_OPTIONS "${options}" "${oneValueArgs}"
+                          "${multiValueArgs}" ${ARGN})
+
+    foreach(REQUIREMENT IN LISTS HERMES_TEST_OPTIONS_REQUIRES)
+      if(NOT ${REQUIREMENT})
+        message(
+          STATUS
+            "Not building fci test ${TESTNAME}, requirement not met: ${REQUIREMENT}"
+        )
+        return()
+      endif()
+    endforeach()
+
+    foreach(CONFLICT IN LISTS HERMES_TEST_OPTIONS_CONFLICTS)
+      if(${CONFLICT})
+        message(
+          STATUS "Not building fci test ${TESTNAME}, conflicts with: ${CONFLICT}")
+        return()
+      endif()
+      message(STATUS "CONFLICT ${CONFLICT} ${${CONFLICT}}")
+    endforeach()
+
+    if(HERMES_COPY_TESTS_TO_BUILD)
+      set(FCI_TEST_SRC ${CMAKE_CURRENT_SOURCE_DIR}/tests/fci/${TESTNAME})
+      set(FCI_TEST_DEST
+          ${CMAKE_CURRENT_BINARY_DIR}/tests/fci/${TESTNAME})
+      # Make copies of the test exec and input file in the build directory and
+      # keep them up to date
+      configure_file(${FCI_TEST_SRC}/runtest ${FCI_TEST_DEST}/runtest COPYONLY)
+      configure_file(${FCI_TEST_SRC}/data/BOUT.inp
+                     ${FCI_TEST_DEST}/data/BOUT.inp COPYONLY)
+    else()
+      set(FCI_TEST_DEST
+          ${CMAKE_CURRENT_SOURCE_DIR}/tests/fci/${TESTNAME})
+    endif()
+    add_test(
+      NAME ${TESTNAME}
+      WORKING_DIRECTORY ${FCI_TEST_DEST}
+      COMMAND runtest)
+    set_tests_properties(${TESTNAME} PROPERTIES LABELS integration)
+
+    if(HERMES_TEST_OPTIONS_DOWNLOAD)
+      if(NOT HERMES_TEST_OPTIONS_DOWNLOAD_NAME)
+        message(FATAL_ERROR "We need DOWNLOAD_NAME if we should DOWNLOAD!")
+      endif()
+      file(REAL_PATH ${HERMES_TEST_OPTIONS_DOWNLOAD_NAME} DOWNLOAD_DEST_PATH
+           BASE_DIRECTORY ${FCI_TEST_DEST})
+      add_custom_command(
+        OUTPUT ${HERMES_TEST_OPTIONS_DOWNLOAD_NAME}
+        COMMAND wget -nv ${HERMES_TEST_OPTIONS_DOWNLOAD} -O
+                ${HERMES_TEST_OPTIONS_DOWNLOAD_NAME}
+        WORKING_DIRECTORY ${FCI_TEST_DEST}
+        COMMENT "Downloading test data to ${DOWNLOAD_DEST_PATH}")
+      # Custom target to run download command; use sanitised absolute path for
+      # the target name
+      string(REPLACE "/" "_" DOWNLOAD_TARGET_NAME ${DOWNLOAD_DEST_PATH})
+      add_custom_target(
+        ${DOWNLOAD_TARGET_NAME} ALL
+        DEPENDS ${HERMES_TEST_OPTIONS_DOWNLOAD_NAME}
+        DEPENDS setup-test)
+    endif()
+  endfunction()
+  
+  hermes_add_fci_test(1D-density-fci)
+  
   # Unit tests
   option(HERMES_UNIT_TESTS "Build the unit tests" ON)
   if(HERMES_UNIT_TESTS)
