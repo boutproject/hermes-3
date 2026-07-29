@@ -36,7 +36,7 @@ omega = 0.0001
 n = 1 + 0.1*sin(2*y)# * sin(t*omega)
 p = 1 + 0.1*cos(3*y)# * sin(t*omega)
 mnv = AA * 0.1*sin(y)# * sin(2*t*omega)
-
+T = p/n
 # Turn solution into real x and z coordinates
 replace = [ (y, metric.y*2*pi/Ly) ]
 #replace = [ (y, metric.y) ]
@@ -82,8 +82,8 @@ mnv = mnv.subs(replace)
 Sn = Sn.subs(replace)
 Sp = Sp.subs(replace)
 Smnv = Smnv.subs(replace)
-
-print("density: " + exprToStr(n * Nnorm))
+print("temperature = " + exprToStr(T * Tnorm))
+print("density = " + exprToStr(n * Nnorm))
 
 print("\n[NVh+]")
 print("solution = " + exprToStr(mnv))
