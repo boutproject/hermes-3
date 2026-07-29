@@ -173,6 +173,10 @@ void EvolveDensity::transform_impl(GuardedOptions& state) {
 
   mesh->communicate(N);
 
+  if (N.isFci()) {
+    N.applyParallelBoundary();
+  }
+  
   if (neumann_boundary_average_z) {
     // Take Z (usually toroidal) average and apply as X (radial) boundary condition
     if (mesh->firstX()) {
@@ -206,9 +210,12 @@ void EvolveDensity::transform_impl(GuardedOptions& state) {
       }
     }
   }
-
+  if (N.isFci()) {
+    ASSERT2(N.hasParallelSlices());
+  }
   auto species = state["species"][name];
-  set(species["density"], floor(N, 0.0)); // Density in state always >= 0
+  Field3D floored_N = floor(N.asField3DParallel(), 0.0); // BOUT++ seems to have problems with passing F3DPs around different arguments
+  set(species["density"], floored_N); // Density in state always >= 0
   set(species["AA"], AA);                 // Atomic mass
   if (charge != 0.0) {                    // Don't set charge for neutral species
     set(species["charge"], charge);
