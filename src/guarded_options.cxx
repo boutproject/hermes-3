@@ -1,3 +1,4 @@
+#include <atomic>
 #include <cstddef>
 #include <map>
 #include <memory>
@@ -25,10 +26,13 @@ bool isSetRecursive(Options& opt, const std::string& varname) {
   return isSetRecursive(opt[fragment], varname.substr(colon + 1));
 }
 
+namespace {
+/// Source of unique session IDs for root GuardedOptions objects
+std::atomic<std::size_t> next_session_id{0};
+} // namespace
+
 GuardedOptions::GuardedOptions(Options* options, Permissions* permissions)
-    : options(options), permissions(permissions),
-      unread_variables(std::make_shared<std::map<std::string, Regions>>()),
-      unwritten_variables(std::make_shared<std::map<std::string, Regions>>()) {
+    : options(options), permissions(permissions), session(next_session_id++) {
   if (options == nullptr) {
     throw BoutException("Can not construct GuardedOptions with null options pointer.");
   }
@@ -37,7 +41,8 @@ GuardedOptions::GuardedOptions(Options* options, Permissions* permissions)
         "Can not construct GuardedOptions with null permissions pointer.");
   }
 #if CHECKLEVEL >= 999
-  *unread_variables = permissions->getVariablesWithPermission(PermissionTypes::Read);
+  unread_variables = std::make_shared<std::map<std::string, Regions>>(
+      permissions->getVariablesWithPermission(PermissionTypes::Read));
   // Only add variables with permission ReadIfSet to
   // unread_variables if they are already present in the options
   // object
@@ -47,8 +52,8 @@ GuardedOptions::GuardedOptions(Options* options, Permissions* permissions)
       unread_variables->insert({varname, region});
     }
   }
-  *unwritten_variables =
-      permissions->getVariablesWithPermission(PermissionTypes::Write, false);
+  unwritten_variables = std::make_shared<std::map<std::string, Regions>>(
+      permissions->getVariablesWithPermission(PermissionTypes::Write, false));
 #endif
 }
 
@@ -98,9 +103,14 @@ const T& GuardedOptions::GetRef([[maybe_unused]] Regions region) const {
   const std::string name = options->str();
   auto [permission, varname] = permissions->getHighestPermission(name, region);
   if (permission >= PermissionTypes::ReadIfSet) {
-    if (permission == PermissionTypes::ReadIfSet && !options->isSet()) {
+    if (!options->isSet()) {
+      if (permission == PermissionTypes::ReadIfSet) {
+        throw BoutException(
+            "Only have permission to read {} if it is already set, which it is not.",
+            name);
+      }
       throw BoutException(
-          "Only have permission to read {} if it is already set, which it is not.", name);
+          "Reading value of {} but it has not been set this RHS evaluation.", name);
     }
 #if CHECKLEVEL >= 999
     updateAccessRecords(*unread_variables, varname, region);
@@ -132,9 +142,9 @@ Options& GuardedOptions::getWritable([[maybe_unused]] Regions region) {
 }
 
 bool GuardedOptions::operator==(const GuardedOptions& other) const {
-  return std::tie(options, permissions, unread_variables, unwritten_variables)
-         == std::tie(other.options, other.permissions, other.unread_variables,
-                     other.unwritten_variables);
+  return std::tie(options, permissions, session, unread_variables, unwritten_variables)
+         == std::tie(other.options, other.permissions, other.session,
+                     other.unread_variables, other.unwritten_variables);
 }
 
 bool GuardedOptions::operator!=(const GuardedOptions& other) const {

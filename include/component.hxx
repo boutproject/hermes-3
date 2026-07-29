@@ -271,6 +271,10 @@ namespace hermes {
 /// Enable a function if and only if `T` is a (subclass of) `GuardedOptions`
 template <class T>
 using EnableIfGuardedOption = std::enable_if_t<std::is_base_of_v<GuardedOptions, T>>;
+
+/// If true (the default), every `set()` checks all values are finite
+/// (when CHECKLEVEL >= 1). Set `hermes:check_state_values` to disable.
+extern bool check_state_values;
 } // namespace hermes
 
 /// Faster non-printing getter for Options
@@ -430,7 +434,7 @@ Options& set(Options& option, T value) {
                         option.attributes["final-domain"].as<std::string>());
   }
 
-  if (hermesDataInvalid(value)) {
+  if (hermes::check_state_values and hermesDataInvalid(value)) {
     throw BoutException("Setting invalid value for '{}'", option.str());
   }
 #endif

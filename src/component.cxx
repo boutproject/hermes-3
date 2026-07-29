@@ -9,6 +9,10 @@
 #include "../include/guarded_options.hxx"
 #include "../include/permissions.hxx"
 
+namespace hermes {
+bool check_state_values = true;
+} // namespace hermes
+
 std::unique_ptr<Component> Component::create(const std::string& type,
                                              const std::string& name, Options& alloptions,
                                              Solver* solver) {
