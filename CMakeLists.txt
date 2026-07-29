@@ -411,7 +411,7 @@ if(HERMES_TESTS)
       NAME ${TESTNAME}
       WORKING_DIRECTORY ${FCI_TEST_DEST}
       COMMAND runtest)
-    set_tests_properties(${TESTNAME} PROPERTIES LABELS integration)
+    set_tests_properties(${TESTNAME} PROPERTIES LABELS fci)
 
     if(HERMES_TEST_OPTIONS_DOWNLOAD)
       if(NOT HERMES_TEST_OPTIONS_DOWNLOAD_NAME)
