@@ -228,7 +228,10 @@ FieldlineGeometry::FieldlineGeometry(std::string name, Options& options, Solver*
   for (int j = 0; j < mesh->LocalNy; ++j) {
     // N.b.
     // The Jacobian has units of [m / radian T], which is why we need an extra factor of Lnorm.
+#if not BOUT_USE_METRIC_3D    
     coord->J(0, j) = 1 / effective_magnetic_field_strength(0, j, 0) / Lnorm;
+#endif
+    
   }
   // Fill the inter-processor guard cells with the neighbour's Jacobian so the
   // metric is continuous across rank boundaries in a parallel y-decomposition.
