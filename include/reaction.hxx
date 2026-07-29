@@ -239,9 +239,6 @@ private:
   // Collision frequency properties to be set during transform_impl
   std::vector<std::tuple<std::string, std::string, std::string>> coll_freq_props;
 
-  /// Label used in the state for reaction configuration.
-  const std::string name;
-
   /// Participation factors of all species - currently set to 1!
   std::map<std::string, BoutReal> pfactors;
 

@@ -15,10 +15,9 @@ namespace hermes {
 
 ///
 Reaction::Reaction(std::string name, Options& options, bool add_pop_change_sources)
-    : ReactionBase({readOnly("species:{sp}:{r_val}"), readOnly("species:e:{e_val}"),
-                    readWrite("species:{sp}:{w_val}")}),
-      units(options["units"]), add_pop_change_sources(add_pop_change_sources),
-      name(name) {
+    : ReactionBase(name, {readOnly("species:{sp}:{r_val}"), readOnly("species:e:{e_val}"),
+                          readWrite("species:{sp}:{w_val}")}),
+      units(options["units"]), add_pop_change_sources(add_pop_change_sources) {
 
   // Extract some relevant options, units to member vars for readability
   this->Tnorm = get<BoutReal>(this->units["eV"]);
