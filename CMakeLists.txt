@@ -112,6 +112,7 @@ set(HERMES_SOURCES
     src/reaction_data.cxx
     src/reaction_parser.cxx
     src/species_parser.cxx
+    src/fieldline_geometry.cxx
     src/transform.cxx
     src/vorticity.cxx
     include/adas_reaction.hxx
@@ -179,7 +180,8 @@ set(HERMES_SOURCES
     include/zero_current.hxx
     include/transform.hxx
     include/fixed_fraction_radiation.hxx
-    include/simple_pump.hxx)
+    include/simple_pump.hxx
+    include/fieldline_geometry.hxx)
 
 # Compile Hermes sources into a library, which can be used for unit tests
 add_library(hermes-3-lib ${HERMES_SOURCES})
