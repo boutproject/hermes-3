@@ -436,6 +436,8 @@ if(HERMES_TESTS)
   endfunction()
   
   hermes_add_fci_test(1D-density-fci)
+  hermes_add_fci_test(1D-momentum-fci)
+
   
   # Unit tests
   option(HERMES_UNIT_TESTS "Build the unit tests" ON)
