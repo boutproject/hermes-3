@@ -1078,7 +1078,7 @@ Source term calculation
 Density, momentum and energy source fields are constructed in `Reaction::transform_impl` using the
 `RateHelper` class to calculate reaction rates and collision frequencies.
 
-On instantiation, :code:`RateHelper` assembles maps containing (pointers to) all reactant densities
+On instantiation, :code:`RateHelper` assembles vectors containing (pointers to) all reactant densities
 and any other fields required as inputs.
 
 `RateHelper::calc_rates` is "run-time templated", allowing it to accept rate functions with 1D and
