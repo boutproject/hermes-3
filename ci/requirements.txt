@@ -1,5 +1,5 @@
 scipy~=1.4
-numpy~=1.18
+numpy~=2.0
 netcdf4~=1.5
 boututils
 zoidberg>=0.3.1
