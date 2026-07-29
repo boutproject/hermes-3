@@ -36,6 +36,7 @@ struct FixedVelocity : public NamedComponent<FixedVelocity> {
     if (V.isFci()) {
       bout::globals::mesh->communicate(V);
       V.applyParallelBoundary("parallel_neumann_o2");
+      ASSERT2(V.hasParallelSlices());
     }
     
     substitutePermissions("name", {name});
@@ -77,7 +78,10 @@ private:
       const Field3D N = getNoBoundary<Field3D>(species["density"]);
       const BoutReal AA = get<BoutReal>(species["AA"]); // Atomic mass
 
-      Field3D mom = AA * N * V.asField3DParallel();
+      Field3D mom = (AA * N.asField3DParallel()) * V.asField3DParallel();
+      if (V.isFci()) {
+	ASSERT2(mom.hasParallelSlices());
+      }
       set(species["momentum"], mom);
     }
   }
