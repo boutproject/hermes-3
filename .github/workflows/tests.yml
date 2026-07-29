@@ -78,15 +78,16 @@ jobs:
         with:
           submodules: true
 
-      - name: Build
-        run: cmake . -B build -DCMAKE_BUILD_TYPE=$BUILD_TYPE  $BOUT_CONFIGURE_OPTIONS &&
-             cmake --build build -j4
-
       - name: Install pip packages
         run: |
           ./ci/pip_install.sh
           # Add the pip install location to the runner's PATH
           echo ~/.local/bin >> $GITHUB_PATH
+
+      - name: Build
+        run: cmake . -B build -DCMAKE_BUILD_TYPE=$BUILD_TYPE  $BOUT_CONFIGURE_OPTIONS &&
+             cmake --build build -j4
+
       - name: Run tests
         run: cd build &&
              ctest --output-on-failure --timeout 300 -L $TEST_TYPE
