@@ -112,18 +112,59 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
           .withDefault(10.0)
       * meters;
 
+  limiter_gradient_floor_eta =
+      options["limiter_gradient_floor_eta"]
+          .doc("Floor for |grad Vn| in the eta limiter "
+               "denominator in SI [1/s]. Higher values improve robustness "
+               "in shallow Vn gradients but may affect the answer. ")
+          .withDefault(9.5788e4)
+      * seconds;
+
   limiter_gradient_ceiling =
       options["limiter_gradient_ceiling"]
           .doc("Ceiling for |grad log Pn| in the D limiter "
                "denominator in SI [1/m]. Lower values can improve robustness "
                "in steep Pn gradients but may affect the answer. ")
-          .withDefault(100.0)
+          .withDefault(100)
       * meters;
 
-  flux_limit =
+  limiter_gradient_ceiling_eta =
+      options["limiter_gradient_ceiling_eta"]
+          .doc("Ceiling for |grad Vn| in the eta limiter "
+               "denominator in SI [1/s]. Lower values can improve robustness "
+               "in steep Vn gradients but may affect the answer. ")
+          .withDefault(1.0e12)
+      * seconds;
+
+  flux_limit_adv =
       options["flux_limit"]
-          .doc("Limit diffusive fluxes to fraction of free-streaming flux. <0 means off.")
+          .doc("Limit advective perpendicular fluxes to fraction of thermal speed. <=0 "
+               "means no limits applied.")
           .withDefault(0.5);
+
+  flux_limit_cond_perp =
+      options["flux_limit_cond_perp"]
+          .doc("Limit conductive perpendicular fluxes to fraction of free-streaming. "
+               "Defaults to same as advection limiter.")
+          .withDefault(flux_limit_adv);
+
+  flux_limit_cond_par =
+      options["flux_limit_cond_par"]
+          .doc("Limit conductive parallel fluxes to fraction of free-streaming. Defaults "
+               "to same as conduction perpendicular limiter value.")
+          .withDefault(flux_limit_cond_perp);
+
+  flux_limit_visc_perp =
+      options["flux_limit_visc_perp"]
+          .doc("Limit viscous perpendicular fluxes to fraction of free-streaming. "
+               "Defaults to same as advection limiter value.")
+          .withDefault(flux_limit_adv);
+
+  flux_limit_visc_par =
+      options["flux_limit_visc_par"]
+          .doc("Limit viscous parallel fluxes to fraction of free-streaming. Defaults to "
+               "same as viscous perpendicular limiter value.")
+          .withDefault(flux_limit_visc_perp);
 
   flux_limiter_sharpness = options["flux_limiter_sharpness"]
                                .doc("Sharpness parameter for flux limiter. Higher values "
@@ -135,10 +176,36 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
                         flux_limiter_sharpness);
   }
 
-  diffusion_limit = options["diffusion_limit"]
-                        .doc("Upper limit on diffusion coefficient [m^2/s]. <0 means off")
-                        .withDefault(-1.0)
-                    / (meters * meters / seconds); // Normalise
+  if (options.isSet("diffusion_limit")) {
+    throw BoutException(
+        "diffusion_limit option is deprecated. Use diffusion_limit_override,"
+        "conduction_limit_override and viscosity_limit_override for explicit "
+        "caps on the three diffusion coefficients.");
+  }
+
+  // The three coefficients have different units. Dnn is a diffusivity;
+  // kappa_n = (5/2) Dnn Nn carries a density; eta_n = AA (2/5) kappa_n also
+  // carries a mass. Each normalisation factor below matches its own units.
+  diffusion_limit_override =
+      options["diffusion_limit_override"]
+          .doc("Upper limit on diffusion coefficient Dnn [m^2/s]. <0 means off")
+          .withDefault(-1.0)
+      / (meters * meters / seconds);
+
+  conduction_limit_override =
+      options["conduction_limit_override"]
+          .doc("Upper limit on conduction coefficient kappa_n [m^-1 s^-1], the "
+               "coefficient multiplying grad(Tn) with Tn in energy units. "
+               "<0 means off")
+          .withDefault(-1.0)
+      / (Nnorm * meters * meters / seconds);
+
+  viscosity_limit_override =
+      options["viscosity_limit_override"]
+          .doc("Upper limit on dynamic viscosity eta_n [Pa s] = [kg m^-1 s^-1]. "
+               "<0 means off")
+          .withDefault(-1.0)
+      / (SI::Mp * Nnorm * meters * meters / seconds);
 
   neutral_viscosity = options["neutral_viscosity"]
                           .doc("Include neutral gas viscosity?")
@@ -454,62 +521,159 @@ void NeutralMixed::finally(const Options& state) {
     }
   }
 
+  // Heat conductivity
+  // Note: This is kappa_n = (5/2) * Pn / (m * nu)
+  //       where nu is the collision frequency used in Dnn
+  kappa_n_unlimited = (5. / 2) * Dnn_unlimited * Nnlim;
+
+  // Viscosity
+  // Relationship between heat conduction and viscosity for neutral
+  // gas Chapman, Cowling "The Mathematical Theory of Non-Uniform
+  // Gases", CUP 1952 Ferziger, Kaper "Mathematical Theory of
+  // Transport Processes in Gases", 1972
+  // eta_n = (2. / 5) * m_n * kappa_n;
+  eta_n_unlimited = AA * (2. / 5) * kappa_n_unlimited;
+
   // Start from the unlimited coefficient. copy() forces independent storage, so
   // that later writes to Dnn / Dmax do not alias back onto Dnn_unlimited.
   Dnn = copy(Dnn_unlimited);
   Dmax = copy(Dnn_unlimited);
+  kappa_n_perp = copy(Dnn_unlimited);
+  kappa_n_par = copy(Dnn_unlimited);
+  kappa_n_max_perp = copy(Dnn_unlimited);
+  kappa_n_max_par = copy(Dnn_unlimited);
+  eta_n_perp = copy(Dnn_unlimited);
+  eta_n_par = copy(Dnn_unlimited);
+  eta_n_max_perp = copy(Dnn_unlimited);
+  eta_n_max_par = copy(Dnn_unlimited);
 
-  // Flux limit: cap diffusion at a fraction of the free-streaming particle flux,
-  // set through the ceiling coefficient Dmax.
-  if (flux_limit > 0.0) {
-
-    // Mean speed in a non-drifting Maxwellian [Stangeby eq. 2.21, p.67]
-    const Field3D vn_bar = sqrt(8.0 * Tnlim / (PI * AA));
-
-    // See documentation
-    // Particle flux is 0.25 * Nn * Vth [Stangeby, under eq. 2.24, p.67]; the Nn
-    // factor enters at the operator.
-    // The gradient is regularised.
-    // It has a smooth user-set ceiling, which aids robustness in transients.
-    // It also has a smooth floor to avoid division by zero while keeping differentiability.
-    const Vector3D g = Grad_perp(logPnlim); // Inverse Pn gradient length scale
+  // Take smooth absolute of a gradient and regularise with:
+  // Smooth user-set ceiling, which aids robustness in transients.
+  // Smooth floor to avoid division by zero.
+  auto regularise_gradient = [&](const auto& g, BoutReal g_min,
+                                 BoutReal g_max) -> Field3D {
     const Field3D g_sq = g * g;
-    const BoutReal g_max_sq = SQ(limiter_gradient_ceiling);
+    const BoutReal g_max_sq = SQ(g_max);
     const Field3D g_ceil = g_sq * g_max_sq / (g_sq + g_max_sq);
-    const Field3D g_reg = sqrt(g_ceil + SQ(limiter_gradient_floor));
+    const Field3D g_reg = sqrt(g_ceil + SQ(g_min));
+    return g_reg;
+  };
 
-    Dmax = flux_limit * 0.25 * vn_bar / g_reg;
+  // Mean speed in a non-drifting Maxwellian [Stangeby eq. 2.21, p.67]
+  const Field3D vn_bar = sqrt(8.0 * Tnlim / (PI * AA));
+
+  // Each cap is computed only when its own limiter is enabled. The condition
+  // must match the limit_fraction passed to apply_limiter below, otherwise the
+  // limiter blends against a cap that was never calculated.
+
+  // Particle flux is (1/4)*vbar*Nn [Stangeby, under eq. 2.24, p.67];
+  // the Nn factor enters at the operator through DnnNn.
+  if (flux_limit_adv > 0.0) {
+    Dmax = flux_limit_adv * (1. / 4) * vn_bar
+           / regularise_gradient(Grad_perp(logPnlim), limiter_gradient_floor,
+                                 limiter_gradient_ceiling);
   }
 
-  // Hard upper limit on the diffusion coefficient. Clamp Dmax down to whichever
-  // cap is tighter, so both limiters compose through the single blend below.
-  if (diffusion_limit > 0.0) {
-    BOUT_FOR(i, Dmax.getRegion("RGN_ALL")) {
-      Dmax[i] = BOUTMIN(Dmax[i], diffusion_limit);
-    }
+  // Heat flux is (1/2)*vbar*Pn. The Nn is here, and the Tn comes from the
+  // denominator being grad(Tn)/Tn rather than grad(Tn).
+  if (flux_limit_cond_perp > 0.0) {
+    kappa_n_max_perp =
+        flux_limit_cond_perp * (1. / 2) * vn_bar * Nnlim
+        / regularise_gradient(Grad_perp(Tn) / Tnlim, limiter_gradient_floor,
+                              limiter_gradient_ceiling);
+  }
+  if (flux_limit_cond_par > 0.0) {
+    kappa_n_max_par = flux_limit_cond_par * (1. / 2) * vn_bar * Nnlim
+                      / regularise_gradient(Grad_par(Tn) / Tnlim, limiter_gradient_floor,
+                                            limiter_gradient_ceiling);
   }
 
-  // Blend the unlimited coefficient with the ceiling (harmonic mean). Skipped
-  // when no limiter is active, leaving Dnn = Dnn_unlimited from the copy above.
-  if (flux_limit > 0.0 || diffusion_limit > 0.0) {
+  // Viscous momentum flux cannot exceed the pressure.
+  if (flux_limit_visc_perp > 0.0) {
+    eta_n_max_perp = flux_limit_visc_perp * Pnlim
+                     / regularise_gradient(Grad_perp(Vn), limiter_gradient_floor_eta,
+                                           limiter_gradient_ceiling_eta);
+  }
+  if (flux_limit_visc_par > 0.0) {
+    eta_n_max_par = flux_limit_visc_par * Pnlim
+                    / regularise_gradient(Grad_par(Vn), limiter_gradient_floor_eta,
+                                          limiter_gradient_ceiling_eta);
+  }
 
-    if (flux_limiter_sharpness == 1.0) {
-      // Avoid expensive pow() if not needed
-      BOUT_FOR(i, Dnn.getRegion("RGN_NOBNDRY")) {
-        Dnn[i] = Dnn_unlimited[i] * Dmax[i] / (Dnn_unlimited[i] + Dmax[i]);
-      }
+  // Flux limiter application
+  // Limits a diffusive flux to its calculated max based on a fraction of free streaming (see above)
+  // Or to an explicitly specified diffusion coefficient override, or both.
+  // Use smoothly varying limiter with a user-set sharpness.
+  static auto apply_limiter = [](BoutReal unlimited, BoutReal max, BoutReal max_override,
+                                 BoutReal limit_fraction,
+                                 BoutReal flux_limiter_sharpness) -> BoutReal {
+    BoutReal flux_cap;
+    if (limit_fraction > 0 && max_override > 0) {
+      flux_cap = max * max_override / (max + max_override);
+    } else if (limit_fraction > 0) {
+      flux_cap = max;
+    } else if (max_override > 0) {
+      flux_cap = max_override;
     } else {
-      BOUT_FOR(i, Dnn.getRegion("RGN_NOBNDRY")) {
-        Dnn[i] = Dnn_unlimited[i]
-                 * pow(1.0 + pow(Dnn_unlimited[i] / Dmax[i], flux_limiter_sharpness),
-                       -1.0 / flux_limiter_sharpness);
-      }
+      return unlimited;
     }
+
+    // If sharpness == 1, it reduces to cheaper form with no pow().
+    if (flux_limiter_sharpness == 1.0) {
+      return unlimited * flux_cap / (unlimited + flux_cap);
+    } else {
+      return unlimited
+             * pow(1.0 + pow(unlimited / flux_cap, flux_limiter_sharpness),
+                   -1.0 / flux_limiter_sharpness);
+    }
+  };
+
+  // Apply the limiter to each diffusion coefficient.
+  BOUT_FOR(i, Dnn.getRegion("RGN_NOBNDRY")) {
+    Dnn[i] = apply_limiter(Dnn_unlimited[i], Dmax[i], diffusion_limit_override,
+                           flux_limit_adv, flux_limiter_sharpness);
+    kappa_n_perp[i] = apply_limiter(kappa_n_unlimited[i], kappa_n_max_perp[i],
+                                    conduction_limit_override, flux_limit_cond_perp,
+                                    flux_limiter_sharpness);
+    kappa_n_par[i] =
+        apply_limiter(kappa_n_unlimited[i], kappa_n_max_par[i], conduction_limit_override,
+                      flux_limit_cond_par, flux_limiter_sharpness);
+    eta_n_perp[i] =
+        apply_limiter(eta_n_unlimited[i], eta_n_max_perp[i], viscosity_limit_override,
+                      flux_limit_visc_perp, flux_limiter_sharpness);
+    eta_n_par[i] =
+        apply_limiter(eta_n_unlimited[i], eta_n_max_par[i], viscosity_limit_override,
+                      flux_limit_visc_par, flux_limiter_sharpness);
   }
 
   mesh->communicate(Dnn);
   Dnn.clearParallelSlices();
   Dnn.applyBoundary();
+
+  // TODO: Investigate whether the BCs should be set to same as Dnn.
+  mesh->communicate(kappa_n_unlimited);
+  kappa_n_unlimited.clearParallelSlices();
+  kappa_n_unlimited.applyBoundary("neumann");
+
+  mesh->communicate(kappa_n_perp);
+  kappa_n_perp.clearParallelSlices();
+  kappa_n_perp.applyBoundary("neumann");
+
+  mesh->communicate(kappa_n_par);
+  kappa_n_par.clearParallelSlices();
+  kappa_n_par.applyBoundary("neumann");
+
+  mesh->communicate(eta_n_unlimited);
+  eta_n_unlimited.clearParallelSlices();
+  eta_n_unlimited.applyBoundary("neumann");
+
+  mesh->communicate(eta_n_perp);
+  eta_n_perp.clearParallelSlices();
+  eta_n_perp.applyBoundary("neumann");
+
+  mesh->communicate(eta_n_par);
+  eta_n_par.clearParallelSlices();
+  eta_n_par.applyBoundary("neumann");
 
   // Neutral diffusion parameters have the same boundary condition as Dnn
   DnnNn = Dnn * Nnlim;
@@ -551,20 +715,6 @@ void NeutralMixed::finally(const Options& state) {
       sound_speed = sqrt(Tn * (5. / 3) / AA);
     }
   }
-
-  // Heat conductivity
-  // Note: This is kappa_n = (5/2) * Pn / (m * nu)
-  //       where nu is the collision frequency used in Dnn
-  kappa_n = (5. / 2) * DnnNn;
-
-  // Viscosity
-  // Relationship between heat conduction and viscosity for neutral
-  // gas Chapman, Cowling "The Mathematical Theory of Non-Uniform
-  // Gases", CUP 1952 Ferziger, Kaper "Mathematical Theory of
-  // Transport Processes in Gases", 1972
-  // eta_n = (2. / 5) * m_n * kappa_n;
-  //
-  eta_n = AA * (2. / 5) * kappa_n;
 
   /////////////////////////////////////////////////////
   // Neutral density
@@ -613,20 +763,20 @@ void NeutralMixed::finally(const Options& state) {
 
   if (neutral_conduction) {
     ddt(Pn) += (2. / 3)
-               * Div_par_K_Grad_par_mod(kappa_n, Tn, // Parallel conduction
+               * Div_par_K_Grad_par_mod(kappa_n_par, Tn, // Parallel conduction
                                         ef_cond_par_ylow,
                                         false, // No conduction through target boundary
                                         conduction_method);
 
     // Perpendicular conduction
     if (nonorthogonal_operators) {
-      ddt(Pn) +=
-          (2. / 3)
-          * Div_a_Grad_perp_nonorthog(kappa_n, Tn, ef_cond_perp_xlow, ef_cond_perp_ylow);
+      ddt(Pn) += (2. / 3)
+                 * Div_a_Grad_perp_nonorthog(kappa_n_perp, Tn, ef_cond_perp_xlow,
+                                             ef_cond_perp_ylow);
     } else {
       ddt(Pn) +=
           (2. / 3)
-          * Div_a_Grad_perp_flows(kappa_n, Tn, ef_cond_perp_xlow, ef_cond_perp_ylow);
+          * Div_a_Grad_perp_flows(kappa_n_perp, Tn, ef_cond_perp_xlow, ef_cond_perp_ylow);
     }
 
     // The factor here is likely 3/2 as this is pure energy flow, but needs checking.
@@ -672,17 +822,17 @@ void NeutralMixed::finally(const Options& state) {
       // eta_n = (2. / 5) * kappa_n;
 
       Field3D viscosity_source = Div_par_K_Grad_par_mod( // Parallel viscosity
-          eta_n, Vn, mf_visc_par_ylow,
+          eta_n_par, Vn, mf_visc_par_ylow,
           false, // No viscosity through target boundary
           conduction_method);
 
       // Perpendicular viscosity
       if (nonorthogonal_operators) {
-        viscosity_source +=
-            Div_a_Grad_perp_nonorthog(eta_n, Vn, mf_visc_perp_xlow, mf_visc_perp_ylow);
+        viscosity_source += Div_a_Grad_perp_nonorthog(eta_n_perp, Vn, mf_visc_perp_xlow,
+                                                      mf_visc_perp_ylow);
       } else {
         viscosity_source +=
-            Div_a_Grad_perp_flows(eta_n, Vn, mf_visc_perp_xlow, mf_visc_perp_ylow);
+            Div_a_Grad_perp_flows(eta_n_perp, Vn, mf_visc_perp_xlow, mf_visc_perp_ylow);
       }
 
       ddt(NVn) += viscosity_source;
@@ -765,6 +915,10 @@ void NeutralMixed::outputVars(Options& state) {
   auto Cs0 = get<BoutReal>(state["Cs0"]);
   auto rho_s0 = get<BoutReal>(state["rho_s0"]);
   const BoutReal Pnorm = SI::qe * Tnorm * Nnorm;
+  // kappa_n is n*D with the eV->J factor folded in, as in braginskii_conduction.
+  const BoutReal kappa_norm = (Pnorm * Omega_ci * SQ(rho_s0)) / Tnorm;
+  // eta_n is m_n*n*D, so the same product with the proton mass in place of qe/Tnorm.
+  const BoutReal eta_norm = SI::Mp * Nnorm * Omega_ci * SQ(rho_s0);
 
   state[std::string("N") + name].setAttributes({{"time_dimension", "t"},
                                                 {"units", "m^-3"},
@@ -846,6 +1000,89 @@ void NeutralMixed::outputVars(Options& state) {
                     {"conversion", Cs0 * Cs0 / Omega_ci},
                     {"standard_name", "diffusion coefficient"},
                     {"long_name", name + " maximum diffusion coefficient"},
+                    {"source", "neutral_mixed"}});
+    set_with_attrs(
+        state[fmt::format("kappa_unlimited_{}", name)], kappa_n_unlimited,
+        {{"time_dimension", "t"},
+         {"units", "W / m / eV"},
+         {"conversion", kappa_norm},
+         {"standard_name", "conduction coefficient"},
+         {"long_name", name + " heat conduction coefficient (unlimited, isotropic)"},
+         {"species", name},
+         {"source", "neutral_mixed"}});
+    set_with_attrs(
+        state[fmt::format("kappa_par_{}", name)], kappa_n_par,
+        {{"time_dimension", "t"},
+         {"units", "W / m / eV"},
+         {"conversion", kappa_norm},
+         {"standard_name", "conduction coefficient"},
+         {"long_name", name + " parallel, limited heat conduction coefficient"},
+         {"species", name},
+         {"source", "neutral_mixed"}});
+    set_with_attrs(
+        state[fmt::format("kappa_perp_{}", name)], kappa_n_perp,
+        {{"time_dimension", "t"},
+         {"units", "W / m / eV"},
+         {"conversion", kappa_norm},
+         {"standard_name", "conduction coefficient"},
+         {"long_name", name + " perpendicular, limited heat conduction coefficient"},
+         {"species", name},
+         {"source", "neutral_mixed"}});
+    set_with_attrs(state[fmt::format("kappa_par_max_{}", name)], kappa_n_max_par,
+                   {{"time_dimension", "t"},
+                    {"units", "W / m / eV"},
+                    {"conversion", kappa_norm},
+                    {"standard_name", "conduction coefficient"},
+                    {"long_name", name + " parallel free-streaming conduction cap"},
+                    {"species", name},
+                    {"source", "neutral_mixed"}});
+    set_with_attrs(state[fmt::format("kappa_perp_max_{}", name)], kappa_n_max_perp,
+                   {{"time_dimension", "t"},
+                    {"units", "W / m / eV"},
+                    {"conversion", kappa_norm},
+                    {"standard_name", "conduction coefficient"},
+                    {"long_name", name + " perpendicular free-streaming conduction cap"},
+                    {"species", name},
+                    {"source", "neutral_mixed"}});
+    set_with_attrs(state[fmt::format("eta_unlimited_{}", name)], eta_n_unlimited,
+                   {{"time_dimension", "t"},
+                    {"units", "Pa s"},
+                    {"conversion", eta_norm},
+                    {"standard_name", "viscosity coefficient"},
+                    {"long_name", name + " dynamic viscosity (unlimited, isotropic)"},
+                    {"species", name},
+                    {"source", "neutral_mixed"}});
+    set_with_attrs(state[fmt::format("eta_par_{}", name)], eta_n_par,
+                   {{"time_dimension", "t"},
+                    {"units", "Pa s"},
+                    {"conversion", eta_norm},
+                    {"standard_name", "viscosity coefficient"},
+                    {"long_name", name + " parallel, limited dynamic viscosity"},
+                    {"species", name},
+                    {"source", "neutral_mixed"}});
+    set_with_attrs(state[fmt::format("eta_perp_{}", name)], eta_n_perp,
+                   {{"time_dimension", "t"},
+                    {"units", "Pa s"},
+                    {"conversion", eta_norm},
+                    {"standard_name", "viscosity coefficient"},
+                    {"long_name", name + " perpendicular, limited dynamic viscosity"},
+                    {"species", name},
+                    {"source", "neutral_mixed"}});
+    set_with_attrs(state[fmt::format("eta_par_max_{}", name)], eta_n_max_par,
+                   {{"time_dimension", "t"},
+                    {"units", "Pa s"},
+                    {"conversion", eta_norm},
+                    {"standard_name", "viscosity coefficient"},
+                    {"long_name", name + " parallel free-streaming viscosity cap"},
+                    {"species", name},
+                    {"source", "neutral_mixed"}});
+    set_with_attrs(state[fmt::format("eta_perp_max_{}", name)], eta_n_max_perp,
+                   {{"time_dimension", "t"},
+                    {"units", "Pa s"},
+                    {"conversion", eta_norm},
+                    {"standard_name", "viscosity coefficient"},
+                    {"long_name", name + " perpendicular free-streaming viscosity cap"},
+                    {"species", name},
                     {"source", "neutral_mixed"}});
     set_with_attrs(state[std::string("SN") + name], Sn,
                    {{"time_dimension", "t"},
