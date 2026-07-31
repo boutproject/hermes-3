@@ -27,7 +27,7 @@ dev = [
 cmake.version = ">=3.25"
 cmake.build-type = "Release"
 wheel.packages = []
-#wheel.install-dir = "${SKBUILD_DATA_DIR}"
+wheel.install-dir = "${SKBUILD_DATA_DIR}"
 sdist.exclude = ["*"]
 sdist.include = ["/README.md", "/LICENSE", "/pyproject.toml", "/src/*.cxx", "/include/*.hxx*", "/hermes-3.cxx", "/hermes-3.hxx",
                  "/CMakeLists.txt", "cmake/**.cmake*",
