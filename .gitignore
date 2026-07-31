@@ -30,3 +30,6 @@ views
 docker/work/
 docker/.env
 docker/docker-compose.override.yaml
+
+# asv-related
+.asv/env/
