@@ -1,46 +1,163 @@
 # Docker image for Hermes
 
-This document describes the Docker setup for building and running the Hermes-3 and BOUT++ plasma simulation frameworks. It outlines the purpose of the `Dockerfile`, the `docker-compose.yml` services, and provides instructions on how to interact with the Docker image.
+This is the Docker setup for building and running the Hermes-3 and BOUT++ plasma
+simulation frameworks. It gives you a containerized environment where you can run
+prebuilt simulations out of the box, or rebuild BOUT++/Hermes-3 from your own source
+without rebuilding the image — either from a checkout you already have (the surrounding
+repository is mounted straight into the container) or from sources you place in the
+`work/` folder.
 
-## Overview
+## Getting started
 
-This Docker configuration provides a containerized environment for building and running Hermes-3. It's designed to be flexible, allowing you to build the software and run simulations using files from your local machine, and even modify the source code and build configurations within the container by leveraging the `work` folder.
+You need [Docker](https://docs.docker.com/get-docker/) with Compose v2 (`docker
+compose`). Everything below runs from the `docker/` folder of this repository, and
+nothing is built locally by default — the images are pulled from the GitHub Container
+Registry (`ghcr.io/boutproject/...`) the first time you use them, for whichever CPU
+architecture you're on.
 
-### Multi-architecture support
+Pick the path that matches what you want to do.
+
+### Just run simulations with the prebuilt image
+
+```bash
+cd docker
+./setup.sh                       # create .env (your UID/GID + settings) and the work/ folder
+mkdir -p work/case               # a folder for your case, under work/
+cp /path/to/BOUT.inp work/case/  # your input file
+./run.sh hermes work/case        # run on a single process
+./run.sh hermes work/case 4      # ...or on 4 MPI ranks (see below)
+```
+
+Output is written straight back to `work/case` on your machine. `./run.sh help` lists
+every available service.
+
+### Edit and rebuild Hermes-3 / BOUT++
+
+Use `development-setup.sh`, which wires up editable Hermes-3 and BOUT++ sources you can
+recompile inside the container. It works in two ways, depending on where you run it.
+
+If you already have a hermes-3 checkout, run it from that checkout's `docker` folder:
+
+```bash
+cd docker
+sh development-setup.sh
+```
+
+This writes a `docker-compose.override.yaml` so the build commands compile your local
+BOUT++ and Hermes-3, and creates a `work/` folder for your run cases (it also holds the
+build output). Alternatively, copy this script to somewhere outside any project and run
+`sh development-setup.sh` there: it creates a `hermes-3-docker/` folder with fresh
+clones of hermes-3 and BOUT++ under `work/`.
+
+Once it has run, you can:
+
+* `./run.sh build_hermes` — compile your local Hermes-3 against the BOUT++ stored in the image
+* `./run.sh build_boutpp` — compile just your local BOUT++
+* `./run.sh build_both` — compile your local BOUT++ and Hermes-3 together
+
+To change CMake build options, edit the config files `development-setup.sh` drops into
+`work/` — `work/hermes_config.cmake` and `work/boutpp_config.cmake`.
+
+See [Quick start for developers](#quick-start-for-developers) for the standalone
+(no-checkout) variant and the full details.
+
+### A few other things
+
+```bash
+./run.sh shell                   # interactive shell in the image
+./run.sh jupyter                 # Jupyter server on http://localhost:8888
+./run.sh cleanup                 # remove orphaned/stopped containers for this project
+```
+
+Build and run services execute as your host user, so files they create under `work/`
+are owned by you rather than root — see
+[Running as your host user (not root)](#running-as-your-host-user-not-root).
+
+## Multi-architecture support
 
 The published images (`ghcr.io/boutproject/hermes-3`, `hermes-3-builder`, and `hermes-3-jupyter`) are built for both `linux/amd64` and `linux/arm64`. Docker automatically pulls the variant matching your machine, so Apple-silicon Macs get a native `arm64` image and no longer rely on x86 emulation. The Spack build is pinned to a portable microarchitecture baseline per architecture — `aarch64` on arm64 and `x86_64_v3` on amd64 — rather than the build runner's native (SVE2 / AVX-512) target, so the images also run correctly under emulation and on older CPUs. (See the [Spack binary caches](#spack-binary-caches-and-the-microarchitecture-pin) section for the details of this choice.)
 
-## Basic Getting Started
+## Quick start for developers
 
-This guide will walk you through the quickest way to run a Hermes-3 simulation using the Docker image.
+For most developers the fastest way in is `development-setup.sh`. It sets up the
+docker tooling and wires up editable Hermes-3 and BOUT++ sources that you can rebuild
+inside the container, so it is the recommended starting point. Anything it fetches is
+cloned over **HTTPS**, so no SSH keys are required. It behaves differently depending
+on where you run it:
 
-1.  **Navigate to the `docker` directory:** Open your terminal and change the current directory to the `docker` folder within your Hermes-3 repository:
+### In place — inside an existing checkout (recommended)
+
+Run it from the `docker` folder of a checkout you already have. It reuses that
+checkout **directly** as the build source — no second copy is cloned — so
+`./run.sh build_*` compiles your actual working tree, branch and all:
+
+```bash
+cd docker
+sh development-setup.sh
+```
+
+It detects the surrounding checkout, then:
+
+1. Runs `setup.sh` to create the `.env` file and the `work` folder (see
+   [Running without the helper scripts](#running-without-the-helper-scripts)).
+2. Writes a `docker-compose.override.yaml` that bind-mounts the checkout (and its
+   `external/BOUT-dev` submodule) into the `build_hermes`, `build_boutpp` and
+   `build_both` services, pointing their source overrides at it. Compose merges this
+   file automatically. Delete the file to revert to the image's built-in sources.
+3. Copies the default CMake config files into `work/` so you can tweak build options.
+
+The build stays out of your source tree: build output goes to `work/`
+(out-of-source), and the config files disable the in-source
+`git submodule update` that CMake would otherwise run at configure time, so **your
+checkout — including `external/BOUT-dev`'s checked-out state — is not modified**. The
+build services also run as your user (`UID`/`GID` from `.env`), so nothing they write
+to `work/` is root-owned. Because the automatic submodule update is off, the
+checkout's submodules must already be populated; if any are missing the script tells
+you to run `git submodule update --init --recursive` in your checkout first.
+
+To rebuild both your Hermes-3 and your BOUT-dev in one go, use `./run.sh build_both`.
+`./run.sh build_hermes` on its own compiles your Hermes-3 tree against the BOUT++
+already built into the image, not your `external/BOUT-dev`; `./run.sh build_boutpp`
+rebuilds just your BOUT-dev.
+
+### Standalone — bootstrap from scratch
+
+Download just this one script and run it in an empty directory. It fetches the
+`docker` folder from GitHub into a new `hermes-3-docker` folder and then clones the
+sources into `work/`:
+
+```bash
+curl -O https://raw.githubusercontent.com/boutproject/hermes-3/master/docker/development-setup.sh
+sh development-setup.sh
+cd hermes-3-docker
+```
+
+Here it will, in addition to running `setup.sh` and copying the config files:
+
+* Clone Hermes-3 (`master`) into `work/hermes-3`, and BOUT++ (pinned to the submodule
+  commit Hermes-3 expects) into `work/BOUT-dev`, which then override the versions
+  baked into the image (see
+  [Overriding Default Builds](#overriding-default-builds-using-the-work-folder)).
+* If you export `GITHUB_USERNAME` first, add a `fork` remote to each clone pointing at
+  your fork:
     ```bash
-    cd docker
+    GITHUB_USERNAME=your-username sh development-setup.sh
     ```
+  Because the clones use HTTPS you can pull without credentials. To *push* to your
+  fork, use a [personal access token](https://docs.github.com/en/authentication), or
+  switch that one remote to SSH afterwards, e.g.
+  `git -C work/hermes-3 remote set-url fork git@github.com:your-username/hermes-3.git`.
 
-2.  **Set up the environment:** Run the `setup.sh` script. This will create a `.env` file with necessary configurations for `docker compose` and a `work` subfolder. The `work` folder will be your central point for transferring simulation files to and from the Docker container, and for overriding default builds.
-    ```bash
-    ./setup.sh
-    ```
+Either way, build and run with `run.sh`, described next.
 
-3.  **Prepare your simulation case:** Create a subdirectory within `work` named `case` (if it doesn't exist) and copy your `BOUT.inp` simulation configuration file into it. For example:
-    ```bash
-    mkdir -p work/case
-    cp /path/to/your/BOUT.inp work/case/
-    ```
+## Building and running with `run.sh`
 
-4.  **Run the simulation:** Execute the following `docker compose` command. This will start a temporary container based on the `hermes` service defined in `docker-compose.yml`, run the Hermes-3 executable with your `BOUT.inp` file located in `work/case`, and automatically remove the container once the simulation is finished.
-    ```bash
-    docker compose run --rm hermes work/case
-    ```
-    You should see the output of your Hermes-3 simulation in the terminal. Any output files generated by the simulation will be located in the `work/case` folder on your local machine.
-
-## Using the `run.sh` helper
-
-The `docker compose run --rm <service> ...` commands are flexible but easy to get
-subtly wrong (missing environment, an unknown service name, or forgetting the case
-argument to `hermes`). The `run.sh` helper wraps them and validates your input first.
+`run.sh` is the everyday helper for building and running inside the container. It
+wraps the raw `docker compose run --rm <service> ...` commands (which are flexible
+but easy to get subtly wrong) and validates your input first: that your environment
+is set up (a `docker-compose.yaml`, an `.env`, and a `work` folder all exist — i.e.
+that `setup.sh` has run), that the requested service is real, and that services which
+need an argument (currently `hermes`) were given one.
 
 Use it either directly or by sourcing it:
 
@@ -51,28 +168,98 @@ source run.sh
 run_docker <service> [arguments]
 ```
 
-Before running anything it checks that your environment is set up correctly — that
-you are in a folder with `docker-compose.yaml`, an `.env`, and a `work` subfolder to
-mount (i.e. that you have run `setup.sh`). It then confirms the requested action maps
-to one of the services in `docker-compose.yaml`, and that services which need an
-argument (currently `hermes`) were actually given one.
-
-Examples:
+Common commands:
 
 ```bash
-./run.sh shell              # interactive shell in the image
-./run.sh build_both         # rebuild hermes and BOUT++
-./run.sh hermes work/case   # run a case (argument required)
-./run.sh jupyter            # start the Jupyter server (uses `up`, stays running)
-./run.sh help               # list the available services
+./run.sh shell               # interactive shell in the image
+./run.sh build_hermes        # rebuild Hermes-3 only, from your local source
+./run.sh build_boutpp        # rebuild BOUT++ only, from your local source
+./run.sh build_both          # rebuild Hermes-3 and BOUT++ from your local sources
+./run.sh hermes work/case    # run a case on a single process
+./run.sh hermes work/case 4  # run a case on 4 MPI ranks
+./run.sh jupyter             # start the Jupyter server on http://localhost:8888
+./run.sh help                # list the available services
 ```
 
-To tidy up containers left behind by interrupted runs, use the cleanup shortcut,
-which runs `docker compose down --remove-orphans` followed by `docker compose rm`:
+`build_hermes` rebuilds Hermes-3 alone (against the BOUT++ already in the image),
+`build_boutpp` rebuilds BOUT++ alone, and `build_both` rebuilds both.
+
+**Which source do they compile?** Each `build_*` service builds the *first* of these
+it finds, so you switch source by adding or removing the higher-priority one:
+
+1. **Your own checkout**, if `docker-compose.override.yaml` is present. In-place
+   `development-setup.sh` writes this file to mount your checkout and point the build
+   at it. Delete the file to drop back to option 2 or 3.
+2. **A clone in `work/`** — `work/hermes-3` and/or `work/BOUT-dev` — if present.
+   Standalone `development-setup.sh` creates these; you can also add or delete them by
+   hand. (Ignored while the override file above is in place.)
+3. **The source baked into the image**, when neither of the above is set up — i.e.
+   after a plain `./setup.sh` with an empty `work/`.
+
+CMake options are independent of the above: a `build_*` service uses
+`work/hermes_config.cmake` / `work/boutpp_config.cmake` whenever those files exist,
+otherwise the image's defaults. See
+[Overriding Default Builds](#overriding-default-builds-using-the-work-folder) for more.
+
+### Running in parallel
+
+`./run.sh hermes work/case` runs Hermes-3 on a single process. Pass an optional
+rank count as a third argument to run it under MPI instead:
 
 ```bash
-./run.sh cleanup
+./run.sh hermes work/case 4   # equivalent to: mpirun -np 4 hermes-3 -d work/case
 ```
+
+The run is launched with `mpirun`. If the rank count fits within the CPUs Docker
+exposes to the container it runs normally; if it exceeds them, the run prints a
+warning and adds `--oversubscribe` so it still starts (ranks then time-slice the
+same CPUs and run slowly — raise Docker's CPU allocation for better performance).
+Make sure the case is decomposed for the number of ranks you request
+(`NXPE`/`NYPE` in `BOUT.inp`).
+
+### Tidying up
+
+```bash
+./run.sh cleanup     # stop and remove orphaned/stopped containers for this project
+./run.sh rm_docker   # remove ALL containers, volumes and images for this project
+```
+
+`cleanup` runs `docker compose down --remove-orphans` followed by
+`docker compose rm`, to clear out containers left behind by interrupted runs.
+`rm_docker` goes further and removes this project's images and named volumes too
+(after a confirmation prompt).
+
+## Running without the helper scripts
+
+The helper scripts above are thin wrappers over plain `docker compose`. If you only
+want to run pre-built simulations — no local source checkout — you can drive it
+directly:
+
+1.  **Navigate to the `docker` directory:**
+    ```bash
+    cd docker
+    ```
+2.  **Set up the environment:** `setup.sh` writes a `.env` file (your user/group IDs,
+    the image tags and build settings) and creates the `work` folder that is mounted
+    into the container. `work` is your central point for moving simulation files to
+    and from the container, and for overriding the default builds.
+    ```bash
+    ./setup.sh
+    ```
+3.  **Prepare your simulation case:** create a subdirectory of `work` and copy your
+    `BOUT.inp` into it:
+    ```bash
+    mkdir -p work/case
+    cp /path/to/your/BOUT.inp work/case/
+    ```
+4.  **Run the simulation:** this starts a temporary container from the `hermes`
+    service, runs Hermes-3 against `work/case`, and removes the container when it
+    finishes. Output files are written back to `work/case` on your machine.
+    ```bash
+    docker compose run --rm hermes work/case      # single process
+    docker compose run --rm hermes work/case 4    # 4 MPI ranks
+    ```
+    These are exactly the commands `./run.sh hermes work/case [n]` runs for you.
 
 ## Selecting an image tag
 
@@ -105,58 +292,99 @@ if you have spare cores and memory you can raise it:
 * **Edit `.env`** for a persistent value: `HERMES_BUILD_JOBS=8`
 * **Override for a single build**: `HERMES_BUILD_JOBS=8 ./run.sh build_both`
 
+Before starting a `build_*` service, `run.sh` sanity-checks the value: it must be a
+positive integer, and it may not exceed the number of CPUs Docker exposes to the
+container (`docker info --format '{{.NCPU}}'`). An oversubscribed compile only
+thrashes the CPU and can exhaust RAM, so if the requested count is too high the build
+is aborted with a message telling you to lower `HERMES_BUILD_JOBS` or raise Docker's
+CPU allocation. (Raise the CPU/memory limits in Docker Desktop's *Resources* settings
+if you want to use more.) This check is applied by `run.sh`; the image build-arg of the
+same name is not validated.
+
 The same variable is also a build-arg for the image build itself
 (`docker build --build-arg HERMES_BUILD_JOBS=8 ...`), where it likewise defaults
 to `4`.
 
+## Running as your host user (not root)
+
+Every service that writes into `work/` runs as your host user and group, taken from the
+`UID`/`GID` that `setup.sh` records in `.env`. This is why build output and simulation
+results under `work/` are owned by you rather than root. Two guards keep it that way:
+
+* **`run.sh` checks `.env` first.** It refuses to start any service unless `.env`
+  defines numeric `UID` and `GID`. If those are missing (for example an empty or
+  truncated `.env`), Compose would otherwise substitute a blank user and fall back to
+  the image's default user — root — leaving root-owned files behind. Re-run
+  `./setup.sh` to regenerate `.env` if you hit this.
+* **The image refuses to run as root.** The in-image `image` command (see
+  [Interacting with the Image](#interacting-with-the-image-using-image-commands))
+  rejects any filesystem-writing mode (`build_boutpp`, `build_hermes`, `build_both`,
+  `run`, and the `*_and_run` variants) when it is running as root, so even a direct
+  `docker run ... image build_hermes` without the helper scripts won't silently create
+  root-owned output. Set `HERMES_ALLOW_ROOT=1` to override this — for instance when
+  your host user genuinely is root (`UID=0`).
+
+The deliberate exception is **`fix_permissions`**, which *must* run as root: its whole
+job is to `chown` the `work/` directory back to you. It is exempt from the guard, and
+the `sudo` and `shell` services (which give you an interactive shell rather than going
+through the `image` command) are unaffected. If you end up with root-owned files you
+can't delete, see
+[the permissions troubleshooting section](#help-i-dont-have-permission-to-delete-the-hermes-3-dockerwork-folder).
+
 ## Overriding Default Builds using the `work` Folder
 
-The `work` folder on your local machine is mounted to the `/hermes_project/work` directory inside the Docker container. This allows you to override the default builds of BOUT++ and Hermes-3 that are included in the image by placing your own source code and configuration files within the `work` folder. The build scripts inside the container are designed to prioritize these files if they exist.
+`work/` is mounted at `/hermes_project/work` in the container, and the in-container
+build scripts prefer files found there over the versions baked into the image. This
+lets you rebuild BOUT++ or Hermes-3 from your own source and configuration **without
+rebuilding the image**. Put any of these in `work/` (source directories must be named
+*exactly* as shown):
 
-Here's how you can leverage the `work` folder to customize the build:
+| Place in `work/` | Effect when you run a `build_*` service |
+| --- | --- |
+| `BOUT-dev/` — a BOUT++ clone | builds this instead of the image's BOUT++ |
+| `hermes-3/` — a Hermes-3 clone | builds this instead of the image's Hermes-3 |
+| `boutpp_config.cmake` | replaces BOUT++'s default CMake config |
+| `hermes_config.cmake` | replaces Hermes-3's default CMake config |
 
-1.  **Modifying BOUT++ Source Code:**
-    * Clone the BOUT++ repository into the `work` folder on your local machine. **Important:** The directory must be named exactly `BOUT-dev`.
-        ```bash
-        git clone https://github.com/boutproject/BOUT-dev.git work/BOUT-dev
-        ```
-    * When you run `docker compose run --rm build_boutpp` or `docker compose run --rm build_both`, the build process will detect the `BOUT-dev` directory in `work` and use this source code instead of the version built into the image.
+For example, to build from your own clones:
 
-2.  **Modifying Hermes-3 Source Code:**
-    * Clone the Hermes-3 repository into the `work` folder on your local machine. **Important:** The directory must be named exactly `hermes-3`.
-        ```bash
-        git clone https://github.com/boutproject/hermes-3.git work/hermes-3
-        ```
-    * When you run `docker compose run --rm build_hermes` or `docker compose run --rm build_both`, the build process will detect the `hermes-3` directory in `work` and use this source code instead of the default.
+```bash
+git clone https://github.com/boutproject/BOUT-dev.git work/BOUT-dev
+git clone https://github.com/boutproject/hermes-3.git work/hermes-3
+```
 
-3.  **Providing Custom Configuration Files:**
-    * If you need to change the CMake build options for BOUT++, create a file named `boutpp_config.cmake` and place it directly inside the `work` folder on your local machine.
-    * Similarly, for custom Hermes-3 build options, create a file named `hermes_config.cmake` and place it directly inside the `work` folder.
-    * When the build scripts run, they will check for these configuration files in the `work` folder and use them in preference to the default configuration files included in the image.
-
-By placing your source code and configuration files in the correctly named locations within the `work` folder, you can effectively override the default build process and use your own customized versions of BOUT++ and Hermes-3 within the Docker environment without needing to rebuild the entire Docker image.
+`build_boutpp` then picks up `work/BOUT-dev`, `build_hermes` picks up `work/hermes-3`,
+and `build_both` does both. (`development-setup.sh` sets all of this up for you — see
+[Quick start for developers](#quick-start-for-developers).)
 
 ## Interacting with the Image using `image` Commands
 
 The Docker image includes a set of pre-defined commands accessible via the `/bin/image` script within the container. These commands simplify common tasks such as building the code and running simulations. When you use `docker compose run --rm <service> <command> <arguments>`, you are essentially executing this `/bin/image` script with the specified `<command>` and `<arguments>`. The `image` command is defined by the `image_ingredients/docker_image_commands.sh` file.
 
-Here's a breakdown of the available commands:
+The build/run commands all follow the same override rule: a matching file or directory
+in `work/` wins, otherwise the version baked into the image is used (see
+[Overriding Default Builds](#overriding-default-builds-using-the-work-folder)).
 
-* **`build_boutpp`**: This command is used to configure and build the BOUT++ framework. It looks for the BOUT++ source code in `/hermes_project/work/BOUT-dev` (if this directory exists; otherwise, it uses the version included when the image was built). It uses the configuration file located at `/hermes_project/work/boutpp_config.cmake` (if it exists; otherwise, it uses the default). The build output is placed in `/hermes_project/build/boutpp-build`.
+* **`build_boutpp`** — configure and build BOUT++. Source: `work/BOUT-dev`; config:
+  `work/boutpp_config.cmake`; output: `/hermes_project/build/boutpp-build`.
+* **`build_hermes`** — configure and build Hermes-3, against a previously built BOUT++
+  (or the one in the image). Source: `work/hermes-3`; config:
+  `work/hermes_config.cmake`; output: `/hermes_project/build/hermes-3-build`.
+* **`build_both`** — `build_boutpp` then `build_hermes`.
+* **`run <directory> [nprocs]`** — run the compiled Hermes-3 against `<directory>`, a
+  subfolder of `work/` containing a `BOUT.inp`. `nprocs` defaults to `1` (single
+  process); `n > 1` launches `mpirun -np n`, adding `--oversubscribe` (with a warning)
+  only if `n` exceeds the container's cores.
+* **`build_hermes_and_run <directory>`** / **`build_both_and_run <directory>`** — build
+  (Hermes-3, or both) and then `run`, in one step.
+* **`fix_permissions`** — `chown` `/hermes_project/work` back to your host user/group,
+  for when a root container (e.g. `docker compose run --rm sudo`) has left files you
+  can't edit. This is the one mode allowed to run as root (see
+  [Running as your host user](#running-as-your-host-user-not-root)).
 
-* **`build_hermes`**: This command configures and builds the Hermes-3 model. It searches for the Hermes-3 source code in `/hermes_project/work/hermes-3` (overriding the built-in version if present) and uses the configuration file at `/hermes_project/work/hermes_config.cmake` (or the default). It depends on a previously built BOUT++ (using the `build_boutpp` command or the BOUT++ built into the image) and places the resulting executable in `/hermes_project/build/hermes-3-build`.
-
-* **`build_both`**: This is a convenience command that sequentially executes `build_boutpp` followed by `build_hermes`.
-
-* **`run <directory>`**: This command executes the compiled Hermes-3 model. You must provide a `<directory>` argument, which should correspond to a subdirectory within the `work` folder on your local machine (e.g., `work/case`). The command checks for a `BOUT.inp` file within this directory and then runs the Hermes-3 executable, passing the specified directory as the working directory for the simulation.
-
-* **`build_hermes_and_run <directory>`**: This command first builds the Hermes-3 model (using the same logic as `build_hermes`) and then immediately runs it in the specified `<directory>` (similar to the `run` command).
-
-* **`build_both_and_run <directory>`**: This command first builds both BOUT++ and Hermes-3 (like the `build_both` command) and then executes the Hermes-3 model in the provided `<directory>`.
-
-* **`fix_permissions`**: This command adjusts the ownership of the `/hermes_project/work` directory within the container to match the user and group IDs of your host machine. This is useful when you encounter permission issues when trying to access or modify files in the `work` folder from within a container started with root privileges (e.g., using `docker compose run --rm sudo`).
-
-When you use commands like `docker compose run --rm hermes work/case`, the `docker-compose.yml` defines the `hermes` service in a way that effectively runs `/bin/image run work/case` inside the container. Similarly, `docker compose run --rm build_hermes` executes `/bin/image build_hermes`.
+These are exactly what the `docker-compose.yml` services invoke: `docker compose run
+--rm hermes work/case` runs `/bin/image run work/case`, `docker compose run --rm
+build_hermes` runs `/bin/image build_hermes`, and so on.
 
 ## Continuous Integration and Delivery
 

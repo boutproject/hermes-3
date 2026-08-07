@@ -1,0 +1,83 @@
+name: Merge digests into a multi-arch manifest
+description: >
+  Download per-architecture digests uploaded by build-push-digest and combine
+  them into a single multi-arch manifest, applying the requested tags.
+
+inputs:
+  registry:
+    description: Container registry the images live in.
+    default: ghcr.io
+  image-name:
+    description: Image repository name (without registry or tag).
+    required: true
+  token:
+    description: Registry password / token (pass secrets.GITHUB_TOKEN).
+    required: true
+  cache-scope:
+    description: >
+      The cache-scope passed to build-push-digest. The matching digest
+      artifacts ('<cache-scope>-digests-*') are downloaded and merged.
+    required: true
+  tags:
+    description: >
+      Newline-separated docker/metadata-action tag rules used to compute the
+      manifest tags. Defaults to the production tag policy (latest/edge/sha/
+      semver/branch, plus a YYYY-MM tag on scheduled runs). Override with e.g.
+      'type=raw,value=<tag>' for a single fixed tag. Rules that don't apply to
+      the triggering event (e.g. type=schedule on a push) are simply inert.
+    default: |
+      # tag with date for scheduled jobs (YYYY-MM)
+      type=schedule,pattern={{date 'YYYY-MM'}}
+      # set "latest" tag
+      type=raw,value=latest,enable={{is_default_branch}}
+      # always tag the most recent build as 'edge'
+      type=raw,value=edge
+      # short sha tag
+      type=sha,enable={{is_default_branch}}
+      # tag with semantic version
+      type=semver,pattern={{version}}
+      type=semver,pattern={{major}}.{{minor}}
+      # tag with branch name
+      type=ref,event=branch,enable={{is_default_branch}}
+  inspect-tag:
+    description: Tag to inspect once the manifest has been created.
+    default: edge
+
+runs:
+  using: composite
+  steps:
+    - name: Download digests
+      uses: actions/download-artifact@v4
+      with:
+        path: /tmp/digests
+        pattern: ${{ inputs.cache-scope }}-digests-*
+        merge-multiple: true
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Log in to registry ${{ inputs.registry }}
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ inputs.registry }}
+        username: ${{ github.actor }}
+        password: ${{ inputs.token }}
+
+    - name: Extract Docker metadata
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ inputs.registry }}/${{ inputs.image-name }}
+        tags: ${{ inputs.tags }}
+
+    - name: Create multi-arch manifest
+      shell: bash
+      working-directory: /tmp/digests
+      run: |
+        docker buildx imagetools create \
+          $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
+          $(printf '${{ inputs.registry }}/${{ inputs.image-name }}@sha256:%s ' *)
+
+    - name: Inspect manifest
+      shell: bash
+      run: docker buildx imagetools inspect ${{ inputs.registry }}/${{ inputs.image-name }}:${{ inputs.inspect-tag }}
