@@ -169,7 +169,8 @@ void SheathBoundary::transform_impl(GuardedOptions& state) {
 
   // Need electron properties
   // Not const because boundary conditions will be set
-  Field3D Ne = toFieldAligned(floor(GET_NOBOUNDARY(Field3D, electrons["density"]), 0.0));
+  Field3D Ne =
+      toFieldAligned(Field3D(floor(GET_NOBOUNDARY(Field3D, electrons["density"]), 0.0)));
   Field3D Te = toFieldAligned(GET_NOBOUNDARY(Field3D, electrons["temperature"]));
   Field3D Pe = IS_SET_NOBOUNDARY(electrons["pressure"])
                    ? toFieldAligned(getNoBoundary<Field3D>(electrons["pressure"]))
@@ -231,8 +232,8 @@ void SheathBoundary::transform_impl(GuardedOptions& state) {
         continue; // Skip electrons and non-charged ions
       }
 
-      const Field3D Ni =
-          toFieldAligned(floor(GET_NOBOUNDARY(Field3D, species["density"]), 0.0));
+      const Field3D Ni = toFieldAligned(
+          Field3D(floor(GET_NOBOUNDARY(Field3D, species["density"]), 0.0)));
       const Field3D Ti = toFieldAligned(GET_NOBOUNDARY(Field3D, species["temperature"]));
       const BoutReal Mi = GET_NOBOUNDARY(BoutReal, species["AA"]);
       const BoutReal Zi = GET_NOBOUNDARY(BoutReal, species["charge"]);
@@ -683,7 +684,8 @@ void SheathBoundary::transform_impl(GuardedOptions& state) {
                                    : 5. / 3; // Ratio of specific heats (ideal gas)
 
     // Density and temperature boundary conditions will be imposed (free)
-    Field3D Ni = toFieldAligned(floor(getNoBoundary<Field3D>(species["density"]), 0.0));
+    Field3D Ni =
+        toFieldAligned(Field3D(floor(getNoBoundary<Field3D>(species["density"]), 0.0)));
     Field3D Ti = toFieldAligned(getNoBoundary<Field3D>(species["temperature"]));
     Field3D Pi = species.isSet("pressure")
                      ? toFieldAligned(getNoBoundary<Field3D>(species["pressure"]))
