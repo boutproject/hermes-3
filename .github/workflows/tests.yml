@@ -42,6 +42,11 @@ jobs:
             name: "CMake default options"
             configure_options: "-DPACKAGE_TESTS=OFF -DHERMES_ERROR_ON_WARNINGS=ON"
           - cmake_build_type: Debug
+            test_type: unit
+            coverage: ON
+            name: "3D metrics"
+            configure_options: "-DPACKAGE_TESTS=OFF -DHERMES_ERROR_ON_WARNINGS=ON -DBOUT_ENABLE_METRIC_3D=ON"
+          - cmake_build_type: Debug
             test_type: fci
             name: "3D metrics"
             configure_options: "-DPACKAGE_TESTS=OFF -DHERMES_ERROR_ON_WARNINGS=ON -DBOUT_ENABLE_METRIC_3D=ON"
