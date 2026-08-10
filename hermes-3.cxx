@@ -187,9 +187,6 @@ int Hermes::init(bool restarting) {
   output.write("Slope limiter: {}\n", hermes::limiter_typename);
   options["slope_limiter"] = hermes::limiter_typename;
   options["slope_limiter"].setConditionallyUsed();
-  output.write("Conduction method: {}\n", hermes::conduction_typename);
-  options["conduction_method"] = hermes::conduction_typename;
-  options["conduction_method"].setConditionallyUsed();
 
   // Choose normalisations
   Tnorm = options["Tnorm"].doc("Reference temperature [eV]").withDefault(100.);
