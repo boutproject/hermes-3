@@ -52,12 +52,12 @@ DiamagneticDrift::DiamagneticDrift(std::string name, Options& alloptions,
   // Set drift to zero through sheath boundaries.
   // Flux through those cell faces should be set by sheath.
   for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
-    for (int k = 0; k < -Curlb_B.y.getNz(); ++k) {
+    for (int k = 0; k < Curlb_B.y.getNz(); ++k) {
       Curlb_B.y(r.ind, mesh->ystart - 1, k) = -Curlb_B.y(r.ind, mesh->ystart, k);
     }
   }
   for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
-    for (int k = 0; k < -Curlb_B.y.getNz(); ++k) {
+    for (int k = 0; k < Curlb_B.y.getNz(); ++k) {
       Curlb_B.y(r.ind, mesh->yend + 1, k) = -Curlb_B.y(r.ind, mesh->yend, k);
     }
   }

@@ -187,9 +187,6 @@ int Hermes::init(bool restarting) {
   output.write("Slope limiter: {}\n", hermes::limiter_typename);
   options["slope_limiter"] = hermes::limiter_typename;
   options["slope_limiter"].setConditionallyUsed();
-  output.write("Conduction method: {}\n", hermes::conduction_typename);
-  options["conduction_method"] = hermes::conduction_typename;
-  options["conduction_method"].setConditionallyUsed();
 
   // Choose normalisations
   Tnorm = options["Tnorm"].doc("Reference temperature [eV]").withDefault(100.);
@@ -260,49 +257,48 @@ int Hermes::init(bool restarting) {
       // To use non-orthogonal metric
       // Normalise
       if (mesh->isFci()) {
-	// Normalisation for Fci
-	BoutReal rhoSQ = SQ(rho_s0);
-	BoutReal rhoCU = rho_s0 * rho_s0 * rho_s0;
-	// g12 and g23 dont need F3DP because they are zero anyway       
-	coord->g11 = coord->g11.asField3DParallel() * rhoSQ;
-	coord->g22 = coord->g22.asField3DParallel() * rhoSQ;
-	coord->g33 = coord->g33.asField3DParallel() * rhoSQ;
-	coord->g12 = coord->g12 * rhoSQ;
+        // Normalisation for Fci
+        BoutReal rhoSQ = SQ(rho_s0);
+        BoutReal rhoCU = rho_s0 * rho_s0 * rho_s0;
+        // g12 and g23 dont need F3DP because they are zero anyway
+        coord->g11 = coord->g11.asField3DParallel() * rhoSQ;
+        coord->g22 = coord->g22.asField3DParallel() * rhoSQ;
+        coord->g33 = coord->g33.asField3DParallel() * rhoSQ;
+        coord->g12 = coord->g12 * rhoSQ;
         coord->g13 = coord->g13.asField3DParallel() * rhoSQ;
         coord->g23 = coord->g23 * rhoSQ;
 
         coord->J = coord->J.asField3DParallel() / rhoCU;
 
-	coord->g_11 = coord->g_11.asField3DParallel() / rhoSQ;
+        coord->g_11 = coord->g_11.asField3DParallel() / rhoSQ;
         coord->g_22 = coord->g_22.asField3DParallel() / rhoSQ;
-	coord->g_33 = coord->g_33.asField3DParallel() / rhoSQ;
-	coord->g_12 = coord->g_12 / rhoSQ;
+        coord->g_33 = coord->g_33.asField3DParallel() / rhoSQ;
+        coord->g_12 = coord->g_12 / rhoSQ;
         coord->g_13 = coord->g_13.asField3DParallel() / rhoSQ;
-        coord->g_23 = coord->g_23 / rhoSQ;	
+        coord->g_23 = coord->g_23 / rhoSQ;
 
         coord->Bxy = coord->Bxy.asField3DParallel() / Bnorm;
-	
+
       } else {
-	// Standard normalisation
-	coord->dx /= rho_s0 * rho_s0 * Bnorm;
-	coord->Bxy /= Bnorm;
-	// Metric is in grid file - just need to normalise
-	coord->g11 /= SQ(Bnorm * rho_s0);
-	coord->g22 *= SQ(rho_s0);
-	coord->g33 *= SQ(rho_s0);
-	coord->g12 /= Bnorm;
-	coord->g13 /= Bnorm;
-	coord->g23 *= SQ(rho_s0);
+        // Standard normalisation
+        coord->dx /= rho_s0 * rho_s0 * Bnorm;
+        coord->Bxy /= Bnorm;
+        // Metric is in grid file - just need to normalise
+        coord->g11 /= SQ(Bnorm * rho_s0);
+        coord->g22 *= SQ(rho_s0);
+        coord->g33 *= SQ(rho_s0);
+        coord->g12 /= Bnorm;
+        coord->g13 /= Bnorm;
+        coord->g23 *= SQ(rho_s0);
 
-	coord->J *= Bnorm / rho_s0;
+        coord->J *= Bnorm / rho_s0;
 
-	coord->g_11 *= SQ(Bnorm * rho_s0);
-	coord->g_22 /= SQ(rho_s0);
-	coord->g_33 /= SQ(rho_s0);
-	coord->g_12 *= Bnorm;
-	coord->g_13 *= Bnorm;
-	coord->g_23 /= SQ(rho_s0);
-	
+        coord->g_11 *= SQ(Bnorm * rho_s0);
+        coord->g_22 /= SQ(rho_s0);
+        coord->g_33 /= SQ(rho_s0);
+        coord->g_12 *= Bnorm;
+        coord->g_13 *= Bnorm;
+        coord->g_23 /= SQ(rho_s0);
       }
       coord->geometry(); // Calculate other metrics
     }

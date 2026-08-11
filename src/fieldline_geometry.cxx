@@ -225,16 +225,14 @@ FieldlineGeometry::FieldlineGeometry(std::string name, Options& options, Solver*
   // inter-processor boundaries degrades the solution (and roughly doubles the
   // spread between different y-decompositions). effective_magnetic_field_strength
   // is defined over RGN_ALL, so the guard cells get a consistent value here.
-  for (int j = 0; j < mesh->LocalNy; ++j) {
+  BOUT_FOR(i, effective_magnetic_field_strength.getRegion("RGN_ALL")) {
     // N.b.
     // The Jacobian has units of [m / radian T], which is why we need an extra factor of Lnorm.
-#if not BOUT_USE_METRIC_3D    
-    coord->J(0, j) = 1 / effective_magnetic_field_strength(0, j, 0) / Lnorm;
-#endif
-    
+    coord->J[i] = 1 / effective_magnetic_field_strength[i] / Lnorm;
   }
   // Fill the inter-processor guard cells with the neighbour's Jacobian so the
   // metric is continuous across rank boundaries in a parallel y-decomposition.
+  ASSERT2(not coord->J.isFci());
   mesh->communicate(coord->J);
 
   // Parallel length of cell
