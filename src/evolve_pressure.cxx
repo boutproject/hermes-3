@@ -270,9 +270,7 @@ void EvolvePressure::finally(const Options& state) {
     P.clearParallelSlices();
   }
 
-  const Field3D Pfloor = P.isFci() ? floor(P.asField3DParallel(),
-                                           0.0) // if !Fci, P should have cleared slices
-                                   : floor(P, 0.0); // Restricted to never go below zero
+  const Field3DParallel Pfloor = floor(P, 0.0); // Restricted to never go below zero
 
   T = get<Field3D>(species["temperature"]);
   N = get<Field3D>(species["density"]);
