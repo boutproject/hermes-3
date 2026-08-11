@@ -214,9 +214,7 @@ void EvolveDensity::transform_impl(GuardedOptions& state) {
     ASSERT2(N.hasParallelSlices());
   }
   auto species = state["species"][name];
-  Field3D floored_N = floor(
-      N.asField3DParallel(),
-      0.0); // BOUT++ seems to have problems with passing F3DPs around different arguments
+  Field3DParallel floored_N = floor(N, 0.0);
   set(species["density"], floored_N); // Density in state always >= 0
   set(species["AA"], AA);             // Atomic mass
   if (charge != 0.0) {                // Don't set charge for neutral species
