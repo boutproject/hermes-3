@@ -62,8 +62,8 @@ struct EvolvePressure : public NamedComponent<EvolvePressure> {
 private:
   std::string name; ///< Short name of the species e.g. h+
 
-  Field3D P;    ///< Pressure (normalised)
-  Field3D T, N; ///< Temperature, density
+  Field3DParallel P;    ///< Pressure (normalised)
+  Field3DParallel T, N; ///< Temperature, density
 
   bool bndry_flux;
   bool neumann_boundary_average_z; ///< Apply neumann boundary with Z average?
