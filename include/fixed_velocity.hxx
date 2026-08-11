@@ -75,13 +75,10 @@ private:
 
     // If density is set, also set momentum
     if (isSetFinalNoBoundary(species["density"])) {
-      const Field3D N = getNoBoundary<Field3D>(species["density"]);
+      const Field3DParallel N = getNoBoundary<Field3D>(species["density"]);
       const BoutReal AA = get<BoutReal>(species["AA"]); // Atomic mass
 
-      Field3D mom = (AA * N.asField3DParallel()) * V.asField3DParallel();
-      if (V.isFci()) {
-        ASSERT2(mom.hasParallelSlices());
-      }
+      Field3DParallel mom = AA * N * V;
       set(species["momentum"], mom);
     }
   }
