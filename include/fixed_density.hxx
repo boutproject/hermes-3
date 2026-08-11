@@ -32,7 +32,7 @@ struct FixedDensity : public NamedComponent<FixedDensity> {
       N.applyParallelBoundary("parallel_neumann_o2");
       ASSERT2(N.hasParallelSlices());
     }
-    
+
     substitutePermissions("name", {name});
     substitutePermissions("vars", {"AA", "charge", "density"});
   }

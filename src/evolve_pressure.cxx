@@ -197,7 +197,7 @@ void EvolvePressure::transform_impl(GuardedOptions& state) {
   if (P.isFci()) {
     P.applyParallelBoundary();
   }
-  
+
   if (neumann_boundary_average_z) {
     // Take Z (usually toroidal) average and apply as X (radial) boundary condition
     if (mesh->firstX()) {
@@ -242,20 +242,19 @@ void EvolvePressure::transform_impl(GuardedOptions& state) {
   if (P.isFci()) {
 
     Pfloor = floor(P.asField3DParallel(), 0.0);
-    T =	Pfloor.asField3DParallel() / floor(N.asField3DParallel(), density_floor);
+    T = Pfloor.asField3DParallel() / floor(N.asField3DParallel(), density_floor);
     Pfloor = N.asField3DParallel() * T;
 
     ASSERT2(Pfloor.hasParallelSlices());
     ASSERT2(T.hasParallelSlices());
-    
+
   } else {
-    
+
     Pfloor = floor(P, 0.0);
     T = Pfloor / softFloor(N, density_floor);
     Pfloor = N * T; // Ensure consistency
-    
-  }  
-  
+  }
+
   set(species["pressure"], Pfloor);
   set(species["temperature"], T);
 }
@@ -268,12 +267,12 @@ void EvolvePressure::finally(const Options& state) {
   // Get updated pressure and temperature with boundary conditions
   P = get<Field3D>(species["pressure"]);
   if (!P.isFci()) {
-      P.clearParallelSlices();
+    P.clearParallelSlices();
   }
-  
-  const Field3D Pfloor = P.isFci()?
-    floor(P.asField3DParallel(), 0.0) // if !Fci, P should have cleared slices
-    :floor(P, 0.0); // Restricted to never go below zero
+
+  const Field3D Pfloor = P.isFci() ? floor(P.asField3DParallel(),
+                                           0.0) // if !Fci, P should have cleared slices
+                                   : floor(P, 0.0); // Restricted to never go below zero
 
   T = get<Field3D>(species["temperature"]);
   N = get<Field3D>(species["density"]);
@@ -307,9 +306,9 @@ void EvolvePressure::finally(const Options& state) {
 
       // Work done. This balances energetically a term in the momentum equation
       if (P.isFci()) {
-	E_PdivV = -Pfloor * Div_par(V.asField3DParallel());
+        E_PdivV = -Pfloor * Div_par(V.asField3DParallel());
       } else {
-	E_PdivV = -Pfloor * Div_par(V);
+        E_PdivV = -Pfloor * Div_par(V);
       }
       ddt(P) += (2. / 3) * E_PdivV;
 
@@ -322,9 +321,9 @@ void EvolvePressure::finally(const Options& state) {
           (5. / 3)
           * FV::Div_par_mod<hermes::Limiter>(P, V, fastest_wave, flow_ylow_advection);
       if (P.isFci()) {
-	E_VgradP = V * Grad_par(P.asField3DParallel());
+        E_VgradP = V * Grad_par(P.asField3DParallel());
       } else {
-	E_VgradP = V * Grad_par(P);
+        E_VgradP = V * Grad_par(P);
       }
       ddt(P) += (2. / 3) * E_VgradP;
     }

@@ -4,7 +4,7 @@ timestep = 0.1
 
 [mesh]
 
-extrapolate_y = false 
+extrapolate_y = false
 
 [mesh:paralleltransform]
 type = fci

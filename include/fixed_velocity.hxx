@@ -38,7 +38,7 @@ struct FixedVelocity : public NamedComponent<FixedVelocity> {
       V.applyParallelBoundary("parallel_neumann_o2");
       ASSERT2(V.hasParallelSlices());
     }
-    
+
     substitutePermissions("name", {name});
     // FIXME: Momentum is only written if density is set
     substitutePermissions("output", {"velocity", "momentum"});
@@ -80,7 +80,7 @@ private:
 
       Field3D mom = (AA * N.asField3DParallel()) * V.asField3DParallel();
       if (V.isFci()) {
-	ASSERT2(mom.hasParallelSlices());
+        ASSERT2(mom.hasParallelSlices());
       }
       set(species["momentum"], mom);
     }

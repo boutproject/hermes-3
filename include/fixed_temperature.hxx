@@ -31,7 +31,7 @@ struct FixedTemperature : public NamedComponent<FixedTemperature> {
       bout::globals::mesh->communicate(T);
       T.applyParallelBoundary("parallel_neumann_o2");
     }
-    
+
     diagnose = options["diagnose"]
                    .doc("Save additional output diagnostics")
                    .withDefault<bool>(false);
@@ -101,7 +101,7 @@ private:
       auto N = GET_NOBOUNDARY(Field3D, species["density"]);
       P = N.asField3DParallel() * T;
       if (P.isFci()) {
-	ASSERT2(P.hasParallelSlices());
+        ASSERT2(P.hasParallelSlices());
       }
       set(species["pressure"], P);
     }
