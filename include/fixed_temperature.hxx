@@ -72,8 +72,8 @@ struct FixedTemperature : public NamedComponent<FixedTemperature> {
 private:
   std::string name; ///< Short name of species e.g "e"
 
-  Field3D T; ///< Species temperature (normalised)
-  Field3D P; ///< Species pressure (normalised)
+  Field3D T;         ///< Species temperature (normalised)
+  Field3DParallel P; ///< Species pressure (normalised)
 
   bool diagnose; ///< Output additional fields
 
@@ -99,7 +99,7 @@ private:
     if (isSetFinalNoBoundary(species["density"])) {
       // Note: The boundary of N may not be set yet
       auto N = GET_NOBOUNDARY(Field3D, species["density"]);
-      P = N.asField3DParallel() * T;
+      P = N * T;
       if (P.isFci()) {
         ASSERT2(P.hasParallelSlices());
       }
