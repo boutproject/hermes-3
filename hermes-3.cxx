@@ -259,25 +259,35 @@ int Hermes::init(bool restarting) {
       if (mesh->isFci()) {
         // Normalisation for Fci
         BoutReal rhoSQ = SQ(rho_s0);
-        BoutReal rhoCU = rho_s0 * rho_s0 * rho_s0;
-        // g12 and g23 dont need F3DP because they are zero anyway
-        coord->g11 = coord->g11.asField3DParallel() * rhoSQ;
-        coord->g22 = coord->g22.asField3DParallel() * rhoSQ;
-        coord->g33 = coord->g33.asField3DParallel() * rhoSQ;
-        coord->g12 = coord->g12 * rhoSQ;
-        coord->g13 = coord->g13.asField3DParallel() * rhoSQ;
-        coord->g23 = coord->g23 * rhoSQ;
+        coord->g11.asField3DParallel() *= rhoSQ;
+        coord->g22.asField3DParallel() *= rhoSQ;
+        coord->g33.asField3DParallel() *= rhoSQ;
+        if (coord->g12.hasParallelSlices()) {
+          coord->g12.asField3DParallel() *= rhoSQ;
+          coord->g23.asField3DParallel() *= rhoSQ;
+        } else {
+          coord->g12 *= rhoSQ;
+          coord->g23 *= rhoSQ;
+        }
+        coord->g13.asField3DParallel() *= rhoSQ;
 
-        coord->J = coord->J.asField3DParallel() / rhoCU;
+        coord->J.asField3DParallel() /= rho_s0 * rho_s0 * rho_s0;
 
-        coord->g_11 = coord->g_11.asField3DParallel() / rhoSQ;
-        coord->g_22 = coord->g_22.asField3DParallel() / rhoSQ;
-        coord->g_33 = coord->g_33.asField3DParallel() / rhoSQ;
-        coord->g_12 = coord->g_12 / rhoSQ;
-        coord->g_13 = coord->g_13.asField3DParallel() / rhoSQ;
-        coord->g_23 = coord->g_23 / rhoSQ;
+        coord->g_11.asField3DParallel() /= rhoSQ;
+        coord->g_22.asField3DParallel() /= rhoSQ;
+        coord->g_33.asField3DParallel() /= rhoSQ;
+        coord->g_13.asField3DParallel() /= rhoSQ;
+        if (coord->g_12.hasParallelSlices()) {
+          coord->g_12.asField3DParallel() /= rhoSQ;
+          coord->g_23.asField3DParallel() /= rhoSQ;
+        } else {
+          coord->g_12 /= rhoSQ;
+          coord->g_23 /= rhoSQ;
+        }
 
-        coord->Bxy = coord->Bxy.asField3DParallel() / Bnorm;
+        ASSERT2(coord->Bxy.hasParallelSlices());
+        coord->Bxy.asField3DParallel() /= Bnorm;
+        ASSERT2(coord->Bxy.hasParallelSlices());
 
       } else {
         // Standard normalisation
