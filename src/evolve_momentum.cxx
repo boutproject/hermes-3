@@ -91,14 +91,13 @@ void EvolveMomentum::transform_impl(GuardedOptions& state) {
   auto species = state["species"][name];
 
   // Not using density boundary condition
-  auto N = getNoBoundary<Field3D>(species["density"]);
+  Field3DParallel N = getNoBoundary<Field3D>(species["density"]);
 
-  const Field3D Nlim = NV.isFci() ? floor(N.asField3DParallel(), density_floor)
-                                  : softFloor(N.asField3DParallel(), density_floor);
+  const Field3DParallel Nlim = softFloor(N, density_floor);
 
   const BoutReal AA = get<BoutReal>(species["AA"]); // Atomic mass
 
-  V = NV.asField3DParallel() / (AA * Nlim.asField3DParallel());
+  V = Field3DParallel(NV / (AA * Nlim));
   V.applyBoundary();
 
   if (NV.isFci()) {
@@ -106,12 +105,10 @@ void EvolveMomentum::transform_impl(GuardedOptions& state) {
   }
   set(species["velocity"], V);
 
-  NV_solver = NV; // Save the momentum as calculated by the solver
-  NV = (AA * N.asField3DParallel())
-       * V.asField3DParallel(); // Re-calculate consistent with V and N
+  NV_solver = NV;                   // Save the momentum as calculated by the solver
+  NV = Field3DParallel(AA * N * V); // Re-calculate consistent with V and N
   // Note: Now NV and NV_solver will differ when N < density_floor
-  NV_err = NV.asField3DParallel()
-           - NV_solver.asField3DParallel(); // This is used in the finally() function
+  NV_err = NV - NV_solver; // This is used in the finally() function
 
   if (NV.isFci()) {
     ASSERT2(NV.hasParallelSlices());
@@ -132,8 +129,7 @@ void EvolveMomentum::finally(const Options& state) {
   // Get the species density
   const Field3D N = get<Field3D>(species["density"]);
   // Apply a floor to the density
-  const Field3D Nlim = NV.isFci() ? floor(N.asField3DParallel(), density_floor)
-                                  : softFloor(N.asField3DParallel(), density_floor);
+  const Field3D Nlim = softFloor(N.asField3DParallel(), density_floor);
 
   // Typical wave speed used for numerical diffusion
   Field3D fastest_wave;
@@ -203,9 +199,8 @@ void EvolveMomentum::finally(const Options& state) {
   //  - Density floor should be consistent with calculation of V
   //    otherwise energy conservation is affected
   //  - using the same operator as in density and pressure equations doesn't work
-
   if (NV.isFci()) {
-    ddt(NV) -= Div_par(NV.asField3DParallel() * V);
+    ddt(NV) -= Div_par(NV * V);
   } else {
     ddt(NV) -= AA
                * FV::Div_par_fvv<hermes::Limiter>(Nlim, V, fastest_wave,
