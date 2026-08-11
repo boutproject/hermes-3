@@ -68,6 +68,10 @@ EvolveMomentum::EvolveMomentum(std::string name, Options& alloptions, Solver* so
   diagnose =
       options["diagnose"].doc("Output additional diagnostics?").withDefault<bool>(false);
 
+  use_div_par_fvv = options["use_div_par_fvv"]
+                        .doc("Use Div_par_fvv instead of Div_par")
+                        .withDefault<bool>(use_div_par_fvv);
+
   fix_momentum_boundary_flux =
       options["fix_momentum_boundary_flux"]
           .doc("Fix Y boundary momentum flux to boundary midpoint value?")
@@ -199,12 +203,12 @@ void EvolveMomentum::finally(const Options& state) {
   //  - Density floor should be consistent with calculation of V
   //    otherwise energy conservation is affected
   //  - using the same operator as in density and pressure equations doesn't work
-  if (NV.isFci()) {
-    ddt(NV) -= Div_par(NV * V);
-  } else {
+  if (use_div_par_fvv) {
     ddt(NV) -= AA
                * FV::Div_par_fvv<hermes::Limiter>(Nlim, V, fastest_wave,
                                                   fix_momentum_boundary_flux);
+  } else {
+    ddt(NV) -= Div_par(NV * V);
   }
 
   // Parallel pressure gradient
