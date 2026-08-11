@@ -7,6 +7,14 @@ import sys
 
 
 force = "-f" in sys.argv or "--force" in sys.argv
+verbose = "-v" in sys.argv or "--verbose" in sys.argv
+
+orgprint = print
+
+
+def print(*args, **kvargs):
+    if verbose:
+        orgprint(*args, **kvargs)
 
 
 class ThisField(Slab):
