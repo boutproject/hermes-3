@@ -440,6 +440,10 @@ Options& set(Options& option, T value) {
   return option;
 }
 
+inline Options& set(Options& option, Field3DParallel value) {
+  return set(option, Field3D(value));
+}
+
 template <typename ResT, typename L, typename R, typename Func>
 inline decltype(auto) set(Options& option, const BinaryExpr<ResT, L, R, Func>& f) {
   return set(option, ResT{f});
