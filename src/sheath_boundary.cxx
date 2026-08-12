@@ -208,6 +208,7 @@ void SheathBoundary::transform_impl(GuardedOptions& state) {
     struct IonBoundaryInfo {
       Field3D density;
       Field3D temperature;
+      Field3D velocity;
       BoutReal mass;
       BoutReal charge;
       BoutReal adiabatic;
@@ -215,7 +216,8 @@ void SheathBoundary::transform_impl(GuardedOptions& state) {
 
     std::vector<IonBoundaryInfo> ion_species;
 
-    // Need to sum  s_i Z_i C_i over all ion species
+    // Sum the positive outgoing ion charge flux divided by electron density:
+    // s_i * Z_i * sin(alpha) * |V_i,sheath|
     //
     // To avoid looking up species for every grid point, this
     // loops over the boundaries once per species.
@@ -234,6 +236,9 @@ void SheathBoundary::transform_impl(GuardedOptions& state) {
       const Field3D Ni =
           toFieldAligned(floor(GET_NOBOUNDARY(Field3D, species["density"]), 0.0));
       const Field3D Ti = toFieldAligned(GET_NOBOUNDARY(Field3D, species["temperature"]));
+      const Field3D Vi = species.isSet("velocity")
+                             ? toFieldAligned(getNoBoundary<Field3D>(species["velocity"]))
+                             : zeroFrom(Ni);
       const BoutReal Mi = GET_NOBOUNDARY(BoutReal, species["AA"]);
       const BoutReal Zi = GET_NOBOUNDARY(BoutReal, species["charge"]);
 
@@ -242,7 +247,7 @@ void SheathBoundary::transform_impl(GuardedOptions& state) {
                                      : 5. / 3; // Ratio of specific heats (ideal gas)
 
       if (ion_ee_gamma_max > 0.0) {
-        ion_species.push_back({Ni, Ti, Mi, Zi, adiabatic});
+        ion_species.push_back({Ni, Ti, Vi, Mi, Zi, adiabatic});
       }
 
       if (lower_y) {
@@ -280,8 +285,12 @@ void SheathBoundary::transform_impl(GuardedOptions& state) {
             const BoutReal C_i_sq = std::clamp(
                 (adiabatic * ti + Zi * s_i * te * grad_ne / grad_ni) / Mi, 0., 100.);
 
-            // Note: Vzi = C_i * sin(α)
-            ion_sum[i] += s_i * Zi * sin_alpha[ip] * sqrt(C_i_sq);
+            // Enable supersonic flow
+            const BoutReal visheath =
+                std::min(-sqrt(C_i_sq), Vi[i]); // Negative into lower sheath
+
+            // Note: Vzi = |visheath| * sin(α)
+            ion_sum[i] += s_i * Zi * sin_alpha[ip] * (-visheath);
           }
         }
       }
@@ -317,7 +326,11 @@ void SheathBoundary::transform_impl(GuardedOptions& state) {
             const BoutReal C_i_sq = std::clamp(
                 (adiabatic * ti + Zi * s_i * te * grad_ne / grad_ni) / Mi, 0., 100.);
 
-            ion_sum[i] += s_i * Zi * sin_alpha[im] * sqrt(C_i_sq);
+            // Enable supersonic flow
+            const BoutReal visheath =
+                std::max(sqrt(C_i_sq), Vi[i]); // Positive into upper sheath
+
+            ion_sum[i] += s_i * Zi * sin_alpha[im] * visheath;
           }
         }
       }
@@ -376,11 +389,14 @@ void SheathBoundary::transform_impl(GuardedOptions& state) {
                   const BoutReal C_i_sq = std::clamp(
                       (ad * ti + zi * s_i * te * grad_ne / grad_ni) / mi, 0., 100.);
 
-                  const BoutReal ion_flux_over_ne =
-                      s_i * sin_alpha[ip] * sqrt(C_i_sq); // Γ_i / n_e
+                  // Negative velocity is outward through the lower-Y sheath
+                  const BoutReal visheath = std::min(-sqrt(C_i_sq), ion.velocity[i]);
+
+                  // Positive magnitude of the outgoing ion particle flux divided by ne
+                  const BoutReal ion_flux_over_ne = -s_i * sin_alpha[ip] * visheath;
 
                   const BoutReal ion_energy =
-                      0.5 * (ti + mi * C_i_sq) + zi * delta_phi_guess;
+                      0.5 * (ti + mi * SQ(visheath)) + zi * delta_phi_guess;
 
                   ion_emission_sum +=
                       ionSecondaryElectronEmissionGamma(ion_energy) * ion_flux_over_ne;
@@ -465,9 +481,14 @@ void SheathBoundary::transform_impl(GuardedOptions& state) {
                   const BoutReal C_i_sq = std::clamp(
                       (ad * ti + zi * s_i * te * grad_ne / grad_ni) / mi, 0., 100.);
 
-                  const BoutReal ion_flux_over_ne = s_i * sin_alpha[im] * sqrt(C_i_sq);
+                  // Positive velocity is outward through the upper-Y sheath
+                  const BoutReal visheath = std::max(sqrt(C_i_sq), ion.velocity[i]);
+
+                  // Positive magnitude of the outgoing ion particle flux divided by ne
+                  const BoutReal ion_flux_over_ne = s_i * sin_alpha[im] * visheath;
+
                   const BoutReal ion_energy =
-                      0.5 * (ti + mi * C_i_sq) + zi * delta_phi_guess;
+                      0.5 * (ti + mi * SQ(visheath)) + zi * delta_phi_guess;
 
                   ion_emission_sum +=
                       ionSecondaryElectronEmissionGamma(ion_energy) * ion_flux_over_ne;
