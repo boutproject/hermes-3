@@ -566,6 +566,13 @@ void set_with_attrs(
   option.setAttributes(attrs);
 }
 
+inline void set_with_attrs(
+    Options& option, Field3DParallel value,
+    std::initializer_list<std::pair<std::string, Options::AttributeType>> attrs) {
+  option.force(Field3D(value));
+  option.setAttributes(attrs);
+}
+
 template <typename ResT, typename L, typename R, typename Func>
 inline void set_with_attrs(
     Options& option, const BinaryExpr<ResT, L, R, Func>& f,
