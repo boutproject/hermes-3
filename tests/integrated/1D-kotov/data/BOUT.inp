@@ -1,0 +1,293 @@
+# 1D system with:
+#  - No-flow boundary on lower Y (i.e. outboard midplane)
+#  - Sheath boundary on upper Y (i.e. divertor target)
+#  - Evolving electron and ion species
+#  - Heat conduction
+#  - Uniform source of heat and particles throughout region above the X-point
+#  - Non-uniform grid, packed towards the divertor target
+#  - Recycling of ions as atoms
+#  - Ionisation of neutrals as ions
+#  - Charge exchange between neutrals and ions
+#  - Feedback control of upstream density
+#  - Molecules modelled with the Kotov08 mechanism
+#
+# Evolves density, momentum, pressure for deuterium atoms, ions, molecules and molecular ions (d, d+, d2, d2+) and electron pressure.
+# Calculates force on ions due to electron pressure using electron force balance.
+
+# Number of output time-steps to write out
+# This is the interval between writing output time-steps (solver timestep is automatic)
+nout = 50
+
+# Normalisation: see BOUT++ docs
+timestep = 95788 * 0.05   # 95788 is 1 millisecond
+
+# No guard cells in X
+MXG = 0
+
+########################################## Mesh options ###########################################
+[mesh]
+# 1D simulation, use "y" as the dimension along the fieldline
+nx = 1
+ny = 400   # Resolution along field-line
+nz = 1
+
+length = 30       # Length of the domain in meters
+length_xpt = 10   # Length from midplane to X-point [m] (i.e. this is where the source ends)
+
+dymin = 0.1  # Minimum grid spacing near target, as fraction of average. Must be > 0 and < 1
+
+# Parallel grid spacing — grid refinement near the divertor target
+dy = (length / ny) * (1 + (1-dymin)*(1-y/pi))
+
+# Calculate where the source ends in grid index (i.e. at the X-point)
+source = length_xpt / length
+y_xpt = pi * ( 2 - dymin - sqrt( (2-dymin)^2 - 4*(1-dymin)*source ) ) / (1 - dymin)
+
+# Separatrix index set to -1 for 1D simulations
+ixseps1 = -1
+ixseps2 = -1
+
+# In 1D, the Jacobian is inversely proportional to volume
+# Total flux expansion can be set up with a non-constant J profile
+J = 1
+
+######################################### Hermes options ##########################################
+[hermes]
+components = (d+, d, d2, d2+, e,
+              sheath_boundary_simple, braginskii_collisions, braginskii_friction,
+              braginskii_heat_exchange, reactions, electron_force_balance,
+              neutral_parallel_diffusion, braginskii_conduction, recycling)
+
+normalise_metric = true
+
+# Normalisation parameters
+Nnorm = 1e19 #particles per cubic metre
+Bnorm = 1 #tesla
+Tnorm = 100 #electron-volts
+
+######################################### Solver options ##########################################
+[solver]
+
+#### HIGH ORDER IN TIME, SLOWER SOLVER CVODE
+# type = cvode                     # CVODE time-accurate solver
+# use_precon = true                # Enable solution acceleration with preconditioning
+# mxstep = 1e9                     # Solver timeout
+####
+
+#### FIRST ORDER IN TIME, FASTER SOLVER BEULER
+type = beuler                    # Backward Euler steady-state solver
+snes_type = newtonls             # Newton iterations
+ksp_type = gmres                 # GMRES method
+pc_type = hypre                  # Preconditioner type
+pc_hypre_type = euclid           # Hypre preconditioner type
+max_nonlinear_iterations = 10    # Max Newton iterations per timestep
+lag_jacobian = 500               # How long to wait before Jacobian recalculation per Newton iteration
+
+# Tolerances
+atol = 1e-7                      # Absolute tolerance (controls small numbers)
+rtol = 1e-5                      # Relative tolerance (primary convergence control)
+
+matrix_free_operator = true
+
+######################################### Deuterium ions #########################################
+[d+]
+type = (evolve_density, evolve_pressure, evolve_momentum,
+        noflow_boundary, upstream_density_feedback)
+
+diagnose = true
+
+# BCs
+noflow_lower_y = true   # Reflective boundary at midplane
+noflow_upper_y = false  # This is already covered by sheath boundary
+
+# Charge; mass in amu
+charge = 1
+AA = 2
+
+# Upstream density feedback controller
+density_upstream = 5e19          # Upstream density [m^-3]
+density_source_positive = false  # Can stabilise controller
+density_controller_i = 1e-2      # "I" in PID control
+density_controller_p = 5e2       # "P" in PID control
+
+# Recycling
+recycle_as = d2
+target_recycle = true
+target_recycle_energy = 3.5    # Franck-Condon dissociation energy
+target_recycle_multiplier = 1  # Recycling fraction
+
+# Enable conduction in evolve_pressure
+thermal_conduction = true
+
+# -----------------------------------------------
+[Nd+]
+# Constant initial density for ions
+function = 1
+# Feedback controller source shape
+source_shape = H(mesh:y_xpt - y) * 1e20
+
+# -----------------------------------------------
+[Pd+]
+
+# Constant initial pressure for ions (in terms of hermes:Nnorm * hermes:Tnorm)
+function = 1
+
+# Unmitigated heat flux at the X-point in W/m2
+powerflux = 2.5e7
+
+# Divide by length of source region to get heat source in W/m3
+source = (powerflux*2/3 / (mesh:length_xpt))*H(mesh:y_xpt - y)  # Input power as function of y
+
+# -----------------------------------------------
+[NVd+]
+# Zero initial momentum for ions
+function = 0
+
+######################################### Deuterium atoms #########################################
+[d]
+type = (evolve_density, evolve_pressure, evolve_momentum, noflow_boundary)
+
+diagnose = true
+
+# Charge; mass in amu
+charge = 0
+AA = 2
+
+# Enable conduction in evolve_pressure
+thermal_conduction = true
+
+# Other options
+density_floor = 1e-5
+
+# -----------------------------------------------
+[Nd]
+function = 0.001
+
+# -----------------------------------------------
+[Pd]
+function = 0.0001
+
+####################################### Deuterium molecules #######################################
+[d2]
+type = (evolve_density, evolve_pressure, evolve_momentum, noflow_boundary)
+
+diagnose = true
+
+# Charge; mass in amu
+charge = 0
+AA = 4
+
+# Enable conduction in evolve_pressure
+thermal_conduction = true
+
+# Other options
+density_floor = 1e-6
+
+# -----------------------------------------------
+[Nd2]
+# 0.1 * atomic neutral density
+function = 0.0001
+
+# -----------------------------------------------
+[Pd2]
+function = 0.00001
+# 0.1 * atomic neutral pressure
+
+##################################### Deuterium molecular ions ####################################
+
+[d2+]  # Deuterium molecular ions
+type = (evolve_density, evolve_pressure, evolve_momentum, noflow_boundary, upstream_density_feedback)
+
+diagnose = true
+
+# BCs
+noflow_lower_y = true   # Reflective boundary at midplane
+noflow_upper_y = false  # This is already covered by sheath boundary
+
+# Charge; mass in amu
+charge = 1
+AA = 4
+
+# Upstream density feedback controller
+density_upstream = 1e18          # Upstream density [m^-3]
+density_source_positive = false  # Can stabilise controller
+density_controller_i = 1e-2      # "I" in PID control
+density_controller_p = 5e2       # "P" in PID control
+
+# Enable conduction in evolve_pressure
+thermal_conduction = true
+
+# Recycling
+# recycle_as = d2
+# target_recycle = true
+# target_recycle_energy = 3.5    # Franck-Condon dissociation energy
+# target_recycle_multiplier = 1  # Recycling fraction
+
+# -----------------------------------------------
+[Nd2+]
+# Constant initial density for molecular ions
+function = 0.00001
+#source_shape = H(mesh:y_xpt - y) * 1e20 # Feedback controller source shape
+
+[Pd2+]
+## Initial condition for ion pressure (in terms of hermes:Nnorm * hermes:Tnorm)
+function = 0.00001
+## Unmitigated heat flux at the X-point in W/m2
+#powerflux = 2.5e7
+
+## Divide by length of source region to get heat source in W/m3
+#source = (powerflux*2/3 / (mesh:length_xpt))*H(mesh:y_xpt - y)  # Input power as function of y
+[NVd2+]
+function = 0
+
+############################################ Electrons ############################################
+[e]
+type = quasineutral, evolve_pressure, zero_current, noflow_boundary
+
+diagnose = true
+
+# BCs
+noflow_upper_y = false
+
+# Charge; mass in amu
+charge = -1
+AA = 1/1836
+thermal_conduction = true  # in evolve_pressure
+
+# -----------------------------------------------
+[Pe]
+# Electrons have same initial pressure profile, source as ions
+function = `Pd+:function`
+source = `Pd+:source`
+
+########################################## Other physics ##########################################
+[neutral_parallel_diffusion]
+# Diffusive enhancement due to recycled neutrals flowing normal to target wall
+dneut = 10   # measure of field line incidence angle: (B / Bpol)^2
+
+# -----------------------------------------------
+[reactions]
+diagnose = true
+type = (
+        d + e -> d+ + 2e,      # Ionisation of Deuterium atoms
+        d+ + e -> d,           # Recombination of Deuterium ions
+        d + d+ -> d+ + d,      # Charge exchange between Deuterium atoms and ions
+        d2 + e -> 2d + e,      # Dissociation of Deuterium molecules
+        d2 + e -> d2+ + 2e,    # Non-dissociative ionisation of Deuterium molecules
+        d2 + e -> d + d+ + 2e, # Dissociative ionisation of molecular Deuterium
+        d2 + d+ -> d2+ + d,    # Charge exchange between Deuterium molecules and ions
+        d2+ + e -> d + d+ + e, # Dissociation of molecular Deuterium ions
+        d2+ + e -> 2d+ + 2e,   # Dissociative ionisation of molecular Deuterium ions
+        d2+ + e -> 2d,         # Dissociative recombination of molecular Deuterium ions
+        d2 + d+ -> d2 + d+     # Elastic collisions between Deuterium molecules and ions
+       )
+
+# -----------------------------------------------
+[recycling]
+species = d+
+
+# -----------------------------------------------
+[sheath_boundary_simple]
+# Sheath boundary at target end
+lower_y = false
+upper_y = true

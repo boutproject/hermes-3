@@ -208,6 +208,7 @@ if gen_data:
         )
         print(f'expected["{region_name}"]["ddt(Pd)"] = {ds["ddt(Pd)"].values.tolist()}')
         print("")
+    exit(1)
 
     exit(2)
 

@@ -48,8 +48,9 @@ protected:
   std::string heavy_reactant;
   /// Name of the heavy product species
   std::string heavy_product;
-  /// Name of the (heavy) species with which collision freqs. are associated in the state
-  std::string heavy_collfreq_species;
+
+  /// Radiation rate multiplier, extracted from input options
+  BoutReal radiation_multiplier;
 
 private:
   /// Short reaction type string used in diagnostic names ("iz" or "rec")

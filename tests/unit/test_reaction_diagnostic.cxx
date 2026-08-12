@@ -54,9 +54,9 @@ TEST_F(ReactionDiagnosticTest, AddToState) {
 
   // Some of the test expects a collision freq type diagnostic; check the default type
   // hasn't changed.
-  EXPECT_TRUE(this->default_type == ReactionDiagnosticType::collision_freq)
+  EXPECT_TRUE(this->default_type == ReactionDiagnosticType::species_collision_freq)
       << "Default diagnostic type has changed! Should be "
-         "ReactionDiagnosticType::collision_freq.";
+         "ReactionDiagnosticType::species_collision_freq.";
 
   // Create default diagnostic
   ReactionDiagnostic diag = default_diag();
