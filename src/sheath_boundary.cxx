@@ -338,7 +338,7 @@ void SheathBoundary::transform_impl(GuardedOptions& state) {
 
     phi.allocate();
 
-    // ion_sum now contains  sum  s_i Z_i C_i over all ion species
+    // ion_sum now contains  sum  s_i Z_i |V_i,sheath| over all ion species
     // at mesh->ystart and mesh->yend indices
     if (lower_y) {
       for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
