@@ -430,14 +430,6 @@ set(HERMES_SLOPE_LIMITER
 set_property(CACHE HERMES_SLOPE_LIMITER PROPERTY STRINGS ${SLOPE_LIMITERS})
 message(STATUS "Slope limiter: ${HERMES_SLOPE_LIMITER}")
 
-set(CONDUCTION_METHODS Original ProductJK Harmonic)
-set(HERMES_CONDUCTION_METHOD
-    Original
-    CACHE STRING "Parallel conduction method")
-set_property(CACHE HERMES_CONDUCTION_METHOD PROPERTY STRINGS
-                                                     ${CONDUCTION_METHODS})
-message(STATUS "Conduction method: ${HERMES_CONDUCTION_METHOD}")
-
 # Generate the build config header
 
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/include/hermes_build_config.hxx")

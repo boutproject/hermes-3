@@ -4,11 +4,9 @@
 
 #include <bout/invert/laplacexy.hxx>
 #include <bout/invert_laplace.hxx>
-#include <bout/vector2d.hxx>
+#include <bout/vectormetric.hxx>
 
 #include "component.hxx"
-
-#include <memory>
 
 /// Evolve electron density in time
 ///
@@ -48,7 +46,7 @@ struct Vorticity : public NamedComponent<Vorticity> {
   ///     If phi_boundary_relax is false, set the radial boundary to the sheath potential?
   ///   - split_n0: bool, default false
   ///     Split phi into n=0 and n!=0 components?
-  ///   - viscosity: Field2D, default 0.0
+  ///   - viscosity: FieldMetric, default 0.0
   ///     Kinematic viscosity [m^2/s]
   ///   - vort_dissipation: bool, default false
   ///     Parallel dissipation of vorticity?
@@ -129,12 +127,12 @@ private:
   bool split_n0;                        // Split phi into n=0 and n!=0 components
   std::unique_ptr<LaplaceXY> laplacexy; // Laplacian solver in X-Y (n=0)
 
-  Field2D Bsq;             // SQ(coord->Bxy)
-  Vector2D Curlb_B;        // Curvature vector Curl(b/B)
-  BoutReal hyper_z;        ///< Hyper-viscosity in Z
-  Field2D viscosity;       ///< Kinematic viscosity
-  Field3D viscous_heating; ///< Heating due to kinematic viscosity
-  bool include_viscosity;  ///< Is viscosity > 0?
+  Coordinates::FieldMetric Bsq;       // SQ(coord->Bxy)
+  VectorMetric Curlb_B;               // Curvature vector Curl(b/B)
+  BoutReal hyper_z;                   ///< Hyper-viscosity in Z
+  Coordinates::FieldMetric viscosity; ///< Kinematic viscosity
+  Field3D viscous_heating;            ///< Heating due to kinematic viscosity
+  bool include_viscosity;             ///< Is viscosity > 0?
 
   // Diagnostic outputs
   Field3D DivJdia, DivJcol; // Divergence of diamagnetic and collisional current

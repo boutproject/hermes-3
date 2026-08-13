@@ -78,6 +78,8 @@ private:
   ///       - energy_flow_ylow  Energy flow diagnostics.
   ///
   void transform_impl(GuardedOptions& state) override;
+
+  std::string conduction_method{"orginal"};
 };
 
 namespace {

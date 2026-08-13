@@ -21,6 +21,7 @@
 #include <bout/sys/range.hxx>
 #include <bout/utils.hxx>
 #include <bout/vecops.hxx>
+#include <bout/vectormetric.hxx>
 
 #include "../include/braginskii_ion_viscosity.hxx"
 #include "../include/component.hxx"
@@ -95,7 +96,7 @@ BraginskiiIonViscosity::BraginskiiIonViscosity(const std::string& name,
       mesh->get(Curlb_B, "bxcv");
     } catch (BoutException& e) {
       // May be 2D, reading as 3D
-      Vector2D curv2d;
+      VectorMetric curv2d;
       curv2d.covariant = false;
       mesh->get(curv2d, "bxcv");
       Curlb_B = curv2d;
@@ -145,9 +146,9 @@ void BraginskiiIonViscosity::transform_impl(GuardedOptions& state) {
   GuardedOptions allspecies = state["species"];
 
   auto coord = mesh->getCoordinates();
-  const Field2D Bxy = coord->Bxy;
-  const Field2D sqrtB = sqrt(Bxy);
-  const Field2D Grad_par_logB = Grad_par(log(Bxy));
+  const auto Bxy = coord->Bxy;
+  const auto sqrtB = sqrt(Bxy);
+  const auto Grad_par_logB = Grad_par(log(Bxy));
 
   // Loop through all species
   for (auto& kv : allspecies.getChildren()) {
@@ -239,7 +240,7 @@ void BraginskiiIonViscosity::transform_impl(GuardedOptions& state) {
     // Parallel ion viscosity (4/3 * 0.96 coefficient)
     Field3D eta = 1.28 * P * tau;
 
-    const Field2D tau_av = DC(tau);
+    const auto tau_av = DC(tau);
 
     Field2D bounce_factor =
         1.0; // if bounce_frequency = false, this factor does nothing to anything
