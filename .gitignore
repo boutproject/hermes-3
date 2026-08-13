@@ -8,6 +8,7 @@ BOUT.settings
 .DS_Store
 /build*
 __pycache__
+uv.lock
 
 # Docs
 /docs/build

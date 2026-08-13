@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
-from boututils.run_wrapper import shell, launch_safe
-import numpy as np
-import shutil
-import zipfile
 import hashlib
 import os
-from pathlib import Path
+import shutil
+import sys
 import urllib.request
-import xhermes
+import zipfile
+from pathlib import Path
 from time import time
+
+import numpy as np
+import xhermes
+from boututils.run_wrapper import launch_safe, shell
 
 t0 = time()
 
@@ -87,11 +89,10 @@ def checkHash(doRaise=True):
             raise
         return False
 
-    if doRaise:
-        if file_hash != expected_hash:
-            raise RuntimeError(
-                "2D-Production test: downloaded zip file hash does not match expected value"
-            )
+    if doRaise and file_hash != expected_hash:
+        raise RuntimeError(
+            "2D-Production test: downloaded zip file hash does not match expected value"
+        )
     return file_hash == expected_hash
 
 
@@ -121,7 +122,7 @@ s, out = launch_safe("./hermes-3 -d data", nproc=10, pipe=True)
 if s != 0:
     print(" => 2D-Production test failed: ")
     print(out)
-    exit(1)
+    sys.exit(1)
 
 t_run = time()
 if verbose:
@@ -207,9 +208,9 @@ if gen_data:
             f'expected["{region_name}"]["ddt(NVd+)"] = {ds["ddt(NVd+)"].values.tolist()}'
         )
         print(f'expected["{region_name}"]["ddt(Pd)"] = {ds["ddt(Pd)"].values.tolist()}')
-        print("")
+        print()
 
-    exit(2)
+    sys.exit(2)
 
 else:
     # Perform test
@@ -234,10 +235,10 @@ else:
             print(f"\n{f['region']} [{f['variable']}]:")
             print(f["error_msg"])
 
-        exit(1)
+        sys.exit(1)
 
     else:
         if verbose:
             t_final = time()
             print(f"2D-production test: Passed in {t_final - t0:.2f} seconds")
-        exit(0)
+        sys.exit(0)

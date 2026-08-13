@@ -148,6 +148,9 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
                            .doc("Include neutral gas heat conduction?")
                            .withDefault<bool>(true);
 
+  conduction_method =
+      options["conduction_method"].withDefault<std::string>(conduction_method);
+
   collisionality_override =
       options["collisionality_override"]
           .doc(
@@ -612,7 +615,8 @@ void NeutralMixed::finally(const Options& state) {
     ddt(Pn) += (2. / 3)
                * Div_par_K_Grad_par_mod(kappa_n, Tn, // Parallel conduction
                                         ef_cond_par_ylow,
-                                        false); // No conduction through target boundary
+                                        false, // No conduction through target boundary
+                                        conduction_method);
 
     // Perpendicular conduction
     if (nonorthogonal_operators) {
@@ -669,8 +673,8 @@ void NeutralMixed::finally(const Options& state) {
 
       Field3D viscosity_source = Div_par_K_Grad_par_mod( // Parallel viscosity
           eta_n, Vn, mf_visc_par_ylow,
-          false) // No viscosity through target boundary
-          ;
+          false, // No viscosity through target boundary
+          conduction_method);
 
       // Perpendicular viscosity
       if (nonorthogonal_operators) {

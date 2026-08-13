@@ -99,13 +99,14 @@ jobs:
   # each by digest only.
   build-builder:
     needs: changes
-    # Publishing needs registry write access, which fork PRs don't have, so skip
-    # cleanly on forks instead of failing on the push step. (Non-PR events such
-    # as workflow_dispatch always run from this repo.)
+    # Publishing needs write access to the boutproject registry, so skip cleanly
+    # anywhere else (fork PRs and downstream forks) instead of failing on the
+    # push step.
     if: |
       needs.changes.outputs.builder == 'true' &&
+      github.repository == 'boutproject/hermes-3' &&
       (github.event_name != 'pull_request' ||
-       github.event.pull_request.head.repo.full_name == github.repository)
+       github.event.pull_request.head.repo.full_name == 'boutproject/hermes-3')
     strategy:
       fail-fast: false
       matrix:
@@ -173,11 +174,12 @@ jobs:
     # Runs when the builder changed (only after the experimental builder is
     # (re)published successfully) OR when only the final image changed (using the
     # experimental builder from a previous run, so merge-builder is skipped).
-    # Skips on fork PRs, which can't publish.
+    # Skips anywhere that can't publish (fork PRs, and downstream forks).
     if: |
       always() &&
+      github.repository == 'boutproject/hermes-3' &&
       (github.event_name != 'pull_request' ||
-       github.event.pull_request.head.repo.full_name == github.repository) &&
+       github.event.pull_request.head.repo.full_name == 'boutproject/hermes-3') &&
       (
         (needs.changes.outputs.builder == 'true' && needs.merge-builder.result == 'success') ||
         (needs.changes.outputs.builder != 'true' && needs.changes.outputs.final == 'true')
@@ -244,12 +246,14 @@ jobs:
   # 'experimental_docker_build' tag directly.
   build-jupyter:
     needs: changes
-    # Publishing needs registry write access, which fork PRs don't have, so skip
-    # cleanly on forks instead of failing on the push step.
+    # Publishing needs write access to the boutproject registry, so skip cleanly
+    # anywhere else (fork PRs and downstream forks) instead of failing on the
+    # push step.
     if: |
       needs.changes.outputs.jupyter == 'true' &&
+      github.repository == 'boutproject/hermes-3' &&
       (github.event_name != 'pull_request' ||
-       github.event.pull_request.head.repo.full_name == github.repository)
+       github.event.pull_request.head.repo.full_name == 'boutproject/hermes-3')
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:

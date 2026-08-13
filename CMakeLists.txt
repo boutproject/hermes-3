@@ -112,6 +112,7 @@ set(HERMES_SOURCES
     src/reaction_data.cxx
     src/reaction_parser.cxx
     src/species_parser.cxx
+    src/fieldline_geometry.cxx
     src/transform.cxx
     src/vorticity.cxx
     include/adas_reaction.hxx
@@ -179,7 +180,8 @@ set(HERMES_SOURCES
     include/zero_current.hxx
     include/transform.hxx
     include/fixed_fraction_radiation.hxx
-    include/simple_pump.hxx)
+    include/simple_pump.hxx
+    include/fieldline_geometry.hxx)
 
 # Compile Hermes sources into a library, which can be used for unit tests
 add_library(hermes-3-lib ${HERMES_SOURCES})
@@ -427,14 +429,6 @@ set(HERMES_SLOPE_LIMITER
     CACHE STRING "Set advection slope limiter")
 set_property(CACHE HERMES_SLOPE_LIMITER PROPERTY STRINGS ${SLOPE_LIMITERS})
 message(STATUS "Slope limiter: ${HERMES_SLOPE_LIMITER}")
-
-set(CONDUCTION_METHODS Original ProductJK Harmonic)
-set(HERMES_CONDUCTION_METHOD
-    Original
-    CACHE STRING "Parallel conduction method")
-set_property(CACHE HERMES_CONDUCTION_METHOD PROPERTY STRINGS
-                                                     ${CONDUCTION_METHODS})
-message(STATUS "Conduction method: ${HERMES_CONDUCTION_METHOD}")
 
 # Generate the build config header
 

@@ -2,7 +2,8 @@
 #ifndef RELAX_POTENTIAL_H
 #define RELAX_POTENTIAL_H
 
-#include <bout/vector2d.hxx>
+#include <bout/coordinates.hxx>
+#include <bout/vectormetric.hxx>
 
 #include "component.hxx"
 
@@ -115,11 +116,11 @@ private:
   BoutReal phi_boundary_last_update; ///< Time when last updated
   bool phi_core_averagey;            ///< Average phi core boundary in Y?
 
-  Field2D Bsq;           ///< SQ(coord->Bxy)
-  Vector2D Curlb_B;      ///< Curvature vector Curl(b/B)
-  BoutReal hyper_z;      ///< Hyper-viscosity in Z
-  Field2D viscosity;     ///< Perpendicular Kinematic viscosity
-  Field2D viscosity_par; ///< Parallel Kinematic viscosity
+  Coordinates::FieldMetric Bsq;           ///< SQ(coord->Bxy)
+  VectorMetric Curlb_B;                   ///< Curvature vector Curl(b/B)
+  BoutReal hyper_z;                       ///< Hyper-viscosity in Z
+  Coordinates::FieldMetric viscosity;     ///< Perpendicular Kinematic viscosity
+  Coordinates::FieldMetric viscosity_par; ///< Parallel Kinematic viscosity
 
   // Relax-potential related variables
   BoutReal lambda_1; ///< Relaxation parameters.  NOTE: lambda_1 has dimensions!
