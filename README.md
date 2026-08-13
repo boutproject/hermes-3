@@ -156,3 +156,10 @@ for more complicated cases.
   plant](https://iopscience.iop.org/article/10.1088/1741-4326/ae70a0#nfae70a0s3)
   Nucl. Fusion 66 086011 2026
   doi:[10.1088/1741-4326/ae70a0](https://doi.org/10.1088/1741-4326/ae70a0)
+* Khan, M and Kryjak, M and Cziegler, I and Dudson, B and Henderson, S
+  and Moulton, D and Osawa, R and Ridgers, C P [The role of momentum
+  transfer in the detachment front response to power transients for
+  reactor scale
+  tokamaks](https://iopscience.iop.org/article/10.1088/1741-4326/ae91f8/meta)
+  Nucl. Fusion 66 096032 2026
+  doi:[10.1088/1741-4326/ae91f8](https://doi.org/10.1088/1741-4326/ae91f8)
