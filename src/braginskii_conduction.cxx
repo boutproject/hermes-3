@@ -114,8 +114,7 @@ BraginskiiConduction::BraginskiiConduction(const std::string& name, Options& all
   }
   substitutePermissions("sp", species);
 
-  conduction_method =
-      alloptions["conduction_method"].withDefault<std::string>(conduction_method);
+  conduction_method = alloptions["conduction_method"].withDefault(conduction_method);
 }
 
 void BraginskiiConduction::transform_impl(GuardedOptions& state) {
