@@ -43,7 +43,7 @@
 /*!
  * Diffusion in index space
  *
- * Similar to using Div_par_diffusion(SQ(mesh->dy)*mesh->g_22, f)
+ * Similar to using Div_par_diffusion(SQ(mesh->dy())*mesh->g_22(), f)
  *
  * @param[in] The field to be differentiated
  * @param[in] bndry_flux  Are fluxes through the boundary calculated?

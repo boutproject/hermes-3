@@ -220,7 +220,7 @@ void EvolveDensity::transform_impl(GuardedOptions& state) {
     auto* coord = mesh->getCoordinates();
 
     Field3D low_n_coeff =
-        SQ(coord->dy) * coord->g_22
+        SQ(coord->dy()) * coord->g_22()
         * log(density_floor / clamp(N, 1e-3 * density_floor, density_floor));
     low_n_coeff.applyBoundary("neumann");
     set(species["low_n_coeff"], low_n_coeff);
@@ -306,7 +306,7 @@ void EvolveDensity::finally(const Options& state) {
 
   if (hyper_z > 0.) {
     auto* coord = N.getCoordinates();
-    ddt(N) -= hyper_z * SQ(SQ(coord->dz)) * D4DZ4(N);
+    ddt(N) -= hyper_z * SQ(SQ(coord->dz())) * D4DZ4(N);
   }
 
   // Collect the external source from above with all the sources from

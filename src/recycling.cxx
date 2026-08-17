@@ -197,11 +197,11 @@ void Recycling::transform_impl(GuardedOptions& state) {
 
   // Get metric tensor components
   Coordinates* coord = mesh->getCoordinates();
-  const auto& J = coord->J;
-  const auto& dy = coord->dy;
-  const auto& dx = coord->dx;
-  const auto& dz = coord->dz;
-  const auto& g_22 = coord->g_22;
+  const auto& J = coord->J();
+  const auto& dy = coord->dy();
+  const auto& dx = coord->dx();
+  const auto& dz = coord->dz();
+  const auto& g_22 = coord->g_22();
 
   for (auto& channel : channels) {
     const GuardedOptions species_from = state["species"][channel.from];
@@ -529,12 +529,13 @@ void Recycling::transform_impl(GuardedOptions& state) {
               // Calculate radial wall area in [m^2]
               // Calculate final cell volume [m^3]
               BoutReal dpolsheath =
-                  0.5 * (coord->dy[i] + coord->dy[ig]) * 1
-                  / (0.5 * (sqrt(coord->g22[i]) + sqrt(coord->g22[ig])));
-              BoutReal dtorsheath = 0.5 * (coord->dz[i] + coord->dz[ig]) * 0.5
-                                    * (sqrt(coord->g_33[i]) + sqrt(coord->g_33[ig]));
+                  0.5 * (coord->dy()[i] + coord->dy()[ig]) * 1
+                  / (0.5 * (sqrt(coord->g22()[i]) + sqrt(coord->g22()[ig])));
+              BoutReal dtorsheath = 0.5 * (coord->dz()[i] + coord->dz()[ig]) * 0.5
+                                    * (sqrt(coord->g_33()[i]) + sqrt(coord->g_33()[ig]));
               BoutReal dasheath = dpolsheath * dtorsheath; // [m^2]
-              BoutReal dv = coord->J[i] * coord->dx[i] * coord->dy[i] * coord->dz[i];
+              BoutReal dv =
+                  coord->J()[i] * coord->dx()[i] * coord->dy()[i] * coord->dz()[i];
 
               // Calculate particle and energy fluxes of neutrals hitting the pump
               // Assume thermal velocity greater than perpendicular velocity and use it
@@ -653,12 +654,14 @@ void Recycling::transform_impl(GuardedOptions& state) {
                 // Calculate radial wall area in [m^2]
                 // Calculate final cell volume [m^3]
                 BoutReal dpolsheath =
-                    0.5 * (coord->dy[i] + coord->dy[ig]) * 1
-                    / (0.5 * (sqrt(coord->g22[i]) + sqrt(coord->g22[ig])));
-                BoutReal dtorsheath = 0.5 * (coord->dz[i] + coord->dz[ig]) * 0.5
-                                      * (sqrt(coord->g_33[i]) + sqrt(coord->g_33[ig]));
+                    0.5 * (coord->dy()[i] + coord->dy()[ig]) * 1
+                    / (0.5 * (sqrt(coord->g22()[i]) + sqrt(coord->g22()[ig])));
+                BoutReal dtorsheath =
+                    0.5 * (coord->dz()[i] + coord->dz()[ig]) * 0.5
+                    * (sqrt(coord->g_33()[i]) + sqrt(coord->g_33()[ig]));
                 BoutReal dasheath = dpolsheath * dtorsheath; // [m^2]
-                BoutReal dv = coord->J[i] * coord->dx[i] * coord->dy[i] * coord->dz[i];
+                BoutReal dv =
+                    coord->J()[i] * coord->dx()[i] * coord->dy()[i] * coord->dz()[i];
 
                 // Calculate particle and energy fluxes of neutrals hitting the pump
                 // Assume thermal velocity greater than perpendicular velocity and use

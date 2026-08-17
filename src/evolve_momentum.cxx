@@ -225,7 +225,7 @@ void EvolveMomentum::finally(const Options& state) {
 
   if (hyper_z > 0.) {
     auto* coord = N.getCoordinates();
-    ddt(NV) -= hyper_z * SQ(SQ(coord->dz)) * D4DZ4(NV);
+    ddt(NV) -= hyper_z * SQ(SQ(coord->dz())) * D4DZ4(NV);
   }
 
   // Other sources/sinks
