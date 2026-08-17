@@ -2,6 +2,7 @@ import zoidberg
 from zoidberg.field import Slab
 import numpy as np
 
+import uuid
 import os
 import sys
 
@@ -97,10 +98,12 @@ def create_grid(folder, nx, ny, nz, BC=False, inp_Ly=None):
         maps["forward_xt_prime"][:, -1, :] = nx - 1
         maps["backward_xt_prime"][:, 0, :] = nx - 1
 
-    with zoidberg.zoidberg.MapWriter(filename) as mw:
+    tmpname = str(uuid.uuid4())
+    with zoidberg.zoidberg.MapWriter(tmpname) as mw:
         mw.add_grid_field(rectangle, magnetic_field)
         mw.add_maps(maps)
         mw.add_dagp()
+    os.replace(tmpname, filename)
 
 
 script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -155,10 +158,12 @@ def create_blob_grid(nx, ny, nz, filename):
 
     maps = zoidberg.make_maps(rectangle, magnetic_field, nslice=1)
 
-    with zoidberg.zoidberg.MapWriter(filename) as mw:
+    tmpname = str(uuid.uuid4())
+    with zoidberg.zoidberg.MapWriter(tmpname) as mw:
         mw.add_grid_field(rectangle, magnetic_field)
         mw.add_maps(maps)
         mw.add_dagp()
+    os.replace(tmpname, filename)
 
 
 folder_blob = script_dir + "/slab_for_blob/"
