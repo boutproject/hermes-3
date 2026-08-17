@@ -321,7 +321,6 @@ if(HERMES_TESTS)
           STATUS "Not building test ${TESTNAME}, conflicts with: ${CONFLICT}")
         return()
       endif()
-      message(STATUS "CONFLICT ${CONFLICT} ${${CONFLICT}}")
     endforeach()
 
     if(HERMES_COPY_TESTS_TO_BUILD)
