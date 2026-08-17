@@ -7,7 +7,7 @@ from boutdata.collect import collect
 
 from numpy import sqrt, max, abs, mean, array, log
 
-gridpath = "../../../../grids/MMS_slab_y/"
+gridpath = "../../../grids/MMS_slab_y/"
 
 
 def gridname(ny):
