@@ -132,8 +132,8 @@ TEST_F(FieldlineGeometryTest, SetsCoordinatesJacobianAndBxy) {
 
   // Bxy is no longer consistent with the new Jacobian, so should be NaN
   // everywhere to stop anyone accidentally using it.
-  for (auto i : coord->Bxy.getRegion("RGN_ALL")) {
-    ASSERT_TRUE(std::isnan(coord->Bxy[i]));
+  for (auto i : coord->Bxy().getRegion("RGN_ALL")) {
+    ASSERT_TRUE(std::isnan(coord->Bxy()[i]));
   }
 
   // J = 1 / (Beff) / Lnorm. With constant inputs, transport_broadening = 1
@@ -236,7 +236,7 @@ TEST_F(FieldlineGeometryTest, GeometryFactorsAreSelfConsistentForNonTrivialProfi
   component.outputVars(outputs);
 
   Coordinates* coord = mesh->getCoordinates();
-  auto dy = coord->dy;
+  auto dy = coord->dy();
   auto pitch_angle = get<Field3D>(outputs["fieldline_geometry_magnetic_pitch"]);
   auto Rxy = get<Field3D>(outputs["fieldline_geometry_Rxy"]);
   auto lambda_int = get<Field3D>(outputs["fieldline_geometry_lambda_int"]);
