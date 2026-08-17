@@ -1,0 +1,88 @@
+(* ::Package:: *)
+
+BeginPackage["axial`"]
+
+(* To run the package, execute the following line in a notebook
+<<axial.m
+ *)
+
+(* 
+"Provides MMS solution and source for the anisotropic diffusion model in circular geometry
+- Only Dirichlet boundary conditions in the perpendicular direction is considered
+- Parallel boundaries (Penalisation) are not taken into account 
+- MMS solution is firstly is prescribed in cylindrical coordinates 
+(r,p,z) and afterwards a transformed to Cartesian coordinates (x,y,phi) used in GRILLIX 
+r = sqrt(x^2+y^2);  p = arctan(y/x);  z = phi, t = time
+- Paramters of model are: chi_par, chi_perp, safety factor q, and limiting flux surfaces rmin and rmax"
+*)
+
+
+Print["Computing MMS Terms"];
+
+(*
+define x,y and parallel derivatives in terms of r,p,z derivative \
+and normalised radial coordinate rn
+*)
+absb[x_] = Sqrt[1 + x^2/q[x]^2];
+pgrad[f_, x_, z_, y_, t_] = (D[f[x,z,y,t],y] + 1/q[x]*D[f[x,z,y,t],z])/absb[x];
+ddx[f_, r_, p_, z_, t_] = D[f[r, p, z, t], r];
+ddy[f_, r_, p_, z_, t_] = D[f[r, p, z, t], r]*Sin[p] + D[f[r, p, z, t], p]*Cos[p]/r;
+d2dx2[f_, r_, p_, z_, t_] = D[ddx[f, r, p, z, t], r];
+d2dy2[f_, r_, p_, z_, t_] = D[ddy[f, r, p, z, t], r]*Sin[p] +  D[ddy[f, r, p, z, t], p]*Cos[p]/r;
+
+
+LaplacePerpMmsSol[f_,r_, p_, z_, t_] =  d2dx2[f, r, p, z, t] + d2dy2[f, r, p, z, t];
+
+LaplacePerp[f_,r_,p_,z_,t_] = D[f[r,p,z,t],{r,2}] + D[f[r,p,z,t],r]/r + 1.0/(r*r)*D[f[r,p,z,t],{p,2}];
+
+
+  
+xn[x_] = (x-xmin)/(xmax-xmin);  
+    
+
+divparkgradparb[f_,h_, x_, z_, y_, t_]=pgrad[];
+d2dpar2[f_, x_, z_, y_, t_] = (D[D[f[x, z, y, t], y], y] + 2/q[x]*D[D[f[x, z, y, t], y], z] +  1/q[x]^2*D[D[f[x, z, y, t], z], z])/absb[x]^2;
+    
+
+
+(*
+Define normalised rho and MMS solution in terms of mode numbers \
+given above
+*)
+MmsN[x_, z_, y_, t_] = N0/Nnorm;
+MmsT[x_, z_, y_, t_] = (Tamp*Sin[2.0*Pi*kx*xn[x]]*Sin[kz*z - phz]*Cos[ky*y- phy]+T0)/Tnorm;
+MmsP[x_, z_, y_, t_] = MmsN[x,z,y,t]*MmsT[x,z,y,t];
+rhos = 0.0002284697436697996
+qe = 1.60217663*^-19
+Me = 9.1093837*^-31
+e0 = 8.85418781*^-12
+Omegaci = qe * Bnorm / (1836.0*Me)
+
+logN[x_, z_, y_, t_]=Log[MmsN[x,z,y,t]*Nnorm];
+logT[x_, z_, y_, t_]=Log[MmsT[x,z,y,t]*Tnorm];
+
+coulog[x_, z_, y_, t_]=30.4 - 0.5*logN[x,z,y,t]+(5.0/4.0)*logT[x,z,y,t]-Sqrt[1.0/(10^5)+(1.0/16.0)*(logT[x,z,y,t]-2.0)^2];
+vsq[x_, z_, y_, t_] = 2.0 * MmsT[x,z,y,t]*Tnorm * qe / Me;
+
+nu[x_, z_, y_, t_] = ((qe^4)*MmsN[x, z, y, t]*Nnorm * coulog[x, z, y, t] * 2.0 /(3.0 *((Pi*2.0*vsq[x,z,y,t])^1.5)*((e0*Me)^2)))/Omegaci;
+
+tau[x_, z_, y_, t_] = 1.0 / nu[x,z,y,t];
+
+kappa[x_, z_, y_, t_] = (3.16/Sqrt[2.0])*MmsP[x,z,y,t]*tau[x,z,y,t]/AA;
+
+qpar[x_, z_, y_, t_]=kappa[x,z,y,t]*pgrad[MmsT,x,z,y,t];
+divqpar[x_, z_, y_, t_]=pgrad[qpar,x,z,y,t];
+
+
+Smms[x_, z_, y_, t_]=D[MmsP[x,z,y,t],t]-(2.0 / 3.0) * Chiperp/(rhos*rhos*Omegaci) * MmsN[x,z,y,t] * LaplacePerp[MmsT,x,z,y,t] * (rhos*rhos)-
+					Chipar/(rhos*rhos*Omegaci)*d2dpar2[MmsP,x,z,y,t]* (rhos*rhos)-
+					(2.0/3.0)*divqpar[x,z,y,t]*(rhos*rhos);
+
+
+Print["Finished MMS Terms"];
+Print[Omegaci]
+(* Set a dummy return value *)
+1
+
+
+EndPackage[ ]
