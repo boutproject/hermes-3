@@ -429,20 +429,19 @@ if(HERMES_TESTS)
       add_test(
         NAME differential_operators_mms_orthogonal
         WORKING_DIRECTORY tests/mms_operator/
-        COMMAND python3 orthogonal_test.py CONFLICTS BOUT_ENABLE_METRIC_3D)
+        COMMAND python3 orthogonal_test.py)
       set_tests_properties(differential_operators_mms_orthogonal
                            PROPERTIES LABELS integration)
       add_test(
         NAME differential_operators_mms_nonorthogonal
         WORKING_DIRECTORY tests/mms_operator/
-        COMMAND python3 nonorthogonal_test.py CONFLICTS BOUT_ENABLE_METRIC_3D)
+        COMMAND python3 nonorthogonal_test.py)
       set_tests_properties(differential_operators_mms_nonorthogonal
                            PROPERTIES LABELS integration)
       add_test(
         NAME rhs_mms_neutral_mixed
         WORKING_DIRECTORY tests/mms_operator/
-        COMMAND python3 neutral_mixed_ddt_test.py CONFLICTS
-                BOUT_ENABLE_METRIC_3D)
+        COMMAND python3 neutral_mixed_ddt_test.py)
       set_tests_properties(rhs_mms_neutral_mixed PROPERTIES LABELS integration)
     endif()
   endif()
