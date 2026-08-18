@@ -69,8 +69,11 @@ EvolveMomentum::EvolveMomentum(std::string name, Options& alloptions, Solver* so
       options["diagnose"].doc("Output additional diagnostics?").withDefault<bool>(false);
 
   use_div_par_fvv = options["use_div_par_fvv"]
-                        .doc("Use Div_par_fvv instead of Div_par")
+                        .doc("Use Div_par_fvv instead of Div_par\nOnly for MMS tests")
                         .withDefault<bool>(use_div_par_fvv);
+  if ((not use_div_par_fvv) and (not alloptions["mms"].as<bool>())) {
+    throw BoutException("use_div_par_fvv is only for MMS tests");
+  }
 
   fix_momentum_boundary_flux =
       options["fix_momentum_boundary_flux"]
