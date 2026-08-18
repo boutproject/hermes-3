@@ -28,11 +28,16 @@ cmake.version = ">=3.25"
 cmake.build-type = "Release"
 wheel.packages = []
 wheel.install-dir = "${SKBUILD_DATA_DIR}"
-sdist.exclude = ["*"]
-sdist.include = ["/README.md", "/LICENSE", "/pyproject.toml", "/src/*.cxx", "/include/*.hxx*", "/hermes-3.cxx", "/hermes-3.hxx",
-                 "/CMakeLists.txt", "cmake/**.cmake*",
-                 "/json_database", "external/BOUT-dev/README.md", "external/BOUT-dev/LICENSE", "external/BOUT-dev/LICENSE.GPL", "external/BOUT-dev/CMakeLists.txt", "external/BOUT-dev/bout++Config.cmake.in", "external/BOUT-dev/cmake_build_defines.hxx.in", "external/BOUT-dev/cmake/*.cmake*", "external/BOUT-dev/bin/bout-config.in", "external/BOUT-dev/tools/pylib/boutconfig/__init__.py.cin", "external/BOUT-dev/src/**/*.cxx", "external/BOUT-dev/src/**/*.hxx",
-                 "external/BOUT-dev/include/bout/**/*.h*", "external/BOUT-dev/externalpackages/cpptrace", "external/BOUT-dev/externalpackages/fmt", "external/BOUT-dev/externalpackages/mpark.variant", "external/BOUT-dev/externalpackages/PVODE", "!external/BOUT-dev/externalpackages/PVODE/source/build-aux", "!external/BOUT-dev/externalpackages/PVODE/precon/build-aux", "!*~", "external/BOUT-dev/src/field/gen_fieldops.jinja", "external/BOUT-dev/src/field/gen_fieldops.py", "external/BOUT-dev/locale", "external/json.hxx"]
+sdist.exclude = [".github", "scripts", "external/BOUT-spack",
+"googletest", "benchmarks", "ci", "docker", "doc", "docs", "examples",
+"performance", "test", "tests", "external/BOUT-dev/tools",
+"external/BOUT-dev/manual", "build-aux", "external/BOUT-dev/bin",
+"CHANGELOG.md"]
+sdist.include = ["external/BOUT-dev/bin/bout-config.in",
+                 # For some reason this file isn't automatically being included in the SDIST
+                 "external/BOUT-dev/include/bout/build_config.hxx",
+                 "external/BOUT-dev/tools/pylib/boutconfig/__init__.py.cin",
+]
 
 [tool.scikit-build.cmake.define]
 BUILD_SHARED_LIBS = false
