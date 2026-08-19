@@ -100,9 +100,6 @@ private:
       // Note: The boundary of N may not be set yet
       auto N = GET_NOBOUNDARY(Field3D, species["density"]);
       P = N * T;
-      if (P.isFci()) {
-        ASSERT2(P.hasParallelSlices());
-      }
       set(species["pressure"], P);
     }
   }
