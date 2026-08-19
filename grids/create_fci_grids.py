@@ -2,20 +2,25 @@ import zoidberg
 from zoidberg.field import Slab
 import numpy as np
 
+import argparse
 import uuid
 import os
-import sys
 
-
-force = "-f" in sys.argv or "--force" in sys.argv
-verbose = "-v" in sys.argv or "--verbose" in sys.argv
+parser = argparse.ArgumentParser()
+parser.add_argument(
+    "-v", "--verbose", help="increase output verbosity", action="store_true"
+)
+parser.add_argument(
+    "-f", "--force", help="create grid files, even if they exist", action="store_true"
+)
+args = parser.parse_args()
 
 orgprint = print
 
 
-def print(*args, **kvargs):
-    if verbose:
-        orgprint(*args, **kvargs)
+def print(*pargs, **kvargs):
+    if args.verbose:
+        orgprint(*pargs, **kvargs)
 
 
 class ThisField(Slab):
@@ -64,7 +69,7 @@ def create_grid(folder, nx, ny, nz, BC=False, inp_Ly=None):
 
     filename = folder + f"MMS_straight_slab_{nx}_{ny}_{nz}_{BC}.fci.grid.nc"
 
-    if os.path.exists(filename) and not force:
+    if os.path.exists(filename) and not args.force:
         print(filename, " exists")
         return 0
 
@@ -133,7 +138,7 @@ create_grid(folder_BC, 8, 256, 4, BC=True)
 
 def create_blob_grid(nx, ny, nz, filename):
 
-    if os.path.exists(filename) and not force:
+    if os.path.exists(filename) and not args.force:
         print(filename, " exists")
         return 0
 
