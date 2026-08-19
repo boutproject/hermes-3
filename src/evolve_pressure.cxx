@@ -290,11 +290,7 @@ void EvolvePressure::finally(const Options& state) {
       ddt(P) -= FV::Div_par_mod<hermes::Limiter>(P, V, fastest_wave, flow_ylow_advection);
 
       // Work done. This balances energetically a term in the momentum equation
-      if (P.isFci()) {
-        E_PdivV = -Pfloor * Div_par(V.asField3DParallel());
-      } else {
-        E_PdivV = -Pfloor * Div_par(V);
-      }
+      E_PdivV = -Pfloor * Div_par(V.asField3DParallel());
       ddt(P) += (2. / 3) * E_PdivV;
 
     } else {
@@ -305,11 +301,7 @@ void EvolvePressure::finally(const Options& state) {
       ddt(P) -=
           (5. / 3)
           * FV::Div_par_mod<hermes::Limiter>(P, V, fastest_wave, flow_ylow_advection);
-      if (P.isFci()) {
-        E_VgradP = V * Grad_par(P.asField3DParallel());
-      } else {
-        E_VgradP = V * Grad_par(P);
-      }
+      E_VgradP = V * Grad_par(P.asField3DParallel());
       ddt(P) += (2. / 3) * E_VgradP;
     }
     flow_ylow_advection *= 5. / 2; // Energy flow
