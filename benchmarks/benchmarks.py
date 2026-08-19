@@ -1,76 +1,83 @@
+import dataclasses
 import os
 import pathlib
 import shutil
 import sys
 import tempfile
+from collections.abc import Callable
+from typing import ClassVar
 
 from boututils.run_wrapper import launch_safe
 
-TESTPATH = pathlib.Path(__file__).parent.parent.resolve() / "tests" / "integrated"
+REPO_BASE = pathlib.Path(__file__).parent.parent.resolve()
 
 
-class Time1DRun:
-    """
-    Simple performance benchmark for 1D case.
-    """
+@dataclasses.dataclass
+class BenchmarkParameters:
+    testname: str
+    nproc: int
+    nout: int
+    timestep: float
+    testpath: pathlib.Path = REPO_BASE / "tests" / "integrated"
+    datadir: str = "data"
+    get_data: Callable[["BenchmarkParameters", pathlib.Path], None] = (
+        lambda self, path: None
+    )
 
+    def __repr__(self) -> str:
+        return self.testname
+
+
+def get_2d_production_data(self: BenchmarkParameters, runpath: pathlib.Path):
+    sys.path.append(str(self.testpath / self.testname))
+    import runtest_utils
+
+    sys.path.pop()
+    dd = runtest_utils.DataDownloader(runpath)
+    dd.download_data()
+    dd.checkHash()
+    dd.extractZip()
+
+
+class TimingBenchmark:
     timeout = 180
-    rounds = 1
+    rounds = 3
     repeat = 1
     number = 1
     warmup_time = 0
 
-    def setup(self):
+    params: ClassVar = [
+        BenchmarkParameters("1D-recycling-dthe", 1, 10, 2500),
+        BenchmarkParameters(
+            "2D-production", 10, 10, 10, get_data=get_2d_production_data
+        ),
+        BenchmarkParameters(
+            "tokamak-2D-driftplane",
+            4,
+            15,
+            250,
+            testpath=REPO_BASE / "examples",
+            datadir="2D-drift-plane-turbulence-te-ti",
+        ),
+    ]
+    param_names: ClassVar = ["testcase"]
+
+    def setup(self, param: BenchmarkParameters):
         self.rundir = tempfile.TemporaryDirectory()
         self.runpath = pathlib.Path(self.rundir.name)
-        shutil.copytree(TESTPATH / "1D-recycling-dthe" / "data", self.runpath / "data")
+        shutil.copytree(
+            param.testpath / param.testname / param.datadir, self.runpath / "data"
+        )
         self.cwd = os.getcwd()
         os.chdir(self.runpath)
+        param.get_data(param, self.runpath)
 
-    def time_1D_sim(self):
+    def time_sim(self, param: BenchmarkParameters):
         launch_safe(
-            f"hermes-3 -d {self.runpath / 'data'} nout=10 timestep=2500", nproc=1
+            f"hermes-3 -d {self.runpath / 'data'} nout={param.nout} timestep={param.timestep}",
+            nproc=param.nproc,
         )
 
-    def teardown(self):
-        os.chdir(self.cwd)
-        del self.rundir
-
-
-class Time2DRun:
-    """
-    Simple performance benchmark based on running 2D-production
-    """
-
-    timeout = 180
-    rounds = 1
-    repeat = 1
-    number = 1
-    warmup_time = 0
-
-    def setup(self):
-        self.rundir = tempfile.TemporaryDirectory()
-        self.runpath = pathlib.Path(self.rundir.name)
-        testdir = TESTPATH / "2D-production"
-        shutil.copytree(testdir / "data", self.runpath / "data")
-        self.cwd = os.getcwd()
-        os.chdir(self.runpath)
-        # Load the runtest file to access methods needed to download data
-        sys.path.append(str(testdir))
-        import runtest_utils
-
-        sys.path.pop()
-
-        dd = runtest_utils.DataDownloader(self.runpath)
-        dd.download_data()
-        dd.checkHash()
-        dd.extractZip()
-
-    def time_2D_sim(self):
-        launch_safe(
-            f"hermes-3 -d {self.runpath / 'data'} nout=10 timestep=10", nproc=10
-        )
-
-    def teardown(self):
+    def teardown(self, param: BenchmarkParameters):
         os.chdir(self.cwd)
         del self.rundir
