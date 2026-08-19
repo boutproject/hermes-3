@@ -16,8 +16,7 @@ from math import pi
 Ly = 2.0 * pi
 
 # Atomic mass number
-AA = 1.0
-# Auxil variables
+
 AA = 1.0
 charge = 1.0
 qe = 1.60217663e-19
@@ -35,6 +34,7 @@ rho_s = 0.00022847
 Cs0 = sqrt(qe * Tnorm / Mp)
 Omega_ci = qe * Bnorm / Mp
 rho_s = Cs0 / Omega_ci
+
 # metric tensor
 metric = Metric()  # Identity
 
