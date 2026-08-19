@@ -6,6 +6,8 @@ import argparse
 import uuid
 import os
 
+from pathlib import Path
+
 parser = argparse.ArgumentParser()
 parser.add_argument(
     "-v", "--verbose", help="increase output verbosity", action="store_true"
@@ -67,9 +69,9 @@ def create_directory(path):
 
 def create_grid(folder, nx, ny, nz, BC=False, inp_Ly=None):
 
-    filename = folder + f"MMS_straight_slab_{nx}_{ny}_{nz}_{BC}.fci.grid.nc"
+    filename = folder / f"MMS_straight_slab_{nx}_{ny}_{nz}_{BC}.fci.grid.nc"
 
-    if os.path.exists(filename) and not args.force:
+    if filename.exists() and not args.force:
         print(filename, " exists")
         return 0
 
@@ -111,11 +113,11 @@ def create_grid(folder, nx, ny, nz, BC=False, inp_Ly=None):
     os.replace(tmpname, filename)
 
 
-script_dir = os.path.dirname(os.path.abspath(__file__))
+script_dir = Path(__file__).parent
 print(script_dir)
-folder_xz = script_dir + "/MMS_slab_xz/"
-folder_y = script_dir + "/MMS_slab_y/"
-folder_BC = script_dir + "/slab_with_BC/"
+folder_xz = script_dir / "MMS_slab_xz"
+folder_y = script_dir / "MMS_slab_y"
+folder_BC = script_dir / "slab_with_BC"
 
 
 create_directory(folder_xz)
@@ -138,7 +140,7 @@ create_grid(folder_BC, 8, 256, 4, BC=True)
 
 def create_blob_grid(nx, ny, nz, filename):
 
-    if os.path.exists(filename) and not args.force:
+    if filename.exists() and not args.force:
         print(filename, " exists")
         return 0
 
@@ -171,11 +173,11 @@ def create_blob_grid(nx, ny, nz, filename):
     os.replace(tmpname, filename)
 
 
-folder_blob = script_dir + "/slab_for_blob/"
+folder_blob = script_dir / "slab_for_blob"
 
 create_directory(folder_blob)
-create_blob_grid(132, 2, 128, folder_blob + "slab_blob_132_2_128.grid.fci.nc")
-create_blob_grid(260, 2, 256, folder_blob + "slab_blob_260_2_256.grid.fci.nc")
+create_blob_grid(132, 2, 128, folder_blob / "slab_blob_132_2_128.grid.fci.nc")
+create_blob_grid(260, 2, 256, folder_blob / "slab_blob_260_2_256.grid.fci.nc")
 
 
 print("Finished creating all the grids")
