@@ -4,7 +4,7 @@
 
 from boututils.run_wrapper import shell, launch_safe
 from boutdata.collect import collect
-
+from pathlib import Path
 from numpy import sqrt, max, abs, mean, array, log
 
 gridpath = "../../../grids/MMS_slab_y/"
@@ -29,14 +29,7 @@ for var in varnames:
     results[var] = {"l2": [], "inf": []}
 
 for ny in nylist:
-    args = (
-        "mesh:file="
-        + gridname(ny)
-        + " nout="
-        + str(nout)
-        + " timestep="
-        + str(timestep)
-    )
+    args = "mesh:file={gridname(ny)} nout={nout} timestep={timestep}"
 
     print("Running with " + args)
 
@@ -46,12 +39,8 @@ for ny in nylist:
     # Command to run
     cmd = "../../../hermes-3 " + args
     # Launch using MPI
-    s, out = launch_safe(cmd, nproc=nproc, pipe=True)
-
-    # Save output to log file
-    f = open("run.log." + str(ny), "w")
-    f.write(out)
-    f.close()
+    _, out = launch_safe(cmd, nproc=nproc, pipe=True)
+    Path(f"run.log.{ny}").write_text(out)
 
     # Collect data
     for var in varnames:
