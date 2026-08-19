@@ -78,8 +78,7 @@ private:
       const Field3DParallel N = getNoBoundary<Field3D>(species["density"]);
       const BoutReal AA = get<BoutReal>(species["AA"]); // Atomic mass
 
-      Field3DParallel mom = AA * N * V;
-      set(species["momentum"], mom);
+      set(species["momentum"], Field3DParallel{AA * N * V});
     }
   }
 };
