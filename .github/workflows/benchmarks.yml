@@ -51,29 +51,32 @@ jobs:
         with:
           python-version: "3.x"
 
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install -r requirements_bench.txt
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Install dev tools
+        run: uv sync --only-dev
 
       - name: Run benchmarks
         env:
           ASV_FACTOR: 1.5
         run: |
           # ID of this machine
-          asv machine --yes
+          uv run asv machine --yes
 
           echo "Baseline:  ${{ github.event.pull_request.base.sha }} (${{ github.event.pull_request.base.label }})"
           echo "Contender: ${GITHUB_SHA} ($PR_HEAD_LABEL)"
 
           # Run benchmarks for current commit against base
           ASV_OPTIONS="--split --show-stderr --factor $ASV_FACTOR"
-          asv continuous $ASV_OPTIONS ${{ github.event.pull_request.base.sha }} ${GITHUB_SHA} \
+          uv run asv continuous $ASV_OPTIONS ${{ github.event.pull_request.base.sha }} ${GITHUB_SHA} \
               | sed "/Traceback \|failed$\|PERFORMANCE DECREASED/ s/^/::error::/" \
               | tee benchmarks.log
 
           # Report and export results for subsequent steps
-          asv compare --split --factor $ASV_FACTOR ${{ github.event.pull_request.base.sha }} ${GITHUB_SHA}
+          uv run asv compare --split --factor $ASV_FACTOR ${{ github.event.pull_request.base.sha }} ${GITHUB_SHA}
           if grep "Traceback \|failed\|PERFORMANCE DECREASED" benchmarks.log > /dev/null ; then
               exit 1
           fi
