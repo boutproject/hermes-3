@@ -396,6 +396,8 @@ environment file, spack.yaml, to include the gcc installation details.
 
    This workaround should not be required when using spack versions newer than 1.1.0.
 
+.. _sec-install-hermes-3:
+
 Install Hermes-3 and dependencies
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 

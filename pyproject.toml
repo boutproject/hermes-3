@@ -19,6 +19,8 @@ dev = [
      "ruff~=0.16",
      "sphinx-lint~=1.0",
      "sync-with-uv~=0.6.0",
+     "scikit-build-core~=1.0.3",
+     "asv~=0.6.6",
 ]
 
 [tool.uv.workspace]
