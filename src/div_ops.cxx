@@ -2148,6 +2148,7 @@ const Field3D Div_par_K_Grad_par_mod(const Field3D& Kin, const Field3D& fin,
     flow_ylow = zeroFrom(fin);
 
     BOUT_FOR(i, result.getRegion("RGN_NOBNDRY")) {
+      if (immBndry && !immBndry->IsInside(i)) {continue;}
       const auto iyp = i.yp();
       const auto iym = i.ym();
 
@@ -2199,6 +2200,7 @@ const Field3D Div_par_K_Grad_par_mod(const Field3D& Kin, const Field3D& fin,
 
   BOUT_FOR(i, result.getRegion("RGN_NOBNDRY")) {
     // Calculate flux at upper surface
+    if (immBndry && !immBndry->IsInside(i)) {continue;}
 
     const auto iyp = i.yp();
     const auto iym = i.ym();

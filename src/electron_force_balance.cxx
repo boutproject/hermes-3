@@ -40,6 +40,8 @@ void ElectronForceBalance::transform(Options &state) {
     Epar = force_density;
     BOUT_FOR(i, mesh->getRegion3D("RGN_NO_IMM_BNDRY")) {
       Epar[i] /= Nfloor[i];
+      Epar.yup()[i.yp()] /= Nfloor.yup()[i.yp()];
+      Epar.ydown()[i.ym()] /= Nfloor.ydown()[i.ym()];
     }
     Epar.name = "Epar";
     if (!immBndry->CheckFieldSetUp(Epar.name)) {

@@ -315,6 +315,8 @@ void EvolveDensity::finally(const Options& state) {
         fastest_wave = copy(T);
         //IB_TODO: Complicated / operator logic...
         BOUT_FOR(i, T.getRegion("RGN_ALL")) {
+          //IB_TODO: Need to handle up/down too? Same for pressure and momentum.
+          //Fastest wave doesnt have up/down so simply add check for has parallel slices everywhere before doing that.
           if (!immBndry->IsInside(i)) {fastest_wave[i] = 0.0;}
           else {fastest_wave[i] = sqrt(fastest_wave[i]/AA);}
         }

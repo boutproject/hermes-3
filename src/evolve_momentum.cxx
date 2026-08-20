@@ -153,6 +153,8 @@ void EvolveMomentum::transform(Options &state) {
     V = NV;
     BOUT_FOR(i, NV.getRegion("RGN_NO_IMM_BNDRY")) {
       V[i] /= (AA * Nlim[i]);
+      V.yup()[i.yp()]   /= (AA * Nlim.yup()[i.yp()]);
+      V.ydown()[i.ym()] /= (AA * Nlim.ydown()[i.ym()]);
     }
     V.name = Vname;
     immBndry->SetBoundary(V);
@@ -169,7 +171,7 @@ void EvolveMomentum::transform(Options &state) {
     NV_solver.name = NV.name;
     //IB_TODO: Complex * operator logic...
     BOUT_FOR(i, V.getRegion("RGN_NO_IMM_BNDRY")) {
-      NV[i] = AA * N[i] * V[i];
+      NV[i] = AA * N[i] * V[i]; //Dont need yup/ydown, done below!
     }
     //IB_TODO: Dont need to SetBoundary(NV) if N and V set at some point?
     immBndry->SetBoundary(NV);

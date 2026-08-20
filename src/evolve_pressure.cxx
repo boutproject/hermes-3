@@ -307,12 +307,14 @@ void EvolvePressure::transform(Options& state) {
     T = copy(Pfloor);
     BOUT_FOR(i, T.getRegion("RGN_NO_IMM_BNDRY")) {
       T[i] /= Nfloor[i];
+      T.yup()[i.yp()] /= Nfloor.yup()[i.yp()];
+      T.ydown()[i.ym()] /= Nfloor.ydown()[i.ym()];
     }
     Pfloor = Nfloor * T;
     Pfloor.name = P.name;
     T.name = old_name;
 
-    //IB_TODO: Is it necessary to do this or just loop over ghost cells above too to combine BCs?
+    //IB_TODO: More simple to set ghosts in loop? But flooring means need new ghosts too.
     immBndry->SetBoundary(Pfloor);
     immBndry->SetBoundary(T);
   } else {
