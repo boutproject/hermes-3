@@ -7,12 +7,13 @@
 
 /// Set parallel velocity to a fixed value
 ///
-struct FixedVelocity : public Component {
+struct FixedVelocity : public NamedComponent<FixedVelocity> {
 
   FixedVelocity(std::string name, Options& alloptions, Solver* UNUSED(solver))
-      : Component({readIfSet("species:{name}:density", Regions::Interior),
-                   // FIXME: AA is only read if density is set
-                   readOnly("species:{name}:AA"), readWrite("species:{name}:{output}")}),
+      : NamedComponent(name, {readIfSet("species:{name}:density", Regions::Interior),
+                              // FIXME: AA is only read if density is set
+                              readOnly("species:{name}:AA"),
+                              readWrite("species:{name}:{output}")}),
         name(name) {
 
     auto& options = alloptions[name];
@@ -23,9 +24,10 @@ struct FixedVelocity : public Component {
 
     // Get the velocity and normalise
     // First read from the mesh file e.g. "Ve0"
-    if ((bout::globals::mesh->get(V, std::string("V") + name + "0") != 0) and
-        !options.isSet("velocity")) {
-      throw BoutException("fixed_velocity: Missing mesh V{}0 or option {}:velocity\n", name, name);
+    if ((bout::globals::mesh->get(V, std::string("V") + name + "0") != 0)
+        and !options.isSet("velocity")) {
+      throw BoutException("fixed_velocity: Missing mesh V{}0 or option {}:velocity\n",
+                          name, name);
     }
     // Option overrides mesh value
     // so use mesh value (if any) as default value.
@@ -47,6 +49,8 @@ struct FixedVelocity : public Component {
                     {"species", name},
                     {"source", "fixed_velocity"}});
   }
+
+  static constexpr auto type = "fixed_velocity";
 
 private:
   std::string name; ///< Short name of species e.g "e"
@@ -73,7 +77,7 @@ private:
 };
 
 namespace {
-RegisterComponent<FixedVelocity> registercomponentfixedvelocity("fixed_velocity");
+RegisterComponent<FixedVelocity> registercomponentfixedvelocity;
 }
 
 #endif // FIXED_VELOCITY_H

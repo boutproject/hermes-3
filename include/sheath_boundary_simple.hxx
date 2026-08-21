@@ -15,7 +15,7 @@
 ///   - It is recommended to use SheathBoundary rather than SheathBoundarySimple;
 ///     this is here for comparison to that more complete model.
 ///
-struct SheathBoundarySimple : public Component {
+struct SheathBoundarySimple : public NamedComponent<SheathBoundarySimple> {
   /// # Input options
   /// - <name>  e.g. "sheath_boundary_simple"
   ///   - lower_y                  Boundary on lower y?
@@ -27,18 +27,20 @@ struct SheathBoundarySimple : public Component {
   ///   - secondary_electron_coef  Effective secondary electron emission coefficient
   ///   - sin_alpha                Sine of the angle between magnetic field line and wall surface (0 to 1)
   ///   - always_set_phi           Always set phi field? Default is to only modify if already set
-  SheathBoundarySimple(std::string name, Options &options, Solver *);
+  SheathBoundarySimple(std::string name, Options& options, Solver*);
 
-  void outputVars(Options &state) override;
+  void outputVars(Options& state) override;
+
+  static constexpr auto type = "sheath_boundary_simple";
 
 private:
-  BoutReal Ge; // Secondary electron emission coefficient
+  BoutReal Ge;        // Secondary electron emission coefficient
   BoutReal sin_alpha; // sin of angle between magnetic field and wall.
 
-  BoutReal gamma_e; ///< Electron sheath heat transmission
-  BoutReal gamma_i; ///< Ion sheath heat transmission
+  BoutReal gamma_e;               ///< Electron sheath heat transmission
+  BoutReal gamma_i;               ///< Ion sheath heat transmission
   BoutReal sheath_ion_polytropic; ///< Polytropic coefficient in sheat velocity
-  
+
   bool lower_y; // Boundary on lower y?
   bool upper_y; // Boundary on upper y?
 
@@ -46,16 +48,17 @@ private:
 
   Field3D wall_potential; ///< Voltage of the wall. Normalised units.
 
-  Field3D hflux_e;  // Electron heat flux through sheath
-  Field3D phi; // Phi at sheath
+  Field3D hflux_e; // Electron heat flux through sheath
+  Field3D phi;     // Phi at sheath
   Field3D ion_sum; // Sum of ion current at sheath
 
-  bool diagnose; // Save diagnostic variables?
-  Options diagnostics;   // Options object to store diagnostic fields like a dict
+  bool diagnose;       // Save diagnostic variables?
+  Options diagnostics; // Options object to store diagnostic fields like a dict
 
   bool no_flow; ///< No flow speed, only remove energy
 
-  BoutReal density_boundary_mode, pressure_boundary_mode, temperature_boundary_mode; ///< BC mode: 0=LimitFree, 1=ExponentialFree, 2=LinearFree
+  BoutReal density_boundary_mode, pressure_boundary_mode,
+      temperature_boundary_mode; ///< BC mode: 0=LimitFree, 1=ExponentialFree, 2=LinearFree
 
   ///
   /// # Inputs
@@ -102,8 +105,7 @@ private:
 };
 
 namespace {
-RegisterComponent<SheathBoundarySimple>
-    registercomponentsheathboundarysimple("sheath_boundary_simple");
+RegisterComponent<SheathBoundarySimple> registercomponentsheathboundarysimple;
 }
 
 #endif // SHEATH_BOUNDARY_SIMPLE_H

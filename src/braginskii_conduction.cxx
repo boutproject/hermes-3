@@ -22,20 +22,21 @@
 #include "../include/component.hxx"
 #include "../include/div_ops.hxx"
 #include "../include/hermes_utils.hxx"
+#include "../include/permissions.hxx"
 
 using bout::globals::mesh;
 
-BraginskiiConduction::BraginskiiConduction(const std::string&, Options& alloptions,
+BraginskiiConduction::BraginskiiConduction(const std::string& name, Options& alloptions,
                                            Solver*)
-    : Component({readOnly("species:{sp}:{input_vars}"), readOnly("fields:Apar_flutter"),
-                 writeBoundary("species:{sp}:pressure"),
-                 readWrite("species:{sp}:{output_vars}")}) {
+    : NamedComponent(name, {readOnly("species:{sp}:{input_vars}"),
+                            readOnly("fields:Apar_flutter"),
+                            readWrite("species:{sp}:{output_vars}")}) {
 
   // Get settings for each species
-  for (auto& kv : alloptions.getChildren()) {
+  for (const auto& kv : alloptions.getChildren()) {
     auto& options = alloptions[kv.first];
     // Check if the component is a species which undergoes energy/pressure evolution
-    if (options.isValue() || !options["type"].isValue()
+    if (options.isValue() || !options.isSet("type")
         || (options["type"].as<std::string>().find("evolve_pressure") == std::string::npos
             && options["type"].as<std::string>().find("evolve_energy")
                    == std::string::npos)) {
@@ -90,7 +91,7 @@ BraginskiiConduction::BraginskiiConduction(const std::string&, Options& alloptio
 
   std::vector<std::string> coll_types;
 
-  substitutePermissions("input_vars", {"AA", "density", "temperature"});
+  substitutePermissions("input_vars", {"AA", "density", "pressure", "temperature"});
   substitutePermissions("output_vars",
                         {"energy_source", "kappa_par", "energy_flow_ylow"});
   std::vector<std::string> species;
@@ -112,6 +113,9 @@ BraginskiiConduction::BraginskiiConduction(const std::string&, Options& alloptio
     }
   }
   substitutePermissions("sp", species);
+
+  conduction_method =
+      alloptions["conduction_method"].withDefault<std::string>(conduction_method);
 }
 
 void BraginskiiConduction::transform_impl(GuardedOptions& state) {
@@ -291,7 +295,8 @@ void BraginskiiConduction::transform_impl(GuardedOptions& state) {
     // is calculated and removed separately
     set(species["kappa_par"], kappa_par);
     add(species["energy_source"],
-        Div_par_K_Grad_par_mod(kappa_par, T, flow_ylow_conduction, false));
+        Div_par_K_Grad_par_mod(kappa_par, T, flow_ylow_conduction, false,
+                               conduction_method));
     add(species["energy_flow_ylow"], flow_ylow_conduction);
 
     if (state.isSection("fields") and state["fields"].isSet("Apar_flutter")) {

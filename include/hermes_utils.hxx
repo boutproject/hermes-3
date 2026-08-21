@@ -173,3 +173,31 @@ inline bool collisionSpeciesMatch(std::string input, const std::string& species1
   // Check if the first species matches species1 and the second species matches species2
   return (species1_found && species2_found && reaction_found);
 }
+
+/// Helper class used for compile-time concatenation of string
+/// literals. Taken from https://stackoverflow.com/a/62823211
+template <const std::string_view&... Strs>
+struct join {
+  // Join all strings into a single std::array of chars
+  static constexpr auto impl() noexcept {
+    constexpr std::size_t len = (Strs.size() + ... + 0);
+    std::array<char, len + 1> arr{};
+    size_t i = 0;
+    auto append = [&i, &arr](const auto& s) mutable {
+      for (auto c : s) {
+        arr[i++] = c;
+      }
+    };
+    (append(Strs), ...);
+    arr[len] = 0;
+    return arr;
+  }
+  // Give the joined string static storage
+  static constexpr auto arr = impl();
+  // View as std::string_view
+  static constexpr std::string_view value{arr.data(), arr.size() - 1};
+};
+
+// Helper to get the value out
+template <const std::string_view&... Strs>
+static constexpr auto join_v = join<Strs...>::value;

@@ -5,12 +5,14 @@
 
 #include "component.hxx"
 
-class Ionisation : public Component {
+class Ionisation : public NamedComponent<Ionisation> {
 public:
-  Ionisation(std::string name, Options &options, Solver *);
-  
+  Ionisation(std::string name, Options& options, Solver*);
+
+  static constexpr auto type = "ionisation";
+
 private:
-  BoutReal Eionize;   // Energy loss per ionisation [eV]
+  BoutReal Eionize; // Energy loss per ionisation [eV]
 
   BoutReal Tnorm, Nnorm, FreqNorm; // Normalisations
 
@@ -18,7 +20,7 @@ private:
 };
 
 namespace {
-RegisterComponent<Ionisation> registersolverionisation("ionisation");
+RegisterComponent<Ionisation> registersolverionisation;
 }
 
 #endif // IONISATION_H

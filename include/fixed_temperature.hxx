@@ -7,15 +7,15 @@
 
 /// Set species temperature to a fixed value
 ///
-struct FixedTemperature : public Component {
+struct FixedTemperature : public NamedComponent<FixedTemperature> {
   /// Inputs
   /// - <name>
   ///   - temperature   value (expression) in units of eV
   FixedTemperature(std::string name, Options& alloptions, Solver* UNUSED(solver))
-      : Component({readIfSet("species:{name}:density", Regions::Interior),
-                   readWrite("species:{name}:temperature"),
-                   // FIXME: Only written if density is set
-                   readWrite("species:{name}:pressure")}),
+      : NamedComponent(name, {readIfSet("species:{name}:density", Regions::Interior),
+                              readWrite("species:{name}:temperature"),
+                              // FIXME: Only written if density is set
+                              readWrite("species:{name}:pressure")}),
         name(name) {
 
     auto& options = alloptions[name];
@@ -62,6 +62,8 @@ struct FixedTemperature : public Component {
     }
   }
 
+  static constexpr auto type = "fixed_temperature";
+
 private:
   std::string name; ///< Short name of species e.g "e"
 
@@ -99,7 +101,7 @@ private:
 };
 
 namespace {
-RegisterComponent<FixedTemperature> registercomponentfixedtemperature("fixed_temperature");
+RegisterComponent<FixedTemperature> registercomponentfixedtemperature;
 }
 
 #endif // FIXED_TEMPERATURE_H

@@ -13,9 +13,9 @@
 using bout::globals::mesh;
 
 Recycling::Recycling(std::string name, Options& alloptions, Solver*)
-    : Component({readOnly("species:{from}:{from_inputs}"),
-                 readOnly("species:{to}:{to_inputs}"),
-                 readWrite("species:{to}:{outputs}")}) {
+    : NamedComponent(name, {readOnly("species:{from}:{from_inputs}"),
+                            readOnly("species:{to}:{to_inputs}"),
+                            readWrite("species:{to}:{outputs}")}) {
 
   const Options& units = alloptions["units"];
   const BoutReal Tnorm = units["eV"];
@@ -197,11 +197,11 @@ void Recycling::transform_impl(GuardedOptions& state) {
 
   // Get metric tensor components
   Coordinates* coord = mesh->getCoordinates();
-  const Field2D& J = coord->J;
-  const Field2D& dy = coord->dy;
-  const Field2D& dx = coord->dx;
-  const Field2D& dz = coord->dz;
-  const Field2D& g_22 = coord->g_22;
+  const auto& J = coord->J;
+  const auto& dy = coord->dy;
+  const auto& dx = coord->dx;
+  const auto& dz = coord->dz;
+  const auto& g_22 = coord->g_22;
 
   for (auto& channel : channels) {
     const GuardedOptions species_from = state["species"][channel.from];
@@ -466,8 +466,8 @@ void Recycling::transform_impl(GuardedOptions& state) {
           for (int iz = 0; iz < mesh->LocalNz; iz++) {
 
             // Volume of cell adjacent to wall which will receive source
-            BoutReal volume = J(mesh->xend, iy) * dx(mesh->xend, iy) * dy(mesh->xend, iy)
-                              * dz(mesh->xend, iy);
+            BoutReal volume = J(mesh->xend, iy, iz) * dx(mesh->xend, iy, iz)
+                              * dy(mesh->xend, iy, iz) * dz(mesh->xend, iy, iz);
 
             // If cell is a pump, overwrite multiplier with pump multiplier
             BoutReal multiplier = channel.sol_multiplier;
@@ -589,8 +589,8 @@ void Recycling::transform_impl(GuardedOptions& state) {
             for (int iz = 0; iz < mesh->LocalNz; iz++) {
 
               // Volume of cell adjacent to wall which will receive source
-              BoutReal volume = J(mesh->xstart, iy) * dx(mesh->xstart, iy)
-                                * dy(mesh->xstart, iy) * dz(mesh->xstart, iy);
+              BoutReal volume = J(mesh->xstart, iy, iz) * dx(mesh->xstart, iy, iz)
+                                * dy(mesh->xstart, iy, iz) * dz(mesh->xstart, iy, iz);
 
               // If cell is a pump, overwrite multiplier with pump multiplier
               BoutReal multiplier = channel.pfr_multiplier;

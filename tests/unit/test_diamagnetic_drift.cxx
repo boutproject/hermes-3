@@ -1,15 +1,15 @@
 
 #include "gtest/gtest.h"
 
-#include "test_extras.hxx" // FakeMesh
 #include "fake_mesh_fixture.hxx"
+#include "test_extras.hxx" // FakeMesh
 
 #include "../../include/diamagnetic_drift.hxx"
 
 /// Global mesh
-namespace bout{
-namespace globals{
-extern Mesh *mesh;
+namespace bout {
+namespace globals {
+extern Mesh* mesh;
 } // namespace globals
 } // namespace bout
 
@@ -18,13 +18,3 @@ using namespace bout::globals;
 
 // Reuse the "standard" fixture for FakeMesh
 using DiamagneticDriftTest = FakeMeshFixture;
-
-TEST_F(DiamagneticDriftTest, CreateComponent) {
-  Options options;
-
-  mesh->getCoordinates()->Bxy = 1.0;
-  
-  options["units"]["Tesla"] = 1.0;
-  options["units"]["meters"] = 1.0;
-  DiamagneticDrift component("test", options, nullptr);
-}

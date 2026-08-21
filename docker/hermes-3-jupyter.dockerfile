@@ -1,7 +1,12 @@
 # Build as "hermes-3-jupyter"
 # with sudo docker build -f docker/hermes-3-jupyter.dockerfile -t hermes-3-jupyter .
 
-FROM jupyter/scipy-notebook
+# Maintained images now live at quay.io (docker.io/jupyter/scipy-notebook is frozen at Oct 2023).
+# The reference is tag@digest: Docker resolves *solely* by the @sha256 digest
+# (immutable - the exact bytes never change even if the tag is re-pushed) and does
+# NOT verify the tag against it. The :2026-06-29 tag is unverified documentation
+# only (jupyter images are date-tagged, not semver), so keep it in sync by hand.
+FROM quay.io/jupyter/scipy-notebook:2026-06-29@sha256:52a7d9ee3faa90118d89db7729d6bb45db7cb030d9e2fdb096eb9979264d1ab6
 
 RUN git clone https://github.com/boutproject/xhermes /home/jovyan/xhermes && cd /home/jovyan/xhermes && pip install -e .
 USER root

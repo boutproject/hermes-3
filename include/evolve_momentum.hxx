@@ -5,9 +5,9 @@
 #include "component.hxx"
 
 /// Evolve parallel momentum
-struct EvolveMomentum : public Component {
-  EvolveMomentum(std::string name, Options &options, Solver *solver);
-  
+struct EvolveMomentum : public NamedComponent<EvolveMomentum> {
+  EvolveMomentum(std::string name, Options& options, Solver* solver);
+
   /// Calculate ddt(NV).
   ///
   /// Inputs
@@ -21,32 +21,35 @@ struct EvolveMomentum : public Component {
   ///     - temperature (only needed if sound_speed not provided)
   /// - fields
   ///   - phi (optional)
-  void finally(const Options &state) override;
+  void finally(const Options& state) override;
 
-  void outputVars(Options &state) override;
+  void outputVars(Options& state) override;
+
+  static constexpr auto type = "evolve_momentum";
+
 private:
-  std::string name;     ///< Short name of species e.g "e"
+  std::string name; ///< Short name of species e.g "e"
 
-  Field3D NV;           ///< Species parallel momentum (normalised, evolving)
-  Field3D NV_err;       ///< Difference from momentum as input from solver
-  Field3D NV_solver;    ///< Momentum as calculated in the solver
-  Field3D V;            ///< Species parallel velocity
+  Field3D NV;        ///< Species parallel momentum (normalised, evolving)
+  Field3D NV_err;    ///< Difference from momentum as input from solver
+  Field3D NV_solver; ///< Momentum as calculated in the solver
+  Field3D V;         ///< Species parallel velocity
 
   Field3D momentum_source; ///< From other components. Stored for diagnostic output
 
-  bool bndry_flux;      // Allow flows through boundaries?
-  bool poloidal_flows;  // Include ExB flow in Y direction?
+  bool bndry_flux;     // Allow flows through boundaries?
+  bool poloidal_flows; // Include ExB flow in Y direction?
 
   BoutReal density_floor;
   bool low_n_diffuse_perp; ///< Cross-field diffusion at low density?
   BoutReal pressure_floor;
   bool low_p_diffuse_perp; ///< Cross-field diffusion at low pressure?
 
-  BoutReal hyper_z;  ///< Hyper-diffusion
+  BoutReal hyper_z; ///< Hyper-diffusion
 
-  bool diagnose; ///< Output additional diagnostics?
+  bool diagnose;                   ///< Output additional diagnostics?
   bool fix_momentum_boundary_flux; ///< Fix momentum flux to boundary condition?
-  Field3D flow_xlow, flow_ylow; ///< Momentum flow diagnostics
+  Field3D flow_xlow, flow_ylow;    ///< Momentum flow diagnostics
 
   /// This takes as inputs
   /// - species
@@ -63,7 +66,7 @@ private:
 };
 
 namespace {
-RegisterComponent<EvolveMomentum> registercomponentevolvemomentum("evolve_momentum");
+RegisterComponent<EvolveMomentum> registercomponentevolvemomentum;
 }
 
 #endif // EVOLVE_MOMENTUM_H
