@@ -35,18 +35,6 @@ Transform::Transform(std::string name, Options& alloptions, Solver* UNUSED(solve
 
 void Transform::transform_impl(GuardedOptions& state) {
   for (const auto& lr : transforms) {
-    // FIXME: The assignment of one Options object to another means
-    // that the name of the first one is copied. This is a problem
-    // because the name now checked against permissions can differ
-    // from the name used to access the data. Ideally Options would
-    // rewrite the name on assignment, but possibly there's a reason
-    // it does't?
-    //
-    // Choices:
-    // - Rewrite assignment for Options so it rewrites names if one is already present.
-    // - Add a setter method for full_name and use this to correct
-    //   - The correction could be done in an assignment operator for GuardedOptions or else here
-    // - Copy only the underlying object, rather than the option itself. This will bake in an assumption about the type though.
     state[lr.first].getWritable() = state[lr.second].get().copy();
   }
 }
