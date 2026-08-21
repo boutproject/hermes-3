@@ -289,6 +289,7 @@ void BraginskiiConduction::transform_impl(GuardedOptions& state) {
     Field3D& nu = all_nu[name];
     Field3D& kappa_par = all_kappa_par[name];
     Field3D& flow_ylow_conduction = all_flow_ylow_conduction[name];
+    Field3D& parallel_conduction_term = all_parallel_conduction_term[name];
     const BoutReal kappa_coefficient = all_kappa_coefficient[name];
     const BoutReal kappa_limit_alpha = all_kappa_limit_alpha[name];
     const std::string& kappa_limit_model = all_kappa_limit_model[name];
@@ -431,6 +432,10 @@ void BraginskiiConduction::transform_impl(GuardedOptions& state) {
         Div_par_K_Grad_par_mod(kappa_par, T, flow_ylow_conduction, false));
     add(species["energy_flow_ylow"], flow_ylow_conduction);
 
+    if (all_diagnose[name]) {
+      parallel_conduction_term = Div_par_K_Grad_par_mod(kappa_par, T, flow_ylow_conduction, false);
+    }
+
     if (state.isSection("fields") and state["fields"].isSet("Apar_flutter")) {
       // Magnetic flutter term. The operator splits into 4 pieces:
       // Div(k b b.Grad(T)) = Div(k b0 b0.Grad(T)) + Div(k d0 db.Grad(T))
@@ -466,6 +471,8 @@ void BraginskiiConduction::outputVars(Options& state) {
     const Field3D& kappa_par = all_kappa_par[name];
     const Field3D& nu = all_nu[name];
     const Field3D& flow_ylow_conduction = all_flow_ylow_conduction[name];
+    const Field3D& parallel_conduction_term = all_parallel_conduction_term[name];
+
     set_with_attrs(state[std::string("kappa_par_") + name], kappa_par,
                    {{"time_dimension", "t"},
                     {"units", "W / m / eV"},
@@ -490,5 +497,13 @@ void BraginskiiConduction::outputVars(Options& state) {
                     {"long_name", name + " conduction through Y cell face."},
                     {"species", name},
                     {"source", "evolve_pressure"}});
+
+      set_with_attrs(state[std::string("ddt(P") + name + std::string(")_parallel_conduction")], (2. / 3) * parallel_conduction_term,
+                    {{"time_dimension", "t"},
+                      {"units", "Pa s^-1"},
+                      {"conversion", Pnorm * Omega_ci},
+                      {"long_name", std::string("Parallel conduction term for ") + name},
+                      {"species", name},
+                      {"source", "evolve_pressure"}});
   }
 }

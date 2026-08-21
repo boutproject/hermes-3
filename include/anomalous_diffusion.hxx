@@ -37,6 +37,12 @@ private:
   Field2D anomalous_chi;                   ///< Anomalous thermal diffusion coefficient
   Field2D anomalous_nu;                    ///< Anomalous momentum diffusion coefficient
 
+  Field3D perp_diffusion_n_term;    ///< -∇·(v⊥ n) contribution to ∂n/∂t from anomalous D
+  Field3D perp_diffusion_v_term;    ///< Contribution to ∂(nv)/∂t from anomalous nu
+  Field3D perp_diffusion_p_term;    ///< Contribution to ∂p/∂t from anomalous D (advecting p)
+  Field3D perp_diffusion_v2_term;   ///< Contribution to ∂(nv)/∂t from anomalous nu (alternative)
+  Field3D perp_diffusion_p2_term;   ///< Contribution to ∂p/∂t from anomalous chi (thermal diffusion)
+
   bool anomalous_sheath_flux; ///< Allow anomalous diffusion into sheath?
 
   /// Inputs

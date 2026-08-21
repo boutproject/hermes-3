@@ -267,6 +267,9 @@ void BraginskiiIonViscosity::transform_impl(GuardedOptions& state) {
     }
 
     Field3D Pi_cipar = zeroFrom(P);
+    Field3D energy_source_par = zeroFrom(P);
+    Field3D momentum_source_par = zeroFrom(P);
+
     if (parallel and isSetFinal(species["velocity"], "ion_viscosity")) {
 
       const Field3D V = get<Field3D>(species["velocity"]);
@@ -322,6 +325,9 @@ void BraginskiiIonViscosity::transform_impl(GuardedOptions& state) {
       add(species["momentum_source"], div_Pi_cipar);
       subtract(species["energy_source"], V * div_Pi_cipar); // Internal energy
 
+      energy_source_par = - V * div_Pi_cipar;  
+      momentum_source_par = div_Pi_cipar;
+
       // Parallel ion stress tensor component
       Pi_cipar = -0.96 * P * tau * bounce_factor * (2. * Grad_par(V) + V * Grad_par_logB);
       // Could also be written as:
@@ -331,7 +337,7 @@ void BraginskiiIonViscosity::transform_impl(GuardedOptions& state) {
         const Field3D Pi_ciperp = 0.0;
         const Field3D DivJ = 0.0;
         diagnostics[species_name] =
-            Diagnostics{Pi_ciperp, Pi_cipar, DivJ, bounce_factor, nu_star, eta};
+            Diagnostics{Pi_ciperp, Pi_cipar, DivJ, bounce_factor, nu_star, eta, energy_source_par, momentum_source_par};
       }
     }
 
@@ -410,7 +416,7 @@ void BraginskiiIonViscosity::transform_impl(GuardedOptions& state) {
 
     if (diagnose) {
       diagnostics[species_name] =
-          Diagnostics{Pi_ciperp, Pi_cipar, DivJ, bounce_factor, nu_star, eta};
+          Diagnostics{Pi_ciperp, Pi_cipar, DivJ, bounce_factor, nu_star, eta, energy_source_par, momentum_source_par};
     }
   }
 }
@@ -423,6 +429,7 @@ void BraginskiiIonViscosity::outputVars(Options& state) {
     auto Tnorm = get<BoutReal>(state["Tnorm"]);
     auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
     BoutReal Pnorm = SI::qe * Tnorm * Nnorm; // Pressure normalisation
+    auto Cs0 = get<BoutReal>(state["Cs0"]);
 
     for (const auto& it : diagnostics) {
       const std::string& species_name = it.first;
@@ -481,7 +488,26 @@ void BraginskiiIonViscosity::outputVars(Options& state) {
                       {"conversion", Pnorm / Omega_ci},
                       {"long_name", std::string("Ion viscosity coefficient") + species_name},
                       {"species", species_name},
-                      {"source", "ion_viscosity"}});                    
+                      {"source", "ion_viscosity"}});    
+
+      set_with_attrs(state[std::string("ddt(P") + species_name + std::string(")_viscosity_par")], 2./3. * d.energy_source_par,
+                     {{"time_dimension", "t"},
+                      {"units", "Pa s^-1"},
+                      {"conversion", Pnorm * Omega_ci},
+                      {"long_name", std::string("Viscosity parallel energy source term for ") + species_name},
+                      {"species", species_name},
+                      {"source", "ion_viscosity"}});    
+                      
+                      
+    set_with_attrs(state[std::string("ddt(NV") + species_name + std::string(")_viscosity_par")], d.momentum_source_par,
+                   {{"time_dimension", "t"},
+                    {"units", "Pa s^-1"},
+                    {"conversion", SI::Mp * Nnorm * Cs0 * Omega_ci},
+                    {"long_name", std::string("Viscosity parallel energy source term for  ") + species_name},
+                    {"species", species_name},
+                    {"source", "ion_viscosity"}});
+
+
     }
   }
 }

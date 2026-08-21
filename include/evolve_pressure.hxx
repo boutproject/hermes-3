@@ -107,6 +107,8 @@ private:
   Field3D E_PdivV,
       E_VgradP; ///< Diagnostic energy source terms for p*Div(V) and V*Grad(P)
 
+  Field3D parallel_convection_term;   ///< -(5/3)∇·(pv) term in ddt(P)
+
   bool
       initialize_from_mesh; ///< Initilize the Field3D P from 2D profiles stored in the mesh file.
 

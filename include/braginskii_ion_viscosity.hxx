@@ -73,6 +73,8 @@ private:
     Field3D bounce_factor;
     Field3D nu_star;
     Field3D eta;       ///< Ion viscosity coefficient
+    Field3D energy_source_par;
+    Field3D momentum_source_par;
   };
 
   /// Store diagnostics for each species

@@ -76,6 +76,10 @@ private:
 
   std::map<std::string, Field3D>
       all_flow_ylow_conduction; ///< Conduction energy flow diagnostics
+
+  std::map<std::string, Field3D>
+      all_parallel_conduction_term;
+
   /// Save more diagnostics?
   std::map<std::string, bool> all_diagnose;
 

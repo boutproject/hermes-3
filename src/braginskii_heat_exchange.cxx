@@ -133,7 +133,7 @@ void BraginskiiHeatExchange::outputVars(Options& state) {
                         {"standard_name", AB + "collisional energy transfer source"},
                         {"long_name", AB + "collisional energy transfer source"},
                         {"species", A},
-                        {"source", "collisions"}});
+                        {"source", "braginskii_heat_exchange"}});
       }
     }
   }

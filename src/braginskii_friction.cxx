@@ -194,7 +194,7 @@ void BraginskiiFriction::outputVars(Options& state) {
                         {"standard_name", AB + "frictional energy source"},
                         {"long_name", AB + "frictional energy source"},
                         {"species", A},
-                        {"source", "collisions"}});
+                        {"source", "braginskii_friction"}});
       }
 
       // Momentum exchange channels
@@ -208,7 +208,7 @@ void BraginskiiFriction::outputVars(Options& state) {
                         {"standard_name", AB + "collisional momentum transfer"},
                         {"long_name", AB + "collisional momentum transfer"},
                         {"species", A},
-                        {"source", "collisions"}});
+                        {"source", "braginskii_friction"}});
       }
     }
   }

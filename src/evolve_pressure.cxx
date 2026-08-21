@@ -309,6 +309,10 @@ void EvolvePressure::finally(const Options& state) {
 
       E_VgradP = V * Grad_par(P);
       ddt(P) += (2. / 3) * E_VgradP;
+
+      if (diagnose) {
+        parallel_convection_term = -(5. / 3) * FV::Div_par_mod<hermes::Limiter>(P, V, fastest_wave, flow_ylow_advection);
+      }
     }
     flow_ylow_advection *= 5. / 2; // Energy flow
     flow_ylow = flow_ylow_advection;
@@ -512,6 +516,15 @@ void EvolvePressure::outputVars(Options& state) {
                         {"species", name},
                         {"source", "evolve_pressure"}});
       }
+
+      set_with_attrs(state[std::string("ddt(P") + name + std::string(")_parallel_convection")], parallel_convection_term,
+                    {{"time_dimension", "t"},
+                      {"units", "Pa s^-1"},
+                      {"conversion", Pnorm * Omega_ci},
+                      {"long_name", std::string("Parallel convection term -(5/3)∇·(pv) for ") + name},
+                      {"species", name},
+                      {"source", "evolve_pressure"}});
+
     }
 
     if (flow_xlow.isAllocated()) {

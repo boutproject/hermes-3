@@ -288,6 +288,10 @@ void EvolveDensity::finally(const Options& state) {
       fastest_wave = sqrt(T / AA);
     }
 
+    if (diagnose) {
+      parallel_advection_term = -FV::Div_par_mod<hermes::Limiter>(N, V, fastest_wave, flow_ylow);
+    }
+
     ddt(N) -= FV::Div_par_mod<hermes::Limiter>(N, V, fastest_wave, flow_ylow);
 
     if (state.isSection("fields") and state["fields"].isSet("Apar_flutter")) {
@@ -379,6 +383,15 @@ void EvolveDensity::outputVars(Options& state) {
          {"units", "m^-3 s^-1"},
          {"conversion", Nnorm * Omega_ci},
          {"long_name", std::string("Rate of change of ") + name + " number density"},
+         {"species", name},
+         {"source", "evolve_density"}});
+
+    set_with_attrs(
+        state[std::string("ddt(N") + name + std::string(")_parallel_advection")], parallel_advection_term,
+        {{"time_dimension", "t"},
+         {"units", "m^-3 s^-1"},
+         {"conversion", Nnorm * Omega_ci},
+         {"long_name", std::string("Parallel advection term -∇·(bv∥n) for ") + name},
          {"species", name},
          {"source", "evolve_density"}});
 

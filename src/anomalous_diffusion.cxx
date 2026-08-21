@@ -1,6 +1,7 @@
 #include "../include/anomalous_diffusion.hxx"
 
 #include "../include/div_ops.hxx"
+#include <bout/constants.hxx>
 
 #include <bout/fv_ops.hxx>
 #include <bout/mesh.hxx>
@@ -143,6 +144,12 @@ void AnomalousDiffusion::transform_impl(GuardedOptions& state) {
     add(species["energy_flow_ylow"], flow_ylow);
 
     set(species["anomalous_D"], anomalous_D);
+
+    if (diagnose) {
+      perp_diffusion_n_term = Div_a_Grad_perp_upwind_flows(anomalous_D, N2D, flow_xlow, flow_ylow);
+      perp_diffusion_v_term = Div_a_Grad_perp_upwind_flows(Field2D{AA * V2D * anomalous_D}, N2D, flow_xlow, flow_ylow);
+      perp_diffusion_p_term = Div_a_Grad_perp_upwind_flows(Field2D{(3. / 2) * T2D * anomalous_D}, N2D, flow_xlow, flow_ylow);
+    }
   }
 
   if (include_chi) {
@@ -152,6 +159,10 @@ void AnomalousDiffusion::transform_impl(GuardedOptions& state) {
                                      flow_ylow));
     add(species["energy_flow_xlow"], flow_xlow);
     add(species["energy_flow_ylow"], flow_ylow);
+
+    if (diagnose) {
+      perp_diffusion_p2_term = Div_a_Grad_perp_upwind_flows(Field2D{anomalous_chi * N2D}, T2D, flow_xlow, flow_ylow);
+    }
   }
 
   if (include_nu) {
@@ -162,6 +173,10 @@ void AnomalousDiffusion::transform_impl(GuardedOptions& state) {
                                      flow_ylow));
     add(species["momentum_flow_xlow"], flow_xlow);
     add(species["momentum_flow_ylow"], flow_ylow);
+
+    if (diagnose) {
+      perp_diffusion_v2_term = Div_a_Grad_perp_upwind_flows(Field2D{anomalous_nu * AA * N2D}, V2D, flow_xlow, flow_ylow);
+    }
   }
 }
 
@@ -170,6 +185,11 @@ void AnomalousDiffusion::outputVars(Options& state) {
   auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
   auto rho_s0 = get<BoutReal>(state["rho_s0"]);
   const std::string& name = objectName();
+  auto Nnorm = get<BoutReal>(state["Nnorm"]);
+  auto Tnorm = get<BoutReal>(state["Tnorm"]);
+  auto Cs0 = get<BoutReal>(state["Cs0"]);
+
+  BoutReal Pnorm = SI::qe * Tnorm * Nnorm; // Pressure normalisation
 
   if (diagnose) {
 
@@ -197,6 +217,46 @@ void AnomalousDiffusion::outputVars(Options& state) {
                     {"conversion", rho_s0 * rho_s0 * Omega_ci},
                     {"standard_name", "anomalous momentum diffusion"},
                     {"long_name", std::string("Anomalous momentum diffusion of ") + name},
+                    {"source", "anomalous_diffusion"}});
+
+    set_with_attrs(
+        state[std::string("ddt(N") + name + std::string(")_perp_diffusion")], perp_diffusion_n_term,
+        {{"time_dimension", "t"},
+         {"units", "m^-3 s^-1"},
+         {"conversion", Nnorm * Omega_ci},
+         {"long_name", std::string("Perpendicular diffusion term -∇·(v⊥n) for ") + name},
+         {"source", "anomalous_diffusion"}});
+
+
+    set_with_attrs(state[std::string("ddt(P") + name + std::string(")_particle_diffusion")], 2.0/3.0 * perp_diffusion_p_term,
+                   {{"time_dimension", "t"},
+                    {"units", "Pa s^-1"},
+                    {"conversion", Pnorm * Omega_ci},
+                    {"long_name", std::string("Pressure change from particle diffusion ∇·(D∇n) carrying enthalpy for ") + name},
+                    {"source", "anomalous_diffusion"}});
+
+    set_with_attrs(state[std::string("ddt(P") + name + std::string(")_thermal_diffusion")], 2.0/3.0 * perp_diffusion_p2_term,
+                   {{"time_dimension", "t"},
+                    {"units", "Pa s^-1"},
+                    {"conversion", Pnorm * Omega_ci},
+                    {"long_name", std::string("Pressure change from thermal diffusion ∇·(χn∇T) for ") + name},
+                    {"source", "anomalous_diffusion"}});
+
+
+    set_with_attrs(state[std::string("ddt(NV") + name + std::string(")_particle_diffusion")], perp_diffusion_v_term,
+                   {{"time_dimension", "t"},
+                    {"units", "kg m^-2 s^-2"},
+                    {"conversion", SI::Mp * Nnorm * Cs0 * Omega_ci},
+                    {"long_name", std::string("Momentum change from particle diffusion ∇·(D∇n) carrying momentum for ") + name},
+                    {"species", name},
+                    {"source", "anomalous_diffusion"}});
+
+    set_with_attrs(state[std::string("ddt(NV") + name + std::string(")_viscous_diffusion")], perp_diffusion_v2_term,
+                   {{"time_dimension", "t"},
+                    {"units", "kg m^-2 s^-2"},
+                    {"conversion", SI::Mp * Nnorm * Cs0 * Omega_ci},
+                    {"long_name", std::string("Momentum change from viscous diffusion ∇·(νmn∇v) for ") + name},
+                    {"species", name},
                     {"source", "anomalous_diffusion"}});
   }
 }

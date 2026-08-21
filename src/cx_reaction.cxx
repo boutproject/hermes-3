@@ -209,12 +209,18 @@ void CXReaction::transform_additional(GuardedOptions& state, const RateData& rat
   // Handles both symmetric and asymmetric CX
   const BoutReal r1_AA = get<BoutReal>(r1s["AA"]);
   auto p1_vel = get<Field3D>(p1s["velocity"]);
-  add(p1s["energy_source"], 0.5 * r1_AA * rate_data.rate * SQ(p1_vel - r1_vel));
+  // add(p1s["energy_source"], 0.5 * r1_AA * rate_data.rate * SQ(p1_vel - r1_vel));
+  Field3D p1_frictional_heating = 0.5 * r1_AA * rate_data.rate * SQ(p1_vel - r1_vel);
+  update_source<add<Field3D>>(state, this->p1, ReactionDiagnosticType::energy_src,
+                              p1_frictional_heating);
 
   const BoutReal r2_AA = get<BoutReal>(r2s["AA"]);
   auto r2_vel = get<Field3D>(r2s["velocity"]);
   auto p2_vel = get<Field3D>(p2s["velocity"]);
-  add(p2s["energy_source"], 0.5 * r2_AA * rate_data.rate * SQ(p2_vel - r2_vel));
+  // add(p2s["energy_source"], 0.5 * r2_AA * rate_data.rate * SQ(p2_vel - r2_vel));
+  Field3D p2_frictional_heating = 0.5 * r2_AA * rate_data.rate * SQ(p2_vel - r2_vel);
+  update_source<add<Field3D>>(state, this->p2, ReactionDiagnosticType::energy_src,
+                              p2_frictional_heating);
 
   // Set 'collision_frequencies' values
   std::string r1_coll_freq_key =

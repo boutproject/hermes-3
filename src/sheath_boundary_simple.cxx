@@ -403,7 +403,7 @@ void SheathBoundarySimple::transform_impl(GuardedOptions& state) {
         electron_energy_source[i] += power;
 
         // Total heat flux for diagnostic purposes
-        q = gamma_e * tesheath * nesheath * vesheath; // [Wm^-2]
+        q = gamma_e * tesheath * nesheath * vesheath -(2.5 * tesheath + 0.5 * Me * SQ(vesheath)) * nesheath * vesheath; // [Wm^-2]
         hflux_e[i] += q * da / dv;                    // [Wm^-3]
         electron_sheath_power_ylow[i] +=
             heatflow; // [W], lower Y, so sheath boundary power placed in final domain cell
@@ -468,7 +468,7 @@ void SheathBoundarySimple::transform_impl(GuardedOptions& state) {
         electron_energy_source[i] -= power;
 
         // Total heat flux for diagnostic purposes
-        q = gamma_e * tesheath * nesheath * vesheath; // [Wm^-2]
+        q = gamma_e * tesheath * nesheath * vesheath - (2.5 * tesheath + 0.5 * Me * SQ(vesheath)) * nesheath * vesheath; // [Wm^-2]
         hflux_e[i] -= q * da / dv;                    // [Wm^-3]
         electron_sheath_power_ylow[ip] +=
             heatflow; // [W]  Upper Y, so sheath boundary power on ylow side of inner guard cell
@@ -476,7 +476,7 @@ void SheathBoundarySimple::transform_impl(GuardedOptions& state) {
     }
   }
 
-  set(diagnostics["e"]["energy_source"], hflux_e);
+  set(diagnostics["e"]["energy_source"], fromFieldAligned(hflux_e));
 
   // Set electron density and temperature, now with boundary conditions
   // Note: Clear parallel slices because they do not contain boundary conditions.
@@ -619,7 +619,7 @@ void SheathBoundarySimple::transform_impl(GuardedOptions& state) {
               nisheath * visheath * da / dv; // [m^-3s^-1] Diagnostics only
 
           // Total heat flux for diagnostic purposes
-          q = gamma_i * tisheath * nisheath * visheath; // [Wm^-2]
+          q = gamma_i * tisheath * nisheath * visheath - (2.5 * tisheath + 0.5 * Mi * SQ(visheath)) * nisheath * visheath; // [Wm^-2]
           hflux_i[i] += q * da / dv;                    // [Wm^-3]
           ion_sheath_power_ylow[i] +=
               heatflow; // [W] lower Y, so power placed in final domain cell
@@ -689,7 +689,7 @@ void SheathBoundarySimple::transform_impl(GuardedOptions& state) {
               nisheath * visheath * da / dv; // [m^-3s^-1] Diagnostics only
 
           // Total heat flux for diagnostic purposes
-          q = gamma_i * tisheath * nisheath * visheath; // [Wm^-2]
+          q = gamma_i * tisheath * nisheath * visheath -(2.5 * tisheath + 0.5 * Mi * SQ(visheath)) * nisheath * visheath; // [Wm^-2]
           hflux_i[i] -= q * da / dv;                    // [Wm^-3]
           ion_sheath_power_ylow[ip] +=
               heatflow; // [W]  Upper Y, so sheath boundary power on ylow side of inner guard cell
@@ -724,8 +724,8 @@ void SheathBoundarySimple::transform_impl(GuardedOptions& state) {
     // Add the total sheath power flux to the tracker of y power flows
     add(species["energy_flow_ylow"], fromFieldAligned(ion_sheath_power_ylow));
 
-    set(diagnostics[kv.first]["energy_source"], hflux_i);
-    set(diagnostics[kv.first]["particle_source"], particle_source);
+    set(diagnostics[kv.first]["energy_source"], fromFieldAligned(hflux_i));
+    set(diagnostics[kv.first]["particle_source"], fromFieldAligned(particle_source));
   }
 }
 

@@ -147,7 +147,10 @@ void IznRecReaction::transform_additional(GuardedOptions& state,
   // The greater the difference in velocities of the underlying species,
   // the wider the resultant distribution, which corresponds to an
   // increase in temperature and therefore internal energy.
-  add(hp["energy_source"], 0.5 * AA_rh * rate * SQ(v_rh - v_hp));
+    // add(hp["energy_source"], 0.5 * AA_rh * rate * SQ(v_rh - v_hp));
+  Field3D frictional_heating = 0.5 * AA_rh * rate * SQ(v_rh - v_hp);
+  update_source<add<Field3D>>(state, this->heavy_product, ReactionDiagnosticType::energy_src,
+                              frictional_heating);
 
   // Energy source for electrons due to pop change
   GuardedOptions electron = state["species"]["e"];
@@ -168,7 +171,10 @@ void IznRecReaction::transform_additional(GuardedOptions& state,
       const GuardedOptions electron_velocity = electron["velocity"];
       const Field3D& v_e = electron_velocity.GetRef<Field3D>();
       const BoutReal m_e = get<BoutReal>(electron["AA"]);
-      add(electron["energy_source"], 0.5 * m_e * e_pop_change * rate * SQ(v_e));
+      //   add(electron["energy_source"], 0.5 * m_e * e_pop_change * rate * SQ(v_e));
+      Field3D electron_energy_loss = 0.5 * m_e * e_pop_change * rate * SQ(v_e);
+      update_source<add<Field3D>>(state, "e", ReactionDiagnosticType::energy_loss,
+                                        electron_energy_loss);            
     }
   }
 

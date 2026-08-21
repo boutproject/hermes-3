@@ -89,6 +89,9 @@ private:
   bool diagnose;                ///< Output additional diagnostics?
   Field3D flow_xlow, flow_ylow; ///< Particle flow diagnostics
 
+  Field3D parallel_advection_term; ///< -∇·(b v∥ n) contribution to ∂n/∂t
+
+
   bool
       initialize_from_mesh; ///< Initilize the Field3D N from 2D profiles stored in the mesh file.
 
