@@ -47,6 +47,7 @@ jobs:
                                 -DBOUT_USE_PETSC=ON
                                 -DBOUT_USE_SLEPC=ON
                                 -DBOUT_USE_SUNDIALS=ON
+                                -DSUNDIALS_ROOT=/home/runner/local
                                 -DBOUT_USE_HYPRE=ON"
           - cmake_build_type: Debug
             test_type: unit
