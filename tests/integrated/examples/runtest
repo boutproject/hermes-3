@@ -1,19 +1,26 @@
 #!/usr/bin/env python3
 
-import pathlib
-import os
-import itertools
 import argparse
+import itertools
+import os
+import pathlib
+import sys
 
 from boututils.run_wrapper import launch
 
 EXAMPLES_DEFAULT = pathlib.Path("../../../examples")
 HERMES_3_DEFAULT = pathlib.Path("../../../hermes-3")
+JSON_DEFAULT = pathlib.Path("../../../json_database")
 
 NPROCS = {"tokamak-2D": 12, "tokamak-3D": 12}
 
 
-def run_examples(examples_dir: pathlib.Path, hermes3_exe: pathlib.Path, verbose: bool):
+def run_examples(
+    examples_dir: pathlib.Path,
+    hermes3_exe: pathlib.Path,
+    json_database: pathlib.Path,
+    verbose: bool,
+):
     # Specify the number of processors needed by each category of test. If
     # not specified, assume 1.
 
@@ -26,6 +33,8 @@ def run_examples(examples_dir: pathlib.Path, hermes3_exe: pathlib.Path, verbose:
         print(f"\033[1mRunning tests in category '{category_name}'.\033[0m")
         print(f"Working directory: {category}")
         os.chdir(category)
+        json_link = category / "json_database"
+        json_link.symlink_to(json_database)
         for example in examples:
             example_dir = example.parent
             print(f"Running {example_dir.relative_to(examples_dir)}...")
@@ -42,25 +51,32 @@ def run_examples(examples_dir: pathlib.Path, hermes3_exe: pathlib.Path, verbose:
                 if verbose:
                     print(out)
                 failed_tests.append(example_dir)
+        json_link.unlink()
         print()
 
     print("-" * 80, end="\n\n")
     nfailed = len(failed_tests)
     if nfailed == 0:
         print("\033[92mSUCCESS: All examples were able to start running.\033[0m")
-        exit(0)
+        sys.exit(0)
     else:
         print(f"\033[91mFAILURE: The following {nfailed} examples failed to run")
         print("\t", end="")
         print("\n\t".join(map(str, failed_tests)))
         print("\033[0m")
-        exit(1)
+        sys.exit(1)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--example-dir", default=EXAMPLES_DEFAULT, type=pathlib.Path)
     parser.add_argument("--hermes-exe", default=HERMES_3_DEFAULT, type=pathlib.Path)
+    parser.add_argument("--json-database", default=JSON_DEFAULT, type=pathlib.Path)
     parser.add_argument("-v", "--verbose", action="store_true")
     args = parser.parse_args()
-    run_examples(args.example_dir.resolve(), args.hermes_exe.resolve(), args.verbose)
+    run_examples(
+        args.example_dir.resolve(),
+        args.hermes_exe.resolve(),
+        args.json_database.resolve(),
+        args.verbose,
+    )
