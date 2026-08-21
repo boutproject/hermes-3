@@ -24,6 +24,10 @@ Reaction::Reaction(std::string name, Options& options)
   this->Nnorm = get<BoutReal>(this->units["inv_meters_cubed"]);
   this->FreqNorm = 1. / get<BoutReal>(this->units["seconds"]);
 
+  // Default multipliers to unity; subclasses can override these from options.
+  this->rate_multiplier = 1.0;
+  this->radiation_multiplier = 1.0;
+
   this->diagnose = options[name]["diagnose"]
                        .doc("Output additional diagnostics?")
                        .withDefault<bool>(false);
