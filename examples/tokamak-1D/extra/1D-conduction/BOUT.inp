@@ -79,4 +79,3 @@ function = 1
 powerflux = 2.5e7  # Input power flux in W/m^2
 
 source = (powerflux*2/3 / (mesh:length_xpt))*H(mesh:y_xpt - y)  # Input power as function of y
-
