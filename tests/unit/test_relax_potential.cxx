@@ -56,4 +56,27 @@ TEST_F(RelaxPotentialTest, Transform) {
 
   ASSERT_TRUE(state["fields"].isSet("vorticity"));
   ASSERT_TRUE(state["fields"].isSet("phi"));
+  // TODO: Check that the results are actually correct
+}
+
+TEST_F(RelaxPotentialTest, PhiBoundaryRelax) {
+  FakeSolver solver;
+
+  Options::root()["mesh"]["paralleltransform"]["type"] = "shifted";
+  Options options{{"units",
+                   {{"seconds", 1.0},
+                    {"Tesla", 1.0},
+                    {"meters", 1.0},
+                    {"eV", 100.},
+                    {"inv_meters_cubed", 1e19}}},
+                  {"test", {{"phi_boundary_relax", true}}}};
+
+  RelaxPotential component("test", options, &solver);
+
+  Options state{{"time", 0.1}};
+  component.transform(state);
+
+  ASSERT_TRUE(state["fields"].isSet("vorticity"));
+  ASSERT_TRUE(state["fields"].isSet("phi"));
+  // TODO: Check that the results are actually correct
 }
