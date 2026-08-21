@@ -19,7 +19,7 @@ def run_examples(
     examples_dir: pathlib.Path,
     hermes3_exe: pathlib.Path,
     json_database: pathlib.Path,
-    verbose: bool,
+    quiet: bool,
 ):
     # Specify the number of processors needed by each category of test. If
     # not specified, assume 1.
@@ -48,7 +48,7 @@ def run_examples(
                 print("\t\033[92mPASSED!\033[0m")
             else:
                 print("\t\033[91mFAILED!\033[0m")
-                if verbose:
+                if not quiet:
                     print(out)
                 failed_tests.append(example_dir)
         json_link.unlink()
@@ -72,11 +72,11 @@ if __name__ == "__main__":
     parser.add_argument("--example-dir", default=EXAMPLES_DEFAULT, type=pathlib.Path)
     parser.add_argument("--hermes-exe", default=HERMES_3_DEFAULT, type=pathlib.Path)
     parser.add_argument("--json-database", default=JSON_DEFAULT, type=pathlib.Path)
-    parser.add_argument("-v", "--verbose", action="store_true")
+    parser.add_argument("-q", "--quiet", action="store_true")
     args = parser.parse_args()
     run_examples(
         args.example_dir.resolve(),
         args.hermes_exe.resolve(),
         args.json_database.resolve(),
-        args.verbose,
+        args.quiet,
     )
