@@ -89,8 +89,8 @@ jobs:
           # ID of this machine
           uv run asv machine --yes
 
-          echo "\n\nBaseline:  ${{ github.event.pull_request.base.sha }} (${{ github.event.pull_request.base.label }})"
-          echo "Contender: ${GITHUB_SHA} (merge of $PR_HEAD_LABEL into ${{ github.event.pull_request.base.label }})\n"
+          echo -e "\n\nBaseline:  ${{ github.event.pull_request.base.sha }} (${{ github.event.pull_request.base.label }})"
+          echo -e "Contender: ${GITHUB_SHA} (merge of $PR_HEAD_LABEL into ${{ github.event.pull_request.base.label }})\n"
 
           # Run benchmarks for current commit against base
           ASV_OPTIONS="--split --show-stderr --factor $ASV_FACTOR"
