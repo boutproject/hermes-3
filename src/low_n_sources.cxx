@@ -265,7 +265,7 @@ void LowNSources::instantiate_reactions() {
               std::make_unique<PseudoReaction>(reaction_options, spec));
 
           // transform_guarded() reuses LowNSources' own permission-checked state, so any
-          // permissions a pseudoreaction sets on itself (e.g. when adding diagnostics) must be copied across
+          // permissions a PseudoReaction sets on itself (e.g. when adding diagnostics) must be copied across
           for (const auto& [varname, region] :
                this->reactions.back()->getPermissions().getVariablesWithPermission(
                    PermissionTypes::Write, false)) {

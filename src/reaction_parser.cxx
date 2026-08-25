@@ -10,8 +10,9 @@ ReactionParser::ReactionParser(const std::string& reaction_str)
   const std::string rp_sep{"->"};
   const std::size_t sep_len = rp_sep.length();
   if (reaction_str.length() < sep_len + 2) {
-    throw BoutException("Reaction string not long enough to include at least on reactant "
-                        "and one product!");
+    throw BoutException(
+        "Reaction string not long enough to include at least one reactant "
+        "and one product!");
   }
   auto sep_idx = reaction_str.find(rp_sep);
   if (sep_idx == std::string::npos) {
