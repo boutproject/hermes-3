@@ -111,16 +111,16 @@ protected:
    * @param diag_type enum identifying the diagnostic type, also used to determine source
    * name
    * @param data_source Name to use as the 'source' output attribute
-   * @param standard_name Optional string to use as the 'standard_name' output attribute.
-   * Defaults to diag_name.
    * @param transformer Optional transformer function to use when modifying the diagnostic
    * (default is 'negate', i.e. the diagnostic has the opposite sign to the source)
+   * @param standard_name Optional string to use as the 'standard_name' output attribute.
+   * Defaults to diag_name.
    *
    * @details Adds a new entry in the diagnostic (multi)map. The (non-unique)
    * key is < \p sp_name, \p type >
    */
   void add_diagnostic(const std::string& sp_name, const std::string& diag_name,
-                      const std::string& long_diag_name, ReactionDiagnosticType type,
+                      const std::string& long_diag_name, ReactionDiagnosticType diag_type,
                       const std::string& data_source,
                       DiagnosticTransformerType transformer = negate,
                       const std::string& standard_name = "");
