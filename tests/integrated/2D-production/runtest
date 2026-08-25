@@ -24,7 +24,7 @@ output_path = data_dir / "BOUT.dmp.*.nc"
 sys.path.append(str(this_dir.parent))
 from runtest_utils import DataDownloader2DProduction
 
-dd = DataDownloader2DProduction("2D-Prodcution", this_dir)
+dd = DataDownloader2DProduction("2D-Production", this_dir)
 
 if not dd.checkHash(False):
     dd.download_data()

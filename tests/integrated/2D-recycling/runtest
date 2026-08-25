@@ -40,7 +40,7 @@ if not debug:
         dd.download_data()
         t_download = time()
         if verbose:
-            print(f"2D-Production test: download took {t_download - t0:.2f} seconds")
+            print(f"2D-recycling test: download took {t_download - t0:.2f} seconds")
         dd.checkHash()
     else:
         t_download = time()
@@ -50,7 +50,7 @@ if not debug:
     t_extract = time()
     if verbose:
         print(
-            f"2D-Production test: zip extraction took {t_extract - t_download:.2f} seconds"
+            f"2D-recycling test: zip extraction took {t_extract - t_download:.2f} seconds"
         )
 
     # Allow oversubscription for OpenMPI via env var (silently ignored by MPICH,

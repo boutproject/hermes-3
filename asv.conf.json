@@ -18,21 +18,10 @@
     // of the repository.
     // "repo_subdir": "",
 
-    // "build_command": [
-    //     "cmake {build_dir} -B {build_cache_dir} -DCMAKE_BUILD_TYPE=Release -DPACKAGE_TESTS=OFF --install-prefix {env_dir}",
-    //     "cmake --build {build_cache_dir} -j -- -l 0.9"
-    // ],
-    // "install_command": ["cmake --install {build_cache_dir}"],
-    // "uninstall_command": ["xargs rm < {build_cache_dir}/install_manifest.txt"],
-
-    // FIXME: How best to run this in CI?
-
     // Customizable commands for building the project.
     // See asv.conf.json documentation.
     // To build the package using pyproject.toml (PEP518), uncomment the following lines
     "build_command": [
-        "python -m pip install build",
-        "python -m build",
         "python -m pip wheel -w {build_cache_dir} {build_dir}"
     ],
     // To build the package using setuptools and a setup.py file, uncomment the following lines
@@ -67,7 +56,7 @@
 
     // timeout in seconds for installing any dependencies in environment
     // defaults to 10 min
-    "install_timeout": 1200,
+    "install_timeout": 2400,
 
     // the base URL to show a commit for the project.
     "show_commit_url": "https://github.com/boutproject/hermes-3/commit/",

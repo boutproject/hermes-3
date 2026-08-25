@@ -30,7 +30,7 @@ class BenchmarkParameters:
 
 
 class Simulations:
-    timeout = 180
+    timeout = 300
     rounds = 3
     repeat = 1
     number = 1

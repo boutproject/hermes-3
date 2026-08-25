@@ -5,7 +5,31 @@
 
 name: Benchmarks
 
-on: pull_request
+on:
+  pull_request:
+    paths:
+      - '**,cxx'
+      - '**.hxx'
+      - '**.cmake'
+      - '**.in'
+      - 'CMakeLists.txt'
+      - 'external/BOUT-dev'
+      - 'pyproject.toml'
+      - 'benchmarks/**.py'
+      - 'asv.conf.json'
+      - 'tests/integrated/1D-recycling/data/BOUT.inp'
+      - 'tests/integrated/2D-production/data/BOUT.inp'
+      - 'examples/tokamak-2D-driftplane/2D-drift-plane-turbulence-te-ti/BOUT.inp'
+      - 'tests/integrated/runtest_utils.py'
+      - '.github/workflows/benchmarks.yml'
+      - '!performance/'
+      - '!tests/unit/'
+
+# One run per PR/ref; cancel superseded runs since only the latest
+# push matters
+concurrency:
+   group: performance-benchmark-${{ github.ref }}
+   cancel-in-progress: true
 
 env:
   PR_HEAD_LABEL: ${{ github.event.pull_request.head.label }}
@@ -60,14 +84,12 @@ jobs:
         run: uv sync --only-dev
 
       - name: Run benchmarks
-        env:
-          ASV_FACTOR: 1.5
         run: |
           # ID of this machine
           uv run asv machine --yes
 
-          echo "Baseline:  ${{ github.event.pull_request.base.sha }} (${{ github.event.pull_request.base.label }})"
-          echo "Contender: ${GITHUB_SHA} ($PR_HEAD_LABEL)"
+          echo "\n\nBaseline:  ${{ github.event.pull_request.base.sha }} (${{ github.event.pull_request.base.label }})"
+          echo "Contender: ${GITHUB_SHA} (merge of $PR_HEAD_LABEL into ${{ github.event.pull_request.base.label }})\n"
 
           # Run benchmarks for current commit against base
           ASV_OPTIONS="--split --show-stderr --factor $ASV_FACTOR"
