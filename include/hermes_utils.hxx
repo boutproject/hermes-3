@@ -3,6 +3,7 @@
 #define HERMES_UTILS_H
 
 #include <algorithm>
+#include <cctype>
 
 #include "bout/bout_enum_class.hxx"
 #include "bout/traits.hxx"
@@ -70,17 +71,50 @@ static inline std::vector<std::string> str_keys(const std::map<std::string, T>& 
 // TODO: Replace the later SpeciesType with this one. This one
 // doesn't work in elec
 
-/// Enum that identifies the type of a species: electron, ion, neutral
-BOUT_ENUM_CLASS(SpeciesType, electron, ion, neutral);
+/// Enum that identifies the type of a species.
+BOUT_ENUM_CLASS(SpeciesType, electron, ion, neutral, molecule);
 
-/// Identify species name string as electron, ion or neutral
+inline int identifySpeciesMultiplicity(const std::string& species) {
+  auto end = species.find_first_of("+-");
+  const std::string uncharged = species.substr(0, end);
+
+  auto digit = uncharged.end();
+  while (digit != uncharged.begin() and std::isdigit(*(digit - 1)) != 0) {
+    --digit;
+  }
+
+  if (digit == uncharged.end()) {
+    return 1;
+  }
+
+  return std::stoi(std::string(digit, uncharged.end()));
+}
+
+inline std::string identifySpeciesElement(const std::string& species) {
+  auto end = species.find_first_of("+-");
+  std::string uncharged = species.substr(0, end);
+
+  while (!uncharged.empty() and std::isdigit(uncharged.back()) != 0) {
+    uncharged.pop_back();
+  }
+
+  return uncharged;
+}
+
+inline bool isNeutralSpeciesType(SpeciesType type) {
+  return type == SpeciesType::neutral or type == SpeciesType::molecule;
+}
+
+/// Identify species name string as electron, ion, atom or molecule
 inline SpeciesType identifySpeciesType(const std::string& species) {
   if (species == "e") {
     return SpeciesType::electron;
-  } else if ((species == "i") or species.find(std::string("+")) != std::string::npos) {
+  } else if ((species == "i") or species.find_first_of("+-") != std::string::npos) {
     return SpeciesType::ion;
+  } else if (identifySpeciesMultiplicity(species) > 1) {
+    return SpeciesType::molecule;
   }
-  // Not electron or ion -> neutral
+  // Not electron, ion or molecules -> neutral
   return SpeciesType::neutral;
 }
 

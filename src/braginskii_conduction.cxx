@@ -65,6 +65,7 @@ BraginskiiConduction::BraginskiiConduction(const std::string& name, Options& all
       default_kappa = 3.16 / sqrt(2);
       break;
     case SpeciesType::neutral:
+    case SpeciesType::molecule:
       default_kappa = 2.5;
       break;
     default:
@@ -97,7 +98,7 @@ BraginskiiConduction::BraginskiiConduction(const std::string& name, Options& all
   std::vector<std::string> species;
   for (const auto& [sp, mode] : all_conduction_collisions_mode) {
     species.push_back(sp);
-    if (mode == "braginskii" and identifySpeciesType(sp) != SpeciesType::neutral) {
+    if (mode == "braginskii" and !isNeutralSpeciesType(identifySpeciesType(sp))) {
       setPermissions(readIfSet(
           fmt::format("species:{}:collision_frequencies:{}_{}_coll", sp, sp, sp)));
     } else if (mode == "multispecies") {
@@ -105,7 +106,7 @@ BraginskiiConduction::BraginskiiConduction(const std::string& name, Options& all
                                            sp, sp, "{all_species}")));
       setPermissions(readIfSet(fmt::format("species:{}:collision_frequencies:{}_{}_cx",
                                            sp, sp, "{all_species}")));
-    } else if (mode == "AFN" and identifySpeciesType(sp) == SpeciesType::neutral) {
+    } else if (mode == "AFN" and isNeutralSpeciesType(identifySpeciesType(sp))) {
       setPermissions(readIfSet(fmt::format("species:{}:collision_frequencies:{}_{}_cx",
                                            sp, sp, "{positive_ions}")));
       setPermissions(readIfSet(fmt::format("species:{}:collision_frequencies:{}_{}_iz",
@@ -137,7 +138,7 @@ void BraginskiiConduction::transform_impl(GuardedOptions& state) {
 
           std::string collision_name = collision.second.name();
 
-          if (species_type == SpeciesType::neutral) {
+          if (isNeutralSpeciesType(species_type)) {
             throw BoutException("\tBraginskii conduction collisions mode not available "
                                 "for neutrals, choose multispecies or afn");
           } else if (species_type == SpeciesType::electron) {
@@ -177,7 +178,7 @@ void BraginskiiConduction::transform_impl(GuardedOptions& state) {
 
           const std::string collision_name = collision.second.name();
 
-          if (species_type != SpeciesType::neutral) {
+          if (!isNeutralSpeciesType(species_type)) {
             throw BoutException("\tAFN conduction collisions mode not available for ions "
                                 "or electrons, choose braginskii or multispecies");
           }

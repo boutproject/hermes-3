@@ -107,7 +107,7 @@ ReactionParser::get_species(std::vector<std::string> species_names,
   case species_filter::neutral:
     std::copy_if(species_names.begin(), species_names.end(),
                  std::back_inserter(filtered_species_names), [](std::string sp_name) {
-                   return identifySpeciesType(sp_name) == SpeciesType::neutral;
+                   return isNeutralSpeciesType(identifySpeciesType(sp_name));
                  });
     break;
   case species_filter::produced: {
