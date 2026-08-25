@@ -242,6 +242,9 @@ void LowNSources::instantiate_reactions() {
           reaction_options[PSEUDO_REACTION_COMPONENT_NAME]["data_ids"] = "pseudo_rate";
           reaction_options[PSEUDO_REACTION_COMPONENT_NAME]["type"] = spec.reaction_str;
           reaction_options[PSEUDO_REACTION_COMPONENT_NAME]["diagnose"] = this->diagnose;
+          /// This ensures that PseudoReaction instances don't interfere with the parsing of reaction strings from the config
+          //  (See Reaction, ReactionBase constructors for details)
+          reaction_options[PSEUDO_REACTION_COMPONENT_NAME]["is_internal"] = "true";
 
           // Configure all other settings in a PseudoReactionSpec struct
           const BoutReal gate_species_threshold =

@@ -25,13 +25,15 @@ using OPTYPE = GuardedOptions && (GuardedOptions&&, Field3D);
  * Reaction.
  */
 struct ReactionBase : public Component {
-  ReactionBase(std::string name, Permissions&& permissions)
-      : Component(name, std::move(permissions)),
-        inst_num(incremented_instance_num() + 1) {}
+  ReactionBase(std::string name, Permissions&& permissions, bool is_internal = false)
+      : Component(name, std::move(permissions)), is_internal(is_internal),
+        inst_num(is_internal ? 1 : incremented_instance_num() + 1) {}
 
   static std::size_t incremented_instance_num() { return instance_num_ref()++; }
 
-  // Reset the instance counter; needed to avoid unit tests affecting each other!
+  // Reset the instance counter
+  // This is left in for now, as it's used by ConcreteComponentTests and is less ugly
+  // than setting is_internal=true for every tested reaction component.
   static void reset_instance_counter() { instance_num_ref() = 0; }
 
 private:
@@ -41,6 +43,9 @@ private:
   }
 
 protected:
+  /// 'internal' reactions (e.g. the PseudoReactions instantiated by LowNSources) do not increment inst_num
+  const bool is_internal;
+  /// Any scheduled reactions (those read from the config) that inherit from this class have a unique instance number
   std::size_t inst_num;
 };
 
@@ -62,6 +67,7 @@ struct Reaction : public ReactionBase {
    *
    * @param name
    * @param options Options object
+   * @param is_internal Whether or not this instance is an 'internal' reaction (e.g. a PseudoReaction created by LowNSources)
    */
   Reaction(std::string name, Options& options);
 

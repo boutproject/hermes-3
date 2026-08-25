@@ -15,8 +15,10 @@ namespace hermes {
 
 ///
 Reaction::Reaction(std::string name, Options& options)
-    : ReactionBase(name, {readOnly("species:{sp}:{r_val}"), readOnly("species:e:{e_val}"),
-                          readWrite("species:{sp}:{w_val}")}),
+    : ReactionBase(name,
+                   {readOnly("species:{sp}:{r_val}"), readOnly("species:e:{e_val}"),
+                    readWrite("species:{sp}:{w_val}")},
+                   options[name]["is_internal"].withDefault<bool>(false)),
       units(options["units"]) {
 
   // Extract some relevant options, units to member vars for readability
