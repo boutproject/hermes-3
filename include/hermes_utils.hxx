@@ -72,6 +72,9 @@ static inline std::vector<std::string> str_keys(const std::map<std::string, T>& 
 // doesn't work in elec
 
 /// Enum that identifies the type of a species.
+///
+/// The ordering is significant for LowNSources pairing: adjacent values can be
+/// paired, with the lower-valued type appearing first.
 BOUT_ENUM_CLASS(SpeciesType, electron, ion, neutral, molecule);
 
 inline int identifySpeciesMultiplicity(const std::string& species) {

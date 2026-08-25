@@ -74,6 +74,10 @@ struct Reaction : public ReactionBase {
    */
   void outputVars(Options& state) final;
 
+  /// Apply this reaction to an already permission-scoped state.
+  void transform_guarded(GuardedOptions& state) { transform_impl(state); }
+
+  /// The 'type' of this reaction is the reaction string.
   std::string typeName() const final { return parser->get_reaction_str(); }
 
 protected:
