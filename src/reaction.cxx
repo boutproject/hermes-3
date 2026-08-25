@@ -227,8 +227,7 @@ void Reaction::set_momentum_channel_weight(const std::string& reactant_name,
 }
 
 ///
-void Reaction::transform_impl(GuardedOptions& state) {
-  zero_diagnostics(state);
+RateData Reaction::get_rate(GuardedOptions& state) {
   // All reaction sources are computed in interior region only
   Region<Ind3D> rgn_nobndry =
       get<Field3D>(state["species"][this->reactant_names[0]]["density"])
@@ -260,8 +259,17 @@ void Reaction::transform_impl(GuardedOptions& state) {
 
     rate_calc_results = rate_helper.calc_rates(calc_rate, this->do_parallel_averaging);
   } else {
-    throw BoutException("Unhandled RateParamsTypes in Reaction::transform_impl()");
+    throw BoutException("Unhandled RateParamsTypes in Reaction::get_rate()");
   }
+
+  return rate_calc_results;
+}
+
+///
+void Reaction::transform_impl(GuardedOptions& state) {
+  zero_diagnostics(state);
+
+  RateData rate_calc_results = this->get_rate(state);
 
   // Set collision frequencies
   for (const auto& reactant_name : this->reactant_names) {

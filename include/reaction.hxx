@@ -174,6 +174,16 @@ protected:
                                     [[maybe_unused]] const RateData& rate_calc_results) {}
 
   /**
+   * @brief Compute and return rate data for the current state.
+   *
+   * @details Default implementation uses RateHelper, subclasses may override to set custom rates, collision frequencies.
+   *
+   * @param state
+   * @return RateData
+   */
+  virtual RateData get_rate(GuardedOptions& state);
+
+  /**
    * @brief Update both a species source term and the corresponding diagnostics (if any
    * exist and if diagnostics are enabled), determining the key in the state from the
    * type. See alternative form of update_source for further details.
