@@ -5,6 +5,8 @@
 
 #include "../../include/fieldline_geometry.hxx"
 
+#if not BOUT_USE_METRIC_3D
+
 /// Global mesh
 namespace bout {
 namespace globals {
@@ -291,3 +293,5 @@ TEST_F(FieldlineGeometryTest, TransformPublishesGeometryToState) {
   ASSERT_TRUE(
       IsFieldEqual(get<Field3D>(options["fieldline_geometry_Rxy"]), 2.0, "RGN_NOBNDRY"));
 }
+
+#endif

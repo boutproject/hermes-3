@@ -256,25 +256,60 @@ int Hermes::init(bool restarting) {
       Coordinates* coord = mesh->getCoordinates();
       // To use non-orthogonal metric
       // Normalise
-      coord->dx /= rho_s0 * rho_s0 * Bnorm;
-      coord->Bxy /= Bnorm;
-      // Metric is in grid file - just need to normalise
-      coord->g11 /= SQ(Bnorm * rho_s0);
-      coord->g22 *= SQ(rho_s0);
-      coord->g33 *= SQ(rho_s0);
-      coord->g12 /= Bnorm;
-      coord->g13 /= Bnorm;
-      coord->g23 *= SQ(rho_s0);
+      if (mesh->isFci()) {
+        // Normalisation for Fci
+        BoutReal rhoSQ = SQ(rho_s0);
+        coord->g11.asField3DParallel() *= rhoSQ;
+        coord->g22.asField3DParallel() *= rhoSQ;
+        coord->g33.asField3DParallel() *= rhoSQ;
+        if (coord->g12.hasParallelSlices()) {
+          coord->g12.asField3DParallel() *= rhoSQ;
+          coord->g23.asField3DParallel() *= rhoSQ;
+        } else {
+          coord->g12 *= rhoSQ;
+          coord->g23 *= rhoSQ;
+        }
+        coord->g13.asField3DParallel() *= rhoSQ;
 
-      coord->J *= Bnorm / rho_s0;
+        coord->J.asField3DParallel() /= rho_s0 * rho_s0 * rho_s0;
 
-      coord->g_11 *= SQ(Bnorm * rho_s0);
-      coord->g_22 /= SQ(rho_s0);
-      coord->g_33 /= SQ(rho_s0);
-      coord->g_12 *= Bnorm;
-      coord->g_13 *= Bnorm;
-      coord->g_23 /= SQ(rho_s0);
+        coord->g_11.asField3DParallel() /= rhoSQ;
+        coord->g_22.asField3DParallel() /= rhoSQ;
+        coord->g_33.asField3DParallel() /= rhoSQ;
+        coord->g_13.asField3DParallel() /= rhoSQ;
+        if (coord->g_12.hasParallelSlices()) {
+          coord->g_12.asField3DParallel() /= rhoSQ;
+          coord->g_23.asField3DParallel() /= rhoSQ;
+        } else {
+          coord->g_12 /= rhoSQ;
+          coord->g_23 /= rhoSQ;
+        }
 
+        ASSERT2(coord->Bxy.hasParallelSlices());
+        coord->Bxy.asField3DParallel() /= Bnorm;
+        ASSERT2(coord->Bxy.hasParallelSlices());
+
+      } else {
+        // Standard normalisation
+        coord->dx /= rho_s0 * rho_s0 * Bnorm;
+        coord->Bxy /= Bnorm;
+        // Metric is in grid file - just need to normalise
+        coord->g11 /= SQ(Bnorm * rho_s0);
+        coord->g22 *= SQ(rho_s0);
+        coord->g33 *= SQ(rho_s0);
+        coord->g12 /= Bnorm;
+        coord->g13 /= Bnorm;
+        coord->g23 *= SQ(rho_s0);
+
+        coord->J *= Bnorm / rho_s0;
+
+        coord->g_11 *= SQ(Bnorm * rho_s0);
+        coord->g_22 /= SQ(rho_s0);
+        coord->g_33 /= SQ(rho_s0);
+        coord->g_12 *= Bnorm;
+        coord->g_13 *= Bnorm;
+        coord->g_23 /= SQ(rho_s0);
+      }
       coord->geometry(); // Calculate other metrics
     }
   }
