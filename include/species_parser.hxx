@@ -67,7 +67,8 @@ public:
   SpeciesParser recombined();
 
 private:
-  SpeciesParser(std::string base_species, int charge);
+  /// Almost-copy constructor that allows charge to be changed. Used by ionised() and recombined().
+  SpeciesParser(const SpeciesParser& other, const int charge);
 
   /// Base species. Can be an atom, a molecule (made up of a single element), or an electron
   std::string base_species;

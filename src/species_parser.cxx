@@ -106,10 +106,10 @@ SpeciesParser::SpeciesParser(const std::string& species_str) {
 }
 
 ///
-SpeciesParser::SpeciesParser(std::string base_species, int charge)
-    : base_species(base_species), charge(charge) {
-  this->species_str = construct_species_str(base_species, charge);
-}
+SpeciesParser::SpeciesParser(const SpeciesParser& other, const int charge)
+    : base_species(other.base_species), charge(charge), element(other.element),
+      _is_molecule(other._is_molecule),
+      species_str(construct_species_str(other.base_species, charge)) {}
 
 ///
 std::string SpeciesParser::long_name() const {
@@ -126,8 +126,7 @@ SpeciesParser SpeciesParser::ionised() {
   if (this->base_species == "e") {
     throw BoutException("Cannot change electron charge!");
   }
-  int new_charge = this->charge + 1;
-  return SpeciesParser(this->base_species, new_charge);
+  return SpeciesParser(*this, this->charge + 1);
 }
 
 ///
@@ -135,6 +134,5 @@ SpeciesParser SpeciesParser::recombined() {
   if (this->base_species == "e") {
     throw BoutException("Cannot change electron charge!");
   }
-  int new_charge = this->charge - 1;
-  return SpeciesParser(this->base_species, new_charge);
+  return SpeciesParser(*this, this->charge - 1);
 }
