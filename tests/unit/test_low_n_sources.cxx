@@ -36,15 +36,17 @@ using LowNSourcesTest = FakeMeshFixture;
  * @param molecule_density_floor
  * @return Options
  */
-Options make_test_options(BoutReal atom_density_floor, BoutReal ion_density_floor,
-                          BoutReal molecule_density_floor,
-                          const std::string& strategy = "standard") {
+Options
+make_test_options(BoutReal atom_density_floor, BoutReal ion_density_floor,
+                  BoutReal molecule_density_floor,
+                  const std::string& strategy = "standard",
+                  const std::string& component_str = "e, low_n_sources, d, d+, d2") {
   Options options;
   options["units"]["eV"] = 1.0;
   options["units"]["seconds"] = 1.0;
   options["units"]["inv_meters_cubed"] = 1.0;
 
-  options["hermes"]["components"] = "e, low_n_sources, d, d+, d2";
+  options["hermes"]["components"] = component_str;
 
   options[ion_species]["AA"] = 2.0;
   options[atom_species]["AA"] = 2.0;
@@ -154,6 +156,8 @@ void test_reaction_def_creation(const std::map<std::string, std::string>& specie
 
   // Retrieve generated pairs
   ReactionDefs result = component.get_reaction_defs();
+  // Call a second time to check caching mechanism
+  result = component.get_reaction_defs();
 
   // Sort result, expected pairs before comparing
   std::sort(result.begin(), result.end());
@@ -282,6 +286,26 @@ TEST_F(LowNSourcesTest, FailOnInvalidStrategy) {
   Options state;
   set_state(state, nfloor, nfloor, nfloor);
   EXPECT_THROW(component.transform(state), BoutException);
+}
+
+/**
+ * @brief Having multiple +ve ions associated with the same element isn't supported yet when running with low-n-sources.
+ * Ensure it throws on construction for now.
+ *
+ */
+TEST_F(LowNSourcesTest, FailOnMultipleIonChargeStates) {
+  const BoutReal nfloor = 1e-7;
+
+  // Add two He ion components. 'AA' is sufficient for them to be recognised as species.
+  const std::string he_plus = "he+";
+  const std::string he_plus2 = "he+2";
+  std::string component_str =
+      fmt::format("e, low_n_sources, d, d+, d2, {}, {}", he_plus, he_plus2);
+  Options options = make_test_options(nfloor, nfloor, nfloor, "standard", component_str);
+  options[he_plus]["AA"] = 4.0;
+  options[he_plus2]["AA"] = 4.0;
+
+  EXPECT_THROW(hermes::LowNSources component("low_n_sources", options), BoutException);
 }
 
 /**
