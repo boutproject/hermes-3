@@ -95,12 +95,12 @@ jobs:
           # Run benchmarks for current commit against base
           ASV_OPTIONS="--split --show-stderr --factor $ASV_FACTOR"
           uv run asv continuous $ASV_OPTIONS ${{ github.event.pull_request.base.sha }} ${GITHUB_SHA} \
-              | sed "/Traceback \|failed$\|PERFORMANCE DECREASED/ s/^/::error::/" \
+              | sed "/Traceback \|failed *$\|PERFORMANCE DECREASED/ s/^/::error::/" \
               | tee benchmarks.log
 
           # Report and export results for subsequent steps
           uv run asv compare --split --factor $ASV_FACTOR ${{ github.event.pull_request.base.sha }} ${GITHUB_SHA}
-          if grep "Traceback \|failed\|PERFORMANCE DECREASED" benchmarks.log > /dev/null ; then
+          if grep "Traceback \|failed *$\|PERFORMANCE DECREASED" benchmarks.log > /dev/null ; then
               exit 1
           fi
 
