@@ -32,6 +32,13 @@ struct FixedVelocity : public NamedComponent<FixedVelocity> {
     // Option overrides mesh value
     // so use mesh value (if any) as default value.
     V = options["velocity"].withDefault(V) / Cs0;
+
+    if (V.isFci()) {
+      bout::globals::mesh->communicate(V);
+      V.applyParallelBoundary("parallel_neumann_o2");
+      ASSERT2(V.hasParallelSlices());
+    }
+
     substitutePermissions("name", {name});
     // FIXME: Momentum is only written if density is set
     substitutePermissions("output", {"velocity", "momentum"});
@@ -68,10 +75,10 @@ private:
 
     // If density is set, also set momentum
     if (isSetFinalNoBoundary(species["density"])) {
-      const Field3D N = getNoBoundary<Field3D>(species["density"]);
+      const Field3DParallel N = getNoBoundary<Field3D>(species["density"]);
       const BoutReal AA = get<BoutReal>(species["AA"]); // Atomic mass
 
-      set(species["momentum"], AA * N * V);
+      set(species["momentum"], Field3DParallel{AA * N * V});
     }
   }
 };

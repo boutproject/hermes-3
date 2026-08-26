@@ -5,6 +5,8 @@
 
 #include "../../include/fieldline_geometry.hxx"
 
+#if not BOUT_USE_METRIC_3D
+
 /// Global mesh
 namespace bout {
 namespace globals {
@@ -140,14 +142,14 @@ TEST_F(FieldlineGeometryTest, SetsCoordinatesJacobianAndBxy) {
   // and Lnorm = 1, so J = 1/Btotal.
   const BoutReal Btotal = sqrt(0.5 * 0.5 + 1.0 * 1.0);
   for (int j = mesh->ystart; j <= mesh->yend; ++j) {
-    ASSERT_NEAR(coord->J(0, j), 1.0 / Btotal, 1e-12);
+    ASSERT_NEAR(coord->J(0, j, 0), 1.0 / Btotal, 1e-12);
   }
 
   // J must also be set in the guard cells (not left at the default mesh value),
   // otherwise the metric is discontinuous at domain / inter-processor
   // boundaries. Check the full local range including guard cells.
   for (int j = 0; j < mesh->LocalNy; ++j) {
-    ASSERT_NEAR(coord->J(0, j), 1.0 / Btotal, 1e-12);
+    ASSERT_NEAR(coord->J(0, j, 0), 1.0 / Btotal, 1e-12);
   }
 }
 
@@ -205,7 +207,7 @@ TEST_F(FieldlineGeometryTest, JacobianNotOneWhenBnormDoesNotMatchUpstreamField) 
   Coordinates* coord = mesh->getCoordinates();
   const BoutReal expected_J = 1.0 / sqrt(10.0);
   for (int j = mesh->ystart; j <= mesh->yend; ++j) {
-    ASSERT_NEAR(coord->J(0, j), expected_J, 1e-12);
+    ASSERT_NEAR(coord->J(0, j, 0), expected_J, 1e-12);
   }
 }
 
@@ -219,7 +221,7 @@ TEST_F(FieldlineGeometryTest, JacobianIsOneWhenBnormMatchesUpstreamField) {
 
   Coordinates* coord = mesh->getCoordinates();
   for (int j = mesh->ystart; j <= mesh->yend; ++j) {
-    ASSERT_NEAR(coord->J(0, j), 1.0, 1e-12);
+    ASSERT_NEAR(coord->J(0, j, 0), 1.0, 1e-12);
   }
 }
 
@@ -291,3 +293,5 @@ TEST_F(FieldlineGeometryTest, TransformPublishesGeometryToState) {
   ASSERT_TRUE(
       IsFieldEqual(get<Field3D>(options["fieldline_geometry_Rxy"]), 2.0, "RGN_NOBNDRY"));
 }
+
+#endif

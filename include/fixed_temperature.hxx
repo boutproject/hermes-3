@@ -27,6 +27,11 @@ struct FixedTemperature : public NamedComponent<FixedTemperature> {
     T = options["temperature"].doc("Constant temperature [eV]").as<Field3D>()
         / Tnorm; // Normalise
 
+    if (T.isFci()) {
+      bout::globals::mesh->communicate(T);
+      T.applyParallelBoundary("parallel_neumann_o2");
+    }
+
     diagnose = options["diagnose"]
                    .doc("Save additional output diagnostics")
                    .withDefault<bool>(false);
@@ -67,8 +72,8 @@ struct FixedTemperature : public NamedComponent<FixedTemperature> {
 private:
   std::string name; ///< Short name of species e.g "e"
 
-  Field3D T; ///< Species temperature (normalised)
-  Field3D P; ///< Species pressure (normalised)
+  Field3D T;         ///< Species temperature (normalised)
+  Field3DParallel P; ///< Species pressure (normalised)
 
   bool diagnose; ///< Output additional fields
 

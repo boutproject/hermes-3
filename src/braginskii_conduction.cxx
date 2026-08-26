@@ -114,6 +114,9 @@ BraginskiiConduction::BraginskiiConduction(const std::string& name, Options& all
     }
   }
   substitutePermissions("sp", species);
+
+  conduction_method =
+      alloptions["conduction_method"].withDefault<std::string>(conduction_method);
 }
 
 void BraginskiiConduction::transform_impl(GuardedOptions& state) {
@@ -293,7 +296,8 @@ void BraginskiiConduction::transform_impl(GuardedOptions& state) {
     // is calculated and removed separately
     set(species["kappa_par"], kappa_par);
     add(species["energy_source"],
-        Div_par_K_Grad_par_mod(kappa_par, T, flow_ylow_conduction, false));
+        Div_par_K_Grad_par_mod(kappa_par, T, flow_ylow_conduction, false,
+                               conduction_method));
     add(species["energy_flow_ylow"], flow_ylow_conduction);
 
     if (state.isSection("fields") and state["fields"].isSet("Apar_flutter")) {

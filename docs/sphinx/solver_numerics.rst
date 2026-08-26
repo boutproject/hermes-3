@@ -230,21 +230,22 @@ The divergence of the flux, and so the rate of change of :math:`f` in cell
 Selecting slope limiter and conduction method
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Hermes-3 selects both the parallel advection slope limiter and the
-``Div_par_K_Grad_par_mod`` conduction discretisation at compile time
+Hermes-3 selects the parallel advection slope limiter at compile time
 through CMake cache options:
 
 .. code-block:: bash
 
    cmake -S . -B build \
-     -DHERMES_SLOPE_LIMITER=MC \
-     -DHERMES_CONDUCTION_METHOD=Original
+     -DHERMES_SLOPE_LIMITER=MC
 
 ``HERMES_SLOPE_LIMITER``
    Available values are ``MC``, ``VanAlbada``, ``WENO3``, ``MinMod``,
    ``Upwind``, and ``Superbee``.
 
-``HERMES_CONDUCTION_METHOD``
+
+The
+``Div_par_K_Grad_par_mod`` conduction discretisation can be choosen at run time with:
+``conduction_method``
    Selects the parallel heat conduction discretisation used in
    :cpp:func:`Div_par_K_Grad_par_mod`. Available values are:
 

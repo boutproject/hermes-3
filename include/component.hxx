@@ -236,6 +236,7 @@ struct RegisterComponent : public ComponentFactory::RegisterInFactory<DerivedTyp
       : ComponentFactory::RegisterInFactory<DerivedType>(std::string(DerivedType::type)) {
   }
 };
+using RegisterUnavailableComponent = ComponentFactory::RegisterUnavailableInFactory;
 
 /// Faster non-printing getter for Options
 /// If this fails, it will throw BoutException
@@ -439,6 +440,10 @@ Options& set(Options& option, T value) {
   return option;
 }
 
+inline Options& set(Options& option, Field3DParallel value) {
+  return set(option, Field3D(value));
+}
+
 template <typename ResT, typename L, typename R, typename Func>
 inline decltype(auto) set(Options& option, const BinaryExpr<ResT, L, R, Func>& f) {
   return set(option, ResT{f});
@@ -558,6 +563,13 @@ void set_with_attrs(
     Options& option, T value,
     std::initializer_list<std::pair<std::string, Options::AttributeType>> attrs) {
   option.force(value);
+  option.setAttributes(attrs);
+}
+
+inline void set_with_attrs(
+    Options& option, Field3DParallel value,
+    std::initializer_list<std::pair<std::string, Options::AttributeType>> attrs) {
+  option.force(Field3D(value));
   option.setAttributes(attrs);
 }
 

@@ -68,6 +68,13 @@ EvolveMomentum::EvolveMomentum(std::string name, Options& alloptions, Solver* so
   diagnose =
       options["diagnose"].doc("Output additional diagnostics?").withDefault<bool>(false);
 
+  use_div_par_fvv = options["use_div_par_fvv"]
+                        .doc("Use Div_par_fvv instead of Div_par\nOnly for MMS tests")
+                        .withDefault<bool>(use_div_par_fvv);
+  if ((not use_div_par_fvv) and (not alloptions["solver"]["mms"].as<bool>())) {
+    throw BoutException("use_div_par_fvv is only for MMS tests");
+  }
+
   fix_momentum_boundary_flux =
       options["fix_momentum_boundary_flux"]
           .doc("Fix Y boundary momentum flux to boundary midpoint value?")
@@ -84,21 +91,36 @@ EvolveMomentum::EvolveMomentum(std::string name, Options& alloptions, Solver* so
 void EvolveMomentum::transform_impl(GuardedOptions& state) {
   mesh->communicate(NV);
 
+  if (NV.isFci()) {
+    NV.applyParallelBoundary();
+  }
+
   auto species = state["species"][name];
 
   // Not using density boundary condition
-  auto N = getNoBoundary<Field3D>(species["density"]);
-  const Field3D Nlim = softFloor(N, density_floor);
+  Field3DParallel N = getNoBoundary<Field3D>(species["density"]);
+
+  const Field3DParallel Nlim = softFloor(N, density_floor);
+
   const BoutReal AA = get<BoutReal>(species["AA"]); // Atomic mass
 
-  V = NV / (AA * Nlim);
+  V = Field3DParallel(NV / (AA * Nlim));
   V.applyBoundary();
+
+  if (NV.isFci()) {
+    ASSERT2(V.hasParallelSlices());
+  }
   set(species["velocity"], V);
 
-  NV_solver = NV;  // Save the momentum as calculated by the solver
-  NV = AA * N * V; // Re-calculate consistent with V and N
+  NV_solver = NV;                   // Save the momentum as calculated by the solver
+  NV = Field3DParallel(AA * N * V); // Re-calculate consistent with V and N
   // Note: Now NV and NV_solver will differ when N < density_floor
   NV_err = NV - NV_solver; // This is used in the finally() function
+
+  if (NV.isFci()) {
+    ASSERT2(NV.hasParallelSlices());
+  }
+
   set(species["momentum"], NV);
 }
 
@@ -114,7 +136,7 @@ void EvolveMomentum::finally(const Options& state) {
   // Get the species density
   const Field3D N = get<Field3D>(species["density"]);
   // Apply a floor to the density
-  const Field3D Nlim = softFloor(N, density_floor);
+  const Field3D Nlim = softFloor(N.asField3DParallel(), density_floor);
 
   // Typical wave speed used for numerical diffusion
   Field3D fastest_wave;
@@ -184,14 +206,21 @@ void EvolveMomentum::finally(const Options& state) {
   //  - Density floor should be consistent with calculation of V
   //    otherwise energy conservation is affected
   //  - using the same operator as in density and pressure equations doesn't work
-  ddt(NV) -= AA
-             * FV::Div_par_fvv<hermes::Limiter>(Nlim, V, fastest_wave,
-                                                fix_momentum_boundary_flux);
+  if (use_div_par_fvv) {
+    ddt(NV) -= AA
+               * FV::Div_par_fvv<hermes::Limiter>(Nlim, V, fastest_wave,
+                                                  fix_momentum_boundary_flux);
+  } else {
+    ddt(NV) -= Div_par(NV * V);
+  }
 
   // Parallel pressure gradient
   if (species.isSet("pressure")) {
     const Field3D P = get<Field3D>(species["pressure"]);
-    ddt(NV) -= Grad_par(P);
+    if (NV.isFci()) {
+      ASSERT2(P.hasParallelSlices());
+    }
+    ddt(NV) -= Grad_par(P.asField3DParallel());
   }
 
   if (state.isSection("fields") and state["fields"].isSet("Apar_flutter")) {

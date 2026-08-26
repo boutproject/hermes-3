@@ -2,6 +2,8 @@
 #ifndef CLASSICAL_DIFFUSION_H
 #define CLASSICAL_DIFFUSION_H
 
+#include <bout/coordinates.hxx>
+
 #include "component.hxx"
 
 struct ClassicalDiffusion : public NamedComponent<ClassicalDiffusion> {
@@ -12,7 +14,7 @@ struct ClassicalDiffusion : public NamedComponent<ClassicalDiffusion> {
   static constexpr auto type = "classical_diffusion";
 
 private:
-  Field2D Bsq; // Magnetic field squared
+  Coordinates::FieldMetric Bsq; // Magnetic field squared
 
   bool diagnose;     ///< Output additional diagnostics?
   Field3D Dn;        ///< Particle diffusion coefficient
