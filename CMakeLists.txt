@@ -356,6 +356,7 @@ if(HERMES_TESTS)
   endfunction()
 
   hermes_add_integrated_test(1D-fluid)
+  hermes_add_integrated_test(1D-low-n-srcs)
   hermes_add_integrated_test(1D-recycling)
   hermes_add_integrated_test(1D-recycling-dthe)
   hermes_add_integrated_test(diffusion)
