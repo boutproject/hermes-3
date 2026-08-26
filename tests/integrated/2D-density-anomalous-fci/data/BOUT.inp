@@ -1,0 +1,41 @@
+nout = 50
+timestep = 0.1
+
+
+[mesh]
+
+extrapolate_y = false
+
+[mesh:paralleltransform]
+type = fci
+
+
+[solver]
+mxstep = 10000
+rtol = 1e-8
+atol = 1e-12
+mms = true  # Run with MMS sources and output diagnostics
+mms_initialise = true
+[hermes]
+components = h+
+
+
+Nnorm = 1e18
+Bnorm = 1
+Tnorm = 5
+
+[h+]  # Ions
+type = evolve_density, anomalous_diffusion
+charge = 1.0
+AA = 1.0
+
+
+
+anomalous_D = 0.45*sin(12.5663706143592*x)*cos(z + 4.231231231) + 1.0
+[Nh+]
+solution = 0.35*sin(6.28318530717959*x)*sin(2.0*z + 1.321312) + 1.0
+
+source = 3.60625264297958e-6*(0.0899923162894426*sin(12.5663706143592*x)*cos(z + 4.231231231) + 0.19998292508765)*sin(6.28318530717959*x)*sin(2.0*z + 1.321312) + 1.29814011386663e-7*sin(6.28318530717959*x)*sin(12.5663706143592*x)*sin(z + 4.231231231)*cos(2.0*z + 1.321312) - 1.29814011386663e-7*sin(2.0*z + 1.321312)*cos(6.28318530717959*x)*cos(12.5663706143592*x)*cos(z + 4.231231231)
+
+
+bndry_all = dirichlet(`Nh+`:solution)
