@@ -253,8 +253,8 @@ int Hermes::init(bool restarting) {
     if (options["normalise_metric"]
             .doc("Normalise input metric tensor? (assumes input is in SI units)")
             .withDefault<bool>(true)) {
-      Coordinates* coord = mesh->getCoordinates();
-      coord->normaliseMetric(rho_s0, Bnorm);
+      mesh->getCoordinates()->normaliseMetric(
+          TokamakOrFCIMetricNormaliser(mesh, rho_s0, Bnorm));
     }
   }
 
