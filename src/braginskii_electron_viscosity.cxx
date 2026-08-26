@@ -52,11 +52,14 @@ void BraginskiiElectronViscosity::transform_impl(GuardedOptions& state) {
   const Field3D V = get<Field3D>(species["velocity"]);
 
   Coordinates* coord = P.getCoordinates();
-  const Field3D Bxy = coord->Bxy;
-  const Field3D sqrtB = sqrt(Bxy.asField3DParallel());
+  const Field3DParallel Bxy = coord->Bxy;
+  const Field3DParallel sqrtB = sqrt(Bxy);
+
+  ASSERT2(Bxy.hasParallelSlices());
+  ASSERT2(sqrtB.hasParallelSlices());
 
   // Parallel electron viscosity
-  Field3D eta = (4. / 3) * 0.73 * P.asField3DParallel() * tau;
+  Field3D eta = (4. / 3) * 0.73 * P * tau;
 
   if (eta_limit_alpha > 0.) {
     // SOLPS-style flux limiter
@@ -66,24 +69,24 @@ void BraginskiiElectronViscosity::transform_impl(GuardedOptions& state) {
     const Field3D q_fl = eta_limit_alpha * P; // Flux limit
 
     eta = eta / (1. + abs(q_cl / q_fl));
+  }
 
-    if (P.isFci()) {
-      eta.applyBoundary("neumann");
-      mesh->communicate(eta);
-      eta.applyParallelBoundary("parallel_neumann_o2");
-    } else {
-      eta.getMesh()->communicate(eta);
-      eta.applyBoundary("neumann");
-    }
+  if (P.isFci()) {
+    eta.applyBoundary("neumann");
+    mesh->communicate(eta);
+    eta.applyParallelBoundary("parallel_neumann_o2");
+  } else {
+    eta.getMesh()->communicate(eta);
+    eta.applyBoundary("neumann");
   }
 
   // Save term for output diagnostic
   Field3D dummy;
-  viscosity =
-      P.isFci() ? sqrtB
-                      * Div_par_K_Grad_par_mod(eta.asField3DParallel() / Bxy,
-                                               sqrtB * V.asField3DParallel(), dummy, true)
-                : sqrtB * FV::Div_par_K_Grad_par(eta / Bxy, sqrtB * V);
+  viscosity = P.isFci()
+                  ? sqrtB
+                        * Div_par_K_Grad_par_mod(Field3DParallel{eta / Bxy},
+                                                 Field3DParallel{sqrtB * V}, dummy, true)
+                  : sqrtB * FV::Div_par_K_Grad_par(eta / Bxy, sqrtB * V);
   add(species["momentum_source"], viscosity);
 }
 
