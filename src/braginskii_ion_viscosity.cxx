@@ -153,7 +153,7 @@ void BraginskiiIonViscosity::transform_impl(GuardedOptions& state) {
   ASSERT2(sqrtB.hasParallelSlices());
   ASSERT2(logB.hasParallelSlices());
 
-  const Coordinates::FieldMetric Grad_par_logB = Grad_par(logB);
+  const Field3D Grad_par_logB = Grad_par(logB);
 
   // Loop through all species
   for (auto& kv : allspecies.getChildren()) {
