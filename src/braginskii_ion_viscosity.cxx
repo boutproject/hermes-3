@@ -146,9 +146,14 @@ void BraginskiiIonViscosity::transform_impl(GuardedOptions& state) {
   GuardedOptions allspecies = state["species"];
 
   auto coord = mesh->getCoordinates();
-  const auto Bxy = coord->Bxy;
-  const auto sqrtB = sqrt(Bxy.asField3DParallel());
-  const auto Grad_par_logB = Grad_par(log(Bxy));
+  const Field3DParallel Bxy = coord->Bxy;
+  const Field3DParallel sqrtB = sqrt(Bxy.asField3DParallel());
+  const Field3DParallel logB = log(Bxy.asField3DParallel());
+  ASSERT2(Bxy.hasParallelSlices());
+  ASSERT2(sqrtB.hasParallelSlices());
+  ASSERT2(logB.hasParallelSlices());
+
+  const Coordinates::FieldMetric Grad_par_logB = Grad_par(logB);
 
   // Loop through all species
   for (auto& kv : allspecies.getChildren()) {
@@ -269,7 +274,7 @@ void BraginskiiIonViscosity::transform_impl(GuardedOptions& state) {
     Field3D Pi_cipar = zeroFrom(P);
     if (parallel and isSetFinal(species["velocity"], "ion_viscosity")) {
 
-      const Field3D V = get<Field3D>(species["velocity"]);
+      const Field3DParallel V = get<Field3D>(species["velocity"]);
 
       if (eta_limit_alpha > 0.) {
         // SOLPS-style flux limiter
@@ -292,11 +297,14 @@ void BraginskiiIonViscosity::transform_impl(GuardedOptions& state) {
       // This term is the parallel flow part of
       // -(2/3) B^(3/2) Grad_par(Pi_ci / B^(3/2))
       Field3D dummy;
+      ASSERT2(eta.hasParallelSlices());
+      ASSERT2(V.hasParallelSlices());
+
       const Field3D div_Pi_cipar =
           P.isFci()
               ? sqrtB
-                    * Div_par_K_Grad_par_mod(eta.asField3DParallel() / Bxy,
-                                             sqrtB * V.asField3DParallel(), dummy, true)
+                    * Div_par_K_Grad_par_mod(Field3DParallel{eta / Bxy},
+                                             Field3DParallel{sqrtB * V}, dummy, true)
               : sqrtB * FV::Div_par_K_Grad_par(eta / Bxy, sqrtB * V);
 
       add(species["momentum_source"], div_Pi_cipar);
