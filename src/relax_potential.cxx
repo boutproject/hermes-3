@@ -245,6 +245,11 @@ RelaxPotential::RelaxPotential(std::string name, Options& alloptions, Solver* so
   if (vort_dissipation or phi_dissipation) {
     setPermissions(readOnly("sound_speed"));
   }
+  if (collisional_friction) {
+    setPermissions(readOnly("species:{positive_ions}:density", Regions::Interior));
+    setPermissions(readIfSet("species:{positive_ions}:collision_frequency"));
+    setPermissions(readWrite("fields:DivJcol"));
+  }
 }
 
 void RelaxPotential::transform_impl(GuardedOptions& state) {

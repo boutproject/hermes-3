@@ -20,6 +20,8 @@ using namespace bout::globals;
 // Reuse the "standard" fixture for FakeMesh
 using EvolveDensityTest = FakeMeshFixture;
 
+/// Check that EvolveDensity can be constructed and will register the
+/// density variable for this species with the solver.
 TEST_F(EvolveDensityTest, CreateComponent) {
   FakeSolver solver;
 
@@ -32,6 +34,7 @@ TEST_F(EvolveDensityTest, CreateComponent) {
   ASSERT_TRUE(state.isSet("Ni"));
 }
 
+/// Check that EvolveDensity::transform sets density and atomic mass for species
 TEST_F(EvolveDensityTest, Transform) {
   FakeSolver solver;
 
@@ -48,6 +51,7 @@ TEST_F(EvolveDensityTest, Transform) {
   ASSERT_TRUE(species.isSet("charge"));
 }
 
+/// Check that EvolveDensity::finally sets the time derivative from the density source
 TEST_F(EvolveDensityTest, Finally) {
   FakeSolver solver;
 
@@ -70,6 +74,7 @@ TEST_F(EvolveDensityTest, Finally) {
   }
 }
 
+/// Check that EvolveDensity::outputVars save sthe required diagnostics (with the correct values)
 TEST_F(EvolveDensityTest, Output) {
   FakeSolver solver;
 
@@ -77,7 +82,9 @@ TEST_F(EvolveDensityTest, Output) {
                   {"i", {{"AA", 2.0}, {"charge", 1.0}, {"diagnose", true}}}};
   EvolveDensity component("i", options, &solver);
 
-  // Call the finally() method with a density source
+  // Call the finally() method with a density source so that all
+  // member variables of the EvolveDensity object are set
+  // appropriately
   Options state = {{"species",
                     {{"i",
                       {{"density", 1.0},
