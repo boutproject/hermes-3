@@ -69,7 +69,7 @@ void ZeroCurrent::transform(Options &state) {
     immBndry->FloorField(Nfloor, 1e-5);
     velocity = current;
     BOUT_FOR(i, velocity.getRegion("RGN_NO_IMM_BNDRY")) {
-      velocity[i] /= (-charge * Nfloor[i]);
+      velocity[i] /= (-charge * Nfloor[i]); //Do up/down planes too since no communicate called after.
       velocity.yup()[i.yp()]   /= (-charge * Nfloor.yup()[i.yp()]);
       velocity.ydown()[i.ym()] /= (-charge * Nfloor.ydown()[i.ym()]);
     }

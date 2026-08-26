@@ -231,7 +231,7 @@ void EvolveDensity::transform(Options& state) {
 
   if (immBndry) {
     immBndry->FloorField(N);
-    immBndry->SetBoundary(N);
+    //immBndry->SetBoundary(N); //IB_TODO: Reset after flooring?
     set(species["density"], N);
   } else {
     set(species["density"], floor(N, 0.0));

@@ -306,11 +306,9 @@ void EvolvePressure::transform(Options& state) {
     const auto old_name = T.name;
     T = copy(Pfloor);
     BOUT_FOR(i, T.getRegion("RGN_NO_IMM_BNDRY")) {
-      T[i] /= Nfloor[i];
-      T.yup()[i.yp()] /= Nfloor.yup()[i.yp()];
-      T.ydown()[i.ym()] /= Nfloor.ydown()[i.ym()];
+      T[i] /= Nfloor[i]; //Only need to do central plane here, communicate below fills yup/ydown.
     }
-    Pfloor = Nfloor * T;
+    Pfloor = N * T;
     Pfloor.name = P.name;
     T.name = old_name;
 
@@ -344,7 +342,7 @@ void EvolvePressure::finally(const Options& state) {
   Field3D Pfloor = P;
   if (immBndry) {
     immBndry->FloorField(Pfloor);
-    immBndry->SetBoundary(Pfloor);
+    //immBndry->SetBoundary(Pfloor); //IB_TODO: Reset after flooring?
   } else {
     Pfloor = floor(P, 0.0); // Restricted to never go below zero
   }
