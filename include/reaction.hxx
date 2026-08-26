@@ -4,6 +4,7 @@
 
 #include <map>
 #include <memory>
+#include <vector>
 
 #include "component.hxx"
 #include "rate_helper.hxx"
@@ -85,6 +86,12 @@ protected:
   /// Units and normalisations extracted to member vars for convenience
   Options& units;
   BoutReal Tnorm, Nnorm, FreqNorm;
+
+  /// Species names extracted once during construction
+  std::vector<std::string> reactant_names;
+  std::vector<std::string> heavy_reactant_names;
+  std::vector<std::string> heavy_product_names;
+  std::vector<std::string> heavy_produced_names;
 
   /// Rate multipliers, extracted from input options
   BoutReal rate_multiplier, radiation_multiplier;

@@ -46,6 +46,14 @@ Reaction::Reaction(std::string name, Options& options)
       toString(data_src_type), data_src_id, options, metadata_keys);
 
   std::vector<std::string> species = this->parser->get_species();
+  this->reactant_names = this->parser->get_species(species_filter::reactants);
+  this->heavy_reactant_names =
+      this->parser->get_species(this->reactant_names, species_filter::heavy);
+  this->heavy_product_names =
+      this->parser->get_species(species_filter::heavy, species_filter::products);
+  this->heavy_produced_names =
+      this->parser->get_species(species_filter::heavy, species_filter::produced);
+
   // Participation factors. All set to unity for now; could make
   // configurable in future.
   for (const std::string& sp : species) {
@@ -53,8 +61,7 @@ Reaction::Reaction(std::string name, Options& options)
   }
 
   // Initialise momentum/energy channel maps
-  for (const std::string& reactant :
-       this->parser->get_species(species_filter::heavy, species_filter::reactants)) {
+  for (const std::string& reactant : this->heavy_reactant_names) {
     if (this->energy_channels.count(reactant) == 0) {
       energy_channels[reactant] = std::map<std::string, BoutReal>();
     }
@@ -68,7 +75,7 @@ Reaction::Reaction(std::string name, Options& options)
   substitutePermissions("e_val", {"density", "temperature"});
   substitutePermissions("w_val", {"momentum_source", "energy_source", "density_source"});
   setPermissions(readWrite("species:{reactant}:collision_frequency"));
-  substitutePermissions("reactant", this->parser->get_species(species_filter::reactants));
+  substitutePermissions("reactant", this->reactant_names);
 }
 
 ///
@@ -142,16 +149,11 @@ void Reaction::get_reaction_settings(Options& options, std::string& reaction_str
 
 ///
 void Reaction::init_channel_weights(GuardedOptions& state) {
-  std::vector<std::string> heavy_reactants =
-      this->parser->get_species(species_filter::heavy, species_filter::reactants);
-  std::vector<std::string> heavy_products =
-      this->parser->get_species(species_filter::heavy, species_filter::products);
-
   // If all channels already have values, bail out
   std::size_t num_energy_channels_set = 0, num_momentum_channels_set = 0;
   const std::size_t num_channels_expected =
-      heavy_reactants.size() * heavy_products.size();
-  for (const auto& reactant : heavy_reactants) {
+      this->heavy_reactant_names.size() * this->heavy_product_names.size();
+  for (const auto& reactant : this->heavy_reactant_names) {
     num_energy_channels_set += this->energy_channels[reactant].size();
     num_momentum_channels_set += this->momentum_channels[reactant].size();
   }
@@ -162,16 +164,15 @@ void Reaction::init_channel_weights(GuardedOptions& state) {
 
   // Compute total weights:
   BoutReal momentum_weightsum = 0, energy_weightsum = 0;
-  for (const std::string& sp :
-       this->parser->get_species(species_filter::heavy, species_filter::produced)) {
+  for (const std::string& sp : this->heavy_produced_names) {
     int num_produced = this->parser->pop_change(sp);
     BoutReal pfac = pfactors.at(sp);
     momentum_weightsum += num_produced * pfac * get<BoutReal>(state["species"][sp]["AA"]);
     energy_weightsum += num_produced * pfac;
   }
   // Set default values for any unset channels
-  for (const std::string& reactant : heavy_reactants) {
-    for (const std::string& product : heavy_products) {
+  for (const auto& reactant : this->heavy_reactant_names) {
+    for (const auto& product : this->heavy_product_names) {
       if (this->energy_channels[reactant].count(product) == 0) {
         this->energy_channels[reactant][product] = this->parser->pop_change(product)
                                                    * this->pfactors.at(product)
@@ -189,7 +190,7 @@ void Reaction::init_channel_weights(GuardedOptions& state) {
    * each reactant. The total weights could be restricted to be exactly 1, but we want to
    * allow momentum/energy contributions from certain species to be turned off.
    */
-  for (const std::string& reactant : heavy_reactants) {
+  for (const auto& reactant : this->heavy_reactant_names) {
     double total_energy_weight = std::accumulate(
         this->energy_channels[reactant].begin(), this->energy_channels[reactant].end(),
         0.0, [](double sum, const auto& pair) { return sum + pair.second; });
@@ -228,21 +229,13 @@ void Reaction::set_momentum_channel_weight(const std::string& reactant_name,
 ///
 void Reaction::transform_impl(GuardedOptions& state) {
   zero_diagnostics(state);
-
-  // Get the species name(s) of reactants, heavy reactants and products
-  std::vector<std::string> reactant_names =
-      parser->get_species(species_filter::reactants);
-  std::vector<std::string> heavy_reactant_species =
-      parser->get_species(reactant_names, species_filter::heavy);
-  std::vector<std::string> heavy_product_species =
-      parser->get_species(species_filter::heavy, species_filter::products);
-
   // All reaction sources are computed in interior region only
-  Region<Ind3D> rng_nobndry = get<Field3D>(state["species"][reactant_names[0]]["density"])
-                                  .getRegion("RGN_NOBNDRY");
+  Region<Ind3D> rgn_nobndry =
+      get<Field3D>(state["species"][this->reactant_names[0]]["density"])
+          .getRegion("RGN_NOBNDRY");
 
   // Create rate helper and compute reaction rate, collision frequencies
-  RateData rate_calc_results(reactant_names);
+  RateData rate_calc_results(this->reactant_names);
   RateParamsTypes rate_params_type = this->rate_data->get_fit_type();
   if (rate_params_type == RateParamsTypes::ET) {
     throw BoutException("RateParamsTypes::ET not implemented");
@@ -253,7 +246,7 @@ void Reaction::transform_impl(GuardedOptions& state) {
       return result;
     };
     auto rate_helper =
-        RateHelper<RateParamsTypes::nT>(state, units, reactant_names, rng_nobndry);
+        RateHelper<RateParamsTypes::nT>(state, units, this->reactant_names, rgn_nobndry);
     rate_calc_results = rate_helper.calc_rates(calc_rate, this->do_parallel_averaging);
   } else if (rate_params_type == RateParamsTypes::T) {
     OneDRateFunc calc_rate = [&](BoutReal Teff) {
@@ -263,7 +256,7 @@ void Reaction::transform_impl(GuardedOptions& state) {
     };
 
     auto rate_helper =
-        RateHelper<RateParamsTypes::T>(state, units, reactant_names, rng_nobndry);
+        RateHelper<RateParamsTypes::T>(state, units, this->reactant_names, rgn_nobndry);
 
     rate_calc_results = rate_helper.calc_rates(calc_rate, this->do_parallel_averaging);
   } else {
@@ -271,7 +264,7 @@ void Reaction::transform_impl(GuardedOptions& state) {
   }
 
   // Set collision frequencies
-  for (const auto& reactant_name : reactant_names) {
+  for (const auto& reactant_name : this->reactant_names) {
     update_source<set<Field3D>>(state, reactant_name,
                                 ReactionDiagnosticType::collision_freq,
                                 rate_calc_results.coll_freq(reactant_name));
@@ -312,7 +305,7 @@ void Reaction::transform_impl(GuardedOptions& state) {
     } else if (pop_change_s > 0) {
       // Species with net gain receive a proportion of the momentum and energy lost by
       // consumed reactants. See init_channel_weights() for default splitting factors.
-      for (auto& rsp_name : heavy_reactant_species) {
+      for (auto& rsp_name : this->heavy_reactant_names) {
         // All consumed (net loss) reactants can contribute
         int pop_change_r = this->parser->pop_change_reactant(rsp_name);
         if (pop_change_r < 0) {
