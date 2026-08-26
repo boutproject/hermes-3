@@ -351,7 +351,7 @@ PseudoReaction::PseudoReaction(Options& options, const PseudoReactionSpec& spec)
     std::string label =
         fmt::format("S{:s}_low-n_{:s}", this->target_species, toString(this->type));
     std::string description = fmt::format("Particle source of {:s} due to low-n {:s}",
-                                          toString(this->type), this->target_species);
+                                          this->target_species, toString(this->type));
     std::string src_name = fmt::format("low_n_{:s}", toString(this->type));
     add_diagnostic(this->target_species, label, description,
                    ReactionDiagnosticType::density_src, src_name, identity);
