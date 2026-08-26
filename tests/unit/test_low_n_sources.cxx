@@ -37,7 +37,8 @@ using LowNSourcesTest = FakeMeshFixture;
  * @return Options
  */
 Options make_test_options(BoutReal atom_density_floor, BoutReal ion_density_floor,
-                          BoutReal molecule_density_floor) {
+                          BoutReal molecule_density_floor,
+                          const std::string& strategy = "standard") {
   Options options;
   options["units"]["eV"] = 1.0;
   options["units"]["seconds"] = 1.0;
@@ -66,7 +67,7 @@ Options make_test_options(BoutReal atom_density_floor, BoutReal ion_density_floo
   options["low_n_sources"]["low_n_timescale"] = 1.0;
 
   // Tests all assume 'standard' rate strategt for now.
-  options["low_n_sources"]["strategy"] = "standard";
+  options["low_n_sources"]["strategy"] = strategy;
 
   return options;
 }
@@ -228,6 +229,59 @@ TEST(LowNSourcesConstructionTest, ConstructorBuildsOrderedPairsByElement) {
                                 {"he+", "he", PseudoReactionType::external_src},
                                 {"d+", "d+", PseudoReactionType::external_src}});
   test_reaction_def_creation(species_masses5, expected_pairs5);
+}
+
+TEST_F(LowNSourcesTest, DiagnosticsWrittenToOutput) {
+  // Create a component with diagnostics enabled
+  BoutReal nfloor = 1e-7;
+  Options options = make_test_options(nfloor, nfloor, nfloor);
+  options["low_n_sources"]["diagnose"] = true;
+  hermes::LowNSources component("low_n_sources", options);
+
+  // The species, src_type pairs corresponding to each expected diagnostic
+  std::vector<std::tuple<std::string, PseudoReactionType>> expected_src_defs = {
+      {mol_species, PseudoReactionType::association},
+      {atom_species, PseudoReactionType::recombination},
+      {ion_species, PseudoReactionType::ionization},
+      {ion_species, PseudoReactionType::external_src},
+  };
+
+  // Call transform, then outputVars
+  Options state;
+  set_state(state, nfloor, nfloor, nfloor);
+  component.transform(state);
+  Options output;
+  component.outputVars(output);
+
+  // Check that all expected diagnostics exist
+  for (const auto& [species, reaction_type] : expected_src_defs) {
+    std::string diag_name =
+        fmt::format("S{:s}_low-n_{:s}", species, toString(reaction_type));
+    ASSERT_TRUE(output.isSet(diag_name))
+        << "Expected diagnostic [" << diag_name << "] not set in output state";
+  }
+}
+
+/**
+ * @brief Test that an exception is thrown if an invalid strategy string is provided
+ *
+ */
+TEST_F(LowNSourcesTest, FailOnInvalidStrategy) {
+  const BoutReal nfloor = 1e-7;
+
+  // Check that an invalid strategy string throws at construction
+  Options options_invalid_strat =
+      make_test_options(nfloor, nfloor, nfloor, "does_not_exist");
+  EXPECT_THROW(hermes::LowNSources component("low_n_sources", options_invalid_strat),
+               BoutException);
+
+  // Check that string for a valid, but unimplemented strategy throws on transform
+  Options options_unimplemented_strat =
+      make_test_options(nfloor, nfloor, nfloor, "uedge");
+  hermes::LowNSources component("low_n_sources", options_unimplemented_strat);
+  Options state;
+  set_state(state, nfloor, nfloor, nfloor);
+  EXPECT_THROW(component.transform(state), BoutException);
 }
 
 /**

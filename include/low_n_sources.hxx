@@ -38,6 +38,8 @@ public:
 
   std::vector<ReactionDef> get_reaction_defs() const;
 
+  void outputVars(Options& state) final;
+
 private:
   struct ElementSpeciesGroups {
     std::string ion;
@@ -84,7 +86,6 @@ private:
   void append_species_by_type(const SpeciesParser& species, SpeciesTypeAlt type);
 
   void instantiate_reactions();
-  void outputVars(Options& state) final;
   void populate_reaction_defs() const;
   void transform_impl(GuardedOptions& state) final;
 };
