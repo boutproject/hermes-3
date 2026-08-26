@@ -236,7 +236,9 @@ void BraginskiiConduction::transform_impl(GuardedOptions& state) {
     // EvolvePressure::finally
 
     Field3D P = GET_VALUE(Field3D, species["pressure"]);
-    P.clearParallelSlices();
+    if (!P.isFci()) {
+      P.clearParallelSlices();
+    }
     const Field3D Pfloor = floor(P, 0.0); // Restricted to never go below zero
     const Field3D T = get<Field3D>(species["temperature"]);
     const Field3D N = get<Field3D>(species["density"]);
@@ -276,18 +278,25 @@ void BraginskiiConduction::transform_impl(GuardedOptions& state) {
       mesh->communicate(kappa_par);
     }
 
-    for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
-      for (int jz = 0; jz < mesh->LocalNz; jz++) {
-        auto i = indexAt(kappa_par, r.ind, mesh->ystart, jz);
-        auto im = i.ym();
-        kappa_par[im] = kappa_par[i];
+    if (P.isFci()) {
+
+      mesh->communicate(kappa_par);
+      kappa_par.applyParallelBoundary("parallel_neumann_o1");
+
+    } else {
+      for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
+        for (int jz = 0; jz < mesh->LocalNz; jz++) {
+          auto i = indexAt(kappa_par, r.ind, mesh->ystart, jz);
+          auto im = i.ym();
+          kappa_par[im] = kappa_par[i];
+        }
       }
-    }
-    for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
-      for (int jz = 0; jz < mesh->LocalNz; jz++) {
-        auto i = indexAt(kappa_par, r.ind, mesh->yend, jz);
-        auto ip = i.yp();
-        kappa_par[ip] = kappa_par[i];
+      for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
+        for (int jz = 0; jz < mesh->LocalNz; jz++) {
+          auto i = indexAt(kappa_par, r.ind, mesh->yend, jz);
+          auto ip = i.yp();
+          kappa_par[ip] = kappa_par[i];
+        }
       }
     }
 
