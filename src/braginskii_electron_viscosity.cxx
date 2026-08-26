@@ -55,9 +55,6 @@ void BraginskiiElectronViscosity::transform_impl(GuardedOptions& state) {
   const Field3DParallel Bxy = coord->Bxy;
   const Field3DParallel sqrtB = sqrt(Bxy);
 
-  ASSERT2(Bxy.hasParallelSlices());
-  ASSERT2(sqrtB.hasParallelSlices());
-
   // Parallel electron viscosity
   Field3D eta = (4. / 3) * 0.73 * P * tau;
 

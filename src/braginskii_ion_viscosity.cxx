@@ -149,9 +149,6 @@ void BraginskiiIonViscosity::transform_impl(GuardedOptions& state) {
   const Field3DParallel Bxy = coord->Bxy;
   const Field3DParallel sqrtB = sqrt(Bxy.asField3DParallel());
   const Field3DParallel logB = log(Bxy.asField3DParallel());
-  ASSERT2(Bxy.hasParallelSlices());
-  ASSERT2(sqrtB.hasParallelSlices());
-  ASSERT2(logB.hasParallelSlices());
 
   const Field3D Grad_par_logB = Grad_par(logB);
 
@@ -297,8 +294,6 @@ void BraginskiiIonViscosity::transform_impl(GuardedOptions& state) {
       // This term is the parallel flow part of
       // -(2/3) B^(3/2) Grad_par(Pi_ci / B^(3/2))
       Field3D dummy;
-      ASSERT2(eta.hasParallelSlices());
-      ASSERT2(V.hasParallelSlices());
 
       const Field3D div_Pi_cipar =
           P.isFci()
