@@ -56,6 +56,10 @@ AnomalousDiffusion::AnomalousDiffusion(std::string name, Options& alloptions, So
                  .doc("Output additional diagnostics?")
                  .withDefault<bool>(false);
 
+  if (anomalous_nu.isFci()) {
+    dagp_op = FCI::getDagp_fv(mesh, rho_s0);
+  }
+
   substitutePermissions("name", {name});
   substitutePermissions("optional", {"temperature", "velocity"});
   std::vector<std::string> output_vars;
@@ -97,7 +101,7 @@ void AnomalousDiffusion::transform_impl(GuardedOptions& state) {
       species.isSet("velocity") ? GET_NOBOUNDARY(Field3D, species["velocity"]) : 0.0;
   Field2D V2D = DC(V);
 
-  if (!anomalous_sheath_flux) {
+  if (!anomalous_sheath_flux && !N.isFci()) {
     // Apply Neumann Y boundary condition, so no additional flux into boundary
     // Note: Not setting radial (X) boundaries since those set radial fluxes
     for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
@@ -120,33 +124,40 @@ void AnomalousDiffusion::transform_impl(GuardedOptions& state) {
     // advection velocity
     //
     //  v_D = - D Grad_perp(N) / N
-
-    add(species["density_source"],
-        Div_a_Grad_perp_upwind_flows(anomalous_D, N2D, flow_xlow, flow_ylow));
+    Field3D src_N =
+        N.isFci() ? (*dagp_op)(anomalous_D, N, flow_xlow, flow_ylow, false)
+                  : Div_a_Grad_perp_upwind_flows(anomalous_D, N2D, flow_xlow, flow_ylow);
+    add(species["density_source"], src_N);
     add(species["particle_flow_xlow"], flow_xlow);
     add(species["particle_flow_ylow"], flow_ylow);
 
     // Note: Upwind operators used, or unphysical increases
     // in temperature and flow can be produced
     auto AA = get<BoutReal>(species["AA"]);
-    add(species["momentum_source"],
-        Div_a_Grad_perp_upwind_flows(Field2D{AA * V2D * anomalous_D}, N2D, flow_xlow,
-                                     flow_ylow));
+    Field3D src_NV =
+        N.isFci() ? (*dagp_op)(AA * V * anomalous_D, N, flow_xlow, flow_ylow, false)
+                  : Div_a_Grad_perp_upwind_flows(Field2D{AA * V2D * anomalous_D}, N2D,
+                                                 flow_xlow, flow_ylow);
+    add(species["momentum_source"], src_NV);
     add(species["momentum_flow_xlow"], flow_xlow);
     add(species["momentum_flow_ylow"], flow_ylow);
 
-    add(species["energy_source"],
-        Div_a_Grad_perp_upwind_flows(Field2D{(3. / 2) * T2D * anomalous_D}, N2D,
-                                     flow_xlow, flow_ylow));
+    Field3D src_E =
+        N.isFci() ? (*dagp_op)((3. / 2) * T * anomalous_D, N, flow_xlow, flow_ylow, false)
+                  : Div_a_Grad_perp_upwind_flows(Field2D{(3. / 2) * T2D * anomalous_D},
+                                                 N2D, flow_xlow, flow_ylow);
+    add(species["energy_source"], src_E);
     add(species["energy_flow_xlow"], flow_xlow);
     add(species["energy_flow_ylow"], flow_ylow);
   }
 
   if (include_chi) {
     // Gradients in temperature that drive energy flows
-    add(species["energy_source"],
-        Div_a_Grad_perp_upwind_flows(Field2D{anomalous_chi * N2D}, T2D, flow_xlow,
-                                     flow_ylow));
+    Field3D src_E = N.isFci()
+                        ? (*dagp_op)(anomalous_chi * N, T, flow_xlow, flow_ylow, false)
+                        : Div_a_Grad_perp_upwind_flows(Field2D{anomalous_chi * N2D}, T2D,
+                                                       flow_xlow, flow_ylow);
+    add(species["energy_source"], src_E);
     add(species["energy_flow_xlow"], flow_xlow);
     add(species["energy_flow_ylow"], flow_ylow);
   }
@@ -154,9 +165,11 @@ void AnomalousDiffusion::transform_impl(GuardedOptions& state) {
   if (include_nu) {
     // Gradients in flow speed that drive momentum flows
     auto AA = get<BoutReal>(species["AA"]);
-    add(species["momentum_source"],
-        Div_a_Grad_perp_upwind_flows(Field2D{anomalous_nu * AA * N2D}, V2D, flow_xlow,
-                                     flow_ylow));
+    Field3D src_NV =
+        N.isFci() ? (*dagp_op)(anomalous_nu * AA * N, V, flow_xlow, flow_ylow, false)
+                  : Div_a_Grad_perp_upwind_flows(Field2D{anomalous_nu * AA * N2D}, V2D,
+                                                 flow_xlow, flow_ylow);
+    add(species["momentum_source"], src_NV);
     add(species["momentum_flow_xlow"], flow_xlow);
     add(species["momentum_flow_ylow"], flow_ylow);
   }

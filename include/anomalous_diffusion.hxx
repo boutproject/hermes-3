@@ -2,6 +2,7 @@
 #ifndef ANOMALOUS_DIFFUSION_H
 #define ANOMALOUS_DIFFUSION_H
 
+#include "../include/div_ops.hxx"
 #include "component.hxx"
 
 /// Add anomalous diffusion of density, momentum and energy
@@ -38,6 +39,8 @@ private:
   Field2D anomalous_nu;                    ///< Anomalous momentum diffusion coefficient
 
   bool anomalous_sheath_flux; ///< Allow anomalous diffusion into sheath?
+
+  std::shared_ptr<FCI::dagp_fv> dagp_op; ///< Perp. diffusion operator for Fci
 
   /// Inputs
   /// - species
