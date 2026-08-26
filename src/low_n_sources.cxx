@@ -362,8 +362,9 @@ PseudoReaction::PseudoReaction(Options& options, const PseudoReactionSpec& spec)
 RateData PseudoReaction::get_rate_standard(GuardedOptions& state) {
 
   // Get target species density
-  const Field3D& n_target =
-      state["species"][this->target_species]["density"].GetRef<Field3D>();
+  // Local variable to workaround gcc dangling ref false positive
+  const GuardedOptions n_target_opt = state["species"][this->target_species]["density"];
+  const Field3D& n_target = n_target_opt.GetRef<Field3D>();
   auto region = n_target.getRegion("RGN_NOBNDRY");
 
   // Initialise return object
@@ -385,8 +386,9 @@ RateData PseudoReaction::get_rate_standard(GuardedOptions& state) {
 
   // If this reaction has a gate species, zero the rate when it's depleted.
   if (!this->gate_species.empty()) {
-    const Field3D& n_gate =
-        state["species"][this->gate_species]["density"].GetRef<Field3D>();
+    // Local variable to workaround gcc dangling ref false positive
+    const GuardedOptions n_gate_opt = state["species"][this->gate_species]["density"];
+    const Field3D& n_gate = n_gate_opt.GetRef<Field3D>();
     BOUT_FOR(i, region) {
       if (n_gate[i] < this->gate_species_threshold) {
         result.rate[i] = 0.0;
@@ -397,8 +399,9 @@ RateData PseudoReaction::get_rate_standard(GuardedOptions& state) {
   // If this reaction has a boost species, modify the rate based on the level of its depletion.
   // Disable reactions entirely if a boost species deficit is required (i.e. for the external ion source)
   if (!this->boost_species.empty()) {
-    const Field3D& n_boost =
-        state["species"][this->boost_species]["density"].GetRef<Field3D>();
+    // Local variable to workaround gcc dangling ref false positive
+    const GuardedOptions n_boost_opt = state["species"][this->boost_species]["density"];
+    const Field3D& n_boost = n_boost_opt.GetRef<Field3D>();
     BOUT_FOR(i, region) {
       const BoutReal thresh_ratio = n_boost[i] / this->boost_species_threshold;
       if (thresh_ratio < 1.0) {
