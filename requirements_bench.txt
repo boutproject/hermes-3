@@ -1,0 +1,3 @@
+scikit-build-core~=1.0.3
+asv~=0.6.6
+uv

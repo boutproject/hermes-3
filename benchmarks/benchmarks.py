@@ -1,8 +1,8 @@
 import os
 import pathlib
+import shutil
 import sys
 import tempfile
-import shutil
 
 from boututils.run_wrapper import launch_safe
 
@@ -23,7 +23,6 @@ class Time1DRun:
     def setup(self):
         self.rundir = tempfile.TemporaryDirectory()
         self.runpath = pathlib.Path(self.rundir.name)
-        # FIXME: is this the right test? My notes say 1D-thene
         shutil.copytree(TESTPATH / "1D-recycling-dthe" / "data", self.runpath / "data")
         self.cwd = os.getcwd()
         os.chdir(self.runpath)
@@ -58,15 +57,9 @@ class Time2DRun:
         os.chdir(self.runpath)
         # Load the runtest file to access methods needed to download data
         sys.path.append(str(testdir))
-        # print(testdir / "runtest")
-        # spec = importlib.util.spec_from_file_location("runtest", testdir / "runtest")
-        # assert spec is not None
-        # assert spec.loader is not None
-        # runtest = importlib.util.module_from_spec(spec)
-        # sys.modules["runtest"] = runtest
-        # spec.loader.exec_module(runtest)
-        # Download test data
         import runtest_utils
+
+        sys.path.pop()
 
         dd = runtest_utils.DataDownloader(self.runpath)
         dd.download_data()

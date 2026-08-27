@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 import os
 import sys
+from pathlib import Path
 from time import time
-from runtest_utils import DataDownloader
 
 import numpy as np
 import xhermes
 from boututils.run_wrapper import launch_safe, shell
+from runtest_utils import DataDownloader
 
 t0 = time()
 
@@ -23,9 +24,9 @@ output_path = data_dir / "BOUT.dmp.*.nc"
 
 dd = DataDownloader()
 
-t_download = time()
 if not dd.checkHash(False):
     dd.download_data()
+    t_download = time()
     if verbose:
         print(f"2D-Production test: download took {t_download - t0:.2f} seconds")
     dd.checkHash()
