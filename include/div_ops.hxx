@@ -73,6 +73,10 @@ Field2D Laplace_FV(const Field2D& k, const Field2D& f);
 /// Takes Div_a_Grad_perp from BOUT++ and adds flows
 Field3D Div_a_Grad_perp_flows(const Field3D& a, const Field3D& f, Field3D& flux_xlow,
                               Field3D& flux_ylow);
+inline Field3D Div_a_Grad_perp_flows(const Field2D& a, const Field2D& f,
+                                     Field3D& flux_xlow, Field3D& flux_ylow) {
+  return Div_a_Grad_perp_flows(Field3D{a}, Field3D{f}, flux_xlow, flux_ylow);
+}
 /// Same but with upwinding
 /// WARNING: Causes checkerboarding in neutral_mixed integrated test
 Field3D Div_a_Grad_perp_upwind(const Field3D& a, const Field3D& f);
@@ -80,6 +84,10 @@ Field3D Div_a_Grad_perp_upwind(const Field3D& a, const Field3D& f);
 /// WARNING: Causes checkerboarding in neutral_mixed integrated test
 Field3D Div_a_Grad_perp_upwind_flows(const Field3D& a, const Field3D& f,
                                      Field3D& flux_xlow, Field3D& flux_ylow);
+inline Field3D Div_a_Grad_perp_upwind_flows(const Field2D& a, const Field2D& f,
+                                            Field3D& flux_xlow, Field3D& flux_ylow) {
+  return Div_a_Grad_perp_upwind_flows(Field3D{a}, Field3D{f}, flux_xlow, flux_ylow);
+}
 
 /*!
  * Div ( a Grad_perp(f) ) -- ∇⊥ ( a ⋅ ∇⊥ f) -- Vorticity
