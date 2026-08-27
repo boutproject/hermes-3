@@ -359,8 +359,13 @@ void sortComponents(std::vector<std::unique_ptr<Component>>& components) {
   // components which do non-final writes on that variable
   for (const auto& [var, comp_indices] : final_writes) {
     if (comp_indices.size() > 1) {
+      std::vector<std::string> comps;
+      for (const auto i : comp_indices) {
+        comps.push_back(fmt::format("{}", *components[i]));
+      }
       throw BoutException(
-          "Multiple components have permission to make final write to variable {}", var);
+          "Multiple components have permission to make final write to variable {}: {}",
+          var, fmt::join(comps, ", "));
     }
     for (const size_t i : comp_indices) {
       const auto item = nonfinal_writes.find(var);
@@ -389,7 +394,7 @@ void sortComponents(std::vector<std::unique_ptr<Component>>& components) {
   std::set<std::string> missing =
       setReadDependencies(components, variable_hierarchy, variable_writers,
                           PermissionTypes::Read, component_dependencies);
-  if (missing.size() > 0) {
+  if (!missing.empty()) {
     throw BoutException(
         "The following required variables are not written by any component:\n\t{}\n",
         fmt::join(missing, "\n\t"));

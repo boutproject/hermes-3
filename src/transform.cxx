@@ -4,7 +4,8 @@
 #include <bout/utils.hxx> // for trim, strsplit
 
 Transform::Transform(std::string name, Options& alloptions, Solver* UNUSED(solver))
-    : NamedComponent(name, {readOnly("{inputs}"), writeFinal("{outputs}")}) {
+    : NamedComponent(name, {readOnly("{inputs}", Regions::Interior),
+                            writeFinal("{outputs}", Regions::Interior)}) {
 
   Options& options = alloptions[name];
 
