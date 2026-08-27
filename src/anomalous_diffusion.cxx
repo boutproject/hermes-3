@@ -55,7 +55,7 @@ AnomalousDiffusion::AnomalousDiffusion(std::string name, Options& alloptions, So
   diagnose = alloptions[name]["diagnose"]
                  .doc("Output additional diagnostics?")
                  .withDefault<bool>(false);
-
+  // Only create the operator when Fci, otherwise other operators are used
   if (anomalous_nu.isFci()) {
     dagp_op = FCI::getDagp_fv(mesh, rho_s0);
   }
@@ -90,17 +90,28 @@ void AnomalousDiffusion::transform_impl(GuardedOptions& state) {
   // Note: Includes diffusion in Y, so set boundary fluxes
   // to zero by imposing neumann boundary conditions.
   const Field3D N = GET_NOBOUNDARY(Field3D, species["density"]);
-  Field2D N2D = DC(N);
 
+  Field2D N2D;
+  // Only perform the toroidal averaging when not Fci
+  if (!N.isFci()) {
+    N2D = DC(N);
+  }
   const Field3D T = species.isSet("temperature")
                         ? GET_NOBOUNDARY(Field3D, species["temperature"])
                         : 0.0;
-  Field2D T2D = DC(T);
+  Field2D T2D;
+  if (!N.isFci()) {
+    T2D = DC(T);
+  }
 
   const Field3D V =
       species.isSet("velocity") ? GET_NOBOUNDARY(Field3D, species["velocity"]) : 0.0;
-  Field2D V2D = DC(V);
+  Field2D V2D;
+  if (!N.isFci()) {
+    V2D = DC(V);
+  }
 
+  // This boundary operator does not work for Fci, so skip if Fci
   if (!anomalous_sheath_flux && !N.isFci()) {
     // Apply Neumann Y boundary condition, so no additional flux into boundary
     // Note: Not setting radial (X) boundaries since those set radial fluxes
@@ -121,9 +132,14 @@ void AnomalousDiffusion::transform_impl(GuardedOptions& state) {
   if (include_D) {
     // Particle diffusion. Gradients of density drive flows of particles,
     // momentum and energy. The implementation here is equivalent to an
-    // advection velocity
+    // advection velocity when field aligned
     //
     //  v_D = - D Grad_perp(N) / N
+    //
+    // When run in Fci the operator (dagp_op) is used, which is a
+    // diffusion operator for curvilinear coordinates that needs special
+    // variables in the grid.
+
     Field3D src_N =
         N.isFci() ? (*dagp_op)(anomalous_D, N, flow_xlow, flow_ylow, false)
                   : Div_a_Grad_perp_upwind_flows(anomalous_D, N2D, flow_xlow, flow_ylow);
