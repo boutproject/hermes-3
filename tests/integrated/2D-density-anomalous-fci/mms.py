@@ -35,18 +35,14 @@ rho_s = 0.00022847
 
 # Define solution in terms of input x,y,z
 omega = 0.0001
-# n = 1 + 0.1*sin(2 * pi * x) * sin(3 * z)# * sin(t*omega)
 n = 1.0 + 0.35 * sin(2.0 * pi * x) * sin(2 * z + 1.321312)
 D = (1.0 + 0.45 * sin(4.0 * pi * x) * cos(z + 4.231231231)) / (rho_s * rho_s * Omega_ci)
 
 
 # Turn solution into real x and z coordinates
-# replace = [(x, metric.x), (z, metric.z / (2.0 * pi) ) ]
-# replace = [ (y, metric.y) ]
-# replace = [ (y, metric.y* Ly / (2.0 * pi)) ]
-
-
 replace = [(x, metric.x), (z, metric.z * 2.0 * pi)]
+
+# Replace the variables with the new metric
 n = n.subs(replace)
 D = D.subs(replace)
 
@@ -66,6 +62,8 @@ Sn = diff(n, t) - dndt
 
 # Substitute back to get input y coordinates
 replace = [(metric.x, x), (metric.z, z / (2.0 * pi))]
+
+# Recalculate the variables
 n = n.subs(replace)
 Sn = Sn.subs(replace)
 D = D.subs(replace)
