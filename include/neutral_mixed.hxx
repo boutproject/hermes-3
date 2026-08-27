@@ -58,9 +58,9 @@ private:
   BoutReal limiter_gradient_ceiling; ///< Ceiling for gradient in Dmax denominator
   BoutReal limiter_gradient_floor_eta;   ///< Floor for gradient in eta denominator
   BoutReal limiter_gradient_ceiling_eta; ///< Ceiling for gradient in eta denominator
-  BoutReal diffusion_limit_override;     ///< Explicit cap on Dnn [m^2/s]
-  BoutReal conduction_limit_override;    ///< Explicit cap on kappa_n [m^-1 s^-1]
-  BoutReal viscosity_limit_override;     ///< Explicit cap on eta_n [Pa s]
+  BoutReal diffusion_limit;              ///< Explicit cap on Dnn [m^2/s]
+  BoutReal conduction_limit;             ///< Explicit cap on kappa_n [m^-1 s^-1]
+  BoutReal viscosity_limit;              ///< Explicit cap on eta_n [Pa s]
   BoutReal neutral_lmax;                 ///< Used for collisionality floor
 
   bool sheath_ydown, sheath_yup;

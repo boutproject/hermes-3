@@ -176,32 +176,20 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
                         flux_limiter_sharpness);
   }
 
-  if (options.isSet("diffusion_limit")) {
-    throw BoutException(
-        "diffusion_limit option is deprecated. Use diffusion_limit_override,"
-        "conduction_limit_override and viscosity_limit_override for explicit "
-        "caps on the three diffusion coefficients.");
-  }
-
-  // The three coefficients have different units. Dnn is a diffusivity;
-  // kappa_n = (5/2) Dnn Nn carries a density; eta_n = AA (2/5) kappa_n also
-  // carries a mass. Each normalisation factor below matches its own units.
-  diffusion_limit_override =
-      options["diffusion_limit_override"]
+  diffusion_limit =
+      options["diffusion_limit"]
           .doc("Upper limit on diffusion coefficient Dnn [m^2/s]. <0 means off")
           .withDefault(-1.0)
       / (meters * meters / seconds);
 
-  conduction_limit_override =
-      options["conduction_limit_override"]
-          .doc("Upper limit on conduction coefficient kappa_n [m^-1 s^-1], the "
-               "coefficient multiplying grad(Tn) with Tn in energy units. "
-               "<0 means off")
-          .withDefault(-1.0)
-      / (Nnorm * meters * meters / seconds);
+  conduction_limit = options["conduction_limit"]
+                         .doc("Upper limit on conduction coefficient kappa_n [m^-1 s^-1]"
+                              "<0 means off")
+                         .withDefault(-1.0)
+                     / (Nnorm * meters * meters / seconds);
 
-  viscosity_limit_override =
-      options["viscosity_limit_override"]
+  viscosity_limit =
+      options["viscosity_limit"]
           .doc("Upper limit on dynamic viscosity eta_n [Pa s] = [kg m^-1 s^-1]. "
                "<0 means off")
           .withDefault(-1.0)
@@ -630,20 +618,18 @@ void NeutralMixed::finally(const Options& state) {
 
   // Apply the limiter to each diffusion coefficient.
   BOUT_FOR(i, Dnn.getRegion("RGN_NOBNDRY")) {
-    Dnn[i] = apply_limiter(Dnn_unlimited[i], Dmax[i], diffusion_limit_override,
-                           flux_limit_adv, flux_limiter_sharpness);
-    kappa_n_perp[i] = apply_limiter(kappa_n_unlimited[i], kappa_n_max_perp[i],
-                                    conduction_limit_override, flux_limit_cond_perp,
-                                    flux_limiter_sharpness);
+    Dnn[i] = apply_limiter(Dnn_unlimited[i], Dmax[i], diffusion_limit, flux_limit_adv,
+                           flux_limiter_sharpness);
+    kappa_n_perp[i] =
+        apply_limiter(kappa_n_unlimited[i], kappa_n_max_perp[i], conduction_limit,
+                      flux_limit_cond_perp, flux_limiter_sharpness);
     kappa_n_par[i] =
-        apply_limiter(kappa_n_unlimited[i], kappa_n_max_par[i], conduction_limit_override,
+        apply_limiter(kappa_n_unlimited[i], kappa_n_max_par[i], conduction_limit,
                       flux_limit_cond_par, flux_limiter_sharpness);
-    eta_n_perp[i] =
-        apply_limiter(eta_n_unlimited[i], eta_n_max_perp[i], viscosity_limit_override,
-                      flux_limit_visc_perp, flux_limiter_sharpness);
-    eta_n_par[i] =
-        apply_limiter(eta_n_unlimited[i], eta_n_max_par[i], viscosity_limit_override,
-                      flux_limit_visc_par, flux_limiter_sharpness);
+    eta_n_perp[i] = apply_limiter(eta_n_unlimited[i], eta_n_max_perp[i], viscosity_limit,
+                                  flux_limit_visc_perp, flux_limiter_sharpness);
+    eta_n_par[i] = apply_limiter(eta_n_unlimited[i], eta_n_max_par[i], viscosity_limit,
+                                 flux_limit_visc_par, flux_limiter_sharpness);
   }
 
   mesh->communicate(Dnn);
