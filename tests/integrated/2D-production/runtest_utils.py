@@ -1,8 +1,8 @@
 import hashlib
-from pathlib import Path
 import shutil
 import urllib.request
 import zipfile
+from pathlib import Path
 
 url = "https://zenodo.org/records/22113649/files/test-2D-production-2026-08-26.zip"
 
@@ -53,7 +53,11 @@ class DataDownloader:
                 # Extract only expected grids
                 for filename in expected_filenames:
                     if filename in zip_contents:
-                        dest = self.data if filename.startswith("BOUT.restart") else self.directory
+                        dest = (
+                            self.data
+                            if filename.startswith("BOUT.restart")
+                            else self.directory
+                        )
                         zf.extract(filename, path=dest)
             except Exception as e:
                 print("2D-Production test: extracting test grids failed:", e)
@@ -69,9 +73,8 @@ class DataDownloader:
                 raise
             return False
 
-        if doRaise:
-            if file_hash != expected_hash:
-                raise RuntimeError(
-                    "2D-Production test: downloaded zip file hash does not match expected value"
-                )
+        if doRaise and file_hash != expected_hash:
+            raise RuntimeError(
+                "2D-Production test: downloaded zip file hash does not match expected value"
+            )
         return file_hash == expected_hash
