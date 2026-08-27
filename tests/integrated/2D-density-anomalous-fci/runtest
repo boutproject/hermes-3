@@ -69,38 +69,6 @@ for var in varnames:
     if order < 1.8:
         success = False
 
-# plot errors
-try:
-    import matplotlib.pyplot as plt
-
-    for var in varnames:
-        l2 = results[var]["l2"]
-        inf = results[var]["inf"]
-        order = log(l2[-1] / l2[-2]) / log(dy[-1] / dy[-2])
-
-        plt.plot(dy, l2, "-o", label=r"$l_2$ (" + var + ")")
-        plt.plot(dy, inf, "-x", label=r"$l_\infty$ (" + var + ")")
-        plt.plot(dy, l2[-1] * (dy / dy[-1]) ** order, "--", label=f"Order {order:.1f}")
-
-    plt.legend(loc="upper left")
-    plt.grid()
-
-    plt.yscale("log")
-    plt.xscale("log")
-
-    plt.xlabel(r"Mesh spacing $\delta y$")
-    plt.ylabel("Error norm")
-
-    plt.savefig("fluid_norm.pdf")
-    plt.savefig("fluid_norm.png")
-
-    # plt.show()
-    plt.close()
-except:  # noqa
-    # Plotting could fail for any number of reasons, and the actual
-    # error raised may depend on, among other things, the current
-    # matplotlib backend, so catch everything
-    pass
 
 if success:
     print(" => Test passed")
