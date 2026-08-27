@@ -30,6 +30,7 @@
 #include <bout/field3d.hxx>
 #include <bout/generic_factory.hxx>
 #include <bout/options.hxx>
+#include <bout/output_bout_types.hxx>
 #include <bout/unused.hxx>
 #include <fmt/base.h>
 #include <fmt/format.h>
@@ -410,6 +411,27 @@ inline bool hermesDataInvalid(const Field2D& value) {
   return false;
 }
 
+template <class T>
+std::string hermesDataInvalidWhere(const T& value) {
+  if constexpr (std::is_base_of_v<Field, T>) {
+    int count = 0;
+    typename T::ind_type ibad;
+    bool isFirst = true;
+    for (const auto& i : value.getRegion("RGN_NOBNDRY")) {
+      if (!std::isfinite(value[i])) {
+        count++;
+        if (isFirst) {
+          ibad = i;
+          isFirst = false;
+        }
+      }
+    }
+    return fmt::format("There are {} bad values. The first one is at {}.", count, ibad);
+  } else {
+    return fmt::format("The value is {}", value);
+  }
+}
+
 /// Set values in an option. This could be optimised, but
 /// currently the is_value private variable would need to be modified.
 ///
@@ -432,7 +454,8 @@ Options& set(Options& option, T value) {
   }
 
   if (hermesDataInvalid(value)) {
-    throw BoutException("Setting invalid value for '{}'", option.str());
+    throw BoutException("Setting invalid value for '{}' with {}", option.str(),
+                        hermesDataInvalidWhere(value));
   }
 #endif
 
