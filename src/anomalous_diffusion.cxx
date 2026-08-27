@@ -52,6 +52,10 @@ AnomalousDiffusion::AnomalousDiffusion(std::string name, Options& alloptions, So
                               .doc("Allow anomalous diffusion into sheath?")
                               .withDefault<bool>(false);
 
+  anomalous_transport_momentum = options["anomalous_transport_momentum"]
+                              .doc("Apply anomalous transport to parallel momentum?")
+                              .withDefault<bool>(true);
+
   diagnose = alloptions[name]["diagnose"]
                  .doc("Output additional diagnostics?")
                  .withDefault<bool>(false);
@@ -94,7 +98,8 @@ void AnomalousDiffusion::transform_impl(GuardedOptions& state) {
   Field2D T2D = DC(T);
 
   const Field3D V =
-      species.isSet("velocity") ? GET_NOBOUNDARY(Field3D, species["velocity"]) : 0.0;
+    (anomalous_transport_momentum && species.isSet("velocity"))
+        ? GET_NOBOUNDARY(Field3D, species["velocity"]) : 0.0;
   Field2D V2D = DC(V);
 
   if (!anomalous_sheath_flux) {
