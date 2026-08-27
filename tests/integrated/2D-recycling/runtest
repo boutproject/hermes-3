@@ -1,15 +1,17 @@
 #!/usr/bin/env python3
-from boututils.run_wrapper import launch_safe
-import numpy as np
-import matplotlib.pyplot as plt
-import shutil
-import zipfile
 import hashlib
 import os
-from pathlib import Path
+import shutil
+import sys
 import urllib.request
-import xhermes
+import zipfile
+from pathlib import Path
 from time import time
+
+import matplotlib.pyplot as plt
+import numpy as np
+import xhermes
+from boututils.run_wrapper import launch_safe
 
 t0 = time()
 
@@ -33,8 +35,8 @@ data_dir = this_dir / "data"
 output_path = data_dir / "BOUT.dmp.*.nc"
 
 zipfile_path = this_dir / "test-2D-recycling.zip"
-url = "https://zenodo.org/records/18696440/files/test-2D-production-2026-02-19.zip"
-expected_hash = "4472d27031a6fcedd30e11360814a66c075f8c14442df745e4e9d80a0dbd87f3"
+url = "https://zenodo.org/records/22113649/files/test-2D-production-2026-08-26.zip"
+expected_hash = "f0e02d0599c56a3a95ad28702e50b94ab12bfe3d3b25f6d6a0800851e177cd0c"
 expected_filenames = [
     "BOUT.restart.0.nc",
     "BOUT.restart.1.nc",
@@ -79,7 +81,8 @@ def extractZip():
             # Extract only expected grids
             for filename in expected_filenames:
                 if filename in zip_contents:
-                    zf.extract(filename, path=this_dir)
+                    dest = data_dir if filename.startswith("BOUT.restart") else this_dir
+                    zf.extract(filename, path=dest)
 
         except Exception as e:
             print("2D-recycling test: extracting test grids failed:", e)
@@ -96,11 +99,10 @@ def checkHash(doRaise=True):
             raise
         return False
 
-    if doRaise:
-        if file_hash != expected_hash:
-            raise RuntimeError(
-                "2D-recycling test: downloaded zip file hash does not match expected value"
-            )
+    if doRaise and file_hash != expected_hash:
+        raise RuntimeError(
+            "2D-recycling test: downloaded zip file hash does not match expected value"
+        )
     return file_hash == expected_hash
 
 
@@ -122,12 +124,12 @@ if not debug:
     # which does not enforce slot limits and does not support --oversubscribe)
     os.environ["OMPI_MCA_rmaps_base_oversubscribe"] = "yes"
 
-    s, out = launch_safe("../../../hermes-3 -d data", nproc=10, pipe=True)
+    s, out = launch_safe("../../../hermes-3 -d data restart", nproc=10, pipe=True)
 
     if s != 0:
         print(" => 2D-recycling test failed: ")
         print(out)
-        exit(1)
+        sys.exit(1)
 
     t_run = time()
     if verbose:
