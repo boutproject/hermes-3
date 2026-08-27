@@ -87,19 +87,22 @@ jobs:
       - name: Run benchmarks
         run: |
           # ID of this machine
-          uv run asv machine --yes
+          uv run --no-project asv machine --yes
 
-          echo -e "\n\nBaseline:  ${{ github.event.pull_request.base.sha }} (${{ github.event.pull_request.base.label }})"
-          echo -e "Contender: ${GITHUB_SHA} (merge of $PR_HEAD_LABEL into ${{ github.event.pull_request.base.label }})\n"
+          echo ""
+          echo ""
+          echo "Baseline:  ${{ github.event.pull_request.base.sha }} (${{ github.event.pull_request.base.label }})"
+          echo "Contender: ${GITHUB_SHA} (merge of $PR_HEAD_LABEL into ${{ github.event.pull_request.base.label }})"
+          echo ""
 
           # Run benchmarks for current commit against base
           ASV_OPTIONS="--split --show-stderr --factor $ASV_FACTOR"
-          uv run asv continuous $ASV_OPTIONS ${{ github.event.pull_request.base.sha }} ${GITHUB_SHA} \
+          uv run --no-project asv continuous $ASV_OPTIONS ${{ github.event.pull_request.base.sha }} ${GITHUB_SHA} \
               | sed "/Traceback \|failed *$\|PERFORMANCE DECREASED/ s/^/::error::/" \
               | tee benchmarks.log
 
           # Report and export results for subsequent steps
-          uv run asv compare --split --factor $ASV_FACTOR ${{ github.event.pull_request.base.sha }} ${GITHUB_SHA}
+          uv run --no-project asv compare --split --factor $ASV_FACTOR ${{ github.event.pull_request.base.sha }} ${GITHUB_SHA}
           if grep "Traceback \|failed *$\|PERFORMANCE DECREASED" benchmarks.log > /dev/null ; then
               exit 1
           fi
