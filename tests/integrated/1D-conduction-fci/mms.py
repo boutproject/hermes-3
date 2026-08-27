@@ -32,8 +32,6 @@ p = n * T
 
 # Turn solution into real x and z coordinates
 replace = [(y, metric.y * 2 * pi / Ly)]
-# replace = [ (y, metric.y) ]
-# replace = [ (y, metric.y* Ly / (2.0 * pi)) ]
 
 rho_s = 0.0002284697436697996
 
@@ -45,11 +43,7 @@ p = p.subs(replace)
 # Calculate time derivatives
 
 
-# Density equation
-dndt = 0.0
-
-
-# Pressure equation
+# Coulomb logarithm for the calculation of the frequency
 def coulog(logden, logtemp):
     return (
         30.4
@@ -59,6 +53,7 @@ def coulog(logden, logtemp):
     )
 
 
+# Frequency calculation, requires den and temp to NOT be normalized
 def calc_frequency(den, temp):
     logden = log(den)
     logtemp = log(temp)
@@ -73,12 +68,17 @@ def calc_frequency(den, temp):
         * 2.0
         / (3.0 * (Pi * 2.0 * v1sq) ** 1.5 * (e0 * Me) ** 2)
     )
-
+    # Returns NORMALIZED frequency
     return nu / Omega_ci
 
 
+# Collision frequency
 tau = 1.0 / calc_frequency(n * Nnorm, T * Tnorm)
+
+# Heat conduction transport coefficient
 kappa = (3.16 / sqrt(2)) * p * tau / AA
+
+# Pressure equation
 dpdt = (2.0 / 3.0) * Div_par(kappa * Grad_par(T)) * (rho_s**2)
 
 #############################
@@ -89,8 +89,7 @@ Sp = diff(p, t) - dpdt
 
 # Substitute back to get input y coordinates
 replace = [(metric.y, y * Ly / (2 * pi))]
-# replace = [ (metric.y, y ) ]
-# replace = [ (metric.y, y*(2*pi) / Ly ) ]
+
 
 n = n.subs(replace)
 p = p.subs(replace)
