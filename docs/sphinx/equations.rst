@@ -837,7 +837,6 @@ parallel momentum, are then calculated from the limited diffusion coefficient:
    \eta_{n} =& \frac{2}{5} m_n \kappa_{n} \\
    \end{aligned}
 
-
 .. doxygenstruct:: NeutralMixed
    :members:
 
