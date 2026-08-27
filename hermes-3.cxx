@@ -275,7 +275,6 @@ int Hermes::init(bool restarting) {
 	// try loading J from the grid, otherwise use the one calculated from the metric coefficients
 	Coordinates::FieldMetric Jtmp = 0.0;
 	if (mesh->get(Jtmp, "J_new")==0){
-	  mesh->communicate(Jtmp);
 	  coord->J = Jtmp;
 	} 
 	
