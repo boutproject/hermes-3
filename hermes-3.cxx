@@ -86,6 +86,7 @@
 #include <bout/boundary_op.hxx>
 #include <bout/constants.hxx>
 #include <bout/field_factory.hxx>
+#include <bout/tokamak_coordinates.hxx>
 
 #include "include/recalculate_metric.hxx"
 
@@ -254,7 +255,7 @@ int Hermes::init(bool restarting) {
             .doc("Normalise input metric tensor? (assumes input is in SI units)")
             .withDefault<bool>(true)) {
       mesh->getCoordinates()->normaliseMetric(
-          TokamakOrFCIMetricNormaliser(mesh, rho_s0, Bnorm));
+          bout::TokamakOrFCIMetricNormaliser(mesh, Bnorm, rho_s0));
     }
   }
 
