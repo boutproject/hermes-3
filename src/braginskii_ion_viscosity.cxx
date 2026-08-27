@@ -146,9 +146,11 @@ void BraginskiiIonViscosity::transform_impl(GuardedOptions& state) {
   GuardedOptions allspecies = state["species"];
 
   auto coord = mesh->getCoordinates();
-  const auto Bxy = coord->Bxy;
-  const auto sqrtB = sqrt(Bxy);
-  const auto Grad_par_logB = Grad_par(log(Bxy));
+  const Field3DParallel Bxy = coord->Bxy;
+  const Field3DParallel sqrtB = sqrt(Bxy.asField3DParallel());
+  const Field3DParallel logB = log(Bxy.asField3DParallel());
+
+  const Field3D Grad_par_logB = Grad_par(logB);
 
   // Loop through all species
   for (auto& kv : allspecies.getChildren()) {
@@ -269,7 +271,7 @@ void BraginskiiIonViscosity::transform_impl(GuardedOptions& state) {
     Field3D Pi_cipar = zeroFrom(P);
     if (parallel and isSetFinal(species["velocity"], "ion_viscosity")) {
 
-      const Field3D V = get<Field3D>(species["velocity"]);
+      const Field3DParallel V = get<Field3D>(species["velocity"]);
 
       if (eta_limit_alpha > 0.) {
         // SOLPS-style flux limiter
@@ -280,12 +282,25 @@ void BraginskiiIonViscosity::transform_impl(GuardedOptions& state) {
 
         eta = eta / (1. + abs(q_cl / q_fl));
       }
-      eta.getMesh()->communicate(eta);
-      eta.applyBoundary("neumann");
+      if (P.isFci()) {
+        eta.applyBoundary("neumann");
+        mesh->communicate(eta);
+        eta.applyParallelBoundary("parallel_neumann_o2");
+      } else {
+        eta.getMesh()->communicate(eta);
+        eta.applyBoundary("neumann");
+      }
 
       // This term is the parallel flow part of
       // -(2/3) B^(3/2) Grad_par(Pi_ci / B^(3/2))
-      const Field3D div_Pi_cipar = sqrtB * FV::Div_par_K_Grad_par(eta / Bxy, sqrtB * V);
+      Field3D dummy;
+
+      const Field3D div_Pi_cipar =
+          P.isFci()
+              ? sqrtB
+                    * Div_par_K_Grad_par_mod(Field3DParallel{eta / Bxy},
+                                             Field3DParallel{sqrtB * V}, dummy, true)
+              : sqrtB * FV::Div_par_K_Grad_par(eta / Bxy, sqrtB * V);
 
       add(species["momentum_source"], div_Pi_cipar);
       subtract(species["energy_source"], V * div_Pi_cipar); // Internal energy

@@ -18,6 +18,8 @@
 #include "../include/braginskii_electron_viscosity.hxx"
 #include "../include/component.hxx"
 
+using bout::globals::mesh;
+
 BraginskiiElectronViscosity::BraginskiiElectronViscosity(const std::string& name,
                                                          Options& alloptions, Solver*)
     : NamedComponent(name,
@@ -50,8 +52,8 @@ void BraginskiiElectronViscosity::transform_impl(GuardedOptions& state) {
   const Field3D V = get<Field3D>(species["velocity"]);
 
   Coordinates* coord = P.getCoordinates();
-  const Field3D Bxy = coord->Bxy;
-  const Field3D sqrtB = sqrt(Bxy);
+  const Field3DParallel Bxy = coord->Bxy;
+  const Field3DParallel sqrtB = sqrt(Bxy);
 
   // Parallel electron viscosity
   Field3D eta = (4. / 3) * 0.73 * P * tau;
@@ -64,13 +66,24 @@ void BraginskiiElectronViscosity::transform_impl(GuardedOptions& state) {
     const Field3D q_fl = eta_limit_alpha * P; // Flux limit
 
     eta = eta / (1. + abs(q_cl / q_fl));
+  }
 
+  if (P.isFci()) {
+    eta.applyBoundary("neumann");
+    mesh->communicate(eta);
+    eta.applyParallelBoundary("parallel_neumann_o2");
+  } else {
     eta.getMesh()->communicate(eta);
     eta.applyBoundary("neumann");
   }
 
   // Save term for output diagnostic
-  viscosity = sqrtB * FV::Div_par_K_Grad_par(eta / Bxy, sqrtB * V);
+  Field3D dummy;
+  viscosity = P.isFci()
+                  ? sqrtB
+                        * Div_par_K_Grad_par_mod(Field3DParallel{eta / Bxy},
+                                                 Field3DParallel{sqrtB * V}, dummy, true)
+                  : sqrtB * FV::Div_par_K_Grad_par(eta / Bxy, sqrtB * V);
   add(species["momentum_source"], viscosity);
 }
 
