@@ -4,13 +4,17 @@
 #include <bout/mesh.hxx>
 #include <bout/options.hxx>
 
+#include "../include/hermes_utils.hxx"
 #include "../include/zero_current.hxx"
+#include <bout/constants.hxx>
 
 ZeroCurrent::ZeroCurrent(std::string name, Options& alloptions, Solver*)
     : NamedComponent(name,
                      {readIfSet("species:{all_species}:charge"),
                       readIfSet("species:{all_species}:{inputs}", Regions::Interior),
-                      readWrite(fmt::format("species:{}:velocity", name))}),
+                      readOnly(fmt::format("species:{}:AA", name)),
+                      readWrite(fmt::format("species:{}:velocity", name)),
+                      readWrite(fmt::format("species:{}:momentum", name))}),
       name(name) {
   Options& options = alloptions[name];
 
@@ -69,12 +73,16 @@ void ZeroCurrent::transform_impl(GuardedOptions& state) {
   }
   Field3D N = getNoBoundary<Field3D>(species["density"]);
 
-  velocity = current / (-charge * floor(N, 1e-5));
+  velocity = current / (-charge * softFloor(N, 1e-7));
   set(species["velocity"], velocity);
+
+  momentum = GET_VALUE(BoutReal, species["AA"]) * N * velocity;
+  set(species["momentum"], momentum);
 }
 
 void ZeroCurrent::outputVars(Options& state) {
   auto Cs0 = get<BoutReal>(state["Cs0"]);
+  auto Nnorm = get<BoutReal>(state["Nnorm"]);
 
   // Save the velocity
   set_with_attrs(state[std::string("V") + name], velocity,
@@ -83,6 +91,15 @@ void ZeroCurrent::outputVars(Options& state) {
                   {"conversion", Cs0},
                   {"long_name", name + " parallel velocity"},
                   {"standard_name", "velocity"},
+                  {"species", name},
+                  {"source", "zero_current"}});
+
+  set_with_attrs(state[std::string("NV") + name], momentum,
+                 {{"time_dimension", "t"},
+                  {"units", "kg / m^2 / s"},
+                  {"conversion", SI::Mp * Nnorm * Cs0},
+                  {"long_name", name + " parallel momentum"},
+                  {"standard_name", "momentum"},
                   {"species", name},
                   {"source", "zero_current"}});
 }

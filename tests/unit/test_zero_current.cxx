@@ -30,6 +30,7 @@ TEST_F(ZeroCurrentTest, ElectronFlowVelocity) {
 
   options["species"]["e"]["charge"] = -1.0;
   options["species"]["e"]["density"] = 2.0;
+  options["species"]["e"]["AA"] = 1. / 1836;
 
   options["species"]["ion"]["density"] = 1.0;
   options["species"]["ion"]["charge"] = 2.0;
@@ -43,9 +44,11 @@ TEST_F(ZeroCurrentTest, ElectronFlowVelocity) {
 
   // Electron velocity should be equal to ion velocity
   Field3D Ve = get<Field3D>(options["species"]["e"]["velocity"]);
+  Field3D NVe = get<Field3D>(options["species"]["e"]["momentum"]);
   BOUT_FOR_SERIAL(i, Ve.getRegion("RGN_NOBNDRY")) {
     ASSERT_DOUBLE_EQ(Ve[i], Vi[i])
         << "Electron velocity not equal to ion velocity at " << i;
+    ASSERT_DOUBLE_EQ(NVe[i] * 918., Vi[i]);
   }
 }
 
@@ -54,12 +57,14 @@ TEST_F(ZeroCurrentTest, OutputVelocity) {
 
   ZeroCurrent component("e", options, nullptr);
 
-  Options state{{"species", {{"e", {{"velocity", 1.4}}}}}};
+  Options state{{"species", {{"e", {{"velocity", 1.4}, {"momentum", 1.4 / 1836.}}}}}};
   component.finally(state);
 
-  Options output{{"Cs0", 1.0}};
+  Options output{{"Cs0", 1.0}, {"Nnorm", 1.}};
   component.outputVars(output);
 
   ASSERT_TRUE(output.isSet("Ve"));
+  ASSERT_TRUE(output.isSet("NVe"));
   ASSERT_TRUE(IsFieldEqual(get<Field3D>(output["Ve"]), 1.4));
+  ASSERT_TRUE(IsFieldEqual(get<Field3D>(output["NVe"]), 1.4 / 1836.));
 }
