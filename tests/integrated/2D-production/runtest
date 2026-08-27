@@ -7,7 +7,6 @@ from time import time
 import numpy as np
 import xhermes
 from boututils.run_wrapper import launch_safe, shell
-from runtest_utils import DataDownloader
 
 t0 = time()
 
@@ -22,7 +21,10 @@ data_dir = this_dir / "data"
 hermes_exec = this_dir.parent.parent.parent / "hermes-3"
 output_path = data_dir / "BOUT.dmp.*.nc"
 
-dd = DataDownloader()
+sys.path.append(str(this_dir.parent))
+from runtest_utils import DataDownloader2DProduction
+
+dd = DataDownloader2DProduction("2D-Prodcution", this_dir)
 
 if not dd.checkHash(False):
     dd.download_data()
@@ -30,6 +32,8 @@ if not dd.checkHash(False):
     if verbose:
         print(f"2D-Production test: download took {t_download - t0:.2f} seconds")
     dd.checkHash()
+else:
+    t_download = time()
 
 dd.extractZip()
 
