@@ -26,6 +26,7 @@
 
 #include <bout/assert.hxx>
 #include <bout/bout_types.hxx>
+#include <bout/build_config.hxx>
 #include <bout/coordinates.hxx>
 #include <bout/derivs.hxx>
 #include <bout/field.hxx>
@@ -310,13 +311,13 @@ Field3D Div_n_bxGrad_f_B_XPPM(const Field3D& n, const Field3D& f, bool bndry_flu
         for (int k = 0; k < mesh->LocalNz; k++) {
 
           // Average dfdy to right X boundary
-          BoutReal f_R = 0.5
-                         * ((coord->g11(i + 1, j, k) * coord->g23(i + 1, j, k)
-                             / SQ(coord->Bxy()(i + 1, j, k)))
-                                * dfdy(i + 1, j, k)
-                            + (coord->g11(i, j, k) * coord->g23(i, j, k)
-                               / SQ(coord->Bxy()(i, j, k)))
-                                  * dfdy(i, j, k));
+          BoutReal f_R =
+              0.5
+              * ((coord->g11(i + 1, j, k) * coord->g23(i + 1, j, k)
+                  / SQ(coord->Bxy()(i + 1, j, k)))
+                     * dfdy(i + 1, j, k)
+                 + (coord->g11(i, j, k) * coord->g23(i, j, k) / SQ(coord->Bxy()(i, j, k)))
+                       * dfdy(i, j, k));
 
           // Advection velocity across cell face
           BoutReal Vx = 0.5 * (coord->J(i + 1, j, k) + coord->J(i, j, k)) * f_R;
@@ -381,13 +382,13 @@ Field3D Div_n_bxGrad_f_B_XPPM(const Field3D& n, const Field3D& f, bool bndry_flu
           // Y flow
 
           // Average dfdx to upper Y boundary
-          BoutReal f_U = 0.5
-                         * ((coord->g11(i, j + 1, k) * coord->g23(i, j + 1, k)
-                             / SQ(coord->Bxy()(i, j + 1, k)))
-                                * dfdx(i, j + 1, k)
-                            + (coord->g11(i, j, k) * coord->g23(i, j, k)
-                               / SQ(coord->Bxy()(i, j, k)))
-                                  * dfdx(i, j, k));
+          BoutReal f_U =
+              0.5
+              * ((coord->g11(i, j + 1, k) * coord->g23(i, j + 1, k)
+                  / SQ(coord->Bxy()(i, j + 1, k)))
+                     * dfdx(i, j + 1, k)
+                 + (coord->g11(i, j, k) * coord->g23(i, j, k) / SQ(coord->Bxy()(i, j, k)))
+                       * dfdx(i, j, k));
 
           BoutReal Vy = -0.5 * (coord->J(i, j + 1, k) + coord->J(i, j, k)) * f_U;
 
@@ -1044,10 +1045,10 @@ Field3D Div_a_Grad_perp_upwind(const Field3D& a, const Field3D& f) {
     for (int j = mesh->ystart; j <= mesh->yend; j++) {
       for (int k = zstart; k <= zend; k++) {
         // Coefficient in front of df/dy term
-        BoutReal coef = coord->g_23(i, j, k)
-                        / (coord->dy(i, j + 1, k) + 2. * coord->dy(i, j, k)
-                           + coord->dy(i, j - 1, k))
-                        / SQ(coord->J(i, j, k) * coord->Bxy(i, j, k));
+        BoutReal coef =
+            coord->g_23(i, j, k)
+            / (coord->dy(i, j + 1, k) + 2. * coord->dy(i, j, k) + coord->dy(i, j - 1, k))
+            / SQ(coord->J(i, j, k) * coord->Bxy(i, j, k));
 
         const auto zstart = bout::build::use_metric_3d ? k : mesh->zstart;
         const auto zend = bout::build::use_metric_3d ? k : mesh->zend;
@@ -1467,7 +1468,7 @@ Field3D Div_a_Grad_perp_upwind_flows(const Field3D& a, const Field3D& f,
 
   Field3D result{zeroFrom(f)};
 
-  Coordinates* coord = f.getCoordinates();
+  const Coordinates* coord = f.getCoordinates();
 
   // Zero all flows
   flow_xlow = 0.0;
@@ -1475,8 +1476,8 @@ Field3D Div_a_Grad_perp_upwind_flows(const Field3D& a, const Field3D& f,
 
   // Flux in x
 
-  int xs = mesh->xstart - 1;
-  int xe = mesh->xend;
+  const int xs = mesh->xstart - 1;
+  const int xe = mesh->xend;
 
   for (int i = xs; i <= xe; i++) {
     for (int j = mesh->ystart; j <= mesh->yend; j++) {
@@ -1540,16 +1541,14 @@ Field3D Div_a_Grad_perp_upwind_flows(const Field3D& a, const Field3D& f,
   for (int i = mesh->xstart; i <= mesh->xend; i++) {
     for (int j = mesh->ystart; j <= mesh->yend; j++) {
       for (int k = zstart; k <= zend; k++) {
-        BoutReal coef_u =
+        const BoutReal coef_u =
             0.5
             * (coord->g_23(i, j, k) / SQ(coord->J(i, j, k) * coord->Bxy(i, j, k))
                + coord->g_23(i, j + 1, k)
                      / SQ(coord->J(i, j + 1, k) * coord->Bxy(i, j + 1, k)));
 
-        BoutReal coef_d =
+        const BoutReal coef_d =
             0.5
-            * (coord->g_23()(i, j, k) / SQ(coord->J()(i, j, k) * coord->Bxy()(i, j, k))
-               + coord->g_23()(i, j - 1, k)
             * (coord->g_23(i, j, k) / SQ(coord->J(i, j, k) * coord->Bxy(i, j, k))
                + coord->g_23(i, j - 1, k)
                      / SQ(coord->J(i, j - 1, k) * coord->Bxy(i, j - 1, k)));
@@ -1558,8 +1557,8 @@ Field3D Div_a_Grad_perp_upwind_flows(const Field3D& a, const Field3D& f,
         const auto zend = bout::build::use_metric_3d ? k : mesh->zend;
         for (int k = zstart; k <= zend; k++) {
           // Calculate flux between j and j+1
-          int kp = (k + 1) % mesh->LocalNz;
-          int km = (k - 1 + mesh->LocalNz) % mesh->LocalNz;
+          const int kp = (k + 1) % mesh->LocalNz;
+          const int km = (k - 1 + mesh->LocalNz) % mesh->LocalNz;
 
           // Calculate Z derivative at y boundary
           BoutReal dfdz =
@@ -1606,18 +1605,18 @@ Field3D Div_a_Grad_perp_upwind_flows(const Field3D& a, const Field3D& f,
     for (int j = mesh->ystart; j <= mesh->yend; j++) {
       for (int k = zstart; k <= zend; k++) {
         // Coefficient in front of df/dy term
-        BoutReal coef = coord->g_23(i, j, k)
-                        / (coord->dy(i, j + 1, k) + 2. * coord->dy(i, j, k)
-                           + coord->dy(i, j - 1, k))
-                        / SQ(coord->J(i, j, k) * coord->Bxy(i, j, k));
+        const BoutReal coef =
+            coord->g_23(i, j, k)
+            / (coord->dy(i, j + 1, k) + 2. * coord->dy(i, j, k) + coord->dy(i, j - 1, k))
+            / SQ(coord->J(i, j, k) * coord->Bxy(i, j, k));
 
         const auto zstart = bout::build::use_metric_3d ? k : mesh->zstart;
         const auto zend = bout::build::use_metric_3d ? k : mesh->zend;
         for (int k = zstart; k <= zend; k++) {
           // Calculate flux between k and k+1
-          int kp = (k + 1) % mesh->LocalNz;
+          const int kp = (k + 1) % mesh->LocalNz;
 
-          BoutReal gradient =
+          const BoutReal gradient =
               // df/dz
               (fc(i, j, kp) - fc(i, j, k)) / coord->dz(i, j, k)
 
@@ -1626,7 +1625,7 @@ Field3D Div_a_Grad_perp_upwind_flows(const Field3D& a, const Field3D& f,
                     * (fup(i, j + 1, k) + fup(i, j + 1, kp) - fdown(i, j - 1, k)
                        - fdown(i, j - 1, kp));
 
-          BoutReal fout = gradient * ((gradient > 0) ? ac(i, j, kp) : ac(i, j, k));
+          const BoutReal fout = gradient * ((gradient > 0) ? ac(i, j, kp) : ac(i, j, k));
 
           yzresult(i, j, k) += fout / coord->dz(i, j, k);
           yzresult(i, j, kp) -= fout / coord->dz(i, j, k);
@@ -1649,7 +1648,7 @@ Field3D Div_n_g_bxGrad_f_B_XZ(const Field3D& n, const Field3D& g, const Field3D&
                               bool bndry_flux) {
   Field3D result{0.0};
 
-  Coordinates* coord = mesh->getCoordinates();
+  const Coordinates* coord = mesh->getCoordinates();
 
   //////////////////////////////////////////
   // X-Z advection.
