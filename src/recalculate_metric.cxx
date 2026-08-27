@@ -32,7 +32,6 @@ void recalculate_metric(BoutReal Lnorm, BoutReal Bnorm) {
 
   Bpxy /= Bnorm;
   Btxy /= Bnorm;
-  coord->setBxy(coord->Bxy() / (Bnorm));
 
   // Calculate metric components
   if (Options::root()["mesh"]["paralleltransform"]["type"].as<std::string>()
@@ -59,9 +58,9 @@ void recalculate_metric(BoutReal Lnorm, BoutReal Bnorm) {
   const Field2D g_13 = sinty * Rxy * Rxy;
   const Field2D g_23 = sbp * Btxy * hthe * Rxy / Bpxy;
 
-  coord->setMetricTensor(ContravariantMetricTensor(g11, g22, g33, g12, g13, g23),
-                         CovariantMetricTensor(g_11, g_22, g_33, g_12, g_13, g_23));
-
   const Field2D J = hthe / Bpxy;
-  coord->setJ(J);
+
+  coord->setMetricTensorJB(ContravariantMetricTensor(g11, g22, g33, g12, g13, g23),
+                           CovariantMetricTensor(g_11, g_22, g_33, g_12, g_13, g_23), J,
+                           coord->Bxy() / (Bnorm));
 }
