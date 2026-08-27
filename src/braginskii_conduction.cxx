@@ -236,6 +236,7 @@ void BraginskiiConduction::transform_impl(GuardedOptions& state) {
     // EvolvePressure::finally
 
     Field3D P = GET_VALUE(Field3D, species["pressure"]);
+    // Only clear parallel slices when not Fci
     if (!P.isFci()) {
       P.clearParallelSlices();
     }
@@ -278,6 +279,7 @@ void BraginskiiConduction::transform_impl(GuardedOptions& state) {
       mesh->communicate(kappa_par);
     }
 
+    // Fci does not work with mesh->iterateBndryLowerY(), so set the boundaries differently
     if (P.isFci()) {
 
       mesh->communicate(kappa_par);
