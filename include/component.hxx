@@ -251,6 +251,10 @@ template <typename T>
 T getNonFinal(const GuardedOptions& option) {
   return getNonFinal<T>(option.get());
 }
+template <typename T>
+T getNonFinal(const GuardedOptions& option, Regions region) {
+  return getNonFinal<T>(option.get(region));
+}
 
 #define TOSTRING_(x) #x
 #define TOSTRING(x) TOSTRING_(x)
@@ -275,7 +279,7 @@ template <typename T>
 T get(const Options& option, [[maybe_unused]] const std::string& location = "") {
 #if CHECKLEVEL >= 1
   // Mark option as final, both inside the domain and the boundary
-  const_cast<Options&>(option).attributes["final"] = location;
+  const_cast<Options&>(option).attributes["final-bounds"] = location;
   const_cast<Options&>(option).attributes["final-domain"] = location;
 #endif
   return getNonFinal<T>(option);
@@ -316,6 +320,23 @@ bool isSetFinalNoBoundary(const GuardedOptions& option, const std::string& locat
   isSetFinalNoBoundary(option, __FILE__ ":" TOSTRING(__LINE__))
 #else
 #define IS_SET_NOBOUNDARY(option) isSetFinalNoBoundary(option)
+#endif
+
+/// Check if an option can be fetched
+/// Sets the final flag so setting the value in the bounds
+/// afterwards will lead to an error
+bool isSetFinalBoundary(const Options& option, const std::string& location = "");
+bool isSetFinalBoundary(const GuardedOptions& option, const std::string& location = "");
+
+#if CHECKLEVEL >= 1
+/// A wrapper around isSetFinalBoundary() which captures debugging information
+///
+/// Usage:
+///   if (IS_SET_BOUNDARY(option["value"]));
+#define IS_SET_BOUNDARY(option) \
+  isSetFinalBoundary(option, __FILE__ ":" TOSTRING(__LINE__))
+#else
+#define IS_SET_BOUNDARY(option) isSetFinalBoundary(option)
 #endif
 
 #if CHECKLEVEL >= 1
@@ -366,6 +387,43 @@ T getNoBoundary(GO&& option, const std::string& location = "") {
 #define GET_NOBOUNDARY(Type, option) getNoBoundary<Type>(option)
 #endif
 
+/// Faster non-printing getter for Options
+/// If this fails, it will throw BoutException
+///
+/// This marks the value as final in the boundary.
+/// The caller is assuming that the domain values are non-final or invalid.
+/// Subsequent calls to "set" or "setBoundary" cor this option will raise
+/// an exception, but calls to "setNoBoundary" will not.
+///
+/// @tparam T  The type the option should be converted to
+///
+/// @param option  The Option whose value will be returned
+/// @param location  An optional string to indicate where this value is used
+template <typename T>
+T getBoundary(const Options& option, [[maybe_unused]] const std::string& location = "") {
+#if CHECKLEVEL >= 1
+  // Mark option as final inside the domain
+  const_cast<Options&>(option).attributes["final-bounds"] = location;
+#endif
+  return getNonFinal<T>(option);
+}
+
+template <typename T, class GO, typename = hermes::EnableIfGuardedOption<GO>>
+T getBoundary(GO&& option, const std::string& location = "") {
+  return getBoundary<T>(std::forward<GO>(option).get(Regions::Boundaries), location);
+}
+
+#if CHECKLEVEL >= 1
+/// A wrapper around getBoundary<>() which captures debugging information
+///
+/// Usage:
+///   auto var = GET_BOUNDARY(Field3D, option["value"]);
+#define GET_BOUNDARY(Type, option) \
+  getBoundary<Type>(option, __FILE__ ":" TOSTRING(__LINE__))
+#else
+#define GET_BOUNDARY(Type, option) getBoundary<Type>(option)
+#endif
+
 /// Check whether value is valid, returning true
 /// if invalid i.e contains non-finite values
 template <typename T>
@@ -408,9 +466,10 @@ template <typename T>
 Options& set(Options& option, T value) {
   // Check that the value has not already been used
 #if CHECKLEVEL >= 1
-  if (option.hasAttribute("final")) {
+  if (option.hasAttribute("final-bounds")) {
     throw BoutException("Setting value of {} but it has already been used in {}.",
-                        option.name(), option.attributes["final"].as<std::string>());
+                        option.name(),
+                        option.attributes["final-bounds"].as<std::string>());
   }
   if (option.hasAttribute("final-domain")) {
     throw BoutException("Setting value of {} but it has already been used in {}.",
@@ -454,9 +513,10 @@ template <typename T>
 Options& setBoundary(Options& option, T value) {
   // Check that the value has not already been used
 #if CHECKLEVEL >= 1
-  if (option.hasAttribute("final")) {
+  if (option.hasAttribute("final-bounds")) {
     throw BoutException("Setting boundary of {} but it has already been used in {}.",
-                        option.name(), option.attributes["final"].as<std::string>());
+                        option.name(),
+                        option.attributes["final-bounds"].as<std::string>());
   }
 #endif
   option.force(std::move(value));
@@ -472,6 +532,40 @@ inline decltype(auto) setBoundary(Options& option,
 template <typename T, class GO, typename = hermes::EnableIfGuardedOption<GO>>
 decltype(auto) setBoundary(GO&& option, T value) {
   setBoundary(std::forward<GO>(option).getWritable(Regions::Boundaries), value);
+  return std::forward<GO>(option);
+}
+
+/// Set values in an option. This could be optimised, but
+/// currently the is_value private variable would need to be modified.
+///
+/// This version only checks that the domain cells have not
+/// already been used by a call to get or getNoBoundary, not a call to getBoundary
+/// or getNonFinal.
+///
+/// @tparam T The type of the value to set. Usually this is inferred
+template <typename T>
+Options& setNoBoundary(Options& option, T value) {
+  // Check that the value has not already been used
+#if CHECKLEVEL >= 1
+  if (option.hasAttribute("final-domain")) {
+    throw BoutException("Setting domain of {} but it has already been used in {}.",
+                        option.name(),
+                        option.attributes["final-domain"].as<std::string>());
+  }
+#endif
+  option.force(std::move(value));
+  return option;
+}
+
+template <typename ResT, typename L, typename R, typename Func>
+inline decltype(auto) setNoBoundary(Options& option,
+                                    const BinaryExpr<ResT, L, R, Func>& f) {
+  return setNoBoundary(option, ResT{f});
+}
+
+template <typename T, class GO, typename = hermes::EnableIfGuardedOption<GO>>
+decltype(auto) setNoBoundary(GO&& option, T value) {
+  setNoBoundary(std::forward<GO>(option).getWritable(Regions::Interior), value);
   return std::forward<GO>(option);
 }
 

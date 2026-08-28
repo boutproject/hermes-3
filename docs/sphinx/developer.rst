@@ -265,14 +265,14 @@ This is important as it uses a single dictionary-like ``state`` class to hold al
 the variables in one place, which could allow some components to overwrite others.
 
 In ``component.hxx`` there is the function ``get``, which once called sets the
-"final" and "final-domain" attributes:
+"final-bounds" and "final-domain" attributes:
 
 .. code-block:: ini
 
    T get(const Options& option, const std::string& location = "") {
    #if CHECKLEVEL >= 1
    // Mark option as final, both inside the domain and the boundary
-   const_cast<Options&>(option).attributes["final"] = location;
+   const_cast<Options&>(option).attributes["final-bounds"] = location;
    const_cast<Options&>(option).attributes["final-domain"] = location;
    #endif
    return getNonFinal<T>(option);
@@ -286,7 +286,7 @@ already been "gotten", they can't be set again:
    Options& set(Options& option, T value) {
    // Check that the value has not already been used
    #if CHECKLEVEL >= 1
-   if (option.hasAttribute("final")) {
+   if (option.hasAttribute("final-bounds")) {
       throw BoutException("Setting value of {} but it has already been used in {}.",
                            option.name(), option.attributes["final"].as<std::string>());
    }
@@ -301,8 +301,9 @@ already been "gotten", they can't be set again:
    }
    #endif
 
-There is a special use case which allows you to use this "locking" scheme for only
-the domain cells, leaving the guard cells to be settable using ``getNoBoundary``:
+There are special use cases which allows you to use this "locking" scheme for only
+the domain (guard) cells, leaving the guard (domain) cells
+to be settable using ``getNoBoundary`` (``getBoundary``) :
 
 .. code-block:: ini
 
@@ -314,14 +315,15 @@ the domain cells, leaving the guard cells to be settable using ``getNoBoundary``
    return getNonFinal<T>(option);
    }
 
-And there is a corresponding ``setBoundary`` that can be used for BC operations:
+And there are corresponding ``setBoundary`` and ``setNoBoundary``
+functions that can be used for BC and domain operations:
 
 .. code-block:: ini
 
    Options& setBoundary(Options& option, T value) {
    // Check that the value has not already been used
    #if CHECKLEVEL >= 1
-   if (option.hasAttribute("final")) {
+   if (option.hasAttribute("final-bounds")) {
       throw BoutException("Setting boundary of {} but it has already been used in {}.",
                            option.name(), option.attributes["final"].as<std::string>());
    }
@@ -333,9 +335,10 @@ And there is a corresponding ``setBoundary`` that can be used for BC operations:
 All of these functions are overloaded to accept both `Options` and
 `GuardedOptions` objects.
 
-These functions take a second argument which tells you where they were set, which is easier for debugging.
-They are wrapped into additional functions, ``GET_VALUE`` and ``GET_NOBOUNDARY`` which automatically
-include this argument.
+These functions take a second argument which tells you where they were
+set, which is easier for debugging.  They are wrapped into additional
+functions, ``GET_VALUE``, ``GET_BOUNDARY``, and ``GET_NOBOUNDARY``
+which automatically include this argument.
 
 Please review `component.hxx <https://github.com/boutproject/hermes-3/blob/master/include/component.hxx#L163>`__
 for more details.
