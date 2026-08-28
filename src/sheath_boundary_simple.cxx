@@ -1,11 +1,27 @@
-#include <algorithm>
-
-#include "../include/hermes_utils.hxx"
 #include "../include/sheath_boundary_simple.hxx"
+#include "../include/hermes_utils.hxx"
+#include "component.hxx"
+#include "guarded_options.hxx"
+#include "permissions.hxx"
 
+#include <bout/assert.hxx>
+#include <bout/boundary_region.hxx>
+#include <bout/bout_types.hxx>
+#include <bout/boutexception.hxx>
 #include <bout/constants.hxx>
+#include <bout/coordinates.hxx>
 #include <bout/field.hxx>
+#include <bout/field3d.hxx>
 #include <bout/mesh.hxx>
+#include <bout/options.hxx>
+#include <bout/sys/range.hxx>
+#include <bout/utils.hxx>
+
+#include <algorithm>
+#include <cmath>
+#include <iterator>
+#include <map>
+#include <string>
 
 using bout::globals::mesh;
 
@@ -48,7 +64,8 @@ BoutReal limitFree(BoutReal fm, BoutReal fc, hermes::SheathLimitMode mode) {
 
 } // namespace
 
-SheathBoundarySimple::SheathBoundarySimple(std::string name, Options& alloptions, Solver*)
+SheathBoundarySimple::SheathBoundarySimple(const std::string& name, Options& alloptions,
+                                           [[maybe_unused]] Solver* solver)
     : NamedComponent(name, {
                                readIfSet("species:e:{e_whole_domain}"),
                                writeBoundary("species:e:{e_boundary}"),

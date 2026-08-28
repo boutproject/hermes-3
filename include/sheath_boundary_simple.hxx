@@ -3,8 +3,14 @@
 #define SHEATH_BOUNDARY_SIMPLE_H
 
 #include "component.hxx"
+#include "guarded_options.hxx"
 
 #include <bout/bout_enum_class.hxx>
+#include <bout/bout_types.hxx>
+#include <bout/field3d.hxx>
+#include <bout/options.hxx>
+
+#include <string>
 
 BOUT_ENUM_CLASS_NS(hermes, SheathLimitMode, limit, exponential, linear);
 
@@ -31,7 +37,7 @@ struct SheathBoundarySimple : public NamedComponent<SheathBoundarySimple> {
   ///   - secondary_electron_coef  Effective secondary electron emission coefficient
   ///   - sin_alpha                Sine of the angle between magnetic field line and wall surface (0 to 1)
   ///   - always_set_phi           Always set phi field? Default is to only modify if already set
-  SheathBoundarySimple(std::string name, Options& options, Solver*);
+  SheathBoundarySimple(const std::string& name, Options& options, Solver* solver);
 
   void outputVars(Options& state) override;
 
