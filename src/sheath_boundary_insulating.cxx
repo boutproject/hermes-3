@@ -495,7 +495,6 @@ void SheathBoundaryInsulating::transform_impl(GuardedOptions& state) {
       for (int jz = 0; jz < mesh->LocalNz; jz++) {
         auto i = indexAt(Ne, r.ind, mesh->yend, jz);
         auto ip = i.yp();
-        auto im = i.ym();
 
         const BoutReal nesheath = 0.5 * (Ne[ip] + Ne[i]);
         const BoutReal tesheath = 0.5 * (Te[ip] + Te[i]); // electron temperature
