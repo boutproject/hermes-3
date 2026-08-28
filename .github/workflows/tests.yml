@@ -114,10 +114,13 @@ jobs:
              cmake --build build -j4
 
       - name: Run tests
-        run: cd build &&
-             ctest --output-on-failure --timeout 300 -L $TEST_TYPE
+        id: run-tests
+        run: >
+          cd build &&
+          ctest --output-on-failure --timeout 300 -L $TEST_TYPE &&
+          echo "num_tests=$(ctest -N -L $TEST_TYPE grep -P -o '(?<=Total Tests: )[0-9]+)'" >> "$GITHUB_OUTPUT"
       - name: Upload test coverage data
         uses: codecov/codecov-action@v5
-        if: ${{ matrix.build_type.coverage == 'ON' }}
+        if: ${{ matrix.build_type.coverage == 'ON' && steps.run-tests.outputs.num_tests > 0 }}
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
