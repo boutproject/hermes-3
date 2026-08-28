@@ -4,17 +4,22 @@
 #include <bout/fv_ops.hxx>
 
 ClassicalDiffusion::ClassicalDiffusion(std::string name, Options& alloptions, Solver*)
-    : Component({readIfSet("species:{all_species}:{optional}"),
-                 readOnly("species:e:{e_vals}"),
-                 // FIXME: This is only read velocity or temperature are set for the species.
-                 readOnly("species:{all_species}:AA"),
-                 readWrite("species:{all_species}:{output}")}) {
+    : NamedComponent(
+          name,
+          {readIfSet("species:{all_species}:{optional}"), readOnly("species:e:{e_vals}"),
+           // FIXME: This is only read velocity or temperature are set for the species.
+           readOnly("species:{all_species}:AA"),
+           readWrite("species:{all_species}:{output}")}) {
   Options& options = alloptions[name];
 
   Bsq = SQ(bout::globals::mesh->getCoordinates()->Bxy);
 
-  diagnose = options["diagnose"].doc("Output additional diagnostics?").withDefault<bool>(false);
-  custom_D = options["custom_D"].doc("Custom diffusion coefficient override. -1: Off, calculate D normally").withDefault<BoutReal>(-1);
+  diagnose =
+      options["diagnose"].doc("Output additional diagnostics?").withDefault<bool>(false);
+  custom_D =
+      options["custom_D"]
+          .doc("Custom diffusion coefficient override. -1: Off, calculate D normally")
+          .withDefault<BoutReal>(-1);
 
   substitutePermissions("optional",
                         {"charge", "pressure", "density", "velocity", "temperature"});
@@ -28,13 +33,14 @@ ClassicalDiffusion::ClassicalDiffusion(std::string name, Options& alloptions, So
   // only used if temperature is set. Nothing happens if the charge or
   // density are unset.
   substitutePermissions("output", {"density_source", "momentum_source", "energy_source"});
-  if (custom_D < 0.)
+  if (custom_D < 0.) {
     setPermissions(readOnly("species:{all_species}:collision_frequency"));
+  }
 }
 
 void ClassicalDiffusion::transform_impl(GuardedOptions& state) {
   GuardedOptions allspecies = state["species"];
-  
+
   // Particle diffusion coefficient
   // The only term here comes from the resistive drift
 
@@ -57,20 +63,19 @@ void ClassicalDiffusion::transform_impl(GuardedOptions& state) {
   // Particle diffusion coefficient. Applied to all charged species
   // so that net transport is ambipolar
 
-  if (custom_D > 0) {    // User-set
-    Dn = custom_D;   
-  } else {                  // Calculated from collisions
+  if (custom_D > 0) { // User-set
+    Dn = custom_D;
+  } else { // Calculated from collisions
     auto electrons = allspecies["e"];
     const auto me = get<BoutReal>(electrons["AA"]);
     const Field3D Ne = GET_VALUE(Field3D, electrons["density"]);
-    const Field3D nu_e = floor(GET_VALUE(Field3D, electrons["collision_frequency"]), 1e-10);
+    const Field3D nu_e =
+        floor(GET_VALUE(Field3D, electrons["collision_frequency"]), 1e-10);
     Dn = floor(Ptotal, 1e-5) * me * nu_e / (floor(Ne, 1e-5) * Bsq);
   }
 
   // Set D to zero in all guard cells
-  BOUT_FOR(i, Dn.getRegion("RGN_GUARDS")) {
-      Dn[i] = 0.0;
-    }
+  BOUT_FOR(i, Dn.getRegion("RGN_GUARDS")) { Dn[i] = 0.0; }
 
   for (auto kv : allspecies.getChildren()) {
     GuardedOptions species = allspecies[kv.first]; // Note: Need non-const
@@ -106,12 +111,13 @@ void ClassicalDiffusion::transform_impl(GuardedOptions& state) {
                                     cls_nef_perp_ylow));
 
       // TODO: Figure out what to do with the below
-      if(custom_D < 0) {
+      if (custom_D < 0) {
         // Cross-field heat conduction
         // kappa_perp = 2 * n * nu_ii * rho_i^2
         const auto P = GET_VALUE(Field3D, species["pressure"]);
         const auto AA = GET_VALUE(BoutReal, species["AA"]);
-        const Field3D nu = floor(GET_VALUE(Field3D, species["collision_frequency"]), 1e-10);
+        const Field3D nu =
+            floor(GET_VALUE(Field3D, species["collision_frequency"]), 1e-10);
         // add(species["energy_source"], FV::Div_a_Grad_perp(2. * floor(P, 1e-5) * nu * AA
         // / Bsq, T));
         add(species["energy_source"],

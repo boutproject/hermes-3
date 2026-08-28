@@ -12,7 +12,7 @@
 
 /// Evolve density, parallel momentum and pressure
 /// for a neutral gas species with cross-field diffusion
-struct NeutralMixed : public Component {
+struct NeutralMixed : public NamedComponent<NeutralMixed> {
   ///
   /// @param name     The name of the species e.g. "h"
   /// @param options  Top-level options. Settings will be taken from options[name]
@@ -29,6 +29,8 @@ struct NeutralMixed : public Component {
   /// Preconditioner
   void precon(const Options& state, BoutReal gamma) override;
 
+  static constexpr auto type = "neutral_mixed";
+
 private:
   std::string name; ///< Species name
 
@@ -44,10 +46,14 @@ private:
       diffusion_collisions_mode; ///< Collision selection, either afn or multispecies
   Field3D nu;                    ///< Collisionality to use for diffusion
   Field3D Dnn;                   ///< Diffusion coefficient
+  Field3D Dnn_unlimited, Dmax;   ///< Unlimited and max Dnn
   Field3D DnnNn, DnnPn, DnnTn, DnnNVn; ///< Used for operators
   BoutReal flux_limit;                 ///< Diffusive flux limit
+  BoutReal flux_limiter_sharpness;     ///< Sharpness of the diffusive flux limiter
+  BoutReal limiter_gradient_floor;     ///< Floor for gradient in Dmax denominator
+  BoutReal limiter_gradient_ceiling;   ///< Ceiling for gradient in Dmax denominator
   BoutReal diffusion_limit;            ///< Maximum diffusion coefficient
-  BoutReal neutral_lmax;
+  BoutReal neutral_lmax;               ///< Used for collisionality floor
 
   bool sheath_ydown, sheath_yup;
 
@@ -80,6 +86,8 @@ private:
   bool output_ddt; ///< Save time derivatives?
   bool diagnose;   ///< Save additional diagnostics?
 
+  std::string conduction_method{"orginal"};
+
   // Flow diagnostics
   Field3D pf_adv_perp_xlow, pf_adv_perp_ylow, pf_adv_par_ylow;
   Field3D mf_adv_perp_xlow, mf_adv_perp_ylow, mf_adv_par_ylow;
@@ -100,7 +108,7 @@ private:
 };
 
 namespace {
-RegisterComponent<NeutralMixed> registersolverneutralmixed("neutral_mixed");
+RegisterComponent<NeutralMixed> registersolverneutralmixed;
 }
 
 #endif // NEUTRAL_MIXED_H

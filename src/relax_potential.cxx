@@ -6,9 +6,11 @@
 #include "../include/hermes_utils.hxx"
 #include "../include/permissions.hxx"
 
+#include <bout/assert.hxx>
 #include <bout/bout_types.hxx>
 #include <bout/boutexception.hxx>
 #include <bout/constants.hxx>
+#include <bout/coordinates.hxx>
 #include <bout/derivs.hxx>
 #include <bout/difops.hxx>
 #include <bout/field.hxx>
@@ -23,6 +25,7 @@
 #include <bout/utils.hxx>
 #include <bout/vecops.hxx>
 #include <bout/vector3d.hxx>
+#include <bout/vectormetric.hxx>
 
 #include <cmath>
 #include <string>
@@ -89,12 +92,19 @@ void applyParallelNeumannBoundary(Field3D& f) {
 } // namespace
 
 RelaxPotential::RelaxPotential(std::string name, Options& alloptions, Solver* solver)
-    : Component({
-          readWrite("fields:vorticity"),
-          readWrite("fields:phi"),
-          readIfSet("species:{all_species}:charge"),
-          readOnly("species:{charged}:AA"),
-      }) {
+    : NamedComponent(
+          name,
+          {
+              readWrite("fields:vorticity"),
+              readWrite("fields:phi"),
+              // FIXME: These are only read if (has AA and pressure) or (diamagnetic and has pressure)
+              readIfSet("species:{all_species}:charge"),
+              readIfSet("species:{charged}:AA"),
+              readIfSet("species:{charged}:pressure", Regions::Interior),
+          }) {
+
+  solver->add(Vort, "Vort"); // Vorticity evolving
+  solver->add(phi1, "phi1"); // Evolving scaled potential ϕ_1 = λ_2 ϕ
 
   auto& options = alloptions[name];
 
@@ -230,10 +240,7 @@ RelaxPotential::RelaxPotential(std::string name, Options& alloptions, Solver* so
   }
 
   if (diamagnetic) {
-    // FIXME: These will only be read if BOTH charge and pressure are set
-    setPermissions(readIfSet("species:{charged}:pressure", Regions::Interior));
-    setPermissions(readIfSet("species:{all_species}:charge"));
-    // FIXME: The weay transform_impl is currently written,
+    // FIXME: The way transform_impl is currently written,
     // energy_source is set for neutral species with an explicit
     // charge declared as 0 if diamagnetic_polarisation == true. I
     // suspect that's a mistake though.
@@ -243,7 +250,7 @@ RelaxPotential::RelaxPotential(std::string name, Options& alloptions, Solver* so
     // Read curvature vector
     try {
       // May be 2D, reading as 3D
-      Vector2D curv2d;
+      VectorMetric curv2d;
       curv2d.covariant = false;
       mesh->get(curv2d, "bxcv");
       Curlb_B = curv2d;
@@ -280,6 +287,20 @@ RelaxPotential::RelaxPotential(std::string name, Options& alloptions, Solver* so
 
   diagnose =
       options["diagnose"].doc("Output additional diagnostics?").withDefault<bool>(false);
+
+  if (phi_boundary_relax) {
+    setPermissions(readOnly("time"));
+  } else {
+    setPermissions(readIfSet("species:e:temperature", Regions::Interior));
+  }
+  if (vort_dissipation or phi_dissipation) {
+    setPermissions(readOnly("sound_speed"));
+  }
+  if (collisional_friction) {
+    setPermissions(readOnly("species:{positive_ions}:density", Regions::Interior));
+    setPermissions(readIfSet("species:{positive_ions}:collision_frequency"));
+    setPermissions(readWrite("fields:DivJcol"));
+  }
 }
 
 Field3D RelaxPotential::calculatePihat(GuardedOptions allspecies) {
@@ -357,7 +378,7 @@ void RelaxPotential::applyPhiBoundary(Field3D& phi, GuardedOptions state) {
         const BoutReal newvalue = (weight * oldvalue) + ((1. - weight) * phivalue);
 
         for (int k = 0; k < mesh->LocalNz; k++) {
-          phi(mesh->xstart - 1, j, k) = 2. * newvalue - phi(mesh->xstart, j, k);
+          phi(mesh->xstart - 1, j, k) = (2. * newvalue) - phi(mesh->xstart, j, k);
         }
         if (mesh->xstart > 1) {
           for (int k = 0; k < mesh->LocalNz; k++) {
@@ -380,7 +401,7 @@ void RelaxPotential::applyPhiBoundary(Field3D& phi, GuardedOptions state) {
         const BoutReal newvalue = (weight * oldvalue) + ((1. - weight) * phivalue);
 
         for (int k = 0; k < mesh->LocalNz; k++) {
-          phi(mesh->xend + 1, j, k) = 2. * newvalue - phi(mesh->xend, j, k);
+          phi(mesh->xend + 1, j, k) = (2. * newvalue) - phi(mesh->xend, j, k);
         }
         if (mesh->LocalNx - mesh->xend > 2) {
           for (int k = 0; k < mesh->LocalNz; k++) {
@@ -414,7 +435,7 @@ void RelaxPotential::applyPhiBoundary(Field3D& phi, GuardedOptions state) {
       teavg /= mesh->LocalNz;
       const BoutReal phivalue = sheathmult * teavg;
       for (int k = 0; k < mesh->LocalNz; k++) {
-        phi(mesh->xstart - 1, j, k) = 2. * phivalue - phi(mesh->xstart, j, k);
+        phi(mesh->xstart - 1, j, k) = (2. * phivalue) - phi(mesh->xstart, j, k);
       }
       if (mesh->xstart > 1) {
         for (int k = 0; k < mesh->LocalNz; k++) {
@@ -433,7 +454,7 @@ void RelaxPotential::applyPhiBoundary(Field3D& phi, GuardedOptions state) {
       teavg /= mesh->LocalNz;
       const BoutReal phivalue = sheathmult * teavg;
       for (int k = 0; k < mesh->LocalNz; k++) {
-        phi(mesh->xend + 1, j, k) = 2. * phivalue - phi(mesh->xend, j, k);
+        phi(mesh->xend + 1, j, k) = (2. * phivalue) - phi(mesh->xend, j, k);
       }
       if (mesh->xend < mesh->LocalNx - 2) {
         for (int k = 0; k < mesh->LocalNz; k++) {
@@ -457,13 +478,13 @@ Field3D RelaxPotential::calculateDivJdia(Field3D& phi, GuardedOptions allspecies
     for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
       for (int jz = 0; jz < mesh->LocalNz; jz++) {
         phi_ydown(r.ind, mesh->ystart - 1, jz) =
-            2 * phi(r.ind, mesh->ystart, jz) - phi_yup(r.ind, mesh->ystart + 1, jz);
+            (2 * phi(r.ind, mesh->ystart, jz)) - phi_yup(r.ind, mesh->ystart + 1, jz);
       }
     }
     for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
       for (int jz = 0; jz < mesh->LocalNz; jz++) {
         phi_yup(r.ind, mesh->yend + 1, jz) =
-            2 * phi(r.ind, mesh->yend, jz) - phi_ydown(r.ind, mesh->yend - 1, jz);
+            (2 * phi(r.ind, mesh->yend, jz)) - phi_ydown(r.ind, mesh->yend - 1, jz);
       }
     }
   } else {
@@ -471,13 +492,13 @@ Field3D RelaxPotential::calculateDivJdia(Field3D& phi, GuardedOptions allspecies
     for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
       for (int jz = 0; jz < mesh->LocalNz; jz++) {
         phi_fa(r.ind, mesh->ystart - 1, jz) =
-            2 * phi_fa(r.ind, mesh->ystart, jz) - phi_fa(r.ind, mesh->ystart + 1, jz);
+            (2 * phi_fa(r.ind, mesh->ystart, jz)) - phi_fa(r.ind, mesh->ystart + 1, jz);
       }
     }
     for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
       for (int jz = 0; jz < mesh->LocalNz; jz++) {
         phi_fa(r.ind, mesh->yend + 1, jz) =
-            2 * phi_fa(r.ind, mesh->yend, jz) - phi_fa(r.ind, mesh->yend - 1, jz);
+            (2 * phi_fa(r.ind, mesh->yend, jz)) - phi_fa(r.ind, mesh->yend - 1, jz);
       }
     }
     phi = fromFieldAligned(phi_fa);
@@ -503,13 +524,13 @@ Field3D RelaxPotential::calculateDivJdia(Field3D& phi, GuardedOptions allspecies
       for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
         for (int jz = 0; jz < mesh->LocalNz; jz++) {
           P_ydown(r.ind, mesh->ystart - 1, jz) =
-              2 * P(r.ind, mesh->ystart, jz) - P_yup(r.ind, mesh->ystart + 1, jz);
+              (2 * P(r.ind, mesh->ystart, jz)) - P_yup(r.ind, mesh->ystart + 1, jz);
         }
       }
       for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
         for (int jz = 0; jz < mesh->LocalNz; jz++) {
           P_yup(r.ind, mesh->yend + 1, jz) =
-              2 * P(r.ind, mesh->yend, jz) - P_ydown(r.ind, mesh->yend - 1, jz);
+              (2 * P(r.ind, mesh->yend, jz)) - P_ydown(r.ind, mesh->yend - 1, jz);
         }
       }
     } else {
@@ -592,7 +613,8 @@ Field3D RelaxPotential::calculateExBAdvectionSource(const Field3D& vort,
 
   mesh->communicate(vEdotGradPi, DelpPhi_2B2);
 
-  result -= FV::Div_a_Grad_perp(0.5 * average_atomic_mass / Bsq, vEdotGradPi);
+  result -= FV::Div_a_Grad_perp(Coordinates::FieldMetric{0.5 * average_atomic_mass / Bsq},
+                                vEdotGradPi);
   result -= Div_n_bxGrad_f_B_XPPM(DelpPhi_2B2, phi + pi_hat, bndry_flux, poloidal_flows);
 
   return result;
@@ -827,7 +849,8 @@ void RelaxPotential::outputVars(Options& state) {
 
 Field3D RelaxPotential::vorticity(const Field3D& phi, GuardedOptions& allspecies) {
   if (boussinesq) {
-    Field3D phi_vort = FV::Div_a_Grad_perp(average_atomic_mass / Bsq, phi);
+    Field3D phi_vort =
+        FV::Div_a_Grad_perp(Coordinates::FieldMetric{average_atomic_mass / Bsq}, phi);
 
     if (diamagnetic_polarisation) {
       for (const auto& kv : allspecies.getChildren()) {
@@ -846,7 +869,7 @@ Field3D RelaxPotential::vorticity(const Field3D& phi, GuardedOptions& allspecies
         }
         const BoutReal A = get<BoutReal>(species["AA"]);
         const Field3D P = GET_NOBOUNDARY(Field3D, species["pressure"]);
-        phi_vort += FV::Div_a_Grad_perp(A / Bsq, P);
+        phi_vort += FV::Div_a_Grad_perp(Coordinates::FieldMetric{A / Bsq}, P);
       }
     }
     return phi_vort;
@@ -874,7 +897,7 @@ Field3D RelaxPotential::vorticity(const Field3D& phi, GuardedOptions& allspecies
     if (diamagnetic_polarisation and species.isSet("pressure")) {
       // Calculate the diamagnetic flow contribution
       const Field3D Pi = get<Field3D>(species["pressure"]);
-      phi_vort += FV::Div_a_Grad_perp(Ai / Bsq / Zi, Pi);
+      phi_vort += FV::Div_a_Grad_perp(Coordinates::FieldMetric{Ai / Bsq / Zi}, Pi);
     }
   }
   return phi_vort;

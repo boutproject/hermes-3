@@ -1,5 +1,5 @@
-#include <bout/constants.hxx>
 #include "../include/snb_conduction.hxx"
+#include <bout/constants.hxx>
 
 #include <bout/bout.hxx>
 using bout::globals::mesh;
@@ -13,7 +13,7 @@ void SNBConduction::transform_impl(GuardedOptions& state) {
 
   // SNB non-local heat flux. Also returns the Spitzer-Harm value for comparison
   // Note: Te in eV, Ne in Nnorm
-  Field2D dy_orig = mesh->getCoordinates()->dy;
+  auto dy_orig = mesh->getCoordinates()->dy;
   mesh->getCoordinates()->dy *= rho_s0; // Convert distances to m
 
   // Inputs in eV and m^-3

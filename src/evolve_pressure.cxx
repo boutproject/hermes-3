@@ -29,8 +29,8 @@
 using bout::globals::mesh;
 
 EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* solver)
-    : Component({readOnly("species:{name}:{inputs}", Regions::Interior),
-                 readWrite("species:{name}:{outputs}")}),
+    : NamedComponent(name, {readOnly("species:{name}:{inputs}", Regions::Interior),
+                            readWrite("species:{name}:{outputs}")}),
       name(name) {
 
   auto& options = alloptions[name];
@@ -194,6 +194,10 @@ void EvolvePressure::transform_impl(GuardedOptions& state) {
 
   mesh->communicate(P);
 
+  if (P.isFci()) {
+    P.applyParallelBoundary();
+  }
+
   if (neumann_boundary_average_z) {
     // Take Z (usually toroidal) average and apply as X (radial) boundary condition
     if (mesh->firstX()) {
@@ -234,7 +238,7 @@ void EvolvePressure::transform_impl(GuardedOptions& state) {
   // Not using density boundary condition
   N = getNoBoundary<Field3D>(species["density"]);
 
-  Field3D Pfloor = floor(P, 0.0);
+  Field3DParallel Pfloor = floor(P, 0.0);
   T = Pfloor / softFloor(N, density_floor);
   Pfloor = N * T; // Ensure consistency
 
@@ -249,8 +253,11 @@ void EvolvePressure::finally(const Options& state) {
 
   // Get updated pressure and temperature with boundary conditions
   P = get<Field3D>(species["pressure"]);
-  P.clearParallelSlices();
-  const Field3D Pfloor = floor(P, 0.0); // Restricted to never go below zero
+  if (!P.isFci()) {
+    P.clearParallelSlices();
+  }
+
+  const Field3DParallel Pfloor = floor(P, 0.0); // Restricted to never go below zero
 
   T = get<Field3D>(species["temperature"]);
   N = get<Field3D>(species["density"]);
@@ -283,7 +290,7 @@ void EvolvePressure::finally(const Options& state) {
       ddt(P) -= FV::Div_par_mod<hermes::Limiter>(P, V, fastest_wave, flow_ylow_advection);
 
       // Work done. This balances energetically a term in the momentum equation
-      E_PdivV = -Pfloor * Div_par(V);
+      E_PdivV = -Pfloor * Div_par(V.asField3DParallel());
       ddt(P) += (2. / 3) * E_PdivV;
 
     } else {
@@ -294,8 +301,7 @@ void EvolvePressure::finally(const Options& state) {
       ddt(P) -=
           (5. / 3)
           * FV::Div_par_mod<hermes::Limiter>(P, V, fastest_wave, flow_ylow_advection);
-
-      E_VgradP = V * Grad_par(P);
+      E_VgradP = V * Grad_par(P.asField3DParallel());
       ddt(P) += (2. / 3) * E_VgradP;
     }
     flow_ylow_advection *= 5. / 2; // Energy flow
@@ -338,11 +344,12 @@ void EvolvePressure::finally(const Options& state) {
   }
 
   if (low_T_diffuse_perp) {
-    ddt(P) +=
-        1e-4
-        * Div_Perp_Lap_FV_Index(
-            floor(temperature_floor / softFloor(T, 1e-3 * temperature_floor) - 1.0, 0.0),
-            T);
+    ddt(P) += 1e-4
+              * Div_Perp_Lap_FV_Index(
+                  floor(Field3D{temperature_floor / softFloor(T, 1e-3 * temperature_floor)
+                                - 1.0},
+                        0.0),
+                  T);
   }
 
   if (low_p_diffuse_perp) {

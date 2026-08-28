@@ -5,6 +5,7 @@
 #include "test_extras.hxx" // FakeMesh
 
 #include <bout/bout_types.hxx>
+#include <bout/coordinates.hxx>
 #include <bout/mesh.hxx>
 
 #include "../../include/component.hxx"
@@ -41,6 +42,8 @@ Options baseOptions() {
 
 } // namespace
 
+/// Check a RelaxPotential object can be successfully constructed and
+/// registers vorticity and phi variables with the solver
 TEST_F(RelaxPotentialTest, CreateComponent) {
   FakeSolver solver;
   Options options = baseOptions();
@@ -53,6 +56,8 @@ TEST_F(RelaxPotentialTest, CreateComponent) {
   ASSERT_TRUE(state.isSet("phi1"));
 }
 
+/// Check that the RelaxPotential::transform method sets voricity and
+/// phi when the component is instantiated with default parameters
 TEST_F(RelaxPotentialTest, Transform) {
   FakeSolver solver;
   Options options = baseOptions();
@@ -64,6 +69,64 @@ TEST_F(RelaxPotentialTest, Transform) {
 
   ASSERT_TRUE(state["fields"].isSet("vorticity"));
   ASSERT_TRUE(state["fields"].isSet("phi"));
+  // TODO: Check that the results are actually correct
+}
+
+/// Check that the RelaxPotential::transform method sets voricity and
+/// phi when the component is instantiated with phi_boundary_relax = true
+TEST_F(RelaxPotentialTest, PhiBoundaryRelax) {
+  FakeSolver solver;
+
+  Options::root()["mesh"]["paralleltransform"]["type"] = "shifted";
+  Options options{{"units",
+                   {{"seconds", 1.0},
+                    {"Tesla", 1.0},
+                    {"meters", 1.0},
+                    {"eV", 100.},
+                    {"inv_meters_cubed", 1e19}}},
+                  {"test", {{"phi_boundary_relax", true}}}};
+
+  RelaxPotential component("test", options, &solver);
+
+  Options state{{"time", 0.1}};
+  component.transform(state);
+
+  ASSERT_TRUE(state["fields"].isSet("vorticity"));
+  ASSERT_TRUE(state["fields"].isSet("phi"));
+  // TODO: Check that the results are actually correct
+}
+
+/// Check that the RelaxPotential::transform method sets voricity,
+/// phi, and DivJcol when the component is instantiated with
+/// collisional_friction = true
+TEST_F(RelaxPotentialTest, CollisionalFriction) {
+  FakeSolver solver;
+
+  Options::root()["mesh"]["paralleltransform"]["type"] = "shifted";
+  Options options{{"units",
+                   {{"seconds", 1.0},
+                    {"Tesla", 1.0},
+                    {"meters", 1.0},
+                    {"eV", 100.},
+                    {"inv_meters_cubed", 1e19}}},
+                  {"test", {{"collisional_friction", true}}}};
+
+  RelaxPotential component("test", options, &solver);
+  component.declareAllSpecies(SpeciesInformation({"i"}));
+  Coordinates* coords = mesh->getCoordinates();
+  coords->Bxy = 1.0;
+
+  Options state{
+      {"time", 0.1},
+      {"species",
+       {{"i",
+         {{"AA", 1.}, {"charge", 1.}, {"density", 1.}, {"collision_frequency", 1.}}}}}};
+  component.transform(state);
+
+  ASSERT_TRUE(state["fields"].isSet("vorticity"));
+  ASSERT_TRUE(state["fields"].isSet("phi"));
+  ASSERT_TRUE(state["fields"].isSet("DivJcol"));
+  // TODO: Check that the results are actually correct
 }
 
 TEST_F(RelaxPotentialTest, CalculatePihat) {
@@ -75,7 +138,7 @@ TEST_F(RelaxPotentialTest, CalculatePihat) {
 
   Options state{{"species", {{"d+", {{"pressure", 1.2}, {"AA", 2.0}, {"charge", 1.4}}}}}};
   Permissions permissions{{readOnly("species")}};
-  GuardedOptions guarded_state{&state, &permissions};
+  const GuardedOptions guarded_state{&state, &permissions};
 
   const Field3D Pi_hat = component.calculatePihat(guarded_state["species"]);
 
@@ -92,13 +155,13 @@ TEST_F(RelaxPotentialTest, ApplyPhiBoundarySheath) {
   Field3D phi{1.0};
   Options state{{"species", {{"e", {{"AA", 1.0}, {"temperature", 2.0}}}}}};
   Permissions permissions{{readOnly("species")}};
-  GuardedOptions guarded_state{&state, &permissions};
+  const GuardedOptions guarded_state{&state, &permissions};
 
   component.applyPhiBoundary(phi, guarded_state);
 
   const BoutReal pi = std::acos(-1.0);
   const BoutReal sheathmult = std::log(0.5 * std::sqrt(1.0 / pi));
-  const BoutReal expected = 2.0 * (2.0 * sheathmult) - 1.0;
+  const BoutReal expected = (2.0 * (2.0 * sheathmult)) - 1.0;
 
   ASSERT_NEAR(phi(mesh->xstart - 1, mesh->ystart, 0), expected, 1e-12);
   ASSERT_NEAR(phi(mesh->xend + 1, mesh->ystart, 0), expected, 1e-12);
@@ -144,7 +207,7 @@ TEST_F(RelaxPotentialTest, CalculateDivJdia) {
 
   Options state{{"species", {{"d+", {{"pressure", 1.2}, {"AA", 2.0}, {"charge", 1.4}}}}}};
   Permissions permissions{{readOnly("species"), readWrite("species:d+:energy_source")}};
-  GuardedOptions guarded_state{&state, &permissions};
+  const GuardedOptions guarded_state{&state, &permissions};
 
   Field3D phi{0.0}; // Y boundary modified in calculateDivJdia
   const Field3D DivJdia = component.calculateDivJdia(phi, guarded_state["species"]);

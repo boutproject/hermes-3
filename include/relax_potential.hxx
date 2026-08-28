@@ -5,8 +5,10 @@
 #include "../include/guarded_options.hxx"
 
 #include <bout/bout_types.hxx>
+#include <bout/coordinates.hxx>
 #include <bout/options.hxx>
 #include <bout/vector2d.hxx>
+#include <bout/vectormetric.hxx>
 
 #include "component.hxx"
 
@@ -18,7 +20,7 @@
 /// steady state, but not for timescales shorter than the relaxation
 /// timescale.
 ///
-struct RelaxPotential : public Component {
+struct RelaxPotential : public NamedComponent<RelaxPotential> {
   /// Options
   ///
   /// - <name>
@@ -101,26 +103,10 @@ struct RelaxPotential : public Component {
   Field3D calculatePhi1Source(const Field3D& vort, const Field3D& vort_rhs,
                               const Field3D& vort_from_phi) const;
 
-  // // Save and restore potential phi
-  // void restartVars(Options& state) override {
-
-  //   // NOTE: This is a hack because we know that the loaded restart file
-  //   //       is passed into restartVars in PhysicsModel::postInit
-  //   // The restart value should be used in init() rather than here
-  //   static bool first = true;
-  //   if (first and state.isSet("phi")) {
-  //     first = false;
-  //     phi = state["phi"].as<Field3D>();
-  //   }
-
-  //   // Save the potential
-  //   set_with_attrs(state["phi"], phi,
-  //                  {{"long_name", "plasma potential"},
-  //                   {"source", "vorticity"}});
-  // }
-
   /// Calculate vorticity from potential and species
   Field3D vorticity(const Field3D& phi, GuardedOptions& allspecies);
+
+  static constexpr auto type = "relax_potential";
 
 private:
   bool evolve_vorticity; ///< Evolve vorticity?
@@ -156,11 +142,11 @@ private:
   BoutReal phi_boundary_last_update; ///< Time when last updated
   bool phi_core_averagey;            ///< Average phi core boundary in Y?
 
-  Field2D Bsq;           ///< SQ(coord->Bxy)
-  Vector2D Curlb_B;      ///< Curvature vector Curl(b/B)
-  BoutReal hyper_z;      ///< Hyper-viscosity in Z
-  Field2D viscosity;     ///< Perpendicular Kinematic viscosity
-  Field2D viscosity_par; ///< Parallel Kinematic viscosity
+  Coordinates::FieldMetric Bsq;           ///< SQ(coord->Bxy)
+  VectorMetric Curlb_B;                   ///< Curvature vector Curl(b/B)
+  BoutReal hyper_z;                       ///< Hyper-viscosity in Z
+  Coordinates::FieldMetric viscosity;     ///< Perpendicular Kinematic viscosity
+  Coordinates::FieldMetric viscosity_par; ///< Parallel Kinematic viscosity
 
   // Relax-potential related variables
   BoutReal lambda_1; ///< Relaxation parameters.  NOTE: lambda_1 has dimensions!
@@ -193,7 +179,7 @@ private:
 };
 
 namespace {
-RegisterComponent<RelaxPotential> registercomponentrelaxpotential("relax_potential");
+RegisterComponent<RelaxPotential> registercomponentrelaxpotential;
 }
 
 #endif // RELAX_POTENTIAL_H

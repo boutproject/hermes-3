@@ -20,9 +20,10 @@
 
 BraginskiiElectronViscosity::BraginskiiElectronViscosity(const std::string& name,
                                                          Options& alloptions, Solver*)
-    : Component({readIfSet("species:e:pressure"), readIfSet("species:e:velocity"),
-                 readOnly("species:e:collision_frequency"),
-                 readWrite("species:e:momentum_source")}) {
+    : NamedComponent(name,
+                     {readIfSet("species:e:pressure"), readIfSet("species:e:velocity"),
+                      readOnly("species:e:collision_frequency"),
+                      readWrite("species:e:momentum_source")}) {
   auto& options = alloptions[name];
 
   eta_limit_alpha = options["eta_limit_alpha"]

@@ -81,7 +81,7 @@ struct IznReaction : public IznRecReaction {
    * @param solver  The solver object for the simulation (discarded by this class)
    */
   IznReaction(std::string name, Options& options, [[maybe_unused]] Solver* solver)
-      : IznReaction(name, options){};
+      : IznReaction(name, options) {};
 };
 
 /**
@@ -106,34 +106,76 @@ struct RecReaction : public IznRecReaction {
    * @param solver  The solver object for the simulation (discarded by this class)
    */
   RecReaction(std::string name, Options& options, [[maybe_unused]] Solver* solver)
-      : RecReaction(name, options){};
+      : RecReaction(name, options) {};
 };
 
 } // namespace hermes
 
 namespace {
+
 /// Register components for Hydrogen isotope ionisation and recombination
-RegisterComponent<hermes::IznReaction> register_izn_h("h + e -> h+ + 2e");
-RegisterComponent<hermes::IznReaction> register_izn_d("d + e -> d+ + 2e");
-RegisterComponent<hermes::IznReaction> register_izn_t("t + e -> t+ + 2e");
-RegisterComponent<hermes::RecReaction> register_rec_h("h+ + e -> h");
-RegisterComponent<hermes::RecReaction> register_rec_d("d+ + e -> d");
-RegisterComponent<hermes::RecReaction> register_rec_t("t+ + e -> t");
+struct IznH : public hermes::IznReaction {
+  using IznReaction::IznReaction;
+  static constexpr auto type = "h + e -> h+ + 2e";
+};
+struct IznD : public hermes::IznReaction {
+  using IznReaction::IznReaction;
+  static constexpr auto type = "d + e -> d+ + 2e";
+};
+struct IznT : public hermes::IznReaction {
+  using IznReaction::IznReaction;
+  static constexpr auto type = "t + e -> t+ + 2e";
+};
+struct RecH : public hermes::RecReaction {
+  using RecReaction::RecReaction;
+  static constexpr auto type = "h+ + e -> h";
+};
+struct RecD : public hermes::RecReaction {
+  using RecReaction::RecReaction;
+  static constexpr auto type = "d+ + e -> d";
+};
+struct RecT : public hermes::RecReaction {
+  using RecReaction::RecReaction;
+  static constexpr auto type = "t+ + e -> t";
+};
+RegisterComponent<IznH> register_izn_h;
+RegisterComponent<IznD> register_izn_d;
+RegisterComponent<IznT> register_izn_t;
+RegisterComponent<RecH> register_rec_h;
+RegisterComponent<RecD> register_rec_d;
+RegisterComponent<RecT> register_rec_t;
 
 /// Register components for Helium ionisation and recombination
-RegisterComponent<hermes::IznReaction> register_izn_he("he + e -> he+ + 2e");
-RegisterComponent<hermes::RecReaction> register_rec_he("he+ + e -> he");
+struct IznHe : public hermes::IznReaction {
+  using IznReaction::IznReaction;
+  static constexpr auto type = "he + e -> he+ + 2e";
+};
+struct RecHe : public hermes::RecReaction {
+  using RecReaction::RecReaction;
+  static constexpr auto type = "he+ + e -> he";
+};
+RegisterComponent<IznHe> register_izn_he;
+RegisterComponent<RecHe> register_rec_he;
 
 /*
  He+ ionisation (Amjuel data would be 2.2C, page 189) is not included yet
  Currently missing energy loss / radiation data
 */
-// RegisterComponent<hermes::IznReaction> register_izn_hep("e + he+ -> he+2 + 2e");
+/// Register components for Helium ionisation and recombination
+// struct IznHe2 : public hermes::IznReaction {
+//   using IznReaction::IznReaction;
+//   static constexpr auto type = "e + h2+ -> he+2 + 2e";
+// };
+// RegisterComponent<IxnHe2> register_izn_hep;
 
 /*
  He+2 recombination is not included yet
 */
-// RegisterComponent<hermes::RecReaction>register_rec_hep2("he+2 + e -> he+");
+// struct RecHe2 : public hermes::RecReaction {
+//   using RecReaction::RecReaction;
+//   static constexpr auto type = "he+2 + e -> he+";
+// };
+// RegisterComponent<RecHe2>register_rec_hep2;
 
 } // namespace
 
