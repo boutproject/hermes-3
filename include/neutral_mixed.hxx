@@ -48,6 +48,7 @@ private:
   Field3D Dnn;                   ///< Diffusion coefficient
   Field3D Dnn_unlimited, Dmax;   ///< Unlimited and max Dnn
   Field3D DnnNn, DnnPn, DnnTn, DnnNVn; ///< Used for operators
+  bool combined_limiters;              ///< Derive kappa, eta limiters from Dnn
   BoutReal flux_limit_adv;           ///< Advective flux limit, fraction of free streaming
   BoutReal flux_limit_cond_perp;     ///< Perpendicular conductive flux limit
   BoutReal flux_limit_cond_par;      ///< Parallel conductive flux limit

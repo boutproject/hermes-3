@@ -166,6 +166,27 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
                "same as viscous perpendicular limiter value.")
           .withDefault(flux_limit_visc_perp);
 
+  combined_limiters = options["combined_limiters"]
+                          .doc("Derive kappa, eta limiters from Dnn? May be more "
+                               "performant but less physically accurate.")
+                          .withDefault<bool>(true);
+
+  // Prevent viscosity and conduction specific options when limiters are combined
+  if (combined_limiters) {
+    for (const auto& key :
+         {"flux_limit_cond_perp", "flux_limit_cond_par", "flux_limit_visc_perp",
+          "flux_limit_visc_par", "conduction_limit", "viscosity_limit"}) {
+      if (options.isSet(key)) {
+        throw BoutException("{:s} has no effect when combined_limiters = true, because "
+                            "conduction and viscosity inherit the Dnn limiter. Set "
+                            "combined_limiters = false to control each channel.",
+                            key);
+      }
+    }
+    flux_limit_cond_perp = flux_limit_cond_par = flux_limit_adv;
+    flux_limit_visc_perp = flux_limit_visc_par = flux_limit_adv;
+  }
+
   flux_limiter_sharpness = options["flux_limiter_sharpness"]
                                .doc("Sharpness parameter for flux limiter. Higher values "
                                     "make the limiter more abrupt. Must be >0")
@@ -215,6 +236,7 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
   normalise_sources = options["normalise_sources"]
                           .doc("Normalise input sources?")
                           .withDefault<bool>(true);
+
   diffusion_collisions_mode = options["diffusion_collisions_mode"]
                                   .doc("Can be multispecies: all enabled collisions "
                                        "excl. IZ, or afn: CX, IZ and NN collisions")
@@ -562,30 +584,34 @@ void NeutralMixed::finally(const Options& state) {
                                  limiter_gradient_ceiling);
   }
 
-  // Heat flux is (1/2)*vbar*Pn. The Nn is here, and the Tn comes from the
-  // denominator being grad(Tn)/Tn rather than grad(Tn).
-  if (flux_limit_cond_perp > 0.0) {
-    kappa_n_max_perp =
-        flux_limit_cond_perp * (1. / 2) * vn_bar * Nnlim
-        / regularise_gradient(Grad_perp(Tn) / Tnlim, limiter_gradient_floor,
-                              limiter_gradient_ceiling);
-  }
-  if (flux_limit_cond_par > 0.0) {
-    kappa_n_max_par = flux_limit_cond_par * (1. / 2) * vn_bar * Nnlim
-                      / regularise_gradient(Grad_par(Tn) / Tnlim, limiter_gradient_floor,
-                                            limiter_gradient_ceiling);
-  }
+  if (!combined_limiters) {
 
-  // Viscous momentum flux cannot exceed the pressure.
-  if (flux_limit_visc_perp > 0.0) {
-    eta_n_max_perp = flux_limit_visc_perp * Pnlim
-                     / regularise_gradient(Grad_perp(Vn), limiter_gradient_floor_eta,
-                                           limiter_gradient_ceiling_eta);
-  }
-  if (flux_limit_visc_par > 0.0) {
-    eta_n_max_par = flux_limit_visc_par * Pnlim
-                    / regularise_gradient(Grad_par(Vn), limiter_gradient_floor_eta,
-                                          limiter_gradient_ceiling_eta);
+    // Heat flux is (1/2)*vbar*Pn. The Nn is here, and the Tn comes from the
+    // denominator being grad(Tn)/Tn rather than grad(Tn).
+    if (flux_limit_cond_perp > 0.0) {
+      kappa_n_max_perp =
+          flux_limit_cond_perp * (1. / 2) * vn_bar * Nnlim
+          / regularise_gradient(Grad_perp(Tn) / Tnlim, limiter_gradient_floor,
+                                limiter_gradient_ceiling);
+    }
+    if (flux_limit_cond_par > 0.0) {
+      kappa_n_max_par =
+          flux_limit_cond_par * (1. / 2) * vn_bar * Nnlim
+          / regularise_gradient(Grad_par(Tn) / Tnlim, limiter_gradient_floor,
+                                limiter_gradient_ceiling);
+    }
+
+    // Viscous momentum flux cannot exceed the pressure.
+    if (flux_limit_visc_perp > 0.0) {
+      eta_n_max_perp = flux_limit_visc_perp * Pnlim
+                       / regularise_gradient(Grad_perp(Vn), limiter_gradient_floor_eta,
+                                             limiter_gradient_ceiling_eta);
+    }
+    if (flux_limit_visc_par > 0.0) {
+      eta_n_max_par = flux_limit_visc_par * Pnlim
+                      / regularise_gradient(Grad_par(Vn), limiter_gradient_floor_eta,
+                                            limiter_gradient_ceiling_eta);
+    }
   }
 
   // Flux limiter application
@@ -620,16 +646,33 @@ void NeutralMixed::finally(const Options& state) {
   BOUT_FOR(i, Dnn.getRegion("RGN_NOBNDRY")) {
     Dnn[i] = apply_limiter(Dnn_unlimited[i], Dmax[i], diffusion_limit, flux_limit_adv,
                            flux_limiter_sharpness);
-    kappa_n_perp[i] =
-        apply_limiter(kappa_n_unlimited[i], kappa_n_max_perp[i], conduction_limit,
-                      flux_limit_cond_perp, flux_limiter_sharpness);
-    kappa_n_par[i] =
-        apply_limiter(kappa_n_unlimited[i], kappa_n_max_par[i], conduction_limit,
-                      flux_limit_cond_par, flux_limiter_sharpness);
-    eta_n_perp[i] = apply_limiter(eta_n_unlimited[i], eta_n_max_perp[i], viscosity_limit,
-                                  flux_limit_visc_perp, flux_limiter_sharpness);
-    eta_n_par[i] = apply_limiter(eta_n_unlimited[i], eta_n_max_par[i], viscosity_limit,
-                                 flux_limit_visc_par, flux_limiter_sharpness);
+
+    if (!combined_limiters) {
+      kappa_n_perp[i] =
+          apply_limiter(kappa_n_unlimited[i], kappa_n_max_perp[i], conduction_limit,
+                        flux_limit_cond_perp, flux_limiter_sharpness);
+      kappa_n_par[i] =
+          apply_limiter(kappa_n_unlimited[i], kappa_n_max_par[i], conduction_limit,
+                        flux_limit_cond_par, flux_limiter_sharpness);
+      eta_n_perp[i] =
+          apply_limiter(eta_n_unlimited[i], eta_n_max_perp[i], viscosity_limit,
+                        flux_limit_visc_perp, flux_limiter_sharpness);
+      eta_n_par[i] = apply_limiter(eta_n_unlimited[i], eta_n_max_par[i], viscosity_limit,
+                                   flux_limit_visc_par, flux_limiter_sharpness);
+    }
+  }
+
+  if (combined_limiters) {
+    kappa_n_perp = (5. / 2) * (Nnlim * Dnn);
+    eta_n_perp = (2. / 5) * AA * kappa_n_perp;
+    kappa_n_par = copy(kappa_n_perp);
+    eta_n_par = copy(eta_n_perp);
+
+    // For diagnostics only:
+    kappa_n_max_perp = (5. / 2) * (Nnlim * Dmax);
+    eta_n_max_perp = (2. / 5) * (AA * kappa_n_max_perp);
+    kappa_n_max_par = copy(kappa_n_max_perp);
+    eta_n_max_par = copy(eta_n_max_perp);
   }
 
   mesh->communicate(Dnn);
