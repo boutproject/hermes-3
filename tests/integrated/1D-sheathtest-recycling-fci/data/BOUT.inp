@@ -128,8 +128,6 @@ precondition = true
 
 dissipative = false
 
-density_floor = 1e-6
-
 parallel_dirichlet = false
 
 diagnose = true

@@ -10,6 +10,7 @@
 
 #include "component.hxx"
 #include <bout/yboundary_regions.hxx>
+#include <bout/derivs.hxx>
 
 
 
@@ -43,8 +44,12 @@ private:
   Field3D Tn; ///< Neutral temperature
   Field3D Nnlim, Pnlim, logPnlim, Vnlim, Tnlim; // Limited in regions of low density
   bool isMMS;
+  Field3D Pn_solver;
+  bool use_eos;
+  bool viscous_heating;
   BoutReal AA; ///< Atomic mass (proton = 1)
   BoutReal n_lowsource, T_lowsource, lowsource_scale;
+  BoutReal low_N_lim;
   Field3D Dnn; ///< Diffusion coefficient
   Field3D DnnNn, DnnPn, DnnNVn;
   bool disable_Dnn;
@@ -53,17 +58,24 @@ private:
   bool dissipative;
   BoutReal density_floor; ///< Minimum Nn used when dividing NVn by Nn to get Vn.
   BoutReal pressure_floor; ///< Minimum Pn used when dividing Pn by Nn to get Tn.
-
+  bool exponential_source;
   BoutReal flux_limit; ///< Diffusive flux limit
+  bool LP_limit;
+  BoutReal LP_speed;
+  Field3D lambdaLP;
   BoutReal diffusion_limit;    ///< Maximum diffusion coefficient
-
+  bool inherited_T;
+  BoutReal include_cond;
+  Field3D anomalous_conduction;
+  
   bool parallel_dirichlet;
   bool neutral_viscosity; ///< include viscosity?
   bool neutral_conduction; ///< Include heat conduction?
   bool evolve_momentum; ///< Evolve parallel momentum?
-
+  bool evolve_pressure;
   bool freeze_low_density;
   bool use_finite_difference;
+  Field3D initial_Tn;
   Field3D kappa_n, eta_n; ///< Neutral conduction and viscosity
   BoutReal neutral_lmax;
   bool precondition {true}; ///< Enable preconditioner?
@@ -73,7 +85,7 @@ private:
   Field3D density_source, pressure_source; ///< External input source
   Field3D Sn, Sp, Snv; ///< Particle, pressure and momentum source
   Field3D sound_speed; ///< Sound speed for use with Lax flux
-
+  BoutReal sound_speed_Tfloor;
   bool output_ddt; ///< Save time derivatives?
   bool diagnose; ///< Save additional diagnostics?
 
@@ -86,6 +98,19 @@ private:
   Field3D ef_adv_perp_xlow, ef_adv_perp_ylow, ef_adv_par_ylow;
   Field3D ef_cond_perp_xlow, ef_cond_perp_ylow, ef_cond_par_ylow;
 
+  const Field3D Grad_x(Field3D& a) {
+    Mesh* mesh = a.getMesh();
+    Coordinates* coord = mesh->getCoordinates();
+    return DDX(a) / sqrt(coord->g_11);
+  }
+
+
+  const Field3D Grad_z(Field3D& a) {
+    Mesh* mesh = a.getMesh();
+    Coordinates* coord = mesh->getCoordinates();
+    return DDZ(a) / sqrt(coord->g_33);
+  }
+  
   Field3D Div_a_Grad_perp(Field3D a, Field3D b) {
     if (a.isFci()) {
       return (*dagp)(a, b, false);
