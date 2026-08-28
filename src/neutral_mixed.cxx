@@ -662,6 +662,10 @@ void NeutralMixed::finally(const Options& state) {
     }
   }
 
+  mesh->communicate(Dnn);
+  Dnn.clearParallelSlices();
+  Dnn.applyBoundary();
+
   if (combined_limiters) {
     kappa_n_perp = (5. / 2) * (Nnlim * Dnn);
     eta_n_perp = (2. / 5) * AA * kappa_n_perp;
@@ -674,10 +678,6 @@ void NeutralMixed::finally(const Options& state) {
     kappa_n_max_par = copy(kappa_n_max_perp);
     eta_n_max_par = copy(eta_n_max_perp);
   }
-
-  mesh->communicate(Dnn);
-  Dnn.clearParallelSlices();
-  Dnn.applyBoundary();
 
   // TODO: Investigate whether the BCs should be set to same as Dnn.
   mesh->communicate(kappa_n_unlimited);
