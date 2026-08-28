@@ -36,6 +36,7 @@ Transform::Transform(std::string name, Options& alloptions, Solver* UNUSED(solve
 
 void Transform::transform_impl(GuardedOptions& state) {
   for (const auto& lr : transforms) {
-    state[lr.first].getWritable() = state[lr.second].get().copy();
+    state[lr.first].getWritable(Regions::Interior) =
+        state[lr.second].get(Regions::Interior).copy();
   }
 }
