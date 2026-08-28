@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
+import os
+import sys
+from pathlib import Path
 
-# Python script to run and analyse MMS test
-from boututils.run_wrapper import shell, launch_safe
 from boutdata.collect import BoutArray
 from boutdata.data import BoutOutputs
-
+from boututils.run_wrapper import launch_safe, shell
 from numpy import isclose
-
-import os
 
 HERMES_BIN = os.environ.get("HERMES_BIN", "../../../hermes-3")
 PATH = "data"
@@ -17,7 +16,7 @@ RTOL = 1e-2
 ATOL = 1e-2
 
 
-def check(result: BoutArray, index: int, expected: float, sense: str) -> bool:
+def check(result: BoutArray, index: int | tuple, expected: float, sense: str) -> bool:
     """Check an individual variable is the expected value, pretty print a failure message if not"""
     result_slice = result[index]
     if isclose(result_slice, expected, rtol=RTOL, atol=ATOL):
@@ -66,11 +65,10 @@ def check_case(
     case_name: str, expected: dict[str, dict[str, float]], extra_args=""
 ) -> bool:
     """Run and check a whole test case"""
-    s, out = launch_safe(f"{HERMES_BIN} -d {PATH} {extra_args}", nproc=1, pipe=True)
+    _, out = launch_safe(f"{HERMES_BIN} -d {PATH} {extra_args}", nproc=1, pipe=True)
 
     filename = case_name.replace(" ", "_")
-    with open(f"{filename}.log", "w") as f:
-        f.write(out)
+    Path(filename).with_suffix(".log").write_text(out)
 
     results = collect_all()
 
@@ -226,7 +224,7 @@ success &= check_case(
 
 if success:
     print(" => Test passed")
-    exit(0)
+    sys.exit(0)
 else:
     print(" => Test failed")
-    exit(1)
+    sys.exit(1)
