@@ -190,7 +190,6 @@ success &= check_case(
 flipped_upstream = base_downstream
 flipped_upstream["Ve"] = -flipped_upstream["Ve"]
 flipped_upstream["Vi"] = -flipped_upstream["Vi"]
-flipped_upstream["Si_sheath"] = -flipped_upstream["Si_sheath"]
 
 expected = {
     "upstream": flipped_upstream,
