@@ -5,9 +5,6 @@
 #  - No heat conduction
 #  - Uniform source of heat and particles throughout domain
 
-nout = 1
-timestep = 10
-
 MXG = 0  # No guard cells in X
 
 # Ensures sheath and noflow boundaries are at opposite ends
@@ -42,6 +39,8 @@ Bnorm = 1
 Tnorm = 100
 
 [solver]
+nout = 1
+output_step = 10
 mxstep = 10000
 
 [sheath_boundary_simple]
