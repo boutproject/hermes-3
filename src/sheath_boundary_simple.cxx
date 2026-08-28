@@ -614,7 +614,7 @@ void SheathBoundarySimple::transform_impl(GuardedOptions& state) {
           BoutReal power = heatflow / dv; // [Wm^-3]
           ASSERT2(std::isfinite(power));
           energy_source[i] += power; // Note: Sign negative because power > 0
-          particle_source[i] -=
+          particle_source[i] +=
               nisheath * visheath * da / dv; // [m^-3s^-1] Diagnostics only
 
           // Total heat flux for diagnostic purposes
@@ -757,8 +757,8 @@ void SheathBoundarySimple::outputVars(Options& state) {
                        {{"time_dimension", "t"},
                         {"units", "m^-3 s^-1"},
                         {"conversion", Nnorm * Omega_ci},
-                        {"standard_name", "energy source"},
-                        {"long_name", species_name + " sheath energy source"},
+                        {"standard_name", "particle source"},
+                        {"long_name", species_name + " sheath particle source"},
                         {"source", "sheath_boundary_simple"}});
       }
     }
