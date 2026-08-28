@@ -12,6 +12,7 @@
 #include <bout/coordinates.hxx>
 #include <bout/field.hxx>
 #include <bout/field3d.hxx>
+#include <bout/globals.hxx>
 #include <bout/mesh.hxx>
 #include <bout/options.hxx>
 #include <bout/sys/range.hxx>
@@ -289,7 +290,7 @@ SheathBoundarySimple::SheathBoundarySimple(const std::string& name, Options& all
 void SheathBoundarySimple::transform_impl(GuardedOptions& state) {
 
   GuardedOptions allspecies = state["species"];
-  GuardedOptions electrons = allspecies["e"];
+  const GuardedOptions electrons = allspecies["e"];
 
   // Need electron properties
   // Not const because boundary conditions will be set
@@ -389,11 +390,11 @@ void SheathBoundarySimple::transform_impl(GuardedOptions& state) {
     const BoutReal vesheath_flow = no_flow ? 0.0 : vesheath;
 
     // Heat flux. Note: Here this is negative because vesheath < 0
-    const BoutReal q =
-        (gamma_e * tesheath * nesheath * vesheath)
-        // Take into account the flow of energy due to fluid flow
-        // This is additional energy flux through the sheath
-        - ((2.5 * tesheath + 0.5 * Me * SQ(vesheath_flow)) * nesheath * vesheath_flow);
+    const BoutReal q = (gamma_e * tesheath * nesheath * vesheath)
+                       // Take into account the flow of energy due to fluid flow
+                       // This is additional energy flux through the sheath
+                       - (((2.5 * tesheath) + (0.5 * Me * SQ(vesheath_flow))) * nesheath
+                          * vesheath_flow);
 
     Ve[im] = 2 * vesheath_flow - Ve[i];
     NVe[im] = 2 * Me * nesheath * vesheath_flow - NVe[i];
@@ -473,7 +474,7 @@ void SheathBoundarySimple::transform_impl(GuardedOptions& state) {
       continue; // Skip electrons
     }
 
-    GuardedOptions species = allspecies[kv.first]; // Note: Need non-const
+    const GuardedOptions species = allspecies[kv.first]; // Note: Need non-const
 
     // Ion charge
     const BoutReal Zi = species.isSet("charge") ? get<BoutReal>(species["charge"]) : 0.0;
