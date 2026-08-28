@@ -845,7 +845,6 @@ parallel momentum, are then calculated from the limited diffusion coefficient:
    \eta_{n} =& \frac{2}{5} m_n \kappa_{n} \\
    \end{aligned}
 
-
 .. doxygenstruct:: NeutralMixed
    :members:
 
@@ -1353,9 +1352,107 @@ of viscosity could in some cases lead to cooling.
 relax_potential
 ~~~~~~~~~~~~~~~
 
-This component evolves a vorticity equation, similar to the ``vorticity`` component.
-Rather than inverting an elliptic equation at every timestep, this component evolves
-the potential in time as a diffusion equation.
+This component evolves a vorticity equation, similar to the ``vorticity``
+component, but avoids an elliptic inversion of :math:`\phi` on every RHS
+evaluation. Instead, it evolves a scaled potential in time, relaxing the
+potential towards consistency with the current vorticity state.
+
+This approach is intended for steady-state, or slowly evolving, problems.
+It is not valid when the physical evolution time is shorter than the chosen
+relaxation timescale.
+
+The evolving variables are the vorticity :math:`\Omega` and a scaled
+electrostatic potential
+
+.. math::
+
+   \phi_1 = \lambda_2 \phi
+
+The physical potential :math:`\phi` is reconstructed from :math:`\phi_1`,
+and a vorticity consistent with that potential is calculated using the same
+operator as in the ``vorticity`` component:
+
+.. math::
+
+   \Omega_\phi = \nabla\cdot\left(\frac{\overline{A}}{B^2}\nabla_\perp\phi\right)
+   + \underbrace{\nabla\cdot\left(\sum_s \frac{A_s}{Z_s B^2}\nabla_\perp p_s\right)}_{\mathrm{if\ diamagnetic\_polarisation}}
+
+where the second term is included only when
+``diamagnetic_polarisation = true``. In the Boussinesq approximation this
+diamagnetic contribution can be written in terms of the effective ion pressure
+
+.. math::
+
+   \hat{p} = \sum_s \frac{A_s}{\overline{A} Z_s} p_s
+
+The relaxation equation for the potential is then
+
+.. math::
+
+   \frac{\partial \phi_1}{\partial t} = \lambda_1 \left(\Omega_\phi - \Omega\right)
+
+when ``evolve_vorticity = true``. In this mode the solver evolves
+:math:`\Omega`, while :math:`\phi_1` is driven so that the potential becomes
+consistent with the evolving vorticity.
+
+If ``evolve_vorticity = false`` then the component instead treats the system as
+steady-state and evolves only the potential relaxation variable:
+
+.. math::
+
+   \frac{\partial \phi_1}{\partial t} = - \lambda_1 \frac{\partial \Omega}{\partial t}
+
+The vorticity RHS is built in two stages. During ``transform()``, the component
+reconstructs :math:`\phi`, calculates :math:`\Omega_\phi`, applies the radial
+potential boundary condition, and adds source terms that depend directly on the
+current potential:
+
+.. math::
+
+   \frac{\partial \Omega}{\partial t} = \underbrace{\nabla\cdot\mathbf{J}_{dia}}_{\mathrm{if\ diamagnetic}}
+   + \underbrace{\nabla\cdot\mathbf{J}_{col}}_{\mathrm{if\ collisional\_friction}}
+   + \ldots
+
+where :math:`\nabla\cdot\mathbf{J}_{dia}` is the diamagnetic current
+divergence, and :math:`\nabla\cdot\mathbf{J}_{col}` is a collisional friction
+term based on a mass-weighted collision frequency.
+
+During ``finally()``, the remaining terms are added:
+
+.. math::
+
+   \frac{\partial \Omega}{\partial t} \mathrel{+}= \underbrace{\nabla\cdot\mathbf{J}_{ExB}}_{\mathrm{if\ exb\_advection}}
+   + \nabla\cdot\left(\mathbf{b} J_{extra}\right)
+   + \nabla\cdot\left(\mathbf{b}\sum_s Z_s n_s V_{||s}\right)
+   + \text{viscosity and dissipation terms}
+
+These include the optional ExB nonlinearity, any externally supplied
+``DivJextra`` field, parallel currents from species momentum, perpendicular and
+parallel viscosity, optional parallel dissipation of vorticity and potential,
+sheath damping when ``phi_sheath_dissipation = true``, and damping of the
+axisymmetric core-adjacent vorticity when ``damp_core_vorticity = true``.
+
+The radial boundary condition for :math:`\phi` is controlled by two modes:
+
+1. If ``phi_boundary_relax = true``, the X-boundaries of :math:`\phi` are
+   relaxed exponentially towards a zero-gradient condition on the timescale
+   ``phi_boundary_timescale``. If ``phi_core_averagey = true``, the inner
+   boundary is first averaged over Y before the relaxation is applied.
+2. If ``phi_boundary_relax = false``, the boundary is set from the electron
+   temperature. When ``sheath_boundary = true`` this uses a sheath-potential
+   relation; otherwise it reduces to zero boundary potential.
+
+Important optional inputs are:
+
+- ``fields:DivJextra`` for externally supplied current divergence
+- ``fields:Apar_flutter`` for magnetic flutter corrections to parallel current
+- ``sound_speed`` for the optional parallel dissipation operators
+- species ``pressure``, ``density``, ``momentum``, ``charge``, ``AA``, and
+  ``collision_frequency`` as required by the enabled terms
+
+The main outputs are ``fields:phi`` and ``fields:vorticity``. When
+``diagnose = true`` the component also writes ``ddt(Vort)``, ``ddt(phi)``, and,
+if enabled, ``DivJdia`` and ``DivJcol``.
 
 .. doxygenstruct:: RelaxPotential
    :members:

@@ -12,6 +12,7 @@
 #include <bout/griddata.hxx>
 #include <bout/mesh.hxx>
 #include <bout/mpi_wrapper.hxx>
+#include <bout/msg_stack.hxx>
 #include <bout/operatorstencil.hxx>
 #include <bout/output.hxx>
 #include <bout/paralleltransform.hxx>
@@ -113,6 +114,9 @@ public:
     mesh_staggered_m.setCoordinates(test_coords_staggered, CELL_XLOW);
     mesh_staggered_m.setCoordinates(test_coords_staggered, CELL_YLOW);
     mesh_staggered_m.setCoordinates(test_coords_staggered, CELL_ZLOW);
+
+    // Clear MsgStack
+    msg_stack.clear();
   }
 
   FakeMeshFixture_tmpl(const FakeMeshFixture_tmpl&) = delete;
