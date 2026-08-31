@@ -288,12 +288,7 @@ sheath_boundary_insulating
 
 WIP
 
-.. _sec-noflow_boundary:
 
-noflow_boundary
-^^^^^^^^^^^^^^^
-
-WIP
 
 .. _sec-recycling:
 
@@ -477,52 +472,78 @@ and `neutral_pump` flags.
 .. doxygenstruct:: Recycling
    :members:
 
-.. _sec-binormal_stpm:
+.. _sec-neutral_bc:
 
-Others
+Neutrals
 ~~~~~~~~~~~~~~~
 
-noflow_boundary
-^^^^^^^^^^^^^^^
+.. _sec-1d_neutral_bc:
 
-This is a species component which imposes a no-flow boundary condition
-on y (parallel) boundaries.
+1D boundary conditions
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+In 1D, neutral density, pressure and momentum equations are implemented through the same components as plasma, i.e. `evolve_density`,
+`evolve_pressure` and `evolve_momentum`.
+The optional `neutral_parallel_diffusion` component is responsible
+for emulating cross-field diffusion. Boundary conditions on the evolved variables are set by the `noflow_boundary` component (see
+:ref:`sec-noflow_boundary`).
+Note that sources related to recycling and neutral wall reflection are calculated in the same way across all dimensionalities
+in the `recycling` and `neutral_boundary` components, respectively.
 
-- Zero-gradient boundary conditions are applied to `density`,
-  `temperature` and `pressure` fields, if they are set.
-- Zero-value boundary conditions are applied to `velocity` and
-  `momentum` if they are set.
+.. _sec-neutral_mixed_bc:
 
-By default both yup and ydown boundaries are set, but can be turned
-off by setting `noflow_lower_y` or `noflow_upper_y` to ``false``.
+2D/3D boundary conditions (neutral_mixed)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Example: To set no-flow boundary condition on an ion ``d+`` at the lower
-y boundary, with a sheath boundary at the upper y boundary:
+`neutral_mixed` allows user-settable boundary conditions for neutral density, pressure, temperature, velocity and momentum
+as well as the cross-field diffusion coefficients `Dnn`, `kappa_n` and `eta_n`. On Y boundaries with the sheath present
+(i.e. if `sheath_ydown` or `sheath_yup` are true), these are overridden with hardcoded sheath boundary conditions which
+are currently not user-settable.
 
-.. code-block:: ini
+By default, `neutral_mixed` does not allow any losses of density, pressure or momentum through boundaries.
+Note that neutral reflection losses are handled as sources by the `neutral_boundary` component, while recycling sources
+are implemented in the `recycling` component.
 
-   [hermes]
-   components = d+, sheath_boundary
+The default settings are:
 
-   [d+]
-   type = noflow_boundary
+.. list-table::
+   :header-rows: 1
+   :widths: 20 20 20 60
 
-   noflow_lower_y = true   # This is the default
-   noflow_upper_y = false  # Turn off no-flow at upper y for d+ species
+   * - Field
+     - Default
+     - Default (sheath)
+     - Notes
+   * - ``Dnn``, ``kappa_n``, ``eta_n``
+     - ``neumann``
+     - ``dirichlet(0)``
+     - ``kappa_n`` and ``eta_n`` inherit ``Dnn`` setting by default. Disables diffusion, conduction and viscosity through sheath.
+   * - ``N``
+     - ``neumann``
+     - ``free_o2``
+     - The density is additionally floored to 0 at the sheath.
+   * - ``P``, ``T``
+     - ``neumann``
+     - ``neumann``
+     - Disables conduction and pressure advection across all boundaries.
+   * - ``V``, ``NV``
+     - ``neumann``
+     - ``dirichlet(0)``
+     - Disables viscosity through radial boundaries. Disables advection of N, P and NV through target.
 
-   [sheath_boundary]
-   lower_y = false         # Turn off sheath lower boundary for all species
-   upper_y = true
+The transport of particles, energy or momentum through the core,
+SOL or PFR boundaries can be enabled by changing the radial boundary conditions.
 
-Note that currently `noflow_boundary` is set per-species, whereas
-`sheath_boundary` is applied to all species. This is because sheath
-boundary conditions couple all charged species together, and doesn't
-affect neutral species.
+Since radial advective transport is driven by pressure diffusion, enabling radial boundary fluxes requires:
 
-The implementation is in `NoFlowBoundary`:
+- A positive diffusion coefficient at the boundary (met by default thanks to the `neumann` on the coefficients)
+- A non-zero pressure gradient through the boundary (unmet by default thanks to the `neumann` on evolved variables)
 
-.. doxygenstruct:: NoFlowBoundary
-   :members:
+A non-zero gradient at the boundary can be achieved with several boundary conditions, including `dirichlet`, `free_o2` or `decaylength`.
+Care must be taken to ensure consistent behaviour across all evolved equations; a non-zero pressure gradient
+will allow the advection of density, pressure and momentum irrespective of the density and momentum boundary conditions.
+Separately from this, conduction and viscosity through the boundary can be enabled through a non-zero boundary condition
+in the temperature and velocity, respectively.
+
 
 .. _sec-neutral_boundary:
 
@@ -601,6 +622,54 @@ reflection by default so that it is compatible with a model of any dimensionalit
 
 .. doxygenstruct:: NeutralBoundary
    :members:
+
+
+Others
+~~~~~~~~~~~~~~~
+.. _sec-noflow_boundary:
+
+noflow_boundary
+^^^^^^^^^^^^^^^
+
+This is a species component which imposes a no-flow boundary condition
+on y (parallel) boundaries.
+
+- Zero-gradient boundary conditions are applied to `density`,
+  `temperature` and `pressure` fields, if they are set.
+- Zero-value boundary conditions are applied to `velocity` and
+  `momentum` if they are set.
+
+By default both yup and ydown boundaries are set, but can be turned
+off by setting `noflow_lower_y` or `noflow_upper_y` to ``false``.
+
+Example: To set no-flow boundary condition on an ion ``d+`` at the lower
+y boundary, with a sheath boundary at the upper y boundary:
+
+.. code-block:: ini
+
+   [hermes]
+   components = d+, sheath_boundary
+
+   [d+]
+   type = noflow_boundary
+
+   noflow_lower_y = true   # This is the default
+   noflow_upper_y = false  # Turn off no-flow at upper y for d+ species
+
+   [sheath_boundary]
+   lower_y = false         # Turn off sheath lower boundary for all species
+   upper_y = true
+
+Note that currently `noflow_boundary` is set per-species, whereas
+`sheath_boundary` is applied to all species. This is because sheath
+boundary conditions couple all charged species together, and doesn't
+affect neutral species.
+
+The implementation is in `NoFlowBoundary`:
+
+.. doxygenstruct:: NoFlowBoundary
+   :members:
+
 
 Sources
 -------------------
