@@ -299,23 +299,55 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
       / momentum_norm;
   // need some normalisation convention here
 
-  // Set boundary condition defaults: Neumann for all but the diffusivity.
-  // The dirichlet on diffusivity ensures no radial flux.
-  // NV and V are ignored as they are hardcoded in the parallel BC code.
+  // Default base boundary condition definition
+  ///////////////////////////////////////////////
+  // Here we define boundary conditions for all relevant fields.
+  // Note that here the BCs are only being *set*, not applied, which happens later
+  // using field.applyBoundary().
+  //
+  // All diffusion coefficients are initially set to Neumann, allowing fluxes through boundaries
+  // if the relevant variable has a gradient through the wall.
+  //
+  // All evolved variables are initially set to Neumann as well to prevent wall fluxes by default.
+  //
+  // If sheath_ydown or sheath_yup are true (default), parallel BCs are overridden.
+  // Density is extrapolated, temperature and pressure are set to Neumann and velocity is set to zero.
+  // The diffusion coefficients are then set to zero at the targets to prevent y boundary flux.
+  //
   alloptions[std::string("Dnn") + name]["bndry_all"] =
-      alloptions[std::string("Dnn") + name]["bndry_all"].withDefault("dirichlet");
+      alloptions[std::string("Dnn") + name]["bndry_all"].withDefault("neumann");
+  alloptions["kappa_" + name]["bndry_all"] =
+      alloptions["kappa_" + name]["bndry_all"].withDefault(
+          alloptions[std::string("Dnn") + name]["bndry_all"].as<std::string>());
+  alloptions["eta_" + name]["bndry_all"] =
+      alloptions["eta_" + name]["bndry_all"].withDefault(
+          alloptions[std::string("Dnn") + name]["bndry_all"].as<std::string>());
+
+  kappa_n_unlimited.setBoundary("kappa_" + name);
+  kappa_n_perp.setBoundary("kappa_" + name);
+  kappa_n_par.setBoundary("kappa_" + name);
+  eta_n_unlimited.setBoundary("eta_" + name);
+  eta_n_perp.setBoundary("eta_" + name);
+  eta_n_par.setBoundary("eta_" + name);
+
   alloptions[std::string("T") + name]["bndry_all"] =
       alloptions[std::string("T") + name]["bndry_all"].withDefault("neumann");
   alloptions[std::string("P") + name]["bndry_all"] =
       alloptions[std::string("P") + name]["bndry_all"].withDefault("neumann");
   alloptions[std::string("N") + name]["bndry_all"] =
       alloptions[std::string("N") + name]["bndry_all"].withDefault("neumann");
+  alloptions[std::string("V") + name]["bndry_all"] =
+      alloptions[std::string("V") + name]["bndry_all"].withDefault("neumann");
+  alloptions[std::string("NV") + name]["bndry_all"] =
+      alloptions[std::string("NV") + name]["bndry_all"].withDefault("neumann");
 
   // Pick up BCs from input file
   Dnn.setBoundary(std::string("Dnn") + name);
   Tn.setBoundary(std::string("T") + name);
   Pn.setBoundary(std::string("P") + name);
   Nn.setBoundary(std::string("N") + name);
+  Vn.setBoundary(std::string("V") + name);
+  NVn.setBoundary(std::string("NV") + name);
 
   // All floored versions of variables get the same boundary as the original
   Pnlim.setBoundary(std::string("P") + name);
@@ -350,7 +382,8 @@ void NeutralMixed::transform_impl(GuardedOptions& state) {
   Tn.applyBoundary();
 
   Vn = NVn / (AA * Nnlim);
-  Vn.applyBoundary("neumann");
+  Vn.applyBoundary();
+  NVn.applyBoundary();
 
   /////////////////////////////////////////////////////
   // Parallel boundary conditions
@@ -679,30 +712,31 @@ void NeutralMixed::finally(const Options& state) {
     eta_n_max_par = copy(eta_n_max_perp);
   }
 
-  // TODO: Investigate whether the BCs should be set to same as Dnn.
+  // Apply boundary conditions
+  // Note: these are defined using .setBoundary() in constructor
   mesh->communicate(kappa_n_unlimited);
   kappa_n_unlimited.clearParallelSlices();
-  kappa_n_unlimited.applyBoundary("neumann");
+  kappa_n_unlimited.applyBoundary();
 
   mesh->communicate(kappa_n_perp);
   kappa_n_perp.clearParallelSlices();
-  kappa_n_perp.applyBoundary("neumann");
+  kappa_n_perp.applyBoundary();
 
   mesh->communicate(kappa_n_par);
   kappa_n_par.clearParallelSlices();
-  kappa_n_par.applyBoundary("neumann");
+  kappa_n_par.applyBoundary();
 
   mesh->communicate(eta_n_unlimited);
   eta_n_unlimited.clearParallelSlices();
-  eta_n_unlimited.applyBoundary("neumann");
+  eta_n_unlimited.applyBoundary();
 
   mesh->communicate(eta_n_perp);
   eta_n_perp.clearParallelSlices();
-  eta_n_perp.applyBoundary("neumann");
+  eta_n_perp.applyBoundary();
 
   mesh->communicate(eta_n_par);
   eta_n_par.clearParallelSlices();
-  eta_n_par.applyBoundary("neumann");
+  eta_n_par.applyBoundary();
 
   // Neutral diffusion parameters have the same boundary condition as Dnn
   DnnNn = Dnn * Nnlim;
@@ -713,26 +747,31 @@ void NeutralMixed::finally(const Options& state) {
   DnnNn.applyBoundary();
   DnnNVn.applyBoundary();
 
-  if (sheath_ydown) {
-    for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
-      for (int jz = 0; jz < mesh->LocalNz; jz++) {
-        Dnn(r.ind, mesh->ystart - 1, jz) = -Dnn(r.ind, mesh->ystart, jz);
-        DnnNn(r.ind, mesh->ystart - 1, jz) = -DnnNn(r.ind, mesh->ystart, jz);
-        DnnPn(r.ind, mesh->ystart - 1, jz) = -DnnPn(r.ind, mesh->ystart, jz);
-        DnnNVn(r.ind, mesh->ystart - 1, jz) = -DnnNVn(r.ind, mesh->ystart, jz);
+  // Hardcode sheath BCs
+  // Override all diffusion coefficient BCs to be zero at targets if sheath is enabled.
+  // Heat fluxes through the sheath are handled by the neutral_boundary component.
+  auto zero_at_boundary = [&](Field3D& f) {
+    // ydown boundary
+    if (sheath_ydown) {
+      for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
+        for (int jz = 0; jz < mesh->LocalNz; jz++) {
+          f(r.ind, mesh->ystart - 1, jz) = -f(r.ind, mesh->ystart, jz);
+        }
       }
     }
-  }
+    // yup boundary
+    if (sheath_yup) {
+      for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
+        for (int jz = 0; jz < mesh->LocalNz; jz++) {
+          f(r.ind, mesh->yend + 1, jz) = -f(r.ind, mesh->yend, jz);
+        }
+      }
+    }
+  };
 
-  if (sheath_yup) {
-    for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
-      for (int jz = 0; jz < mesh->LocalNz; jz++) {
-        Dnn(r.ind, mesh->yend + 1, jz) = -Dnn(r.ind, mesh->yend, jz);
-        DnnNn(r.ind, mesh->yend + 1, jz) = -DnnNn(r.ind, mesh->yend, jz);
-        DnnPn(r.ind, mesh->yend + 1, jz) = -DnnPn(r.ind, mesh->yend, jz);
-        DnnNVn(r.ind, mesh->yend + 1, jz) = -DnnNVn(r.ind, mesh->yend, jz);
-      }
-    }
+  for (Field3D* f : {&Dnn, &DnnNn, &DnnPn, &DnnNVn, &kappa_n_perp, &kappa_n_par,
+                     &kappa_n_unlimited, &eta_n_perp, &eta_n_par, &eta_n_unlimited}) {
+    zero_at_boundary(*f);
   }
 
   // Sound speed appearing in Lax flux for advection terms
