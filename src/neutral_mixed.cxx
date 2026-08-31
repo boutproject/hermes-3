@@ -138,32 +138,33 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
 
   flux_limit_adv =
       options["flux_limit"]
-          .doc("Limit advective perpendicular fluxes to fraction of thermal speed. <=0 "
-               "means no limits applied.")
+          .doc("Limit advective perpendicular fluxes to fraction of thermal speed. <0 "
+               "means no limit applied.")
           .withDefault(0.5);
 
   flux_limit_cond_perp =
       options["flux_limit_cond_perp"]
           .doc("Limit conductive perpendicular fluxes to fraction of free-streaming. "
-               "Defaults to same as advection limiter.")
+               "Defaults to same as advection limiter. <0 means no limit applied.")
           .withDefault(flux_limit_adv);
 
   flux_limit_cond_par =
       options["flux_limit_cond_par"]
           .doc("Limit conductive parallel fluxes to fraction of free-streaming. Defaults "
-               "to same as conduction perpendicular limiter value.")
+               "to same as conduction perpendicular limiter value. <0 means no limit "
+               "applied.")
           .withDefault(flux_limit_cond_perp);
 
   flux_limit_visc_perp =
       options["flux_limit_visc_perp"]
           .doc("Limit viscous perpendicular fluxes to fraction of free-streaming. "
-               "Defaults to same as advection limiter value.")
+               "Defaults to same as advection limiter value. <0 means no limit applied.")
           .withDefault(flux_limit_adv);
 
   flux_limit_visc_par =
       options["flux_limit_visc_par"]
           .doc("Limit viscous parallel fluxes to fraction of free-streaming. Defaults to "
-               "same as viscous perpendicular limiter value.")
+               "same as viscous perpendicular limiter value. <0 means no limit applied.")
           .withDefault(flux_limit_visc_perp);
 
   combined_limiters = options["combined_limiters"]
@@ -602,11 +603,11 @@ void NeutralMixed::finally(const Options& state) {
   static auto blend_explicit_limit_with_fraction_limit =
       [](Field3D& fraction_limited_coefficient, BoutReal flux_limit_explicit,
          BoutReal flux_limit_fraction) {
-        if (flux_limit_explicit <= 0.0) {
+        if (flux_limit_explicit < 0.0) {
           return;
         }
 
-        if (flux_limit_fraction > 0.0) {
+        if (flux_limit_fraction >= 0.0) {
           fraction_limited_coefficient =
               fraction_limited_coefficient * flux_limit_explicit
               / (fraction_limited_coefficient + flux_limit_explicit);
@@ -622,7 +623,7 @@ void NeutralMixed::finally(const Options& state) {
   // Advection
   // Particle flux is (1/4)*vbar*Nn [Stangeby, under eq. 2.24, p.67];
   // the Nn factor enters at the operator through DnnNn.
-  if (flux_limit_adv > 0.0) {
+  if (flux_limit_adv >= 0.0) {
     Dmax = flux_limit_adv * (1. / 4) * vn_bar
            / regularise_gradient(Grad_perp(logPnlim), limiter_gradient_floor,
                                  limiter_gradient_ceiling);
@@ -635,7 +636,7 @@ void NeutralMixed::finally(const Options& state) {
     // Heat flux is (1/2)*vbar*Pn. The Nn is here, and the Tn comes from the
     // denominator being grad(Tn)/Tn rather than grad(Tn).
     // perpendicular
-    if (flux_limit_cond_perp > 0.0) {
+    if (flux_limit_cond_perp >= 0.0) {
       kappa_n_max_perp =
           flux_limit_cond_perp * (1. / 2) * vn_bar * Nnlim
           / regularise_gradient(Grad_perp(Tn) / Tnlim, limiter_gradient_floor,
@@ -645,7 +646,7 @@ void NeutralMixed::finally(const Options& state) {
                                              flux_limit_cond_perp);
 
     // parallel
-    if (flux_limit_cond_par > 0.0) {
+    if (flux_limit_cond_par >= 0.0) {
       kappa_n_max_par =
           flux_limit_cond_par * (1. / 2) * vn_bar * Nnlim
           / regularise_gradient(Grad_par(Tn) / Tnlim, limiter_gradient_floor,
@@ -658,7 +659,7 @@ void NeutralMixed::finally(const Options& state) {
     // Viscous momentum flux cannot exceed the pressure.
 
     // perpendicular
-    if (flux_limit_visc_perp > 0.0) {
+    if (flux_limit_visc_perp >= 0.0) {
       eta_n_max_perp = flux_limit_visc_perp * Pnlim
                        / regularise_gradient(Grad_perp(Vn), limiter_gradient_floor_eta,
                                              limiter_gradient_ceiling_eta);
@@ -667,7 +668,7 @@ void NeutralMixed::finally(const Options& state) {
                                              flux_limit_visc_perp);
 
     // parallel
-    if (flux_limit_visc_par > 0.0) {
+    if (flux_limit_visc_par >= 0.0) {
       eta_n_max_par = flux_limit_visc_par * Pnlim
                       / regularise_gradient(Grad_par(Vn), limiter_gradient_floor_eta,
                                             limiter_gradient_ceiling_eta);
@@ -681,6 +682,10 @@ void NeutralMixed::finally(const Options& state) {
   // Take maximum flux and apply it with a smoothly varying limiter with a user-set sharpness
   static auto apply_limiter = [](BoutReal unlimited, BoutReal max,
                                  BoutReal flux_limiter_sharpness) -> BoutReal {
+    // If limiter is zero, return zero to avoid later division by zero
+    if (max == 0.0) {
+      return 0.0;
+    }
     // If sharpness == 1, it reduces to cheaper form with no pow().
     if (flux_limiter_sharpness == 1.0) {
       return unlimited * max / (unlimited + max);
