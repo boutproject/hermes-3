@@ -279,6 +279,13 @@ auto runDnnTest(Options options, bool with_collisions = false) {
 
   options["units"] = {
       {"eV", 1.0}, {"inv_meters_cubed", 1.0}, {"seconds", 1.0}, {"meters", 1.0}};
+
+  // Effectively disable the gradient floors - this is necessary because
+  // those are tuned to realistic conditions and the tests only check limiter
+  // behaviour at the moment.
+  options["d"]["limiter_gradient_floor"] = 1e-10;
+  options["d"]["limiter_gradient_ceiling"] = 1e10;
+
   NeutralMixed component("d", options, &solver);
 
   // Make pressure gradient in X direction
@@ -301,12 +308,6 @@ auto runDnnTest(Options options, bool with_collisions = false) {
     state["species"]["d"]["collision_frequency"] = 1.0;
     state["species"]["d"]["collision_frequencies"]["d_d+_cx"] = 100.0;
   }
-
-  // Effectively disable the gradient floors - this is necessary because
-  // those are tuned to realistic conditions and the tests only check limiter
-  // behaviour at the moment.
-  state["species"]["d"]["limiter_gradient_floor"] = 1e-10;
-  state["species"]["d"]["limiter_gradient_ceiling"] = 1e10;
 
   component.finally(state);
 

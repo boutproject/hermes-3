@@ -125,7 +125,7 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
           .doc("Ceiling for |grad log Pn| in the D limiter "
                "denominator in SI [1/m]. Lower values can improve robustness "
                "in steep Pn gradients but may affect the answer. ")
-          .withDefault(100)
+          .withDefault(100.0)
       * meters;
 
   limiter_gradient_ceiling_eta =
