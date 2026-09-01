@@ -65,7 +65,7 @@ TEST(ComponentTest, GetThrowsNoValue) {
 
 TEST(ComponentTest, SetNaN) {
   Options option;
-  EXPECT_THROW(set(options, Field3D{BoutNaN}), BoutException);
+  EXPECT_THROW(set(option, Field3D{BoutNaN}), BoutException);
 }
 
 TEST(ComponentTest, GetThrowsIncompatibleValue) {
