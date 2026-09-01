@@ -153,7 +153,7 @@ success &= check_case(
 ################################################################################
 # Re-run with flipped direction. Should be mirror of base case
 
-flipped_upstream = base_downstream
+flipped_upstream = base_downstream.copy()
 flipped_upstream["Ve"] = -flipped_upstream["Ve"]
 flipped_upstream["Vi"] = -flipped_upstream["Vi"]
 
