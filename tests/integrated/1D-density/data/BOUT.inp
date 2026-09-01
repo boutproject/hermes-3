@@ -1,0 +1,57 @@
+# Parallel density conservation with and without the sound_speed component.
+#
+# Closed system: the domain is periodic in Y (ixseps1 = ixseps2 = nx), there
+# are no sources and no sheath. The total particle content sum(N * J*dx*dy*dz)
+# is therefore an exact invariant, and any drift is numerical.
+#
+# What it exercises: evolve_density calls
+#   FV::Div_par_mod<Limiter>(N, V, fastest_wave, flow_ylow)
+# (src/evolve_density.cxx:279) with fastest_wave taken from the state, i.e.
+# from the sound_speed component. Div_par_mod builds the Lax dissipation per
+# cell face as amax = BOUTMAX(w(j), w(j+1), ...). The Lax term is active even
+# at V = 0, because it only depends on the density difference across the face.
+#
+# If the sound_speed component is not present then fastest_wave is calculated
+# in evolve_density using the temperature. If T is not communicated then
+# fastest_wave can be inconsistent between processors (or the two sides
+# of a single processor in a periodic domain)
+
+nout = 5
+timestep = 1
+
+MXG = 0
+
+[mesh]
+
+nx = 1
+ny = 16
+nz = 1
+
+Ly = 1.0
+dy = Ly / ny
+J = 1  # Identity metric
+
+[mesh:paralleltransform]
+type = identity
+
+[hermes]
+components = h+, sound_speed
+
+Nnorm = 1e18
+Bnorm = 1
+Tnorm = 5
+
+normalise_metric = false # Normalise the input metric?
+
+[h+]  # Ions
+type = evolve_density, fixed_velocity, fixed_temperature
+charge = 1.0
+AA = 1.0
+
+temperature = 1.0 + H(y - pi)
+velocity = 0.2 + sin(y)/(0.1*sin(2.0*y) + 1)
+
+[Nh+]
+# Phase offset ensures that extrema are away from processor boundaries
+# so that there is a non-zero Lax flux at those boundaries
+function = 0.4*sin(2.0*y + 0.7) + 1
