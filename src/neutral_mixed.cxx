@@ -11,7 +11,9 @@
 #include <bout/globals.hxx>
 #include <bout/output.hxx>
 #include <bout/output_bout_types.hxx>
+#include <bout/region.hxx>
 #include <bout/solver.hxx>
+#include <bout/sys/range.hxx>
 
 #include "../include/component.hxx"
 #include "../include/div_ops.hxx"
@@ -201,6 +203,16 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
           .withDefault(density_source)
       / density_norm;
 
+  wall_pressure_factor = options["wall_pressure_factor"]
+                             .doc("Add pressure depending on wall_depth. Units of "
+                                  "inverse wall_depth. <0 = off.")
+                             .withDefault(-1.0);
+  if (wall_pressure_factor > 0.0) {
+    if (mesh->get(wall_depth, "wall_depth") != 0) {
+      throw BoutException("wall_pressure_factor needs a wall_depth field in the mesh");
+    }
+  }
+
   // Try to read the pressure source from the mesh
   // Units of Pascals per second
   pressure_source = 0.0;
@@ -368,8 +380,15 @@ void NeutralMixed::finally(const Options& state) {
   const Field3D Tnlim = softFloor(Tn, temperature_floor);
   // Pnlim used where positivity of Pn is required
   Pnlim = softFloor(Pn, pressure_floor);
-  logPnlim = log(Pnlim);
+
+  if (wall_pressure_factor > 0.0) {
+    // Add a pressure that increases into the wall
+    logPnlim = log(Pnlim * (1. + wall_pressure_factor * wall_depth));
+  } else {
+    logPnlim = log(Pnlim);
+  }
   logPnlim.applyBoundary();
+
   ///////////////////////////////////////////////////////
   // Calculate cross-field diffusion from collision frequency
   //
@@ -701,7 +720,7 @@ void NeutralMixed::finally(const Options& state) {
 
   // Scale time derivatives
   if (state.isSet("scale_timederivs")) {
-    Field3D scale_timederivs = get<Field3D>(state["scale_timederivs"]);
+    const Field3D scale_timederivs = get<Field3D>(state["scale_timederivs"]);
     ddt(Nn) *= scale_timederivs;
     ddt(Pn) *= scale_timederivs;
     ddt(NVn) *= scale_timederivs;
@@ -729,7 +748,7 @@ void NeutralMixed::finally(const Options& state) {
       NVn_s = 0.0;
     }
 
-    for (auto& i : Nn.getRegion("RGN_NOBNDRY")) {
+    for (const auto& i : Nn.getRegion("RGN_NOBNDRY")) {
       // Local average density.
       // The purpose is to turn on evolution when nearby cells contain significant
       // density.
@@ -743,7 +762,7 @@ void NeutralMixed::finally(const Options& state) {
   }
 
 #if CHECKLEVEL >= 1
-  for (auto& i : Nn.getRegion("RGN_NOBNDRY")) {
+  for (const auto& i : Nn.getRegion("RGN_NOBNDRY")) {
     if (!std::isfinite(ddt(Nn)[i])) {
       throw BoutException("ddt(N{}) non-finite at {}\n", name, i);
     }
@@ -1109,7 +1128,7 @@ void NeutralMixed::precon([[maybe_unused]] const Options& state, BoutReal gamma)
     ddt(NVn) -= gamma * FV::Div_a_Grad_perp(DnnNVn / Pnlim, ddt(Pn));
   }
 
-  for (auto& i : Nn.getRegion("RGN_NOBNDRY")) {
+  for (const auto& i : Nn.getRegion("RGN_NOBNDRY")) {
     if (!std::isfinite(ddt(Nn)[i])) {
       throw BoutException("Precon ddt(N{}) non-finite at {}\n", name, i);
     }
