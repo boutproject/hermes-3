@@ -110,4 +110,3 @@ RegisterComponent<SheathBoundarySimple> registercomponentsheathboundarysimple;
 }
 
 #endif // SHEATH_BOUNDARY_SIMPLE_H
-B
