@@ -370,6 +370,7 @@ if(HERMES_TESTS)
     endif()
   endfunction()
 
+  hermes_add_integrated_test(1D-density CONFLICTS BOUT_ENABLE_METRIC_3D)
   hermes_add_integrated_test(1D-fluid CONFLICTS BOUT_ENABLE_METRIC_3D)
   hermes_add_integrated_test(1D-recycling CONFLICTS BOUT_ENABLE_METRIC_3D)
   hermes_add_integrated_test(1D-recycling-dthe CONFLICTS BOUT_ENABLE_METRIC_3D)
