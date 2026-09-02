@@ -88,16 +88,17 @@ jobs:
         run: |
           # ID of this machine
           uv run --no-project asv machine --yes
+          base_sha="$(git show -s --format='%H' ${{ github.event.pull_request.base.label }})"
 
           echo ""
           echo ""
-          echo "Baseline:  ${{ github.event.pull_request.base.sha }} (${{ github.event.pull_request.base.label }})"
+          echo "Baseline:  ${base_sha} (${{ github.event.pull_request.base.label }})"
           echo "Contender: ${GITHUB_SHA} (merge of $PR_HEAD_LABEL into ${{ github.event.pull_request.base.label }})"
           echo ""
 
           # Run benchmarks for current commit against base
           ASV_OPTIONS="--split --show-stderr --factor $ASV_FACTOR"
-          uv run --no-project asv continuous $ASV_OPTIONS ${{ github.event.pull_request.base.sha }} ${GITHUB_SHA} \
+          uv run --no-project asv continuous $ASV_OPTIONS ${base_sha} ${GITHUB_SHA} \
               | sed "/Traceback \|failed *$\|PERFORMANCE DECREASED/ s/^/::error::/" \
               | tee benchmarks.log
 
