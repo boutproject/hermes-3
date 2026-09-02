@@ -1,9 +1,6 @@
-#!/usr/bin/env python3
-
-from boutdata import collect
-import numpy as np
-
 import matplotlib.pyplot as plt
+import numpy as np
+from boutdata import collect
 
 fig, axs = plt.subplots(2, 2)
 axs = axs.flatten()

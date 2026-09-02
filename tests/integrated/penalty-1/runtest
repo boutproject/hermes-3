@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
 
-import numpy as np
 import pickle
 
-from boutdata import collect
-from boututils.run_wrapper import shell, launch
-
 import matplotlib.pyplot as plt
+import numpy as np
+from boutdata import collect
+from boututils.run_wrapper import launch, shell
 
 # Link to the executable
 shell("ln -s ../../../hermes-3 hermes-3")
@@ -39,9 +38,8 @@ if recalculate:
             s, out = launch(f"./hermes-3 mesh:ny={ny} -d {path}", nproc=2, pipe=True)
 
             # Save output to log file
-            f = open(f"run.log.{ny}.{path}", "w")
-            f.write(out)
-            f.close()
+            with open(f"run.log.{ny}.{path}", "w") as f:
+                f.write(out)
 
             dy = collect("dy", path=path, info=False).squeeze()
             position = 0.5 * dy
