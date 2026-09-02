@@ -20,6 +20,7 @@ using namespace bout::globals;
 
 namespace {
 
+/// Construct normalized units and component options for SoundSpeed tests.
 Options makeSoundSpeedOptions(BoutReal Bnorm = 1.0, BoutReal Nnorm = 1.0,
                               BoutReal Lnorm = 1.0, BoutReal tnorm = 1.0,
                               BoutReal eVnorm = 1.0, bool alfven_wave = false,
@@ -40,6 +41,7 @@ Options makeSoundSpeedOptions(BoutReal Bnorm = 1.0, BoutReal Nnorm = 1.0,
   return options;
 }
 
+/// Create a Field3D that varies only in Y, with constant X and Z planes.
 Field3D makeYField(const std::vector<BoutReal>& yvalues) {
   EXPECT_EQ(static_cast<int>(yvalues.size()), mesh->LocalNy);
 
@@ -55,6 +57,11 @@ Field3D makeYField(const std::vector<BoutReal>& yvalues) {
   return result;
 }
 
+/// Calculate the normalization factor used for the Alfven-speed comparison.
+///
+/// Takes `Tesla`, `inv_meters_cubed`, `meters`, and `seconds` from `options["units"]`
+/// and returns the factor that multiplies `Bxy / sqrt(total_density)` in
+/// `SoundSpeed::transform_impl()`.
 BoutReal getBetaNorm(const Options& options) {
   const auto& units = options["units"];
   return get<BoutReal>(units["Tesla"])
@@ -62,6 +69,10 @@ BoutReal getBetaNorm(const Options& options) {
          / (get<BoutReal>(units["meters"]) / get<BoutReal>(units["seconds"]));
 }
 
+/// FakeMesh variant whose Y communication wraps edge values into guard cells.
+///
+/// This lets the periodic-boundary test verify the post-communication state of
+/// `sound_speed` and `fastest_wave` without needing a full distributed mesh.
 class PeriodicCommFakeMesh : public FakeMesh {
 public:
   PeriodicCommFakeMesh(int nx, int ny, int nz, MpiWrapper& mpi_in)
@@ -98,6 +109,7 @@ private:
   std::vector<Field3D*> pending_fields;
 };
 
+/// Fixture with a simple metric and periodic Y communication.
 class PeriodicCommSoundSpeedTest : public ::testing::Test {
 public:
   PeriodicCommSoundSpeedTest()
@@ -149,7 +161,9 @@ private:
 // Reuse the "standard" fixture for FakeMesh
 using SoundSpeedTest = FakeMeshFixture;
 
-TEST_F(SoundSpeedTest, OneSpeciesSetsSoundSpeedAndFastestWaveInBoundaryCells) {
+/// Baseline case: with one species, both outputs reduce to that species'
+/// collective sound speed in the interior region (`RGN_NOBNDRY`).
+TEST_F(SoundSpeedTest, OneSpeciesSetsSoundSpeedAndFastestWaveInInteriorCells) {
   Options options = makeSoundSpeedOptions();
   SoundSpeed component("test", options, nullptr);
 
@@ -169,6 +183,8 @@ TEST_F(SoundSpeedTest, OneSpeciesSetsSoundSpeedAndFastestWaveInBoundaryCells) {
       IsFieldEqual(get<Field3D>(options["fastest_wave"]), expected, "RGN_NOBNDRY"));
 }
 
+/// With multiple species and no temperature-driven species maximum, both outputs
+/// use the collective sound speed sqrt(sum(pressure) / sum(density * AA)).
 TEST_F(SoundSpeedTest, TwoSpeciesCollectiveSoundSpeed) {
   Options options = makeSoundSpeedOptions();
   SoundSpeed component("test", options, nullptr);
@@ -193,6 +209,8 @@ TEST_F(SoundSpeedTest, TwoSpeciesCollectiveSoundSpeed) {
       IsFieldEqual(get<Field3D>(options["fastest_wave"]), expected, "RGN_NOBNDRY"));
 }
 
+/// `sound_speed` stays equal to the collective value, while `fastest_wave`
+/// tracks the pointwise maximum of the collective and per-species thermal speeds.
 TEST_F(SoundSpeedTest, FastestWaveIsMaximumOfSpeciesAndCollectiveSoundSpeeds) {
   Options options = makeSoundSpeedOptions();
   SoundSpeed component("test", options, nullptr);
@@ -200,6 +218,9 @@ TEST_F(SoundSpeedTest, FastestWaveIsMaximumOfSpeciesAndCollectiveSoundSpeeds) {
   options["species"]["h+"]["density"] = 1.0;
   options["species"]["h+"]["pressure"] = 8.0;
   options["species"]["h+"]["AA"] = 1.0;
+  // Vary temperature while keeping pressure fixed so only the per-species thermal
+  // speed changes; this makes `fastest_wave` exceed the collective sound speed
+  // in selected interior cells.
   options["species"]["h+"]["temperature"] = makeYField({1.0, 1.0, 4.0, 9.0, 9.0});
 
   options["species"]["he+"]["density"] = 1.0;
@@ -215,6 +236,8 @@ TEST_F(SoundSpeedTest, FastestWaveIsMaximumOfSpeciesAndCollectiveSoundSpeeds) {
                            makeYField({0.0, 2.0, 2.0, 3.0, 0.0}), "RGN_NOBNDRY"));
 }
 
+/// When `alfven_wave` is enabled but the Alfven speed is below the collective
+/// sound speed, `fastest_wave` should remain equal to `sound_speed`.
 TEST_F(SoundSpeedTest, AlfvenWaveUsesSoundSpeedAtHighBeta) {
   Options options = makeSoundSpeedOptions(1.0, 1e38, 1e19, 1.0, 1.0, true);
   SoundSpeed component("test", options, nullptr);
@@ -237,6 +260,8 @@ TEST_F(SoundSpeedTest, AlfvenWaveUsesSoundSpeedAtHighBeta) {
       IsFieldEqual(get<Field3D>(options["fastest_wave"]), sound_speed, "RGN_NOBNDRY"));
 }
 
+/// When the Alfven speed exceeds the collective sound speed, `fastest_wave`
+/// should switch to the Alfven branch while `sound_speed` stays unchanged.
 TEST_F(SoundSpeedTest, AlfvenWaveUsesAlfvenSpeedAtLowBeta) {
   Options options = makeSoundSpeedOptions(1.0, 1.0, 1.0, 1.0, 1.0, true);
   SoundSpeed component("test", options, nullptr);
@@ -259,6 +284,9 @@ TEST_F(SoundSpeedTest, AlfvenWaveUsesAlfvenSpeedAtLowBeta) {
       IsFieldEqual(get<Field3D>(options["fastest_wave"]), alfven_speed, "RGN_NOBNDRY"));
 }
 
+/// Disabling `electron_dynamics` skips the electron species when building the
+/// per-species maximum for `fastest_wave`, but still includes electron pressure
+/// in the collective `sound_speed`.
 TEST_F(SoundSpeedTest, ElectronDynamicsFalseExcludesElectronSpeciesSoundSpeed) {
   Options options = makeSoundSpeedOptions(1.0, 1.0, 1.0, 1.0, 1.0, false, false);
   SoundSpeed component("test", options, nullptr);
@@ -280,6 +308,8 @@ TEST_F(SoundSpeedTest, ElectronDynamicsFalseExcludesElectronSpeciesSoundSpeed) {
   ASSERT_TRUE(IsFieldEqual(get<Field3D>(options["fastest_wave"]), 3.0, "RGN_NOBNDRY"));
 }
 
+/// `fastest_wave_factor` is applied only to the final `fastest_wave` output and
+/// must not change the separately reported `sound_speed`.
 TEST_F(SoundSpeedTest, FastestWaveFactorScalesFastestWaveOnly) {
   Options options = makeSoundSpeedOptions(1.0, 1.0, 1.0, 1.0, 1.0, false, true, 1.7);
   SoundSpeed component("test", options, nullptr);
@@ -295,6 +325,8 @@ TEST_F(SoundSpeedTest, FastestWaveFactorScalesFastestWaveOnly) {
   ASSERT_TRUE(IsFieldEqual(get<Field3D>(options["fastest_wave"]), 3.4, "RGN_NOBNDRY"));
 }
 
+/// On a non-periodic mesh, Y boundary values should be overwritten by boundary
+/// handling rather than preserving the supplied edge-cell inputs.
 TEST_F(SoundSpeedTest, NonPeriodicBoundaryCellsAreSet) {
   auto* fake_mesh = dynamic_cast<FakeMesh*>(mesh);
   ASSERT_NE(fake_mesh, nullptr);
@@ -303,6 +335,8 @@ TEST_F(SoundSpeedTest, NonPeriodicBoundaryCellsAreSet) {
   Options options = makeSoundSpeedOptions();
   SoundSpeed component("test", options, nullptr);
 
+  // Seed distinct edge values so the test can tell whether boundary handling
+  // overwrites them with the expected interior-adjacent values.
   const Field3D input = makeYField({25.0, 4.0, 9.0, 16.0, 36.0});
 
   options["species"]["i"]["density"] = 1.0;
@@ -326,6 +360,8 @@ TEST_F(SoundSpeedTest, NonPeriodicBoundaryCellsAreSet) {
   }
 }
 
+/// On a periodic mesh, Y guard cells should be populated by communication from
+/// the opposite interior edge after `sound_speed` and `fastest_wave` are computed.
 TEST_F(PeriodicCommSoundSpeedTest, PeriodicGuardCellsAreCommunicated) {
   Options options = makeSoundSpeedOptions();
   SoundSpeed component("test", options, nullptr);
