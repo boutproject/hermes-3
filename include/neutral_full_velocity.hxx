@@ -9,10 +9,12 @@
 
 #include <bout/vector2d.hxx>
 
+#if not BOUT_USE_METRIC_3D
+
 /// Neutral gas model, evolving three components of velocity as axisymmetric fields
 ///
 /// Evolves neutral density, pressure and velocity as Field2D quantities
-struct NeutralFullVelocity : public Component {
+struct NeutralFullVelocity : public NamedComponent<NeutralFullVelocity> {
   NeutralFullVelocity(const std::string& name, Options& options, Solver* solver);
 
   /// Use the final simulation state to update internal state
@@ -22,11 +24,12 @@ struct NeutralFullVelocity : public Component {
   /// Add extra fields for output, or set attributes e.g docstrings
   void outputVars(Options& state) override;
 
+  static constexpr auto type = "neutral_full_velocity";
+
 private:
   Coordinates* coord; // Coordinate system
 
-  std::string name; // Name of this species
-  BoutReal AA;      // Atomic mass
+  BoutReal AA; // Atomic mass
 
   BoutReal density_floor; ///< Floor when dividing by density
   BoutReal temperature_floor;
@@ -97,8 +100,13 @@ private:
 };
 
 namespace {
-RegisterComponent<NeutralFullVelocity>
-    registersolverneutralfullvelocity("neutral_full_velocity");
+RegisterComponent<NeutralFullVelocity> registersolverneutralfullvelocity;
 }
-
+#else  // not BOUT_USE_METRIC_3D
+namespace {
+RegisterUnavailableComponent
+    registersolverneutralfullvelocity("neutral_full_velocity",
+                                      "This not (yet) compatible with 3D metrics");
+}
+#endif // not BOUT_USE_METRIC_3D
 #endif // NEUTRAL_FULL_VELOCITY_H

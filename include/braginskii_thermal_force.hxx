@@ -26,9 +26,9 @@
 ///   - electron_ion  : bool   Include electron-ion collisions?
 ///   - ion_ion       : bool   Include ion-ion elastic collisions?
 ///
-struct BraginskiiThermalForce : public Component {
+struct BraginskiiThermalForce : public NamedComponent<BraginskiiThermalForce> {
   BraginskiiThermalForce(const std::string& name, Options& alloptions, Solver*)
-      : Component(Permissions()) {
+      : NamedComponent(name, Permissions()) {
     Options& options = alloptions[name];
     this->electron_ion = options["electron_ion"]
                              .doc("Include electron-ion collisions?")
@@ -68,12 +68,14 @@ struct BraginskiiThermalForce : public Component {
     }
   }
 
+  static constexpr auto type = "braginskii_thermal_force";
+
 private:
   bool electron_ion;                   ///< Include electron-ion collisions?
   bool ion_ion;                        ///< Include ion-ion elastic collisions?
   bool override_ion_mass_restrictions; ///< Ignore default mass restrictions when
                                        ///< calculating thermal force between ions?
-  bool first_time{true}; ///< True the first time transform() is called
+  bool first_time{true};               ///< True the first time transform() is called
 
   /// Inputs
   /// - species
@@ -98,8 +100,7 @@ private:
 };
 
 namespace {
-RegisterComponent<BraginskiiThermalForce>
-    registercomponentbraginskiithermalforce("braginskii_thermal_force");
+RegisterComponent<BraginskiiThermalForce> registercomponentbraginskiithermalforce;
 }
 
 #endif // BRAGINSKII_THERMAL_FORCE_H

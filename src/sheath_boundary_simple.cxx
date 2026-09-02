@@ -57,21 +57,21 @@ BoutReal limitFree(BoutReal fm, BoutReal fc, BoutReal mode) {
 } // namespace
 
 SheathBoundarySimple::SheathBoundarySimple(std::string name, Options& alloptions, Solver*)
-    : Component({
-          readIfSet("species:e:{e_whole_domain}"),
-          writeBoundary("species:e:{e_boundary}"),
-          readWrite("species:e:energy_source"),
-          readWrite("species:e:energy_flow_ylow"),
-          writeBoundaryIfSet("species:e:{e_optional}"),
-          writeBoundaryReadInteriorIfSet("species:e:pressure"),
-          readIfSet("species:{all_species}:charge"),
-          readOnly("species:{ions}:AA"),
-          readWrite("species:{ions}:energy_source"),
-          readWrite("species:{ions}:energy_flow_ylow"),
-          writeBoundary("species:{ions}:{ion_boundary}"),
-          writeBoundaryReadInteriorIfSet("species:{ions}:pressure"),
-          writeBoundaryIfSet("species:{ions}:{ion_optional}"),
-      }) {
+    : NamedComponent(name, {
+                               readIfSet("species:e:{e_whole_domain}"),
+                               writeBoundary("species:e:{e_boundary}"),
+                               readWrite("species:e:energy_source"),
+                               readWrite("species:e:energy_flow_ylow"),
+                               writeBoundaryIfSet("species:e:{e_optional}"),
+                               writeBoundaryReadInteriorIfSet("species:e:pressure"),
+                               readIfSet("species:{all_species}:charge"),
+                               readOnly("species:{ions}:AA"),
+                               readWrite("species:{ions}:energy_source"),
+                               readWrite("species:{ions}:energy_flow_ylow"),
+                               writeBoundary("species:{ions}:{ion_boundary}"),
+                               writeBoundaryReadInteriorIfSet("species:{ions}:pressure"),
+                               writeBoundaryIfSet("species:{ions}:{ion_optional}"),
+                           }) {
 
   Options& options = alloptions[name];
 
@@ -166,7 +166,8 @@ void SheathBoundarySimple::transform_impl(GuardedOptions& state) {
 
   // Need electron properties
   // Not const because boundary conditions will be set
-  Field3D Ne = toFieldAligned(floor(GET_NOBOUNDARY(Field3D, electrons["density"]), 0.0));
+  Field3D Ne =
+      toFieldAligned(Field3D(floor(GET_NOBOUNDARY(Field3D, electrons["density"]), 0.0)));
   Field3D Te = toFieldAligned(GET_NOBOUNDARY(Field3D, electrons["temperature"]));
   Field3D Pe = IS_SET_NOBOUNDARY(electrons["pressure"])
                    ? toFieldAligned(getNoBoundary<Field3D>(electrons["pressure"]))
@@ -287,6 +288,7 @@ void SheathBoundarySimple::transform_impl(GuardedOptions& state) {
     }
 
     phi.allocate();
+    phi.setDirectionY(YDirectionType::Aligned);
 
     // ion_sum now contains the ion current, sum Z_i n_i C_i over all ion species
     // at mesh->ystart and mesh->yend indices
@@ -540,7 +542,8 @@ void SheathBoundarySimple::transform_impl(GuardedOptions& state) {
     const BoutReal Mi = get<BoutReal>(species["AA"]);
 
     // Density and temperature boundary conditions will be imposed (free)
-    Field3D Ni = toFieldAligned(floor(getNoBoundary<Field3D>(species["density"]), 0.0));
+    Field3D Ni =
+        toFieldAligned(Field3D(floor(getNoBoundary<Field3D>(species["density"]), 0.0)));
     Field3D Ti = toFieldAligned(getNoBoundary<Field3D>(species["temperature"]));
     Field3D Pi = species.isSet("pressure")
                      ? toFieldAligned(getNoBoundary<Field3D>(species["pressure"]))

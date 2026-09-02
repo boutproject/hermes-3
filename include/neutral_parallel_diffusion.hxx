@@ -31,12 +31,12 @@
 ///  - E<name>_Dpar   Energy source due to diffusion
 ///  - F<name>_Dpar   Momentum source due to diffusion
 ///
-struct NeutralParallelDiffusion : public Component {
+struct NeutralParallelDiffusion : public NamedComponent<NeutralParallelDiffusion> {
   NeutralParallelDiffusion(std::string name, Options& alloptions, Solver*)
-      : Component({readIfSet("species:{all_species}:charge"),
-                   readIfSet("species:{neutrals}:{optional_inputs}"),
-                   readOnly("species:{neutrals}:{inputs}"),
-                   readWrite("species:{neutrals}:{outputs}")}) {
+      : NamedComponent(name, {readIfSet("species:{all_species}:charge"),
+                              readIfSet("species:{neutrals}:{optional_inputs}"),
+                              readOnly("species:{neutrals}:{inputs}"),
+                              readWrite("species:{neutrals}:{outputs}")}) {
     auto& options = alloptions[name];
     dneut = options["dneut"]
                 .doc("cross-field diffusion projection (B  / Bpol)^2")
@@ -76,6 +76,8 @@ struct NeutralParallelDiffusion : public Component {
 
   /// Save variables to the output
   void outputVars(Options& state) override;
+
+  static constexpr auto type = "neutral_parallel_diffusion";
 
 private:
   BoutReal dneut; ///< cross-field diffusion projection (B  / Bpol)^2
@@ -124,8 +126,7 @@ private:
 };
 
 namespace {
-RegisterComponent<NeutralParallelDiffusion>
-    register_component_neutral_parallel_diffusion("neutral_parallel_diffusion");
+RegisterComponent<NeutralParallelDiffusion> register_component_neutral_parallel_diffusion;
 }
 
 #endif // NEUTRAL_PARALLEL_DIFFUSION_H

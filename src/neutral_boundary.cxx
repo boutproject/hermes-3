@@ -7,11 +7,10 @@ using bout::globals::mesh;
 
 NeutralBoundary::NeutralBoundary(std::string name, Options& alloptions,
                                  [[maybe_unused]] Solver* solver)
-    : Component({writeBoundary("species:{name}:{outputs}"),
-                 writeBoundaryIfSet("species:{name}:{conditional_outputs}"),
-                 readWrite("species:{name}:energy_source"),
-                 readOnly("species:{name}:AA")}),
-      name(name) {
+    : NamedComponent(name, {writeBoundary("species:{name}:{outputs}"),
+                            writeBoundaryIfSet("species:{name}:{conditional_outputs}"),
+                            readWrite("species:{name}:energy_source"),
+                            readOnly("species:{name}:AA")}) {
 
   auto& options = alloptions[name];
   const Options& units = alloptions["units"];
@@ -64,7 +63,7 @@ NeutralBoundary::NeutralBoundary(std::string name, Options& alloptions,
 }
 
 void NeutralBoundary::transform_impl(GuardedOptions& state) {
-  auto species = state["species"][name];
+  auto species = state["species"][objectName()];
   const BoutReal AA = get<BoutReal>(species["AA"]);
 
   Field3D Nn = toFieldAligned(GET_NOBOUNDARY(Field3D, species["density"]));
@@ -356,6 +355,7 @@ void NeutralBoundary::outputVars(Options& state) {
   auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
   auto Tnorm = get<BoutReal>(state["Tnorm"]);
   BoutReal Pnorm = SI::qe * Tnorm * Nnorm; // Pressure normalisation
+  const std::string& name = objectName();
 
   if (diagnose) {
 

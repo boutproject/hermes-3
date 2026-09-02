@@ -15,7 +15,7 @@
 ///   - It is recommended to use SheathBoundary rather than SheathBoundarySimple;
 ///     this is here for comparison to that more complete model.
 ///
-struct SheathBoundarySimple : public Component {
+struct SheathBoundarySimple : public NamedComponent<SheathBoundarySimple> {
   /// # Input options
   /// - <name>  e.g. "sheath_boundary_simple"
   ///   - lower_y                  Boundary on lower y?
@@ -30,6 +30,8 @@ struct SheathBoundarySimple : public Component {
   SheathBoundarySimple(std::string name, Options& options, Solver*);
 
   void outputVars(Options& state) override;
+
+  static constexpr auto type = "sheath_boundary_simple";
 
 private:
   BoutReal Ge;        // Secondary electron emission coefficient
@@ -104,8 +106,8 @@ private:
 };
 
 namespace {
-RegisterComponent<SheathBoundarySimple>
-    registercomponentsheathboundarysimple("sheath_boundary_simple");
+RegisterComponent<SheathBoundarySimple> registercomponentsheathboundarysimple;
 }
 
 #endif // SHEATH_BOUNDARY_SIMPLE_H
+B
