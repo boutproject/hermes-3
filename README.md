@@ -50,49 +50,7 @@ LLNL-CODE-845139
 
 ## Installing and testing
 
-Only CMake is supported for building Hermes-3 and running the tests.
-During configuration
-[BOUT++](https://github.com/boutproject/BOUT-dev/) will be
-automatically downloaded as a submodule, together with some
-dependencies. [NetCDF](https://www.unidata.ucar.edu/software/netcdf/)
-and [FFTW](https://www.fftw.org/) are assumed to be installed already;
-optional dependencies include
-[SUNDIALS](https://computing.llnl.gov/projects/sundials) and
-[PETSc](https://petsc.org). The recommended way to build Hermes-3
-links to the [SUNDIALS](https://computing.llnl.gov/projects/sundials)
-library.
-
-1) Configure with cmake, downloading and linking to SUNDIALS:
-
-    $ cmake . -B build -DBOUT_DOWNLOAD_SUNDIALS=ON
-
-2) Build, compiling Hermes-3 and all dependencies:
-
-    $ cmake --build build
-
-3) Run the unit and integrated tests to check that everything is working:
-
-    $ cd build
-    $ ctest
-
-Note that the integrated tests require MPI, and so may not run on the
-head nodes of many computing clusters.
-
-The CMake configuration can be customised: See the [BOUT++
-documentation](https://bout-dev.readthedocs.io/en/latest/user_docs/installing.html#cmake)
-for examples of using `cmake` arguments, or edit the compile options
-interactively before building:
-
-    $ ccmake . -B build
-
-If you have already installed BOUT++ and want to use that rather than
-configure and build BOUT++ again, set `HERMES_BUILD_BOUT` to `OFF` and pass
-CMake the path to the BOUT++ `build` directory e.g.
-
-    $ cmake . -B build -DHERMES_BUILD_BOUT=OFF -DCMAKE_PREFIX_PATH=$HOME/BOUT-dev/build
-
-Note that Hermes-3 currently requires a specific version of BOUT++:
-https://github.com/boutproject/BOUT-dev/commit/7152948fbde505f6708d5ca4a9c21e5828d1e0a1
+Please refer to the [documentation](https://hermes3.readthedocs.io/en/latest/installation.html) for installation instructions.
 
 ## Examples
 
