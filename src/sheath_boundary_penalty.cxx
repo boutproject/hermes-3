@@ -170,33 +170,33 @@ Field3D SheathBoundaryPenalty::calculateIonSurfaceMomentumPenalty(
 
 SheathBoundaryPenalty::SheathBoundaryPenalty(std::string name, Options& alloptions,
                                              Solver*)
-    : Component({
-          readIfSet("fields:phi"),
-          readIfSet("species:{all_species}:charge"),
-          readIfSet("species:{all_species}:AA"),
-          // Electrons
-          readIfSet("species:e:density", Regions::Interior),
-          readIfSet("species:e:temperature", Regions::Interior),
-          readIfSet("species:e:pressure", Regions::Interior),
-          readIfSet("species:e:velocity", Regions::Interior),
-          readIfSet("species:e:momentum", Regions::Interior),
-          readWrite("species:e:density_source"),
-          readWrite("species:e:momentum_source"),
-          readWrite("species:e:energy_source"),
-          // Ions
-          readIfSet("species:{ions}:adiabatic"),
-          readIfSet("species:{ions}:density", Regions::Interior),
-          readIfSet("species:{ions}:temperature", Regions::Interior),
-          readIfSet("species:{ions}:pressure", Regions::Interior),
-          readIfSet("species:{ions}:velocity", Regions::Interior),
-          readIfSet("species:{ions}:momentum", Regions::Interior),
-          readWrite("species:{ions}:density_source"),
-          readWrite("species:{ions}:momentum_source"),
-          readWrite("species:{ions}:energy_source"),
-          writeFinal("species:{ions}:density_penalty"),
-          writeFinal("species:{ions}:momentum_penalty"),
-          writeFinal("species:{ions}:energy_penalty"),
-      }) {
+    : NamedComponent(name, {
+                               readIfSet("fields:phi"),
+                               readIfSet("species:{all_species}:charge"),
+                               readIfSet("species:{all_species}:AA"),
+                               // Electrons
+                               readIfSet("species:e:density", Regions::Interior),
+                               readIfSet("species:e:temperature", Regions::Interior),
+                               readIfSet("species:e:pressure", Regions::Interior),
+                               readIfSet("species:e:velocity", Regions::Interior),
+                               readIfSet("species:e:momentum", Regions::Interior),
+                               readWrite("species:e:density_source"),
+                               readWrite("species:e:momentum_source"),
+                               readWrite("species:e:energy_source"),
+                               // Ions
+                               readIfSet("species:{ions}:adiabatic"),
+                               readIfSet("species:{ions}:density", Regions::Interior),
+                               readIfSet("species:{ions}:temperature", Regions::Interior),
+                               readIfSet("species:{ions}:pressure", Regions::Interior),
+                               readIfSet("species:{ions}:velocity", Regions::Interior),
+                               readIfSet("species:{ions}:momentum", Regions::Interior),
+                               readWrite("species:{ions}:density_source"),
+                               readWrite("species:{ions}:momentum_source"),
+                               readWrite("species:{ions}:energy_source"),
+                               writeFinal("species:{ions}:density_penalty"),
+                               writeFinal("species:{ions}:momentum_penalty"),
+                               writeFinal("species:{ions}:energy_penalty"),
+                           }) {
   Options& options = alloptions[name];
 
   diagnose =

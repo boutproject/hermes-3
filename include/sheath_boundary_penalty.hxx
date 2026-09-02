@@ -3,8 +3,14 @@
 #define SHEATH_BOUNDARY_PENALTY_H
 
 #include "component.hxx"
+#include "guarded_options.hxx"
+
+#include <bout/bout_types.hxx>
+#include <bout/field3d.hxx>
 #include <bout/mesh.hxx>
 #include <bout/region.hxx>
+
+#include <string>
 
 /// Penalty method for imposing sheath boundary conditions over an
 /// arbitrary shaped wall that is immersed inside the structured mesh.
@@ -13,7 +19,7 @@
 ///  - This should be applied AFTER sheath boundaries have been applied
 ///    An error should be raised if this is done in the wrong order.
 ///
-struct SheathBoundaryPenalty : public Component {
+struct SheathBoundaryPenalty : public NamedComponent<SheathBoundaryPenalty> {
   struct PenaltyMaskData {
     Field3D mask;
     Region<Ind3D> region;
@@ -81,6 +87,8 @@ struct SheathBoundaryPenalty : public Component {
       BoutReal penalty_timescale, BoutReal density_floor = 1e-5,
       BoutReal mask_threshold = 1e-5);
 
+  static constexpr auto type = "sheath_boundary_penalty";
+
 private:
   /// Mask function and region in the original mesh coordinates
   PenaltyMaskData penalty_data;
@@ -131,8 +139,7 @@ private:
 };
 
 namespace {
-RegisterComponent<SheathBoundaryPenalty>
-    registercomponentsheathboundarypenalty("sheath_boundary_penalty");
+RegisterComponent<SheathBoundaryPenalty> registercomponentsheathboundarypenalty;
 }
 
 #endif // SHEATH_BOUNDARY_PENALTY_H
