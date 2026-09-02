@@ -63,11 +63,6 @@ TEST(ComponentTest, GetThrowsNoValue) {
   ASSERT_TRUE(option == 42);
 }
 
-TEST(ComponentTest, SetNaN) {
-  Options option;
-  EXPECT_THROW(set(option, Field3D{BoutNaN}), BoutException);
-}
-
 TEST(ComponentTest, GetThrowsIncompatibleValue) {
   Options option;
 
@@ -271,6 +266,11 @@ TEST_P(ConcreteComponentTests, CheckComponentTypeName) {
   auto component =
       ComponentFactory::getInstance().create(typname, objname, options, &solver);
   EXPECT_EQ(component->typeName(), typname);
+}
+
+TEST_P(ConcreteComponentTests, SetNaN) {
+  Options option;
+  EXPECT_THROW(set(option, Field3D{BoutNaN, bout::globals::mesh}), BoutException);
 }
 
 INSTANTIATE_TEST_SUITE_P(
