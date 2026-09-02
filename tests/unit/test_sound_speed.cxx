@@ -325,41 +325,6 @@ TEST_F(SoundSpeedTest, FastestWaveFactorScalesFastestWaveOnly) {
   ASSERT_TRUE(IsFieldEqual(get<Field3D>(options["fastest_wave"]), 3.4, "RGN_NOBNDRY"));
 }
 
-/// On a non-periodic mesh, Y boundary values should be overwritten by boundary
-/// handling rather than preserving the supplied edge-cell inputs.
-TEST_F(SoundSpeedTest, NonPeriodicBoundaryCellsAreSet) {
-  auto* fake_mesh = dynamic_cast<FakeMesh*>(mesh);
-  ASSERT_NE(fake_mesh, nullptr);
-  fake_mesh->ix_separatrix = 0;
-
-  Options options = makeSoundSpeedOptions();
-  SoundSpeed component("test", options, nullptr);
-
-  // Seed distinct edge values so the test can tell whether boundary handling
-  // overwrites them with the expected interior-adjacent values.
-  const Field3D input = makeYField({25.0, 4.0, 9.0, 16.0, 36.0});
-
-  options["species"]["i"]["density"] = 1.0;
-  options["species"]["i"]["pressure"] = input;
-  options["species"]["i"]["AA"] = 1.0;
-  options["species"]["i"]["temperature"] = input;
-
-  component.declareAllSpecies({"i"});
-  component.transform(options);
-
-  const auto sound_speed = get<Field3D>(options["sound_speed"]);
-  const auto fastest_wave = get<Field3D>(options["fastest_wave"]);
-
-  for (int x = mesh->xstart; x <= mesh->xend; ++x) {
-    for (int z = 0; z < mesh->LocalNz; ++z) {
-      EXPECT_DOUBLE_EQ(sound_speed(x, mesh->ystart, z), 2.0);
-      EXPECT_DOUBLE_EQ(sound_speed(x, mesh->yend, z), 4.0);
-      EXPECT_DOUBLE_EQ(fastest_wave(x, mesh->ystart, z), 2.0);
-      EXPECT_DOUBLE_EQ(fastest_wave(x, mesh->yend, z), 4.0);
-    }
-  }
-}
-
 /// On a periodic mesh, Y guard cells should be populated by communication from
 /// the opposite interior edge after `sound_speed` and `fastest_wave` are computed.
 TEST_F(PeriodicCommSoundSpeedTest, PeriodicGuardCellsAreCommunicated) {

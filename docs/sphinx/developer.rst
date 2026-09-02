@@ -1282,6 +1282,29 @@ This test is a reproduction of C++ code, and therefore there is no golden answer
 This test plots results and can be used to help with developing the recycling component. There
 is a `plot` flag near the beginning of the file.
 
+1D-density (conservation)
+~~~~~~~~~~~~~~
+
+``tests/integrated/1D-density``
+
+This conservation test checks that total particle content of the simulation is conserved on
+a periodic 1D domain while the density is evolved and the temperature and velocity are fixed.
+The test runs four cases: constant temperature and a Heaviside temperature jump, each with and
+without the ``sound_speed`` component, and repeats each case on 1 and 2 MPI ranks.
+
+The script checks three things:
+
+1. total particle content is conserved in this closed periodic system;
+2. the density profile actually changes in time, so the advection path is active;
+3. the final density field matches between the 1-rank and 2-rank runs.
+
+The Heaviside temperature jump is included to stress fluxes that use numerical Lax dissipation
+(see section `Numerics`_), because the wave speed entering that term must be communicated
+consistently across processor boundaries. The constant-temperature cases provide a baseline that
+still checks conservation and MPI decomposition independence. In this testcase the geometry factors
+are constant, so the script checks ``sum(N)`` rather than explicitly evaluating
+:math:`\sum N J\,dx\,dy\,dz`.
+
 1D fluid (MMS)
 ~~~~~~~~~~~~~~
 

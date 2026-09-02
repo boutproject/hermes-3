@@ -1,20 +1,29 @@
 # Parallel density conservation with and without the sound_speed component.
 #
-# Closed system: the domain is periodic in Y (ixseps1 = ixseps2 = nx), there
-# are no sources and no sheath. The total particle content sum(N * J*dx*dy*dz)
-# is therefore an exact invariant, and any drift is numerical.
+# The runtest script runs four variants of this case:
+#   - constant temperature, without sound_speed
+#   - discontinuous temperature, without sound_speed
+#   - constant temperature, with sound_speed
+#   - discontinuous temperature, with sound_speed
+# and compares 1-processor and 2-processor results.
+#
+# Closed system: the domain is periodic in Y, there are no sources, and there
+# is no sheath. Total particle content sum(N * J * dx * dy * dz) is therefore
+# an exact invariant, and any drift is numerical. In this testcase J and the
+# cell sizes are constant, so the script can check the equivalent sum(N).
 #
 # What it exercises: evolve_density calls
 #   FV::Div_par_mod<Limiter>(N, V, fastest_wave, flow_ylow)
-# (src/evolve_density.cxx:279) with fastest_wave taken from the state, i.e.
-# from the sound_speed component. Div_par_mod builds the Lax dissipation per
-# cell face as amax = BOUTMAX(w(j), w(j+1), ...). The Lax term is active even
-# at V = 0, because it only depends on the density difference across the face.
+# with fastest_wave taken from the state, i.e. from the sound_speed component
+# when it is enabled. Div_par_mod builds the Lax dissipation per cell face as
+# amax = BOUTMAX(w(j), w(j+1), ...), so mismatched wave speeds across a
+# processor boundary can change the density update while still conserving the
+# global particle sum.
 #
-# If the sound_speed component is not present then fastest_wave is calculated
-# in evolve_density using the temperature. If T is not communicated then
-# fastest_wave can be inconsistent between processors (or the two sides
-# of a single processor in a periodic domain)
+# The Heaviside jump in temperature is included to stress the communicated
+# fastest_wave used by the Lax term. The constant-temperature cases provide a
+# baseline that still checks closed-system conservation and MPI decomposition
+# consistency.
 
 nout = 5
 timestep = 1
