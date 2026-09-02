@@ -63,7 +63,12 @@ void SoundSpeed::transform_impl(GuardedOptions& state) {
   }
 
   fastest_wave.getMesh()->communicate(fastest_wave, sound_speed);
+  for (const auto& i : fastest_wave.getRegion("RGN_ALL")) {
+    fastest_wave[i] *= fastest_wave_factor;
+  }
+  fastest_wave.resetRegion();
+  sound_speed.resetRegion();
 
   set(state["sound_speed"], sound_speed);
-  set(state["fastest_wave"], fastest_wave * fastest_wave_factor);
+  set(state["fastest_wave"], fastest_wave);
 }
