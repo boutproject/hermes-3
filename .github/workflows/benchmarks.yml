@@ -88,7 +88,7 @@ jobs:
         run: |
           # ID of this machine
           uv run --no-project asv machine --yes
-          base_sha="$(git show -s --format='%H' ${{ github.event.pull_request.base.label }})"
+          base_sha="$(git show -s --format='%H' origin/${{ github.base_ref }})"
 
           echo ""
           echo ""
