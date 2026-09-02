@@ -38,6 +38,19 @@ inline T softFloor(const T& var, BoutReal f, const std::string& rgn = "RGN_ALL")
 
   BOUT_FOR(d, var.getRegion(rgn)) { result[d] = softFloor(var[d], f); }
 
+  if constexpr (std::is_base_of_v<Field3DParallel, T>) {
+    if (var.isFci()) {
+      for (size_t i = 0; i < var.numberParallelSlices(); ++i) {
+        result.yup(i) =
+            softFloor(var.yup(i), f,
+                      fmt::format(FMT_STRING("RGN_YPAR_{:+d}"), static_cast<int>(i + 1)));
+        result.ydown(i) = softFloor(
+            var.ydown(i), f,
+            fmt::format(FMT_STRING("RGN_YPAR_{:+d}"), -static_cast<int>(i + 1)));
+      }
+    }
+  }
+
   return result;
 }
 
@@ -52,6 +65,19 @@ inline T clamp(const T& var, BoutReal lo, BoutReal hi,
       result[d] = lo;
     } else if (result[d] > hi) {
       result[d] = hi;
+    }
+  }
+
+  if constexpr (std::is_base_of_v<Field3DParallel, T>) {
+    if (var.isFci()) {
+      for (size_t i = 0; i < var.numberParallelSlices(); ++i) {
+        result.yup(i) =
+            clamp(var.yup(i), lo, hi,
+                  fmt::format(FMT_STRING("RGN_YPAR_{:+d}"), static_cast<int>(i + 1)));
+        result.ydown(i) =
+            clamp(var.ydown(i), lo, hi,
+                  fmt::format(FMT_STRING("RGN_YPAR_{:+d}"), -static_cast<int>(i + 1)));
+      }
     }
   }
 
@@ -179,3 +205,31 @@ inline bool collisionSpeciesMatch(std::string input, const std::string& species1
   // Check if the first species matches species1 and the second species matches species2
   return (species1_found && species2_found && reaction_found);
 }
+
+/// Helper class used for compile-time concatenation of string
+/// literals. Taken from https://stackoverflow.com/a/62823211
+template <const std::string_view&... Strs>
+struct join {
+  // Join all strings into a single std::array of chars
+  static constexpr auto impl() noexcept {
+    constexpr std::size_t len = (Strs.size() + ... + 0);
+    std::array<char, len + 1> arr{};
+    size_t i = 0;
+    auto append = [&i, &arr](const auto& s) mutable {
+      for (auto c : s) {
+        arr[i++] = c;
+      }
+    };
+    (append(Strs), ...);
+    arr[len] = 0;
+    return arr;
+  }
+  // Give the joined string static storage
+  static constexpr auto arr = impl();
+  // View as std::string_view
+  static constexpr std::string_view value{arr.data(), arr.size() - 1};
+};
+
+// Helper to get the value out
+template <const std::string_view&... Strs>
+static constexpr auto join_v = join<Strs...>::value;

@@ -16,6 +16,7 @@ MXG = 0  # No guard cells in X
 nx = 1
 ny = 200   # Resolution along field-line
 nz = 1
+J = 1
 
 length = 100          # Length of the domain in meters
 length_xpt = length   # Length from midplane to X-point [m]
@@ -40,13 +41,13 @@ normalise_metric = true   # Normalise the input metric?
 
 Nnorm = 1e19   # [m^-3]
 Bnorm = 2.5    # [T]
-Tnorm = 100    # [eV] 
+Tnorm = 100    # [eV]
 
 [solver]
 mxstep = 10000   # maximum step for solver before failure.
 
 [sheath_boundary]
-lower_y = false  
+lower_y = false
 upper_y = true
 
 [binormal_stpm]

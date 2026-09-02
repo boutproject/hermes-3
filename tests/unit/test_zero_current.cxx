@@ -21,13 +21,6 @@ using namespace bout::globals;
 // Reuse the "standard" fixture for FakeMesh
 using ZeroCurrentTest = FakeMeshFixture;
 
-TEST_F(ZeroCurrentTest, CreateComponent) {
-  Options options;
-
-  options["test"]["charge"] = 1.0; // Must be a charged species
-  ZeroCurrent component("test", options, nullptr);
-}
-
 TEST_F(ZeroCurrentTest, ElectronFlowVelocity) {
   Options options;
 

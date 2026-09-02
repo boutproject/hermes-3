@@ -41,14 +41,15 @@
 ///
 ///  *  Shurtz, Nicolai and Busquet 2000: https://doi.org/10.1063/1.1289512
 ///
-struct SNBConduction : public Component {
+struct SNBConduction : public NamedComponent<SNBConduction> {
 
   /// Inputs
   ///  - <name>
   ///    - diagnose   Saves Div_Q_SH and Div_Q_SNB
   SNBConduction(std::string name, Options& alloptions, Solver*)
-      : Component({readOnly("species:e:density"), readOnly("species:e:temperature"),
-                   readWrite("species:e:energy_source")}),
+      : NamedComponent(name,
+                       {readOnly("species:e:density"), readOnly("species:e:temperature"),
+                        readWrite("species:e:energy_source")}),
         snb(alloptions[name]) {
     auto& options = alloptions[name];
 
@@ -59,16 +60,19 @@ struct SNBConduction : public Component {
     Omega_ci = 1. / get<BoutReal>(units["seconds"]);
 
     diagnose = options["diagnose"]
-      .doc("Save additional output diagnostics")
-      .withDefault<bool>(false);
+                   .doc("Save additional output diagnostics")
+                   .withDefault<bool>(false);
   }
 
   void outputVars(Options& state) override;
+
+  static constexpr auto type = "snb_conduction";
+
 private:
   bout::HeatFluxSNB snb;
 
   BoutReal rho_s0, Tnorm, Nnorm, Omega_ci; ///< Normalisations for units
-  Field3D Div_Q_SH, Div_Q_SNB; ///< Divergence of heat fluxes
+  Field3D Div_Q_SH, Div_Q_SNB;             ///< Divergence of heat fluxes
 
   bool diagnose; ///< Output additional diagnostics?
 
@@ -86,8 +90,7 @@ private:
 };
 
 namespace {
-RegisterComponent<SNBConduction> registercomponentsnbconduction("snb_conduction");
+RegisterComponent<SNBConduction> registercomponentsnbconduction;
 }
 
 #endif // SNB_CONDUCTION_H
-

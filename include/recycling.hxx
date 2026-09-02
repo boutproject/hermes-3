@@ -9,7 +9,7 @@
 /// Since this must be calculated after boundary fluxes (e.g. sheath),
 /// it is included as a top-level component
 ///
-struct Recycling : public Component {
+struct Recycling : public NamedComponent<Recycling> {
 
   /// Inputs
   ///
@@ -23,6 +23,8 @@ struct Recycling : public Component {
   Recycling(std::string name, Options& alloptions, Solver*);
 
   void outputVars(Options& state) override;
+
+  static constexpr auto type = "recycling";
 
 private:
   struct RecycleChannel {
@@ -114,7 +116,7 @@ private:
 };
 
 namespace {
-RegisterComponent<Recycling> registercomponentrecycling("recycling");
+RegisterComponent<Recycling> registercomponentrecycling;
 }
 
 #endif // RECYCLING_H

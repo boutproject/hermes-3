@@ -2,18 +2,8 @@
 
 # Python script to run and analyse MMS test
 
-from __future__ import division
-from __future__ import print_function
+from boututils.run_wrapper import launch_safe
 
-try:
-    from builtins import str
-except:
-    pass
-
-from boututils.run_wrapper import shell, launch_safe, getmpirun
-from boutdata.collect import collect
-
-from numpy import sqrt, max, abs, mean, array, log, concatenate
 from pathlib import Path
 
 # Remove old test results and symlink executable
@@ -29,11 +19,8 @@ for file in [
         print(f"Removing old file data/{file}")
         path.unlink()
 
-if not Path("hermes-3").is_file():
-    shell("ln -s ../../../hermes-3 hermes-3")
-
 # Run and exit if unsuccessful
-s, out = launch_safe("./hermes-3 -d data", nproc=1, pipe=True)
+s, out = launch_safe("../../../hermes-3 -d data", nproc=1, pipe=True)
 
 if s != 0:
     print(" => Test failed: ")
