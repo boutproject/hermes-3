@@ -56,12 +56,12 @@ jobs:
             coverage: ON
             name: "3D metrics"
             bout_configure_options: "-DPACKAGE_TESTS=OFF -DBOUT_ENABLE_METRIC_3D=ON"
-            hermes_configure_options: "-DHERMES_ERROR_ON_WARNINGS=ON"
+            hermes_configure_options: "-DHERMES_ERROR_ON_WARNINGS=ON -DBOUT_ENABLE_METRIC_3D=ON"
           - cmake_build_type: Debug
             test_type: integration
             name: "3D metrics"
             bout_configure_options: "-DPACKAGE_TESTS=OFF -DBOUT_ENABLE_METRIC_3D=ON"
-            hermes_configure_options: "-DHERMES_ERROR_ON_WARNINGS=ON"
+            hermes_configure_options: "-DHERMES_ERROR_ON_WARNINGS=ON -DBOUT_ENABLE_METRIC_3D=ON"
             coverage: OFF
 
     steps:
@@ -114,9 +114,6 @@ jobs:
           echo "$BOUT_CONFIGURE_OPTIONS" >> bout_build_info.txt
           echo "${{ hashFiles('./external/BOUT-dev/.build_sundials_for_ci.sh') }}" >> bout_build_info.txt
           cat bout_build_info.txt
-          echo "Hash for these configs: ${{ hashFiles('bout_build_info.txt') }}"
-          echo "Hash for build script: ${{ hashFiles('.build_bout_for_ci.sh') }}"
-          echo "Combined hash: ${{ hashFiles('bout_build_info.txt', '.build_bout_for_ci.sh') }}"
 
       - name: Cache BOUT++ build
         uses: actions/cache@v6
