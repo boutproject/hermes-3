@@ -110,11 +110,14 @@ jobs:
       - name: Construct BOUT++ cache key
         id: bout-cache-key
         run: |
-          echo "$(git submodule status external/BOUT-dev)" > bout_build_info.txt
+          git submodule status external/BOUT-dev > bout_build_info.txt
           echo "Build type: $BUILD_TYPE" >> bout_build_info.txt
           echo "$BOUT_CONFIGURE_OPTIONS" >> bout_build_info.txt
           echo "${{ hashFiles('./external/BOUT-dev/.build_sundials_for_ci.sh') }}" >> bout_build_info.txt
           echo "bout_key=${{ hashFiles('bout_build_info.txt') }}" >> "$GITHUB_OUTPUT"
+          cat bout_build_info.txt
+          echo "Github output:"
+          cat $GITHUB_OUTPUT
 
       - name: Cache BOUT++ build
         uses: actions/cache@v6
@@ -132,7 +135,7 @@ jobs:
           echo ~/.local/bin >> $GITHUB_PATH
 
       - name: Build
-        run: cmake . -B build -DCMAKE_BUILD_TYPE=$BUILD_TYPE $HERMES_CONFIGURE_OPTIONS &&
+        run: cmake . -B build -DCMAKE_BUILD_TYPE=$BUILD_TYPE $HERMES_CONFIGURE_OPTIONS -DHERMES_BUILD_BOUT=OFF  &&
              cmake --build build -j4
 
       - name: Run tests
