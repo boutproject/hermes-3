@@ -23,7 +23,7 @@ jobs:
       MPIRUN: mpiexec -np
       LD_LIBRARY_PATH: /home/runner/local/lib:$LD_LIBRARY_PATH
       BOUT_CONFIGURE_OPTIONS: ${{ matrix.build_type.bout_configure_options }}
-      HERMES_CONFIGURE_OPTIONS: ${{ matrix.build_type.hermes_configure_options }} -DHERMES_COVERAGE=${{ matrix.build_type.coverage }} -DBOUT++_ROOT=/home/runner/local_bout
+      HERMES_CONFIGURE_OPTIONS: ${{ matrix.build_type.hermes_configure_options }} -DHERMES_COVERAGE=${{ matrix.build_type.coverage }} -Dbout++_ROOT=/home/runner/local_bout -DHERMES_BUILD_BOUT=OFF
       BUILD_TYPE: ${{ matrix.build_type.cmake_build_type }}
       TEST_TYPE: ${{ matrix.build_type.test_type }}
       PETSC_DIR: /usr/lib/petscdir/petsc3.12/x86_64-linux-gnu-real
@@ -108,22 +108,21 @@ jobs:
         run: ./external/BOUT-dev/.build_sundials_for_ci.sh
 
       - name: Construct BOUT++ cache key
-        id: bout-cache-key
         run: |
           git submodule status external/BOUT-dev > bout_build_info.txt
           echo "Build type: $BUILD_TYPE" >> bout_build_info.txt
           echo "$BOUT_CONFIGURE_OPTIONS" >> bout_build_info.txt
           echo "${{ hashFiles('./external/BOUT-dev/.build_sundials_for_ci.sh') }}" >> bout_build_info.txt
-          echo "bout_key=${{ hashFiles('bout_build_info.txt') }}" >> "$GITHUB_OUTPUT"
           cat bout_build_info.txt
-          echo "Github output:"
-          cat $GITHUB_OUTPUT
+          echo "Hash for these configs: ${{ hashFiles('bout_build_info.txt') }}"
+          echo "Hash for build script: ${{ hashFiles('.build_bout_for_ci.sh') }}"
+          echo "Combined hash: ${{ hashFiles('bout_build_info.txt', '.build_bout_for_ci.sh') }}"
 
       - name: Cache BOUT++ build
         uses: actions/cache@v6
         with:
           path: /home/runner/local_bout
-          key: bout-${{ matrix.config.os }}-${{ steps.bout-cache-key.outputs.bout_key }}
+          key: bout-${{ matrix.config.os }}-${{ hashFiles('bout_build_info.txt', '.build_bout_for_ci.sh') }}
 
       - name: Build BOUT++
         run: ./.build_bout_for_ci.sh
@@ -135,7 +134,7 @@ jobs:
           echo ~/.local/bin >> $GITHUB_PATH
 
       - name: Build
-        run: cmake . -B build -DCMAKE_BUILD_TYPE=$BUILD_TYPE $HERMES_CONFIGURE_OPTIONS -DHERMES_BUILD_BOUT=OFF  &&
+        run: cmake . -B build -DCMAKE_BUILD_TYPE=$BUILD_TYPE $HERMES_CONFIGURE_OPTIONS &&
              cmake --build build -j4
 
       - name: Run tests
