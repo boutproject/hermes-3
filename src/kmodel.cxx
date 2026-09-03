@@ -65,7 +65,7 @@ Kmodel::Kmodel(std::string name, Options& alloptions, Solver* solver)
 
   advection = options["advection"]
                   .doc("Turn on advection of k via parallel ion flow?")
-                  .withDefault<bool>(true);
+                  .withDefault<bool>(false);
 
   substitutePermissions(
       "input", {"AA", "charge", "density", "pressure", "temperature", "velocity"});
@@ -186,14 +186,14 @@ void Kmodel::transform_impl(GuardedOptions& state) {
 
 void Kmodel::finally(const Options& state) {
 
-  ddt(k) = 0.0;
+  ddt(k) = S_k - P_k;
 
-  ddt(k) += S_k - P_k;
+  Field3D klim = floor(k, 1e-10);
 
   if (diffusion) {
     flux_k_x = 0.0;
     flux_k_y = 0.0;
-    ddt(k) += Div_a_Grad_perp_upwind_flows(D_k, k, flux_k_x, flux_k_y);
+    ddt(k) += Div_a_Grad_perp_upwind_flows(D_k, klim, flux_k_x, flux_k_y);
   }
 
   if (advection) {
@@ -235,7 +235,7 @@ void Kmodel::finally(const Options& state) {
       Field3DParallel V_hat = N * V / Ni_hat;
 
       Field3D dummy;
-      ddt(k) -= FV::Div_par_mod<hermes::Limiter>(V_hat, k, fastest_wave, dummy);
+      ddt(k) -= FV::Div_par_mod<hermes::Limiter>(V_hat, klim, fastest_wave, dummy);
     }
   }
 }
@@ -249,14 +249,14 @@ void Kmodel::outputVars(Options& state) {
   auto Lnorm = get<BoutReal>(state["rho_s0"]);
 
   state["k"].setAttributes({{"time_dimension", "t"},
-                            {"units", "C m^-3"},
-                            {"conversion", SI::qe * Nnorm},
+                            {"units", "m^2 s^-2"},
+                            {"conversion", Nnorm * Nnorm * Omega_ci * Omega_ci},
                             {"long_name", "Turbulent kinetic energy"},
                             {"source", "kmodel"}});
 
   set_with_attrs(state["D_k"], D_k,
                  {{"time_dimension", "t"},
-                  {"units", "m^2 / s"},
+                  {"units", "m^2 s^-1"},
                   {"conversion", Lnorm * Lnorm * Omega_ci},
                   {"standard_name", "Turbulent diffusion coefficient"},
                   {"long_name", "Turbulent diffusion coefficient"},
