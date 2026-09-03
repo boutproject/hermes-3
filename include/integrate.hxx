@@ -75,7 +75,7 @@ auto cellAverage(Function func, const RegionType& region) {
     result.allocate();
 
     // Get the coordinate Jacobian
-    auto J = result.getCoordinates()->J;
+    auto J = result.getCoordinates()->J();
     BOUT_FOR(i, region) {
       // Offset indices
       auto yp = i.yp();

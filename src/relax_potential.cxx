@@ -230,9 +230,9 @@ RelaxPotential::RelaxPotential(std::string name, Options& alloptions, Solver* so
   Curlb_B.y *= SQ(Lnorm);
   Curlb_B.z *= SQ(Lnorm);
 
-  Curlb_B *= 2. / coord->Bxy;
+  Curlb_B *= 2. / coord->Bxy();
 
-  Bsq = SQ(coord->Bxy);
+  Bsq = SQ(coord->Bxy());
 
   diagnose =
       options["diagnose"].doc("Output additional diagnostics?").withDefault<bool>(false);
@@ -740,7 +740,8 @@ void RelaxPotential::finally(const Options& state) {
       // Div_par(jpar) = B * Grad_par(jpar / B)
       // Using the approximation for small delta-B/B
       // b dot Grad(jpar) = Grad_par(jpar) + [jpar, Apar]
-      ddt(Vort) += coord->Bxy * bracket(jpar / coord->Bxy, Apar_flutter, BRACKET_ARAKAWA);
+      ddt(Vort) +=
+          coord->Bxy() * bracket(jpar / coord->Bxy(), Apar_flutter, BRACKET_ARAKAWA);
     }
   }
 
@@ -766,7 +767,7 @@ void RelaxPotential::finally(const Options& state) {
   if (hyper_z > 0) {
     // Form of hyper-viscosity to suppress zig-zags in Z
     auto* coord = Vort.getCoordinates();
-    ddt(Vort) -= hyper_z * SQ(SQ(coord->dz)) * D4DZ4(Vort);
+    ddt(Vort) -= hyper_z * SQ(SQ(coord->dz())) * D4DZ4(Vort);
   }
 
   if (phi_sheath_dissipation) {

@@ -47,7 +47,7 @@ DiamagneticDrift::DiamagneticDrift(std::string name, Options& alloptions,
   Curlb_B.y *= SQ(Lnorm);
   Curlb_B.z *= SQ(Lnorm);
 
-  Curlb_B *= 2. / mesh->getCoordinates()->Bxy;
+  Curlb_B *= 2. / mesh->getCoordinates()->Bxy();
 
   // Set drift to zero through sheath boundaries.
   // Flux through those cell faces should be set by sheath.

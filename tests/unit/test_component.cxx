@@ -268,6 +268,11 @@ TEST_P(ConcreteComponentTests, CheckComponentTypeName) {
   EXPECT_EQ(component->typeName(), typname);
 }
 
+TEST_P(ConcreteComponentTests, SetNaN) {
+  Options option;
+  EXPECT_THROW(set(option, Field3D{BoutNaN, bout::globals::mesh}), BoutException);
+}
+
 INSTANTIATE_TEST_SUITE_P(
     AllRegisteredComponents, ConcreteComponentTests,
     testing::ValuesIn(ComponentFactory::getInstance().listAvailable()));

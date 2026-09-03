@@ -106,7 +106,7 @@ TEST_F(RelaxPotentialTest, CollisionalFriction) {
   RelaxPotential component("test", options, &solver);
   component.declareAllSpecies(SpeciesInformation({"i"}));
   Coordinates* coords = mesh->getCoordinates();
-  coords->Bxy = 1.0;
+  coords->setBxy(1.0);
 
   Options state{
       {"time", 0.1},

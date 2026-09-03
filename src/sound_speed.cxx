@@ -25,7 +25,8 @@ void SoundSpeed::transform_impl(GuardedOptions& state) {
       auto AA = get<BoutReal>(species["AA"]); // Atomic mass number
 
       if (species.isSet("density")) {
-        total_density += GET_NOBOUNDARY(Field3D, species["density"]) * get<BoutReal>(species["AA"]);
+        total_density +=
+            GET_NOBOUNDARY(Field3D, species["density"]) * get<BoutReal>(species["AA"]);
       }
 
       if (species.isSet("temperature")) {
@@ -45,13 +46,13 @@ void SoundSpeed::transform_impl(GuardedOptions& state) {
   }
 
   if (alfven_wave) {
-    auto *coord = fastest_wave.getCoordinates();
+    auto* coord = fastest_wave.getCoordinates();
     for (auto& i : fastest_wave.getRegion("RGN_NOBNDRY")) {
-      BoutReal alfven_speed = beta_norm * coord->Bxy[i] / sqrt(total_density[i]);
+      BoutReal alfven_speed = beta_norm * coord->Bxy()[i] / sqrt(total_density[i]);
       fastest_wave[i] = BOUTMAX(fastest_wave[i], alfven_speed);
     }
   }
 
   set(state["sound_speed"], sound_speed);
-  set(state["fastest_wave"], fastest_wave*fastest_wave_factor);
+  set(state["fastest_wave"], fastest_wave * fastest_wave_factor);
 }

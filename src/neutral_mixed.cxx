@@ -148,8 +148,7 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
                            .doc("Include neutral gas heat conduction?")
                            .withDefault<bool>(true);
 
-  conduction_method =
-      options["conduction_method"].withDefault<std::string>(conduction_method);
+  conduction_method = options["conduction_method"].withDefault(conduction_method);
 
   collisionality_override =
       options["collisionality_override"]

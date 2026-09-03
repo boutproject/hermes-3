@@ -86,7 +86,7 @@ private:
   bool output_ddt; ///< Save time derivatives?
   bool diagnose;   ///< Save additional diagnostics?
 
-  std::string conduction_method{"orginal"};
+  bout::ConductionMethod conduction_method{bout::ConductionMethod::Original};
 
   // Flow diagnostics
   Field3D pf_adv_perp_xlow, pf_adv_perp_ylow, pf_adv_par_ylow;

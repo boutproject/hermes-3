@@ -26,7 +26,7 @@ Field3D calculate_Lpar() {
   BoutReal offset =
       0; // Offset to ensure ylow domain boundary starts at 0. This is needed
          // because the integration starts at the first cell center, not the boundary.
-  auto dy = coord->dy;               // Get the poloidal cell width
+  auto dy = coord->dy();             // Get the poloidal cell width
   lpar(0, 0, 0) = 0.5 * dy(0, 0, 0); // Initialize lpar at the first cell center
   // The parallel length at the first cell center is half of the cell width.
   // The local trapezoidal integration below only knows the correct starting
@@ -214,9 +214,7 @@ FieldlineGeometry::FieldlineGeometry(std::string name, Options& options, Solver*
 
   // Bxy is no longer consistent with the Jacobian.
   // Set equal to NaN, to prevent anyone from using it.
-  BOUT_FOR(i, coord->Bxy.getRegion("RGN_ALL")) {
-    coord->Bxy[i] = std::numeric_limits<BoutReal>::quiet_NaN();
-  }
+  coord->setBxy(BoutNaN);
 
   // Calculate the Jacobian over the whole local field, including the guard
   // cells. Setting only the interior (ystart..yend) leaves the guard cells
@@ -225,18 +223,16 @@ FieldlineGeometry::FieldlineGeometry(std::string name, Options& options, Solver*
   // inter-processor boundaries degrades the solution (and roughly doubles the
   // spread between different y-decompositions). effective_magnetic_field_strength
   // is defined over RGN_ALL, so the guard cells get a consistent value here.
-  BOUT_FOR(i, effective_magnetic_field_strength.getRegion("RGN_ALL")) {
-    // N.b.
-    // The Jacobian has units of [m / radian T], which is why we need an extra factor of Lnorm.
-    coord->J[i] = 1 / effective_magnetic_field_strength[i] / Lnorm;
-  }
-  // Fill the inter-processor guard cells with the neighbour's Jacobian so the
-  // metric is continuous across rank boundaries in a parallel y-decomposition.
-  ASSERT2(not coord->J.isFci());
-  mesh->communicate(coord->J);
+  // N.b.
+  // The Jacobian has units of [m / radian T], which is why we need an extra factor of Lnorm.
+#if BOUT_USE_METRIC_3D
+  coord->setJ(Field3D{1 / effective_magnetic_field_strength / Lnorm});
+#else
+  coord->setJ(DC(Field3D{1 / effective_magnetic_field_strength / Lnorm}));
+#endif
 
   // Parallel length of cell
-  Field3D dlpar = Field3D(coord->dy) / Lnorm;
+  Field3D dlpar = Field3D(coord->dy()) / Lnorm;
   // Width of flux tube in the radial direction
   flux_tube_width = lambda_int * flux_expansion;
   // Length of the cell in the poloidal direction
