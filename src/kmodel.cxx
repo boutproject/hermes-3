@@ -230,7 +230,7 @@ void Kmodel::finally(const Options& state) {
       }
 
       Field3D N = get<Field3D>(species["density"]);
-      Field3D V = get<Field3D>(species["temperature"]);
+      Field3D V = get<Field3D>(species["velocity"]);
 
       Field3DParallel V_hat = N * V / Ni_hat;
 
