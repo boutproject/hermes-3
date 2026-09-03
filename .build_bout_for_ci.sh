@@ -8,8 +8,8 @@ if [[ ! -d $HOME/local_bout/include/bout ]]; then
     echo "****************************************"
     mkdir -p external/BOUT-dev/build/ && cd external/BOUT-dev/build/
     cmake -DCMAKE_INSTALL_PREFIX="$HOME/local_bout" \
-          -DCMAKE_BUILD_TYPE=$BUILD_TYPE
-          $BOUT_CONFIGURE_OPTIONS
+          -DCMAKE_BUILD_TYPE=$BUILD_TYPE \
+          $BOUT_CONFIGURE_OPTIONS \
           ..
     make && make install
     echo "****************************************"
