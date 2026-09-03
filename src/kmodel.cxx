@@ -81,6 +81,7 @@ void Kmodel::transform_impl(GuardedOptions& state) {
 
   Bxy = coord->Bxy;
 
+  k = floor(k, 1e-12);
   k.applyBoundary();
   mesh->communicate(k);
   k.applyParallelBoundary();
@@ -138,8 +139,6 @@ void Kmodel::transform_impl(GuardedOptions& state) {
 
   Field3D inv_sq_c_s = 1.0 / (c_s * c_s);
 
-  Field3D klim = floor(k, 1e-10);
-
   gradPgradB_X = floor((DDX(Pi_hat) / Pi_hat) * (DDX(Bxy) / Bxy) / coord->g_11, 0.0);
 
   if (k.isFci()) {
@@ -169,11 +168,11 @@ void Kmodel::transform_impl(GuardedOptions& state) {
     gamma[i] = c_s[i] * sqrt(std::max(grads, 0.0));
   }
 
-  S_k = gamma * klim;
+  S_k = gamma * k;
 
-  D_k = R_major * klim / floor(c_s, 1e-10);
+  D_k = R_major * k / floor(c_s, 1e-10);
 
-  D_k = softFloor(D_k, 1e-5);
+  D_k = softFloor(D_k, 1e-8);
 
   D_k.applyBoundary("neumann");
   mesh->communicate(D_k);
@@ -181,19 +180,17 @@ void Kmodel::transform_impl(GuardedOptions& state) {
 
   alpha = R_major * L_par * gamma * inv_sq_c_s / (lambda_q * lambda_q);
 
-  P_k = alpha * klim * klim;
+  P_k = alpha * k * k;
 }
 
 void Kmodel::finally(const Options& state) {
 
   ddt(k) = S_k - P_k;
 
-  Field3D klim = floor(k, 1e-10);
-
   if (diffusion) {
     flux_k_x = 0.0;
     flux_k_y = 0.0;
-    ddt(k) += Div_a_Grad_perp_upwind_flows(D_k, klim, flux_k_x, flux_k_y);
+    ddt(k) += Div_a_Grad_perp_upwind_flows(D_k, k, flux_k_x, flux_k_y);
   }
 
   if (advection) {
@@ -235,7 +232,7 @@ void Kmodel::finally(const Options& state) {
       Field3DParallel V_hat = N * V / Ni_hat;
 
       Field3D dummy;
-      ddt(k) -= FV::Div_par_mod<hermes::Limiter>(V_hat, klim, fastest_wave, dummy);
+      ddt(k) -= FV::Div_par_mod<hermes::Limiter>(V_hat, k, fastest_wave, dummy);
     }
   }
 }
@@ -261,4 +258,28 @@ void Kmodel::outputVars(Options& state) {
                   {"standard_name", "Turbulent diffusion coefficient"},
                   {"long_name", "Turbulent diffusion coefficient"},
                   {"source", "kmodel"}});
+
+  if (diagnose) {
+    set_with_attrs(state["Ni_hat"], Ni_hat,
+                   {{"time_dimension", "t"},
+                    {"units", "m^-3"},
+                    {"conversion", Nnorm},
+                    {"standard_name", "Average ion density"},
+                    {"long_name", "Average ion density"},
+                    {"source", "kmodel"}});
+
+    set_with_attrs(state["S_k"], S_k,
+                   {{"time_dimension", "t"},
+                    {"units", "m^2 s^-3"},
+                    {"conversion", Nnorm * Nnorm * Omega_ci * Omega_ci * Omega_ci},
+                    {"standard_name", "Generation of turbulent energy"},
+                    {"source", "kmodel"}});
+
+    set_with_attrs(state["P_k"], P_k,
+                   {{"time_dimension", "t"},
+                    {"units", "m^2 s^-3"},
+                    {"conversion", Nnorm * Nnorm * Omega_ci * Omega_ci * Omega_ci},
+                    {"standard_name", "Dissipation of turbulent energy"},
+                    {"source", "kmodel"}});
+  }
 }
