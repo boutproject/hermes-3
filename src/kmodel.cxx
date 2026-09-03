@@ -232,7 +232,7 @@ void Kmodel::finally(const Options& state) {
       Field3D N = get<Field3D>(species["density"]);
       Field3D V = get<Field3D>(species["temperature"]);
 
-      Field3DParallel V_hat = N * V / average_AA;
+      Field3DParallel V_hat = N * V / Ni_hat;
 
       Field3D dummy;
       ddt(k) -= FV::Div_par_mod<hermes::Limiter>(V_hat, k, fastest_wave, dummy);
