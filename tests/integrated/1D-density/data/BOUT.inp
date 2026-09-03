@@ -1,0 +1,66 @@
+# Parallel density conservation with and without the sound_speed component.
+#
+# The runtest script runs four variants of this case:
+#   - constant temperature, without sound_speed
+#   - discontinuous temperature, without sound_speed
+#   - constant temperature, with sound_speed
+#   - discontinuous temperature, with sound_speed
+# and compares 1-processor and 2-processor results.
+#
+# Closed system: the domain is periodic in Y, there are no sources, and there
+# is no sheath. Total particle content sum(N * J * dx * dy * dz) is therefore
+# an exact invariant, and any drift is numerical. In this testcase J and the
+# cell sizes are constant, so the script can check the equivalent sum(N).
+#
+# What it exercises: evolve_density calls
+#   FV::Div_par_mod<Limiter>(N, V, fastest_wave, flow_ylow)
+# with fastest_wave taken from the state, i.e. from the sound_speed component
+# when it is enabled. Div_par_mod builds the Lax dissipation per cell face as
+# amax = BOUTMAX(w(j), w(j+1), ...), so mismatched wave speeds across a
+# processor boundary can change the density update while still conserving the
+# global particle sum.
+#
+# The Heaviside jump in temperature is included to stress the communicated
+# fastest_wave used by the Lax term. The constant-temperature cases provide a
+# baseline that still checks closed-system conservation and MPI decomposition
+# consistency.
+
+nout = 5
+timestep = 1
+
+MXG = 0
+
+[mesh]
+
+nx = 1
+ny = 16
+nz = 1
+
+Ly = 1.0
+dy = Ly / ny
+J = 1  # Identity metric
+
+[mesh:paralleltransform]
+type = identity
+
+[hermes]
+components = h+, sound_speed
+
+Nnorm = 1e18
+Bnorm = 1
+Tnorm = 5
+
+normalise_metric = false # Normalise the input metric?
+
+[h+]  # Ions
+type = evolve_density, fixed_velocity, fixed_temperature
+charge = 1.0
+AA = 1.0
+
+temperature = 1.0 + H(y - pi)
+velocity = 0.2 + sin(y)/(0.1*sin(2.0*y) + 1)
+
+[Nh+]
+# Phase offset ensures that extrema are away from processor boundaries
+# so that there is a non-zero Lax flux at those boundaries
+function = 0.4*sin(2.0*y + 0.7) + 1

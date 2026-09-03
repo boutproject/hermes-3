@@ -3,7 +3,19 @@
 #define FIXED_VELOCITY_H
 
 #include "component.hxx"
+#include "guarded_options.hxx"
+#include "permissions.hxx"
+
+#include <bout/assert.hxx>
+#include <bout/bout_types.hxx>
+#include <bout/boutexception.hxx>
+#include <bout/field3d.hxx>
 #include <bout/globals.hxx>
+#include <bout/mesh.hxx>
+#include <bout/options.hxx>
+#include <bout/unused.hxx>
+
+#include <string>
 
 /// Set parallel velocity to a fixed value
 ///
@@ -33,8 +45,8 @@ struct FixedVelocity : public NamedComponent<FixedVelocity> {
     // so use mesh value (if any) as default value.
     V = options["velocity"].withDefault(V) / Cs0;
 
+    bout::globals::mesh->communicate(V);
     if (V.isFci()) {
-      bout::globals::mesh->communicate(V);
       V.applyParallelBoundary("parallel_neumann_o2");
       ASSERT2(V.hasParallelSlices());
     }
