@@ -29,7 +29,7 @@ using bout::globals::mesh;
 BraginskiiConduction::BraginskiiConduction(const std::string& name, Options& alloptions,
                                            Solver*)
     : NamedComponent(name, {readOnly("species:{sp}:{input_vars}"),
-                            readOnly("fields:Apar_flutter"),
+                            readIfSet("fields:Apar_flutter"),
                             readWrite("species:{sp}:{output_vars}")}) {
 
   // Get settings for each species
@@ -299,7 +299,7 @@ void BraginskiiConduction::transform_impl(GuardedOptions& state) {
                                conduction_method));
     add(species["energy_flow_ylow"], flow_ylow_conduction);
 
-    if (state.isSection("fields") and state["fields"].isSet("Apar_flutter")) {
+    if (state.isSection("fields") and IS_SET(state["fields:Apar_flutter"])) {
       // Magnetic flutter term. The operator splits into 4 pieces:
       // Div(k b b.Grad(T)) = Div(k b0 b0.Grad(T)) + Div(k d0 db.Grad(T))
       //                    + Div(k db b0.Grad(T)) + Div(k db db.Grad(T))
