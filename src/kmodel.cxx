@@ -181,14 +181,10 @@ void Kmodel::transform_impl(GuardedOptions& state) {
       Field3D N = get<Field3D>(species["density"]);
       Field3D V = get<Field3D>(species["velocity"]);
       Field3D T = get<Field3D>(species["temperature"]);
-      const BoutReal AA = get<BoutReal>(species["AA"]);
 
       Field3D dummy1, dummy2;
       add(species["density_source"],
           Div_a_Grad_perp_upwind_flows(D_k, N, dummy1, dummy2));
-
-      //add(species["momentum_source"],
-      //	  Div_a_Grad_perp_upwind_flows(AA * V * D_k, N, dummy1, dummy2));
 
       add(species["energy_source"],
           Div_a_Grad_perp_upwind_flows((3.0 / 2.0) * T * D_k, N, dummy1, dummy2));
