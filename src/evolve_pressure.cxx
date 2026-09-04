@@ -238,9 +238,18 @@ void EvolvePressure::transform_impl(GuardedOptions& state) {
   // Not using density boundary condition
   N = getNoBoundary<Field3D>(species["density"]);
 
+  // Nnlim is used where division by neutral density is needed
+  // The equation of state is modified at low density:
+  //
+  // e = Cv T Nlim / N    <- Specific internal energy
+  // p = N T
+  //
+  // The internal energy evolution of (N * e) is therefore
+  // evolving P_solver = Nlim * T
+  // rather than pressure P = N * T
   Field3DParallel Pfloor = floor(P, 0.0);
   T = Pfloor / softFloor(N, density_floor);
-  Pfloor = N * T; // Ensure consistency
+  Pfloor = N * T; // Equation of state
 
   set(species["pressure"], Pfloor);
   set(species["temperature"], T);
@@ -262,13 +271,16 @@ void EvolvePressure::finally(const Options& state) {
   T = get<Field3D>(species["temperature"]);
   N = get<Field3D>(species["density"]);
 
+  const Field3D Nlim = softFloor(N, density_floor);
+  const Field3D Pint = Nlim * T; // Internal energy uses limited density
+
   if (species.isSet("charge") and (fabs(get<BoutReal>(species["charge"])) > 1e-5)
       and state.isSection("fields") and state["fields"].isSet("phi")) {
     // Electrostatic potential set and species is charged -> include ExB flow
 
     const Field3D phi = get<Field3D>(state["fields"]["phi"]);
 
-    ddt(P) = -Div_n_bxGrad_f_B_XPPM(P, phi, bndry_flux, poloidal_flows, true);
+    ddt(P) = -Div_n_bxGrad_f_B_XPPM(Pint, phi, bndry_flux, poloidal_flows, true);
   } else {
     ddt(P) = 0.0;
   }
@@ -286,31 +298,33 @@ void EvolvePressure::finally(const Options& state) {
     }
 
     if (p_div_v) {
-      // Use the P * Div(V) form
-      ddt(P) -= FV::Div_par_mod<hermes::Limiter>(P, V, fastest_wave, flow_ylow_advection);
+      // p*Div(V) form:
+      // Advect the limited-density internal energy Pint = Nlim * T
+      // while keeping the compressional work term based on the physical pressure P = N * T.
+      ddt(P) -=
+          FV::Div_par_mod<hermes::Limiter>(Pint, V, fastest_wave, flow_ylow_advection);
 
       // Work done. This balances energetically a term in the momentum equation
       E_PdivV = -Pfloor * Div_par(V.asField3DParallel());
       ddt(P) += (2. / 3) * E_PdivV;
-
     } else {
       // Use V * Grad(P) form
       // Note: A mixed form has been tried (on 1D neon example)
       //       -(4/3)*FV::Div_par(P,V) + (1/3)*(V * Grad_par(P) - P * Div_par(V))
       //       Caused heating of charged species near sheath like p_div_v
-      ddt(P) -=
-          (5. / 3)
-          * FV::Div_par_mod<hermes::Limiter>(P, V, fastest_wave, flow_ylow_advection);
+      ddt(P) -= FV::Div_par_mod<hermes::Limiter>(Pint + (2. / 3) * P, V, fastest_wave,
+                                                 flow_ylow_advection);
       E_VgradP = V * Grad_par(P.asField3DParallel());
       ddt(P) += (2. / 3) * E_VgradP;
     }
+
     flow_ylow_advection *= 5. / 2; // Energy flow
     flow_ylow = flow_ylow_advection;
 
     if (state.isSection("fields") and state["fields"].isSet("Apar_flutter")) {
       // Magnetic flutter term
       const Field3D Apar_flutter = get<Field3D>(state["fields"]["Apar_flutter"]);
-      ddt(P) -= (5. / 3) * Div_n_g_bxGrad_f_B_XZ(P, V, -Apar_flutter);
+      ddt(P) -= Div_n_g_bxGrad_f_B_XZ(Pint + (2. / 3) * P, V, -Apar_flutter);
       ddt(P) += (2. / 3) * V * bracket(P, Apar_flutter, BRACKET_ARAKAWA);
     }
 
@@ -404,7 +418,7 @@ void EvolvePressure::finally(const Options& state) {
   }
 
   if (evolve_log) {
-    ddt(logP) = ddt(P) / P;
+    ddt(logP) = ddt(P) / Pfloor;
   }
 
 #if CHECKLEVEL >= 1
@@ -507,7 +521,6 @@ void EvolvePressure::outputVars(Options& state) {
                         {"source", "evolve_pressure"}});
       }
     }
-
     if (flow_xlow.isAllocated()) {
       set_with_attrs(
           state[fmt::format("ef{}_tot_xlow", name)], flow_xlow,

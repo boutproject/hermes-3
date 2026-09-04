@@ -69,8 +69,7 @@ private:
   bool neumann_boundary_average_z; ///< Apply neumann boundary with Z average?
   bool poloidal_flows;
   bool thermal_conduction; ///< Include thermal conduction?
-
-  bool p_div_v; ///< Use p*Div(v) form? False -> v * Grad(p)
+  bool p_div_v;            ///< Use p*Div(v) form? False -> v * Grad(p)
 
   bool evolve_log; ///< Evolve logarithm of P?
   Field3D logP;    ///< Natural logarithm of P
