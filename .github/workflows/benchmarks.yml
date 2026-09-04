@@ -103,7 +103,7 @@ jobs:
               | tee benchmarks.log
 
           # Report and export results for subsequent steps
-          uv run --no-project asv compare --split --factor $ASV_FACTOR ${{ github.event.pull_request.base.sha }} ${GITHUB_SHA}
+          uv run --no-project asv compare --split --factor $ASV_FACTOR ${base_sha} ${GITHUB_SHA}
           if grep "Traceback \|failed *$\|PERFORMANCE DECREASED" benchmarks.log > /dev/null ; then
               exit 1
           fi
