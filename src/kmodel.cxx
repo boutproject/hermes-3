@@ -34,8 +34,6 @@ Kmodel::Kmodel(std::string name, Options& alloptions, Solver* solver)
   auto& options = alloptions[name];
   // Normalisations
   const Options& units = alloptions["units"];
-  const BoutReal Omega_ci = 1. / units["seconds"].as<BoutReal>();
-  const BoutReal Bnorm = units["Tesla"];
   const BoutReal Lnorm = units["meters"];
 
   diagnose = options["diagnose"].doc("Diagnostic output").withDefault<bool>(false);
@@ -240,7 +238,6 @@ void Kmodel::outputVars(Options& state) {
 
   // Normalisations
   auto Nnorm = get<BoutReal>(state["Nnorm"]);
-  auto Tnorm = get<BoutReal>(state["Tnorm"]);
   auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
   auto Lnorm = get<BoutReal>(state["rho_s0"]);
 
