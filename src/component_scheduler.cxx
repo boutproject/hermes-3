@@ -11,6 +11,7 @@
 #include <bout/bout_types.hxx>
 #include <bout/boutexception.hxx>
 #include <bout/options.hxx>
+#include <bout/output.hxx>
 #include <bout/utils.hxx> // for trim, strsplit
 #include <fmt/format.h>
 #include <fmt/ranges.h>
@@ -308,6 +309,15 @@ setReadDependencies(const std::vector<std::unique_ptr<Component>>& components,
   return missing;
 }
 
+void printComponents(const std::vector<std::unique_ptr<Component>>& components) {
+  if (!components.empty()) {
+    output_info << "Components will be executed in the following order:\n";
+  }
+  for (const auto& comp : components) {
+    output_info << fmt::format("\t{}\n", *comp);
+  }
+}
+
 /// Topologically sorts the list of components to ensure variables are
 /// written and read in the right order.
 ///
@@ -425,6 +435,7 @@ void sortComponents(std::vector<std::unique_ptr<Component>>& components) {
   }
 
   components = std::move(result);
+  printComponents(components);
 }
 } // namespace
 
@@ -434,8 +445,12 @@ ComponentScheduler::ComponentScheduler(Options& scheduler_options,
   const std::string component_names = scheduler_options["components"]
                                           .doc("Components in order of execution")
                                           .as<std::string>();
+  const bool autosort = scheduler_options["autosort"]
+                            .doc("Perform a topological sort to ensure components "
+                                 "executed in the right order?")
+                            .withDefault<bool>(true);
 
-  std::set<ComponentInformation> required_components;
+  std::list<ComponentInformation> required_components;
 
   std::vector<std::string> electrons;
   std::vector<std::string> neutrals;
@@ -485,22 +500,39 @@ ComponentScheduler::ComponentScheduler(Options& scheduler_options,
         continue;
       }
 
-      required_components.emplace(name_trimmed, type_trimmed);
+      required_components.emplace_back(name_trimmed, type_trimmed);
     }
   }
 
+  // Use sets for efficient lookup of whether a component is already
+  // in the queue to be created or already has been created.
+  //
+  // We use a vector to decide the order in which to create
+  // components, to keep this close to what is in the file.
+  std::set<ComponentInformation> unbuilt_components(required_components.begin(),
+                                                    required_components.end());
   std::set<ComponentInformation> created_components;
-  for (auto it = required_components.begin(); it != required_components.end();
-       it = required_components.begin()) {
-    auto comp = Component::create(it->type, it->name, component_options, solver);
-    for (const auto& sub_comp : comp->additionalComponents()) {
-      if (required_components.count(sub_comp) == 0
-          and created_components.count(sub_comp) == 0) {
-        required_components.insert(sub_comp);
+  // We use a vector to keep track of the actual order in which
+  // components are created
+  std::vector<ComponentInformation> component_order;
+
+  while (required_components.size() > 0) {
+    const ComponentInformation component = required_components.front();
+    required_components.pop_front();
+    auto comp =
+        Component::create(component.type, component.name, component_options, solver);
+    std::vector<ComponentInformation> sub_components = comp->additionalComponents();
+    for (auto sub_comp = sub_components.rbegin(); sub_comp != sub_components.rend();
+         ++sub_comp) {
+      if (unbuilt_components.count(*sub_comp) == 0
+          and created_components.count(*sub_comp) == 0) {
+        required_components.push_front(*sub_comp);
+        unbuilt_components.insert(*sub_comp);
       }
     }
+    component_order.push_back(component);
     components.push_back(std::move(comp));
-    created_components.insert(required_components.extract(it));
+    created_components.insert(unbuilt_components.extract(component));
   }
 
   const SpeciesInformation species(electrons, neutrals, positive_ions, negative_ions);
@@ -509,7 +541,11 @@ ComponentScheduler::ComponentScheduler(Options& scheduler_options,
     component->declareAllSpecies(species);
   }
 
-  ::sortComponents(components);
+  if (autosort) {
+    ::sortComponents(components);
+  } else {
+    printComponents(components);
+  }
 }
 
 std::unique_ptr<ComponentScheduler> ComponentScheduler::create(Options& scheduler_options,
