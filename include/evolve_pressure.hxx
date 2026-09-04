@@ -13,7 +13,7 @@
 /// P<name>_src   A source of pressure, in Pascals per second
 ///               This can be over-ridden by the `source` option setting.
 ///
-struct EvolvePressure : public Component {
+struct EvolvePressure : public NamedComponent<EvolvePressure> {
   ///
   /// # Inputs
   ///
@@ -57,12 +57,13 @@ struct EvolvePressure : public Component {
   ///
   void precon(const Options& UNUSED(state), BoutReal gamma) override;
 
+  static constexpr auto type = "evolve_pressure";
+
 private:
   std::string name; ///< Short name of the species e.g. h+
 
-  Field3D P;        ///< Pressure (normalised)
-  Field3D P_solver; ///< Save to restore at the end
-  Field3D T, N;     ///< Temperature, density
+  Field3DParallel P;    ///< Pressure (normalised)
+  Field3DParallel T, N; ///< Temperature, density
 
   bool bndry_flux;
   bool neumann_boundary_average_z; ///< Apply neumann boundary with Z average?
@@ -120,7 +121,7 @@ private:
 };
 
 namespace {
-RegisterComponent<EvolvePressure> registercomponentevolvepressure("evolve_pressure");
+RegisterComponent<EvolvePressure> registercomponentevolvepressure;
 }
 
 #endif // EVOLVE_PRESSURE_H

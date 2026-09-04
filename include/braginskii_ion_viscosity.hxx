@@ -8,7 +8,7 @@
 
 #include <bout/bout_types.hxx>
 #include <bout/options.hxx>
-#include <bout/vector2d.hxx>
+#include <bout/vectormetric.hxx>
 
 #include "component.hxx"
 
@@ -31,7 +31,7 @@
 /// is solved as a parallel diffusion, so is treated separately
 /// All other terms are added to Pi_ciperp, even if they are
 /// not really parallel parts
-struct BraginskiiIonViscosity : public Component {
+struct BraginskiiIonViscosity : public NamedComponent<BraginskiiIonViscosity> {
   /// Inputs
   /// - <name>
   ///   - eta_limit_alpha: float, default -1
@@ -45,6 +45,8 @@ struct BraginskiiIonViscosity : public Component {
   /// Save variables to the output
   void outputVars(Options& state) override;
 
+  static constexpr auto type = "braginskii_ion_viscosity";
+
 private:
   BoutReal eta_limit_alpha; ///< Flux limit coefficient
   bool parallel;            ///< Include parallel viscosity (requires parallel velocity)
@@ -54,7 +56,7 @@ private:
   std::string viscosity_collisions_mode; ///< Collision selection, either multispecies or
                                          ///< braginskii
   Field3D nu;                            ///< Collision frequency for conduction
-  Vector2D Curlb_B;                      ///< Curvature vector Curl(b/B)
+  VectorMetric Curlb_B;                  ///< Curvature vector Curl(b/B)
   bool bounce_frequency;         ///< Modify the collision time with the bounce frequency?
   BoutReal bounce_frequency_q95; ///< Input q95 for when including bounce frequency change
   BoutReal bounce_frequency_epsilon; ///< Input inverse aspect ratio for including bounce
@@ -97,8 +99,7 @@ private:
 };
 
 namespace {
-RegisterComponent<BraginskiiIonViscosity>
-    registercomponentionbraginskiiviscosity("braginskii_ion_viscosity");
+RegisterComponent<BraginskiiIonViscosity> registercomponentionbraginskiiviscosity;
 }
 
 #endif

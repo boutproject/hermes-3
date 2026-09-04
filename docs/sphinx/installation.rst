@@ -37,7 +37,8 @@ and compiled automatically for convenience. `FFTW
 Hermes-3 uses two solvers: `SUNDIALS <https://computing.llnl.gov/projects/sundials>`__ `cvode` for
 time-dependent simulations and the faster `PETSc
 <https://petsc.org>`__ `beuler` for steady-state transport problems. While SUNDIALS
-can be downloaded and installed automatically, PETSc requires manual installation.
+can be downloaded and installed automatically, PETSc requires manual installation when using CMake.
+Using the Spack installation methods provides PETSc automatically.
 
 Installing with SUNDIALS (cvode) only
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -65,8 +66,13 @@ recommended way to build Hermes-3 links to the SUNDIALS library:
       cd build
       ctest
 
-Note that the integrated tests require MPI, and so may not run on the
-head nodes of many computing clusters.
+.. important::
+   The tests require an activated Python environment with `boutdata`, `xhermes` and their dependencies
+   (see https://hermes3.readthedocs.io/en/latest/postprocessing.html). They can be installed with `pip`.
+
+.. important::
+   Note that the integrated tests require MPI, and so may not run on the
+   head nodes of many computing clusters.
 
 
 Installing with SUNDIALS and PETSc (beuler)
@@ -395,6 +401,8 @@ environment file, spack.yaml, to include the gcc installation details.
    and then run :command:`spack repo update`.
 
    This workaround should not be required when using spack versions newer than 1.1.0.
+
+.. _sec-install-hermes-3:
 
 Install Hermes-3 and dependencies
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

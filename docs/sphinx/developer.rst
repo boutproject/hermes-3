@@ -531,7 +531,11 @@ The basic building block of all Hermes-3 models is the
 (a tree of dictionaries/maps) and transforms (modifies) it. This is
 done by calling the public `Component::transform` method. This will
 call the private `Component::transform_impl` method, which must be
-overriden for each Component implementation.
+overriden for each Component implementation. There must also be an
+implementation of the `Component::typeName` method. This can be done
+by inheriting from the `NamedComponent` class, which implements it
+using the ["Curiously Recurring Template
+Pattern"](https://en.wikipedia.org/wiki/Curiously_recurring_template_pattern).
 
 After all components have modified the state in turn, all components
 may then implement a `finally` method to take the final state but not
@@ -552,20 +556,24 @@ file using a code like::
 
   #include "component.hxx"
 
-  struct MyComponent : public Component {
+  struct MyComponent : public NamedComponent<MyComponent> {
     MyComponent(const std::string &name, Options &options, Solver *solver);
     ...
+
+    static constexpr auto type = "mycomponent";
   };
 
   namespace {
-  RegisterComponent<MyComponent> registercomponentmine("mycomponent");
+  RegisterComponent<MyComponent> registercomponentmine;
   }
 
-where `MyComponent` is the component class, and "mycomponent" is the
+where ``MyComponent`` is the component class, and "mycomponent" is the
 name that can be used in the BOUT.inp settings file to create a
-component of this type. Note that the name can be any string except it
-can't contain commas or brackets, and shouldn't start or end with
-whitespace.
+component of this type. The latter is specified in a publicly
+accessible component of the class called ``type``. It must be possible
+to convert ``type`` to a string. Note that the name can be any string
+except it can't contain commas or brackets, and shouldn't start or end
+with whitespace.
 
 Inputs to the component constructors are:
 
@@ -1070,7 +1078,7 @@ Source term calculation
 Density, momentum and energy source fields are constructed in `Reaction::transform_impl` using the
 `RateHelper` class to calculate reaction rates and collision frequencies.
 
-On instantiation, :code:`RateHelper` assembles maps containing (pointers to) all reactant densities
+On instantiation, :code:`RateHelper` assembles vectors containing (pointers to) all reactant densities
 and any other fields required as inputs.
 
 `RateHelper::calc_rates` is "run-time templated", allowing it to accept rate functions with 1D and
@@ -1229,6 +1237,8 @@ The specification of the Toro tests used here is taken from
 originally from Toro's book `Riemann Solvers and Numerical Methods for
 Fluid Dynamics <https://link.springer.com/book/10.1007/b79761>`__.
 
+.. _subsec-1d-recycling-dthe:
+
 1D-recycling-dthe
 ~~~~~~~~~~~~~~~~~
 
@@ -1242,6 +1252,8 @@ exchange channels in the final domain cell against a reference.
 
 The test file can be used to generate the test data if `gen_data` is set to `True` in the beginning
 of the script.
+
+.. _subsec-2d-production:
 
 2D-production
 ~~~~~~~~~~~~~~
@@ -1273,6 +1285,29 @@ This test is a reproduction of C++ code, and therefore there is no golden answer
 
 This test plots results and can be used to help with developing the recycling component. There
 is a `plot` flag near the beginning of the file.
+
+1D-density (conservation)
+~~~~~~~~~~~~~~
+
+``tests/integrated/1D-density``
+
+This conservation test checks that total particle content of the simulation is conserved on
+a periodic 1D domain while the density is evolved and the temperature and velocity are fixed.
+The test runs four cases: constant temperature and a Heaviside temperature jump, each with and
+without the ``sound_speed`` component, and repeats each case on 1 and 2 MPI ranks.
+
+The script checks three things:
+
+1. total particle content is conserved in this closed periodic system;
+2. the density profile actually changes in time, so the advection path is active;
+3. the final density field matches between the 1-rank and 2-rank runs.
+
+The Heaviside temperature jump is included to stress fluxes that use numerical Lax dissipation
+(see section `Numerics`_), because the wave speed entering that term must be communicated
+consistently across processor boundaries. The constant-temperature cases provide a baseline that
+still checks conservation and MPI decomposition independence. In this testcase the geometry factors
+are constant, so the script checks ``sum(N)`` rather than explicitly evaluating
+:math:`\sum N J\,dx\,dy\,dz`.
 
 1D fluid (MMS)
 ~~~~~~~~~~~~~~
@@ -1529,3 +1564,83 @@ across `neutral_mixed`, `evolve_pressure`, `ion_viscosity` and `neutral_parallel
 A minimal 3D geometry is run for one RHS evaluation, and the test checks the log file
 to make sure the correct collisionalities were selected. One of the tests is for the `multispecies`
 mode across all components, while the other is for `braginskii` for plasma and `afn` for neutrals.
+
+.. _sec-benchmarking:
+
+Benchmarking
+------------
+
+`Airspeed Velocity
+<https://asv.readthedocs.io/en/latest/index.html>`__ (``asv``) is used to
+benchmark performance of Hermes-3. The following tests and examples
+are used for this:
+
+- :ref:`subsec-1d-recycling-dthe`
+- :ref:`subsec-2d-production`
+- :ref:`subsec-2d-drift-plane-turbulence-te-ti`
+
+The number and length of timesteps is adjusted so that the benchmarks
+will run for a reasonable length of time. They must run long enough
+that the runtime is not dominated by constructors, but not so long as
+to be inconvenient.
+
+``asv`` was written for use with Python projects and it expects them
+to be installable using typical Python tooling. A `Python wheel
+<https://pythonwheels.com/>`__ (binary package) can be built for
+Hermes-3 using `scikit-build-core
+<https://scikit-build-core.readthedocs.io/en/latest/>`__. This is all
+configured in ``pyproject.toml`` and ``asv`` should be able to build
+and install the wheels automatically. However, this requires all the
+normal Hermes-3 build-dependencies to be findable on your system. See
+the instructions to
+:ref:`sec-hermes-install-spack`/:ref:`sec-install-hermes-3` in a
+``spack`` environment for the simplest way to achieve this. You will
+then need to install ``asv`` itself. This can be done with `uv
+<https://docs.astral.sh/uv/>`__ (various useful linters will also be
+installed).
+
+.. code-block:: bash
+
+   . activate_h3env
+   # Install uv, if not already available on your system
+   curl -LsSf https://astral.sh/uv/install.sh | sh
+   # Set up uv workspace with development dependencies
+   uv sync --only-dev
+   # Run asv from within the uv workspace; the first run will take a minute to install it
+   uv run asv --help
+
+You can run ``asv`` on your current commit with the command
+
+.. code-block:: bash
+
+   uv run asv run HEAD
+
+The first time you run ``asv`` benchmarks on a machine, it will prompt
+you for some information about that computer's specifications. It will
+normally be able to detect the information itself, so the defaults
+should be fine.
+
+.. tip::
+
+   Note that ``asv`` can only run against commits; changes to your
+   code that have not been committed will not be included in the
+   benchmarking tests. The exception to this is the ``asv`` *configurations and
+   benchmarking tests themselves*. ``asv`` will use whatever is in the
+   working tree for these.
+
+You can run ``asv`` it on two commits and compare their performance with
+
+.. code-block:: bash
+
+   uv run asv continuous OLDER_COMMIT NEWER_COMMIT
+   uv run asv compare --split OLDER_COMMIT NEWER_COMMIT
+
+This is useful for checking that a branch you are working on hasn't
+introduced any regressions compared to ``master``. ``asv``
+will automatically handle checking out the necessary commits and
+building Hermes-3 for you. It will do all of this in its own directory
+structure and will not make any changes to your repo.
+
+There is a CI workflow which will run these commands comparing each
+Pull Request to its base commit. **The workflow will fail if the
+runtime of any of the benchmarks increases by more than 10%.**

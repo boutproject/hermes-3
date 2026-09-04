@@ -12,11 +12,13 @@
 
 /// Adds an external contribution to the Apar flutter
 ///
-struct ExternalApar : public Component {
+struct ExternalApar : public NamedComponent<ExternalApar> {
   ExternalApar(std::string name, Options& alloptions, [[maybe_unused]] Solver* solver);
 
   /// Saves the added field to output
   void outputVars(Options& state) override;
+
+  static constexpr auto type = "external_apar";
 
 private:
   /// Adds to the Apar_flutter field
@@ -29,7 +31,7 @@ private:
 };
 
 namespace {
-RegisterComponent<ExternalApar> registercomponentexternalapar("external_apar");
+RegisterComponent<ExternalApar> registercomponentexternalapar;
 }
 
 #endif // EXTERNAL_APAR_H

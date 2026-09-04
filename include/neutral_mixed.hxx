@@ -12,7 +12,7 @@
 
 /// Evolve density, parallel momentum and pressure
 /// for a neutral gas species with cross-field diffusion
-struct NeutralMixed : public Component {
+struct NeutralMixed : public NamedComponent<NeutralMixed> {
   ///
   /// @param name     The name of the species e.g. "h"
   /// @param options  Top-level options. Settings will be taken from options[name]
@@ -28,6 +28,8 @@ struct NeutralMixed : public Component {
 
   /// Preconditioner
   void precon(const Options& state, BoutReal gamma) override;
+
+  static constexpr auto type = "neutral_mixed";
 
 private:
   std::string name; ///< Species name
@@ -85,6 +87,8 @@ private:
   bool output_ddt; ///< Save time derivatives?
   bool diagnose;   ///< Save additional diagnostics?
 
+  std::string conduction_method{"orginal"};
+
   // Flow diagnostics
   Field3D pf_adv_perp_xlow, pf_adv_perp_ylow, pf_adv_par_ylow;
   Field3D mf_adv_perp_xlow, mf_adv_perp_ylow, mf_adv_par_ylow;
@@ -105,7 +109,7 @@ private:
 };
 
 namespace {
-RegisterComponent<NeutralMixed> registersolverneutralmixed("neutral_mixed");
+RegisterComponent<NeutralMixed> registersolverneutralmixed;
 }
 
 #endif // NEUTRAL_MIXED_H

@@ -4,6 +4,7 @@
 using bout::globals::mesh;
 
 void TemperatureFeedback::transform_impl(GuardedOptions& state) {
+  const std::string& name = objectName();
   GuardedOptions species = state["species"][name];
 
   // Doesn't need all boundaries to be set
@@ -29,8 +30,8 @@ void TemperatureFeedback::transform_impl(GuardedOptions& state) {
 
     // Integrate using Trapezium rule
     if (time > temperature_error_lasttime) { // Since time can decrease
-      temperature_error_integral += (time - temperature_error_lasttime) * 0.5 *
-        (error + temperature_error_last);
+      temperature_error_integral +=
+          (time - temperature_error_lasttime) * 0.5 * (error + temperature_error_last);
     }
 
     if ((temperature_error_integral < 0.0) && temperature_integral_positive) {
@@ -56,10 +57,10 @@ void TemperatureFeedback::transform_impl(GuardedOptions& state) {
   // processors the above loop is skipped. Need to broadcast the values from
   // processor 0 to the other processors
   if (control_target_temperature) {
-    MPI_Bcast(&source_multiplier, 1, MPI_DOUBLE, BoutComm::size()-1, BoutComm::get());
-    MPI_Bcast(&proportional_term, 1, MPI_DOUBLE, BoutComm::size()-1, BoutComm::get());
-    MPI_Bcast(&integral_term, 1, MPI_DOUBLE, BoutComm::size()-1, BoutComm::get());
-  } else  {
+    MPI_Bcast(&source_multiplier, 1, MPI_DOUBLE, BoutComm::size() - 1, BoutComm::get());
+    MPI_Bcast(&proportional_term, 1, MPI_DOUBLE, BoutComm::size() - 1, BoutComm::get());
+    MPI_Bcast(&integral_term, 1, MPI_DOUBLE, BoutComm::size() - 1, BoutComm::get());
+  } else {
     MPI_Bcast(&source_multiplier, 1, MPI_DOUBLE, 0, BoutComm::get());
     MPI_Bcast(&proportional_term, 1, MPI_DOUBLE, 0, BoutComm::get());
     MPI_Bcast(&integral_term, 1, MPI_DOUBLE, 0, BoutComm::get());
@@ -76,7 +77,7 @@ void TemperatureFeedback::transform_impl(GuardedOptions& state) {
 
   //     if (sourced_species.empty())
   //       continue; // Missing
-      
+
   //     add(state["species"][sourced_species]["energy_source"], scaling_factor * source_multiplier * source_shape);
 
   //     ++species_it;
@@ -86,21 +87,23 @@ void TemperatureFeedback::transform_impl(GuardedOptions& state) {
   auto species_it = species_list.begin();
   auto scaling_factor_it = scaling_factors_list.begin();
 
-  while (species_it != species_list.end() && scaling_factor_it != scaling_factors_list.end()) {
-      std::string trimmed_species = trim(*species_it);
-      std::string trimmed_scaling_factor = trim(*scaling_factor_it);
+  while (species_it != species_list.end()
+         && scaling_factor_it != scaling_factors_list.end()) {
+    std::string trimmed_species = trim(*species_it);
+    std::string trimmed_scaling_factor = trim(*scaling_factor_it);
 
-      if (trimmed_species.empty() || trimmed_scaling_factor.empty()) {
-          ++species_it;
-          ++scaling_factor_it;
-          continue; // Skip this iteration if either trimmed string is empty
-      }
-
-      BoutReal scaling_factor = stringToReal(trimmed_scaling_factor);
-      add(state["species"][trimmed_species]["energy_source"], scaling_factor * source_multiplier * source_shape);
-
+    if (trimmed_species.empty() || trimmed_scaling_factor.empty()) {
       ++species_it;
       ++scaling_factor_it;
+      continue; // Skip this iteration if either trimmed string is empty
+    }
+
+    BoutReal scaling_factor = stringToReal(trimmed_scaling_factor);
+    add(state["species"][trimmed_species]["energy_source"],
+        scaling_factor * source_multiplier * source_shape);
+
+    ++species_it;
+    ++scaling_factor_it;
   }
 
   // Scale the source and add to the species temperature source

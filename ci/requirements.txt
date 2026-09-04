@@ -1,7 +1,8 @@
 scipy~=1.4
-numpy~=1.18
+numpy~=2.0
 netcdf4~=1.5
 boututils
-boutdata @ git+https://github.com/boutproject/boutdata.git@a4b429965d15e6e2b09abc8d400ee840d01c1aac
-xbout @ git+https://github.com/boutproject/xbout.git@8942a1c354096596e446d80165eabcc812d4786c
-xhermes @ git+https://github.com/boutproject/xhermes.git@208f9bd75342c094629a63ee1d773d1b660518dd
+zoidberg>=0.3.1
+boutdata @ git+https://github.com/boutproject/boutdata.git@83c2d858ac9bb2db04767fc454f6cf4fadb5127d
+xbout @ git+https://github.com/boutproject/xbout.git@028bea942008d7248a314c62994ec324fc435522
+xhermes @ git+https://github.com/boutproject/xhermes.git@84ddc4f8eb5ed9f0873c72d7bf41a0c824be2dee

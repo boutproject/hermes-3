@@ -17,14 +17,13 @@ type = shifted
 [solver]
 #type = beuler
 #pc_type = hypre
-type = pvode
+type = cvode
 mxstep=10000
 
 atol = 1e-7
 rtol = 1e-5
 
 #diagnose = true
-predictor = false
 
 [hermes]
 components = (d+, d, t+, t, he+, he, e,
@@ -190,4 +189,3 @@ type = (
         he + e -> he+ + 2e, # Helium ionisation
         he+ + e -> he,      # Helium+ recombination
        )
-

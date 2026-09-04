@@ -29,7 +29,7 @@ using bout::globals::mesh;
 using ParLimiter = hermes::Limiter;
 
 NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver* solver)
-    : Component({readWrite("species:{name}:{outputs}")}), name(name) {
+    : NamedComponent(name, {readWrite("species:{name}:{outputs}")}), name(name) {
 
   // Normalisations
   const Options& units = alloptions["units"];
@@ -147,6 +147,9 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
   neutral_conduction = options["neutral_conduction"]
                            .doc("Include neutral gas heat conduction?")
                            .withDefault<bool>(true);
+
+  conduction_method =
+      options["conduction_method"].withDefault<std::string>(conduction_method);
 
   collisionality_override =
       options["collisionality_override"]
@@ -382,10 +385,10 @@ void NeutralMixed::finally(const Options& state) {
   // Calculate cross-field diffusion from collision frequency
   //
   //
-
   // Pseudo-collisionality. A collision frequency calculated from user-set
   // maximum neutral mean free path to use as a floor for neutral collisionality.
   const Field3D nu_pseudo_mfp = sqrt(Tnlim / AA) / neutral_lmax;
+
   if (collisionality_override > 0.0) {
     // user has set an override for collision frequency
     Dnn_unlimited = (Tn / AA) / collisionality_override;
@@ -470,8 +473,16 @@ void NeutralMixed::finally(const Options& state) {
   // Flux limit: cap diffusion at a fraction of the free-streaming particle flux,
   // set through the ceiling coefficient Dmax.
   if (flux_limit > 0.0) {
+    // Mean speed in a non-drifting Maxwellian [Stangeby eq. 2.21, p.67]
     const Field3D vn_bar = sqrt(8.0 * Tnlim / (PI * AA));
-    const Vector3D g = Grad_perp(logPnlim);
+
+    // See documentation
+    // Particle flux is 0.25 * Nn * Vth [Stangeby, under eq. 2.24, p.67]; the Nn
+    // factor enters at the operator.
+    // The gradient is regularised.
+    // It has a smooth user-set ceiling, which aids robustness in transients.
+    // It also has a smooth floor to avoid division by zero while keeping differentiability.
+    const Vector3D g = Grad_perp(logPnlim); // Inverse Pn gradient length scale
     const Field3D g_sq = g * g;
     const BoutReal g_max_sq = SQ(limiter_gradient_ceiling);
     const Field3D g_ceil = g_sq * g_max_sq / (g_sq + g_max_sq);
@@ -488,8 +499,12 @@ void NeutralMixed::finally(const Options& state) {
     }
   }
 
+  // Blend the unlimited coefficient with the ceiling (harmonic mean). Skipped
+  // when no limiter is active, leaving Dnn = Dnn_unlimited from the copy above.
   if (flux_limit > 0.0 || diffusion_limit > 0.0) {
+
     if (flux_limiter_sharpness == 1.0) {
+      // Avoid expensive pow() if not needed
       BOUT_FOR(i, Dnn.getRegion("RGN_NOBNDRY")) {
         Dnn[i] = Dnn_unlimited[i] * Dmax[i] / (Dnn_unlimited[i] + Dmax[i]);
       }
@@ -611,7 +626,8 @@ void NeutralMixed::finally(const Options& state) {
     ddt(Pn) += (2. / 3)
                * Div_par_K_Grad_par_mod(kappa_n, Tn, // Parallel conduction
                                         ef_cond_par_ylow,
-                                        false); // No conduction through target boundary
+                                        false, // No conduction through target boundary
+                                        conduction_method);
 
     // Perpendicular conduction
     if (nonorthogonal_operators) {
@@ -668,8 +684,8 @@ void NeutralMixed::finally(const Options& state) {
 
       Field3D viscosity_source = Div_par_K_Grad_par_mod( // Parallel viscosity
           eta_n, Vn, mf_visc_par_ylow,
-          false) // No viscosity through target boundary
-          ;
+          false, // No viscosity through target boundary
+          conduction_method);
 
       // Perpendicular viscosity
       if (nonorthogonal_operators) {
@@ -831,6 +847,20 @@ void NeutralMixed::outputVars(Options& state) {
                     {"conversion", Cs0 * Cs0 / Omega_ci},
                     {"standard_name", "diffusion coefficient"},
                     {"long_name", name + " diffusion coefficient"},
+                    {"source", "neutral_mixed"}});
+    set_with_attrs(state[fmt::format("Dnn{}_unlimited", name)], Dnn_unlimited,
+                   {{"time_dimension", "t"},
+                    {"units", "m^2/s"},
+                    {"conversion", Cs0 * Cs0 / Omega_ci},
+                    {"standard_name", "diffusion coefficient"},
+                    {"long_name", name + " unlimited diffusion coefficient"},
+                    {"source", "neutral_mixed"}});
+    set_with_attrs(state[fmt::format("Dnn{}_max", name)], Dmax,
+                   {{"time_dimension", "t"},
+                    {"units", "m^2/s"},
+                    {"conversion", Cs0 * Cs0 / Omega_ci},
+                    {"standard_name", "diffusion coefficient"},
+                    {"long_name", name + " maximum diffusion coefficient"},
                     {"source", "neutral_mixed"}});
     set_with_attrs(state[std::string("SN") + name], Sn,
                    {{"time_dimension", "t"},

@@ -13,6 +13,7 @@ Hermes-3 documentation
    installation
    inputs
    domain_grid
+   fieldline_geometry
    execution
    postprocessing
    examples

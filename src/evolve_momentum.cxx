@@ -26,9 +26,9 @@
 using bout::globals::mesh;
 
 EvolveMomentum::EvolveMomentum(std::string name, Options& alloptions, Solver* solver)
-    : Component({readOnly("species:{name}:AA"),
-                 readOnly("species:{name}:density", Regions::Interior),
-                 readWrite("species:{name}:{outputs}")}),
+    : NamedComponent(name, {readOnly("species:{name}:AA"),
+                            readOnly("species:{name}:density", Regions::Interior),
+                            readWrite("species:{name}:{outputs}")}),
       name(name) {
 
   // Evolve the momentum in time
@@ -71,8 +71,8 @@ EvolveMomentum::EvolveMomentum(std::string name, Options& alloptions, Solver* so
   use_div_par_fvv = options["use_div_par_fvv"]
                         .doc("Use Div_par_fvv instead of Div_par\nOnly for MMS tests")
                         .withDefault<bool>(use_div_par_fvv);
-  const bool mms = alloptions["solver"]["mms"].withDefault<bool>(false);
-  if ((not use_div_par_fvv) and (not mms)) {
+
+  if ((not use_div_par_fvv) and (not alloptions["solver"]["mms"].as<bool>())) {
     throw BoutException("use_div_par_fvv is only for MMS tests");
   }
 
@@ -132,7 +132,7 @@ void EvolveMomentum::finally(const Options& state) {
   // Get the species density
   const Field3D N = get<Field3D>(species["density"]);
   // Apply a floor to the density
-  const Field3D Nlim = softFloor(N, density_floor);
+  const Field3D Nlim = softFloor(N.asField3DParallel(), density_floor);
 
   // Typical wave speed used for numerical diffusion
   Field3D fastest_wave;
@@ -209,7 +209,7 @@ void EvolveMomentum::finally(const Options& state) {
                * FV::Div_par_fvv<hermes::Limiter>(Nlim, V, fastest_wave,
                                                   fix_momentum_boundary_flux);
   } else {
-    ddt(NV) -= Div_par(NVint * V);
+    ddt(NV) -= Div_par(NV * V);
   }
 
   // Parallel pressure gradient

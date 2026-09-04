@@ -29,8 +29,8 @@
 using bout::globals::mesh;
 
 EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* solver)
-    : Component({readOnly("species:{name}:{inputs}", Regions::Interior),
-                 readWrite("species:{name}:{outputs}")}),
+    : NamedComponent(name, {readOnly("species:{name}:{inputs}", Regions::Interior),
+                            readWrite("species:{name}:{outputs}")}),
       name(name) {
 
   auto& options = alloptions[name];
@@ -194,6 +194,10 @@ void EvolvePressure::transform_impl(GuardedOptions& state) {
 
   mesh->communicate(P);
 
+  if (P.isFci()) {
+    P.applyParallelBoundary();
+  }
+
   if (neumann_boundary_average_z) {
     // Take Z (usually toroidal) average and apply as X (radial) boundary condition
     if (mesh->firstX()) {
@@ -243,11 +247,12 @@ void EvolvePressure::transform_impl(GuardedOptions& state) {
   // The internal energy evolution of (N * e) is therefore
   // evolving P_solver = Nlim * T
   // rather than pressure P = N * T
-  T = floor(P, 0.0) / softFloor(N, density_floor);
-  P_solver = P; // Save solver variable to restore later
-  P = N * T;    // Equation of state
+  Field3DParallel Pfloor = floor(P, 0.0);
+  T = Pfloor / softFloor(N, density_floor);
+  P_solver = P;   // Save solver variable to restore later
+  Pfloor = N * T; // Equation of state
 
-  set(species["pressure"], P);
+  set(species["pressure"], Pfloor);
   set(species["temperature"], T);
 }
 
@@ -258,6 +263,12 @@ void EvolvePressure::finally(const Options& state) {
 
   // Get updated pressure and temperature with boundary conditions
   P = get<Field3D>(species["pressure"]);
+  if (!P.isFci()) {
+    P.clearParallelSlices();
+  }
+
+  const Field3DParallel Pfloor = floor(P, 0.0); // Restricted to never go below zero
+
   T = get<Field3D>(species["temperature"]);
   N = get<Field3D>(species["density"]);
 
@@ -290,20 +301,23 @@ void EvolvePressure::finally(const Options& state) {
     }
 
     if (p_div_v) {
-      // EOS-aware p*Div(V) form:
+      // p*Div(V) form:
       // Advect the limited-density internal energy Pint = Nlim * T
       // while keeping the compressional work term based on the physical pressure P = N * T.
       ddt(P) -=
           FV::Div_par_mod<hermes::Limiter>(Pint, V, fastest_wave, flow_ylow_advection);
 
-      E_PdivV = -Pfloor * Div_par(V);
+      // Work done. This balances energetically a term in the momentum equation
+      E_PdivV = -Pfloor * Div_par(V.asField3DParallel());
       ddt(P) += (2. / 3) * E_PdivV;
     } else {
-      // EOS-aware V * Grad(P) form
+      // Use V * Grad(P) form
+      // Note: A mixed form has been tried (on 1D neon example)
+      //       -(4/3)*FV::Div_par(P,V) + (1/3)*(V * Grad_par(P) - P * Div_par(V))
+      //       Caused heating of charged species near sheath like p_div_v
       ddt(P) -= FV::Div_par_mod<hermes::Limiter>(Pint + (2. / 3) * P, V, fastest_wave,
                                                  flow_ylow_advection);
-
-      E_VgradP = V * Grad_par(P);
+      E_VgradP = V * Grad_par(P.asField3DParallel());
       ddt(P) += (2. / 3) * E_VgradP;
     }
 
@@ -347,11 +361,12 @@ void EvolvePressure::finally(const Options& state) {
   }
 
   if (low_T_diffuse_perp) {
-    ddt(P) +=
-        1e-4
-        * Div_Perp_Lap_FV_Index(
-            floor(temperature_floor / softFloor(T, 1e-3 * temperature_floor) - 1.0, 0.0),
-            T);
+    ddt(P) += 1e-4
+              * Div_Perp_Lap_FV_Index(
+                  floor(Field3D{temperature_floor / softFloor(T, 1e-3 * temperature_floor)
+                                - 1.0},
+                        0.0),
+                  T);
   }
 
   if (low_p_diffuse_perp) {

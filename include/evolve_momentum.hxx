@@ -5,7 +5,7 @@
 #include "component.hxx"
 
 /// Evolve parallel momentum
-struct EvolveMomentum : public Component {
+struct EvolveMomentum : public NamedComponent<EvolveMomentum> {
   EvolveMomentum(std::string name, Options& options, Solver* solver);
 
   /// Calculate ddt(NV).
@@ -25,10 +25,13 @@ struct EvolveMomentum : public Component {
 
   void outputVars(Options& state) override;
 
+  static constexpr auto type = "evolve_momentum";
+
 private:
   std::string name; ///< Short name of species e.g "e"
 
   Field3D NV;        ///< Species parallel momentum (normalised, evolving)
+  Field3D NV_err;    ///< Difference from momentum as input from solver
   Field3D NV_solver; ///< Momentum as calculated in the solver
   Field3D V;         ///< Species parallel velocity
 
@@ -64,7 +67,7 @@ private:
 };
 
 namespace {
-RegisterComponent<EvolveMomentum> registercomponentevolvemomentum("evolve_momentum");
+RegisterComponent<EvolveMomentum> registercomponentevolvemomentum;
 }
 
 #endif // EVOLVE_MOMENTUM_H

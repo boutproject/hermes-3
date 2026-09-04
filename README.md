@@ -14,7 +14,7 @@ manual is [here on
 Readthedocs](https://hermes3.readthedocs.io/en/latest/).
 
 Post-processing Hermes-3 is made easy by using the [xHermes](https://github.com/boutproject/xhermes) Python library.
-xHermes is built on top of [xBOUT](https://github.com/boutproject/xBOUT) and Xarray and automatically accounts 
+xHermes is built on top of [xBOUT](https://github.com/boutproject/xBOUT) and Xarray and automatically accounts
 for the normalisation of Hermes-3 parameters, as well as providing access to many useful xBOUT post-processing functions.
 Many of these are showcased in the [xBOUT examples](https://github.com/boutproject/xBOUT-examples).
 
@@ -31,7 +31,7 @@ All new contributions must be made under the GPLv3 license.
 LLNL-CODE-845139
 
 
-    Copyright Hermes-3 contributors 2017-2025
+    Copyright Hermes-3 contributors 2017-2026
               email: dudson2@llnl.gov
 
     This program is free software: you can redistribute it and/or modify
@@ -50,49 +50,7 @@ LLNL-CODE-845139
 
 ## Installing and testing
 
-Only CMake is supported for building Hermes-3 and running the tests.
-During configuration
-[BOUT++](https://github.com/boutproject/BOUT-dev/) will be
-automatically downloaded as a submodule, together with some
-dependencies. [NetCDF](https://www.unidata.ucar.edu/software/netcdf/)
-and [FFTW](https://www.fftw.org/) are assumed to be installed already;
-optional dependencies include
-[SUNDIALS](https://computing.llnl.gov/projects/sundials) and
-[PETSc](https://petsc.org). The recommended way to build Hermes-3
-links to the [SUNDIALS](https://computing.llnl.gov/projects/sundials)
-library.
-
-1) Configure with cmake, downloading and linking to SUNDIALS:
-
-    $ cmake . -B build -DBOUT_DOWNLOAD_SUNDIALS=ON
-
-2) Build, compiling Hermes-3 and all dependencies:
-
-    $ cmake --build build
-
-3) Run the unit and integrated tests to check that everything is working:
-
-    $ cd build
-    $ ctest
-
-Note that the integrated tests require MPI, and so may not run on the
-head nodes of many computing clusters.
-
-The CMake configuration can be customised: See the [BOUT++
-documentation](https://bout-dev.readthedocs.io/en/latest/user_docs/installing.html#cmake)
-for examples of using `cmake` arguments, or edit the compile options
-interactively before building:
-
-    $ ccmake . -B build
-
-If you have already installed BOUT++ and want to use that rather than
-configure and build BOUT++ again, set `HERMES_BUILD_BOUT` to `OFF` and pass
-CMake the path to the BOUT++ `build` directory e.g.
-
-    $ cmake . -B build -DHERMES_BUILD_BOUT=OFF -DCMAKE_PREFIX_PATH=$HOME/BOUT-dev/build
-
-Note that Hermes-3 currently requires a specific version of BOUT++:
-https://github.com/boutproject/BOUT-dev/commit/7152948fbde505f6708d5ca4a9c21e5828d1e0a1
+Please refer to the [documentation](https://hermes3.readthedocs.io/en/latest/installation.html) for installation instructions.
 
 ## Examples
 
@@ -113,7 +71,7 @@ for more complicated cases.
 * B.Dudson, M.Kryjak, H.Muhammed, P.Hill, J,Omotani [Hermes-3:
   Multi-component plasma simulations with
   BOUT++](https://doi.org/10.1016/j.cpc.2023.108991)
-  Comp. Phys. Comm. 
+  Comp. Phys. Comm.
   108991 (2023).
   doi:[10.1016/j.cpc.2023.108991](https://doi.org/10.1016/j.cpc.2023.108991).
   Preprint:
@@ -142,3 +100,24 @@ for more complicated cases.
   plasma](https://doi.org/10.1088/1361-6587/ae1bd1) Plasma Phys. Control. Fusion 67 115025 (2025)
   doi:[https://doi.org/10.1088/1361-6587/ae1bd1](https://doi.org/10.1088/1361-6587/ae1bd1)
   Preprint: [arXiv:2509.08178](https://arxiv.org/abs/2509.08178)
+* J. L. Baker, M. Kryjak, M. R. K. Wigram, S. Mijin, D. Power,
+  B. D. Dudson and C. P. Ridgers [The impact of non-local fluid models
+  on 1D impurity driven detachment in an ITER-like
+  SOL](https://doi.org/10.1088/1361-6587/ae56b4) Plasma
+  Phys. Control. Fusion 68(4) 045032 2026
+  doi:[10.1088/1361-6587/ae56b4](https://doi.org/10.1088/1361-6587/ae56b4)
+* M. Robinson, A. Scarabosio, E. Vekshina, J.H. Nichols, J.D. Lore,
+  K. Borowiec, J. Varje, S.M. Levine, M. Scarpari, E.N.J. Maartensson,
+  X. Zhang, R. Kamenicky, J. Alexander, M. Jackson, C. Marsden,
+  S.A.M. McNamara and R. Maingi [Power and particle exhaust in the
+  ST-E1 fusion power
+  plant](https://iopscience.iop.org/article/10.1088/1741-4326/ae70a0#nfae70a0s3)
+  Nucl. Fusion 66 086011 2026
+  doi:[10.1088/1741-4326/ae70a0](https://doi.org/10.1088/1741-4326/ae70a0)
+* Khan, M and Kryjak, M and Cziegler, I and Dudson, B and Henderson, S
+  and Moulton, D and Osawa, R and Ridgers, C P [The role of momentum
+  transfer in the detachment front response to power transients for
+  reactor scale
+  tokamaks](https://iopscience.iop.org/article/10.1088/1741-4326/ae91f8/meta)
+  Nucl. Fusion 66 096032 2026
+  doi:[10.1088/1741-4326/ae91f8](https://doi.org/10.1088/1741-4326/ae91f8)

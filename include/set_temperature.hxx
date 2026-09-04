@@ -18,17 +18,16 @@
 /// type = set_temperature, ...
 ///
 /// temperature_from = e // Set Td = Te
-struct SetTemperature : public Component {
+struct SetTemperature : public NamedComponent<SetTemperature> {
   /// Inputs
   /// - <name>
   ///   - temperature_from   name of species
   SetTemperature(std::string name, Options& alloptions, Solver* UNUSED(solver))
-      : Component({readIfSet("species:{name}:density", Regions::Interior),
-                   readOnly("species:{from}:temperature"),
-                   readWrite("species:{name}:temperature"),
-                   // FIXME: Only written if density set
-                   readWrite("species:{name}:pressure")}),
-        name(name) {
+      : NamedComponent(name, {readIfSet("species:{name}:density", Regions::Interior),
+                              readOnly("species:{from}:temperature"),
+                              readWrite("species:{name}:temperature"),
+                              // FIXME: Only written if density set
+                              readWrite("species:{name}:pressure")}) {
 
     auto& options = alloptions[name];
 
@@ -48,6 +47,7 @@ struct SetTemperature : public Component {
 
     if (diagnose) {
       auto Tnorm = get<BoutReal>(state["Tnorm"]);
+      const std::string& name = objectName();
 
       // Save temperature to output files
       set_with_attrs(state[std::string("T") + name], T,
@@ -61,8 +61,9 @@ struct SetTemperature : public Component {
     }
   }
 
+  static constexpr auto type = "set_temperature";
+
 private:
-  std::string name;             ///< Short name of species e.g "e"
   std::string temperature_from; ///< The species that the temperature is taken from
   Field3D T;                    ///< The temperature
   bool diagnose;                ///< Output diagnostics?
@@ -82,6 +83,7 @@ private:
   ///     - pressure (if density is set)
   ///
   void transform_impl(GuardedOptions& state) override {
+    const std::string& name = objectName();
 
     // Get the temperature
     T = GET_NOBOUNDARY(Field3D, state["species"][temperature_from]["temperature"]);
@@ -99,7 +101,7 @@ private:
 };
 
 namespace {
-RegisterComponent<SetTemperature> registercomponentsettemperature("set_temperature");
+RegisterComponent<SetTemperature> registercomponentsettemperature;
 }
 
 #endif // SET_TEMPERATURE_H

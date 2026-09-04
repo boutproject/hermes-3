@@ -8,14 +8,16 @@
 ///
 /// This should only be used where one grid cell is used in y (ny=1).
 /// For domains with multiple Y points, use sheath_boundary
-struct SheathClosure : public Component {
+struct SheathClosure : public NamedComponent<SheathClosure> {
   /// Inputs
   ///  - units
   ///    - meters    Length normalisation
   ///  - <name>
   ///    - connection_length    Parallel connection length in meters
   ///
-  SheathClosure(std::string name, Options &options, Solver *);
+  SheathClosure(std::string name, Options& options, Solver*);
+
+  static constexpr auto type = "sheath_closure";
 
 private:
   BoutReal L_par; // Normalised connection length
@@ -51,9 +53,7 @@ private:
 };
 
 namespace {
-RegisterComponent<SheathClosure>
-    registercomponentsheathclosure("sheath_closure");
+RegisterComponent<SheathClosure> registercomponentsheathclosure;
 }
-
 
 #endif // SHEATH_CLOSURE_H

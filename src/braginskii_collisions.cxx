@@ -24,10 +24,11 @@
 
 BraginskiiCollisions::BraginskiiCollisions(const std::string& name, Options& alloptions,
                                            Solver*)
-    : Component({readOnly("species:{non_electrons}:density", Regions::Interior),
-                 readIfSet("species:{non_electrons}:charge"),
-                 readIfSet("species:{negative_ions}:temperature", Regions::Interior),
-                 readOnly("species:{all_species}:AA")}) {
+    : NamedComponent(name,
+                     {readOnly("species:{non_electrons}:density", Regions::Interior),
+                      readIfSet("species:{non_electrons}:charge"),
+                      readIfSet("species:{negative_ions}:temperature", Regions::Interior),
+                      readOnly("species:{all_species}:AA")}) {
   const Options& units = alloptions["units"];
 
   // Normalisations
@@ -314,7 +315,7 @@ void BraginskiiCollisions::transform_impl(GuardedOptions& state) {
     // If temperature isn't set, assume zero. in eV
     const Field3D temperature1 =
         species1.isSet("temperature")
-            ? GET_NOBOUNDARY(Field3D, species1["temperature"]) * Tnorm
+            ? Field3D{GET_NOBOUNDARY(Field3D, species1["temperature"]) * Tnorm}
             : 0.0;
     const Field3D density1 = GET_NOBOUNDARY(Field3D, species1["density"]) * Nnorm;
 
@@ -341,7 +342,7 @@ void BraginskiiCollisions::transform_impl(GuardedOptions& state) {
         // If temperature isn't set, assume zero. in eV
         const Field3D temperature2 =
             species2.isSet("temperature")
-                ? GET_NOBOUNDARY(Field3D, species2["temperature"]) * Tnorm
+                ? Field3D{GET_NOBOUNDARY(Field3D, species2["temperature"]) * Tnorm}
                 : 0.0;
 
         const Field3D density2 = GET_NOBOUNDARY(Field3D, species2["density"]) * Nnorm;
@@ -434,7 +435,7 @@ void BraginskiiCollisions::transform_impl(GuardedOptions& state) {
         // If temperature isn't set, assume zero
         const Field3D temperature2 =
             species2.isSet("temperature")
-                ? GET_NOBOUNDARY(Field3D, species2["temperature"]) * Tnorm
+                ? Field3D{GET_NOBOUNDARY(Field3D, species2["temperature"]) * Tnorm}
                 : 0.0;
         const BoutReal AA2 = get<BoutReal>(species2["AA"]);
         const Field3D density2 = GET_NOBOUNDARY(Field3D, species2["density"]) * Nnorm;
