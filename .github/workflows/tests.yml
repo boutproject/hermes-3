@@ -23,7 +23,7 @@ jobs:
       MPIRUN: mpiexec -np
       LD_LIBRARY_PATH: /home/runner/local/lib:$LD_LIBRARY_PATH
       BOUT_CONFIGURE_OPTIONS: ${{ matrix.build_type.bout_configure_options }}
-      HERMES_CONFIGURE_OPTIONS: ${{ matrix.build_type.hermes_configure_options }} -DHERMES_COVERAGE=${{ matrix.build_type.coverage }} -Dbout++_ROOT=/home/runner/local_bout -DHERMES_BUILD_BOUT=OFF
+      HERMES_CONFIGURE_OPTIONS: ${{ matrix.build_type.hermes_configure_options }} -DHERMES_COVERAGE=${{ matrix.build_type.coverage }} -Dbout++_ROOT=/home/runner/local_bout -DHERMES_BUILD_BOUT=OFF -DHERMES_UPDATE_GIT_SUBMODULE=OFF
       BUILD_TYPE: ${{ matrix.build_type.cmake_build_type }}
       TEST_TYPE: ${{ matrix.build_type.test_type }}
       PETSC_DIR: /usr/lib/petscdir/petsc3.12/x86_64-linux-gnu-real
@@ -107,11 +107,18 @@ jobs:
       - name: Build SUNDIALS
         run: ./external/BOUT-dev/.build_sundials_for_ci.sh
 
-      - name: Construct BOUT++ cache key
+      - name: Install pip packages
+        run: |
+          ./ci/pip_install.sh
+          # Add the pip install location to the runner's PATH
+          echo ~/.local/bin >> $GITHUB_PATH
+
+      - name: Assemble BOUT++ build info
         run: |
           git submodule status external/BOUT-dev > bout_build_info.txt
           echo "Build type: $BUILD_TYPE" >> bout_build_info.txt
           echo "$BOUT_CONFIGURE_OPTIONS" >> bout_build_info.txt
+          pip freeze | grep numpy >> bout_build_info.txt
           echo "${{ hashFiles('./external/BOUT-dev/.build_sundials_for_ci.sh') }}" >> bout_build_info.txt
           cat bout_build_info.txt
 
@@ -119,16 +126,10 @@ jobs:
         uses: actions/cache@v6
         with:
           path: /home/runner/local_bout
-          key: bout-${{ matrix.config.os }}-${{ hashFiles('bout_build_info.txt', '.build_bout_for_ci.sh') }}
+          key: bout-${{ matrix.config.os }}-${{ hashFiles('bout_build_info.txt', 'ci/build_bout_for_ci.sh') }}
 
       - name: Build BOUT++
-        run: ./.build_bout_for_ci.sh
-
-      - name: Install pip packages
-        run: |
-          ./ci/pip_install.sh
-          # Add the pip install location to the runner's PATH
-          echo ~/.local/bin >> $GITHUB_PATH
+        run: ./ci/build_bout_for_ci.sh
 
       - name: Build
         run: cmake . -B build -DCMAKE_BUILD_TYPE=$BUILD_TYPE $HERMES_CONFIGURE_OPTIONS &&
