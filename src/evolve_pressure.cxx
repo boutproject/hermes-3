@@ -249,7 +249,6 @@ void EvolvePressure::transform_impl(GuardedOptions& state) {
   // rather than pressure P = N * T
   Field3DParallel Pfloor = floor(P, 0.0);
   T = Pfloor / softFloor(N, density_floor);
-  P_solver = P;   // Save solver variable to restore later
   Pfloor = N * T; // Equation of state
 
   set(species["pressure"], Pfloor);
@@ -274,8 +273,6 @@ void EvolvePressure::finally(const Options& state) {
 
   const Field3D Nlim = softFloor(N, density_floor);
   const Field3D Pint = Nlim * T; // Internal energy uses limited density
-  const Field3D Pfloor =
-      floor(P, 0.0); // Keep diagnostics well behaved if P dips negative
 
   if (species.isSet("charge") and (fabs(get<BoutReal>(species["charge"])) > 1e-5)
       and state.isSection("fields") and state["fields"].isSet("phi")) {
@@ -421,7 +418,7 @@ void EvolvePressure::finally(const Options& state) {
   }
 
   if (evolve_log) {
-    ddt(logP) = ddt(P) / P_solver;
+    ddt(logP) = ddt(P) / Pfloor;
   }
 
 #if CHECKLEVEL >= 1
@@ -442,11 +439,6 @@ void EvolvePressure::finally(const Options& state) {
       flow_ylow += get<Field3D>(species["energy_flow_ylow"]);
     }
   }
-
-  // Restore solver pressure.
-  // Keep boundary conditions for post-processing.
-  P_solver.setBoundaryTo(P);
-  P = P_solver;
 }
 
 void EvolvePressure::outputVars(Options& state) {
