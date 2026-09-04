@@ -10,8 +10,8 @@ if [[ ! -d $HOME/local_bout/include/bout ]]; then
     cmake -DCMAKE_INSTALL_PREFIX="$HOME/local_bout" \
           -DCMAKE_BUILD_TYPE=$BUILD_TYPE \
           $BOUT_CONFIGURE_OPTIONS \
-          -j4 ..
-    make && make install
+          ..
+    make  -j4 && make -j4 install
     echo "****************************************"
     echo "Finished building BOUT++"
     echo "****************************************"
