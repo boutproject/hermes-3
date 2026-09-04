@@ -18,6 +18,7 @@
 #include <bout/globals.hxx>
 #include <bout/options.hxx>
 #include <bout/output.hxx>
+#include <bout/output_bout_types.hxx>
 #include <bout/solver.hxx>
 
 #include <string>
@@ -64,6 +65,10 @@ Kmodel::Kmodel(std::string name, Options& alloptions, Solver* solver)
   advection = options["advection"]
                   .doc("Turn on advection of k via parallel ion flow?")
                   .withDefault<bool>(false);
+
+  feedback = options["feedback"]
+                 .doc("Feedback the diffusion coefficients to the species?")
+                 .withDefault<bool>(false);
 
   substitutePermissions(
       "input", {"AA", "charge", "density", "pressure", "temperature", "velocity"});
@@ -137,34 +142,11 @@ void Kmodel::transform_impl(GuardedOptions& state) {
 
   Field3D inv_sq_c_s = 1.0 / (c_s * c_s);
 
-  gradPgradB_X = floor((DDX(Pi_hat) / Pi_hat) * (DDX(Bxy) / Bxy) / coord->g_11, 0.0);
-
-  if (k.isFci()) {
-    gradPgradB_Z = floor((DDZ(Pi_hat) / Pi_hat) * (DDZ(Bxy) / Bxy) / coord->g_33, 0.0);
-  } else {
-    gradPgradB_Y = floor((DDY(Pi_hat) / Pi_hat) * (DDY(Bxy) / Bxy) / coord->g_22, 0.0);
-  }
-
-  DDX_P = DDX(Pi_hat) / sqrt(coord->g_11);
-  DDX_B = DDX(Bxy) / sqrt(coord->g_11);
-
-  if (k.isFci()) {
-    DDZ_P = DDZ(Pi_hat) / sqrt(coord->g_33);
-    DDZ_B = DDZ(Bxy) / sqrt(coord->g_33);
-  } else {
-    DDY_P = DDY(Pi_hat) / sqrt(coord->g_22);
-    DDY_B = DDY(Bxy) / sqrt(coord->g_22);
-  }
-
   gamma = 0.0;
 
-  BOUT_FOR(i, Pi_hat.getRegion("RGN_NOY")) {
-    BoutReal grads = k.isFci() ? (DDX_P[i] / Pi_hat[i]) * (DDX_B[i] / Bxy[i])
-                                     + (DDZ_P[i] / Pi_hat[i]) * (DDZ_B[i] / Bxy[i])
-                               : (DDX_P[i] / Pi_hat[i]) * (DDX_B[i] / Bxy[i])
-                                     + (DDY_P[i] / Pi_hat[i]) * (DDY_B[i] / Bxy[i]);
-    gamma[i] = c_s[i] * sqrt(std::max(grads, 0.0));
-  }
+  Field3D gradPgradB = floor(Grad_perp(Pi_hat) * Grad_perp(Bxy) / (Pi_hat * Bxy), 0.0);
+
+  gamma = c_s * sqrt(gradPgradB);
 
   S_k = gamma * k;
 
@@ -179,6 +161,39 @@ void Kmodel::transform_impl(GuardedOptions& state) {
   alpha = R_major * L_par * gamma * inv_sq_c_s / (lambda_q * lambda_q);
 
   P_k = alpha * k * k;
+
+  // Feedback now also to the electrons
+  if (feedback) {
+    for (auto& kv : allspecies.getChildren()) {
+      GuardedOptions species = allspecies[kv.first]; // Note: Need non-const
+
+      // Skip if not charged
+      if (!(species.isSet("charge"))) {
+        continue;
+      }
+
+      // Skip if no pressure, density or velocity set
+      if (!species.isSet("pressure") or !species.isSet("density")
+          or !species.isSet("velocity")) {
+        continue;
+      }
+
+      Field3D N = get<Field3D>(species["density"]);
+      Field3D V = get<Field3D>(species["velocity"]);
+      Field3D T = get<Field3D>(species["temperature"]);
+      const BoutReal AA = get<BoutReal>(species["AA"]);
+
+      Field3D dummy1, dummy2;
+      add(species["density_source"],
+          Div_a_Grad_perp_upwind_flows(D_k, N, dummy1, dummy2));
+
+      //add(species["momentum_source"],
+      //	  Div_a_Grad_perp_upwind_flows(AA * V * D_k, N, dummy1, dummy2));
+
+      add(species["energy_source"],
+          Div_a_Grad_perp_upwind_flows((3.0 / 2.0) * T * D_k, N, dummy1, dummy2));
+    }
+  } // Feedback
 }
 
 void Kmodel::finally(const Options& state) {
@@ -191,46 +206,48 @@ void Kmodel::finally(const Options& state) {
     ddt(k) += Div_a_Grad_perp_upwind_flows(D_k, k, flux_k_x, flux_k_y);
   }
 
-  if (advection) {
+  for (const auto& kv : state["species"].getChildren()) {
 
-    for (const auto& kv : state["species"].getChildren()) {
+    const Options& species = kv.second;
 
-      const Options& species = kv.second;
-
-      // Skip if not charged
-      if (!(species.isSet("charge"))) {
-        continue;
-      }
-
-      // Electrons for now
-      auto q = get<BoutReal>(species["charge"]);
-      if (q < 0.0) {
-        continue;
-      }
-
-      // Skip if no pressure, density or velocity set
-      if (!species.isSet("pressure") or !species.isSet("density")
-          or !species.isSet("velocity")) {
-        continue;
-      }
-
-      // Typical wave speed used for numerical diffusion
-      Field3D fastest_wave;
-      if (state.isSet("fastest_wave")) {
-        fastest_wave = get<Field3D>(state["fastest_wave"]);
-      } else {
-        Field3D T = get<Field3D>(species["temperature"]);
-        const BoutReal AA = get<BoutReal>(species["AA"]);
-        fastest_wave = sqrt(T / AA);
-      }
-
-      Field3D N = get<Field3D>(species["density"]);
-      Field3D V = get<Field3D>(species["velocity"]);
-
-      Field3DParallel V_hat = N * V / Ni_hat;
-
-      ddt(k) -= V_hat * Div_par(k);
+    // Skip if not charged
+    if (!(species.isSet("charge"))) {
+      continue;
     }
+
+    // Skip if no pressure, density or velocity set
+    if (!species.isSet("pressure") or !species.isSet("density")
+        or !species.isSet("velocity")) {
+      continue;
+    }
+
+    Field3D N = get<Field3D>(species["density"]);
+    Field3D V = get<Field3D>(species["velocity"]);
+    const BoutReal AA = get<BoutReal>(species["AA"]);
+
+    // Skip if not using advection
+    if (!advection) {
+      continue;
+    }
+
+    // Electrons for now
+    auto q = get<BoutReal>(species["charge"]);
+    if (q < 0.0) {
+      continue;
+    }
+
+    // Typical wave speed used for numerical diffusion
+    Field3D fastest_wave;
+    if (state.isSet("fastest_wave")) {
+      fastest_wave = get<Field3D>(state["fastest_wave"]);
+    } else {
+      Field3D T = get<Field3D>(species["temperature"]);
+      fastest_wave = sqrt(T / AA);
+    }
+
+    Field3DParallel V_hat = N * V / Ni_hat;
+
+    ddt(k) -= V_hat * Div_par(k);
   }
 }
 

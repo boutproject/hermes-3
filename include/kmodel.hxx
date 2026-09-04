@@ -27,8 +27,6 @@ private:
 
   Field3D alpha;
 
-  Field3D gradPgradB_X, gradPgradB_Y, gradPgradB_Z;
-
   Field3D DDX_P, DDX_B;
 
   Field3D DDY_P, DDY_B;
@@ -58,7 +56,11 @@ private:
 
   bool diagnose;
 
-  bool diffusion, advection;
+  bool advection;
+
+  bool diffusion;
+
+  bool feedback;
 
   void transform_impl(GuardedOptions& state) override;
 };
