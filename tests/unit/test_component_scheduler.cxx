@@ -330,6 +330,17 @@ TEST_P(InvalidComponentOrderTest, BadDAG) {
   EXPECT_THROW(ComponentScheduler::create(options, options, nullptr), BoutException);
 }
 
+// If the autosorting is turned off then the scheduler will run
+// components in the order written, without throwing an exception
+TEST_P(InvalidComponentOrderTest, NoSort) {
+  Options options = GetParam().copy();
+  options["autosort"] = false;
+  auto scheduler = ComponentScheduler::create(options, options, nullptr);
+  scheduler->transform(options);
+  EXPECT_EQ(fmt::format("{}", fmt::join(OrderChecker::execution_order, ",")),
+            get<std::string>(options["components"]));
+}
+
 INSTANTIATE_TEST_SUITE_P(
     InvalidTopologicalSort, InvalidComponentOrderTest,
     testing::Values(

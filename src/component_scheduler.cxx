@@ -11,6 +11,7 @@
 #include <bout/bout_types.hxx>
 #include <bout/boutexception.hxx>
 #include <bout/options.hxx>
+#include <bout/output.hxx>
 #include <bout/utils.hxx> // for trim, strsplit
 #include <fmt/format.h>
 #include <fmt/ranges.h>
@@ -309,6 +310,18 @@ setReadDependencies(const std::vector<std::unique_ptr<Component>>& components,
   return missing;
 }
 
+void printComponents(const std::vector<std::unique_ptr<Component>>& components) {
+  if (!components.empty()) {
+    output_info << "\nComponents will be executed in the following order:\n";
+  }
+  for (const auto& comp : components) {
+    output_info << fmt::format("\t{}\n", *comp);
+  }
+  if (!components.empty()) {
+    output_info << "\n";
+  }
+}
+
 /// Topologically sorts the list of components to ensure variables are
 /// written and read in the right order.
 ///
@@ -435,6 +448,10 @@ ComponentScheduler::ComponentScheduler(Options& scheduler_options,
   const std::string component_names = scheduler_options["components"]
                                           .doc("Components in order of execution")
                                           .as<std::string>();
+  const bool autosort = scheduler_options["autosort"]
+                            .doc("Perform a topological sort to ensure components "
+                                 "executed in the right order?")
+                            .withDefault<bool>(true);
 
   std::vector<std::string> electrons;
   std::vector<std::string> neutrals;
@@ -495,7 +512,10 @@ ComponentScheduler::ComponentScheduler(Options& scheduler_options,
     component->declareAllSpecies(species);
   }
 
-  ::sortComponents(components);
+  if (autosort) {
+    ::sortComponents(components);
+  }
+  printComponents(components);
 }
 
 std::unique_ptr<ComponentScheduler> ComponentScheduler::create(Options& scheduler_options,
