@@ -64,6 +64,7 @@ protected:
     Options state{{comp_name,
                    {
                        {"type", this->parser.get_reaction_str()},
+                       {"is_internal", "true"},
                        {"diagnose", true},
                    }},
                   {"units", {{"eV", 1.0}, {"inv_meters_cubed", 1.0}, {"seconds", 1.0}}},
