@@ -1,6 +1,7 @@
 #include "gtest/gtest.h"
 
 #include "fake_mesh_fixture.hxx"
+#include "fake_solver.hxx"
 #include "test_extras.hxx" // FakeMesh
 
 #include "../../include/kmodel.hxx"
