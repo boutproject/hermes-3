@@ -231,8 +231,7 @@ void Kmodel::finally(const Options& state) {
 
       Field3DParallel V_hat = N * V / Ni_hat;
 
-      Field3D dummy;
-      ddt(k) -= FV::Div_par_mod<hermes::Limiter>(V_hat, k, fastest_wave, dummy);
+      ddt(k) -= V_hat * Div_par(k);
     }
   }
 }
