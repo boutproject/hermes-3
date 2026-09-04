@@ -183,6 +183,11 @@ evolve_pressure
 Evolves the pressure in time. This pressure is named ``P<species>`` where ``<species>``
 is the short name of the evolving species e.g. ``Pe``.
 
+Away from the density floor this follows the usual pressure equation.
+In low-density cells Hermes regularises the internal-energy evolution
+using a limited density and then maps back to the physical pressure
+:math:`P = N T`. See :ref:`sec-low-density-regions`.
+
 Parallel conduction is included if the global
 :ref:`sec-braginskii_conduction` component has been used.
 
@@ -357,6 +362,10 @@ evolve_momentum
 
 Evolves the momentum `NV<species>` in time. The evolving quantity includes the atomic
 mass number, so should be divided by `AA` to obtain the particle flux.
+
+To avoid singular velocities in dilute cells, velocity and some
+transport terms are calculated using a limited density. See
+:ref:`sec-low-density-regions`.
 
 If the component option :code:`diagnose = true` then additional fields
 will be saved to the dump files: The velocity ``V + name``
@@ -680,6 +689,10 @@ and :math:`z`.  It was adopted from the approach used in UEDGE and this [M.V. Um
 is more advanced in having a separate neutral pressure equation, similar to the
 new AFN (Advanced Fluid Neutral) model in SOLPS-ITER [N. Horsten, N.F. (2017)].
 
+In low-density cells this component regularises the neutral internal
+energy using a limited density and provides extra robustness options
+such as ``freeze_low_density``. See :ref:`sec-low-density-regions`.
+
 .. math::
 
    \begin{aligned}
@@ -845,7 +858,6 @@ parallel momentum, are then calculated from the limited diffusion coefficient:
    \eta_{n} =& \frac{2}{5} m_n \kappa_{n} \\
    \end{aligned}
 
-
 .. doxygenstruct:: NeutralMixed
    :members:
 
@@ -855,6 +867,11 @@ parallel momentum, are then calculated from the limited diffusion coefficient:
 This model evolves the equations for a neutral fluid, assuming
 axisymmetry (constant in :math:`Z`), for the density :math:`n_n`,
 velocity :math:`\mathbf{v}_n` and pressure :math:`p_n`.
+
+As in ``neutral_mixed``, Hermes applies a low-density regularisation to
+the neutral thermodynamics so that the evolved internal energy remains
+well behaved as density becomes small. See
+:ref:`sec-low-density-regions`.
 
 .. math::
 
