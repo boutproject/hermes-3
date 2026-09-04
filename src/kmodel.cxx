@@ -26,9 +26,10 @@
 using bout::globals::mesh;
 
 Kmodel::Kmodel(std::string name, Options& alloptions, Solver* solver)
-    : NamedComponent(name, {readIfSet("species:{all_species}:{input}"),
-                            readOnly("sound_speed"), readOnly("fastest_wave"),
-                            readWrite("species:{all_species}:{output}")}) {
+    : NamedComponent(name,
+                     {readIfSet("species:{all_species}:{input}"), readOnly("sound_speed"),
+                      readOnly("fastest_wave"), readWrite("fields:D_k"),
+                      readWrite("species:{all_species}:{output}")}) {
 
   solver->add(k, "k");
 
@@ -77,8 +78,6 @@ Kmodel::Kmodel(std::string name, Options& alloptions, Solver* solver)
 }
 
 void Kmodel::transform_impl(GuardedOptions& state) {
-
-  auto fields = state["fields"];
 
   auto coord = mesh->getCoordinates();
 
@@ -190,6 +189,8 @@ void Kmodel::transform_impl(GuardedOptions& state) {
           Div_a_Grad_perp_upwind_flows((3.0 / 2.0) * T * D_k, N, dummy1, dummy2));
     }
   } // Feedback
+
+  set(state["fields"]["D_k"], D_k);
 }
 
 void Kmodel::finally(const Options& state) {
