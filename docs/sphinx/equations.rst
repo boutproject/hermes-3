@@ -671,8 +671,8 @@ it is recommended to set ``dneut`` according to the field line pitch at the targ
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 
-The below describes the `neutral_mixed` component used for 2D and 3D simulations. Note that all dimensionalities
-are compatible with the `neutral_boundary` component which facilitates energy losses to the wall through neutral reflection.
+The below describes the `neutral_mixed` component used for 2D and 3D simulations. See :ref:`sec-neutral_mixed_bc` for the
+corresponding boundary conditions and :ref:`sec-neutral_boundary` on enable wall energy losses due to neutral reflection.
 
 The `neutral_mixed` component solves fluid equations along :math:`y`
 (parallel to the magnetic field), and uses diffusive transport in :math:`x`

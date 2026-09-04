@@ -279,6 +279,13 @@ auto runDnnTest(Options options, bool with_collisions = false) {
 
   options["units"] = {
       {"eV", 1.0}, {"inv_meters_cubed", 1.0}, {"seconds", 1.0}, {"meters", 1.0}};
+
+  // Effectively disable the gradient floors - this is necessary because
+  // those are tuned to realistic conditions and the tests only check limiter
+  // behaviour at the moment.
+  options["d"]["limiter_gradient_floor"] = 1e-10;
+  options["d"]["limiter_gradient_ceiling"] = 1e10;
+
   NeutralMixed component("d", options, &solver);
 
   // Make pressure gradient in X direction
@@ -301,12 +308,6 @@ auto runDnnTest(Options options, bool with_collisions = false) {
     state["species"]["d"]["collision_frequency"] = 1.0;
     state["species"]["d"]["collision_frequencies"]["d_d+_cx"] = 100.0;
   }
-
-  // Effectively disable the gradient floors - this is necessary because
-  // those are tuned to realistic conditions and the tests only check limiter
-  // behaviour at the moment.
-  state["species"]["d"]["limiter_gradient_floor"] = 1e-10;
-  state["species"]["d"]["limiter_gradient_ceiling"] = 1e10;
 
   component.finally(state);
 
@@ -372,6 +373,10 @@ TEST_F(NeutralMixedTest, DnnLooseLimit) {
 }
 
 // Check that the explicit diffusion limit can override the flux limitation.
+// Dmax is a harmonic mean of the flux limit and the explicit limit, so it will never
+// be exactly equal to the explicit limit.
+// This test checks if both Dmax and Dnn are within 1% of an explicit limit, and whether
+// Dmax is always less than the explicit limit (as expected for a harmonic mean).
 TEST_F(NeutralMixedTest, DnnExplicitLimit) {
 
   auto [Dnn, Dunl, Dmax] = runDnnTest({{"d",
@@ -382,8 +387,9 @@ TEST_F(NeutralMixedTest, DnnExplicitLimit) {
                                          {"diffusion_limit", 1e-5}}}});
 
   BOUT_FOR_SERIAL(i, Dnn.getRegion("RGN_NOBNDRY")) {
-    EXPECT_DOUBLE_EQ(Dmax[i], 1e-5);
-    EXPECT_NEAR(Dnn[i], 1e-5, 1e-3 * Dnn[i]);
+    EXPECT_NEAR(Dmax[i], 1e-5, 1e-2 * Dmax[i]);
+    EXPECT_NEAR(Dnn[i], 1e-5, 1e-2 * Dnn[i]);
+    EXPECT_LT(Dmax[i], 1e-5);
   }
 }
 
