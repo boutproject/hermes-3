@@ -91,6 +91,10 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
   poloidal_flows =
       options["poloidal_flows"].doc("Include poloidal ExB flow").withDefault<bool>(true);
 
+  p_div_v = options["p_div_v"]
+                .doc("Use p*Div(v) form? Default, false => v * Grad(p) form")
+                .withDefault<bool>(false);
+
   hyper_z = options["hyper_z"].doc("Hyper-diffusion in Z").withDefault(-1.0);
 
   hyper_z_T = options["hyper_z_T"]
@@ -257,8 +261,10 @@ void EvolvePressure::finally(const Options& state) {
   T = get<Field3D>(species["temperature"]);
   N = get<Field3D>(species["density"]);
 
-  Field3D Nlim = softFloor(N, density_floor);
-  Field3D Pint = Nlim * T; // Internal energy uses limited density
+  const Field3D Nlim = softFloor(N, density_floor);
+  const Field3D Pint = Nlim * T; // Internal energy uses limited density
+  const Field3D Pfloor =
+      floor(P, 0.0); // Keep diagnostics well behaved if P dips negative
 
   if (species.isSet("charge") and (fabs(get<BoutReal>(species["charge"])) > 1e-5)
       and state.isSection("fields") and state["fields"].isSet("phi")) {
@@ -283,14 +289,23 @@ void EvolvePressure::finally(const Options& state) {
       fastest_wave = sqrt(T / AA);
     }
 
-    // Use V * Grad(P) form
-    //
-    // The internal energy term Pint = Nlim * T
-    ddt(P) -= FV::Div_par_mod<hermes::Limiter>(Pint + (2. / 3) * P, V, fastest_wave,
-                                               flow_ylow_advection);
+    if (p_div_v) {
+      // EOS-aware p*Div(V) form:
+      // Advect the limited-density internal energy Pint = Nlim * T
+      // while keeping the compressional work term based on the physical pressure P = N * T.
+      ddt(P) -=
+          FV::Div_par_mod<hermes::Limiter>(Pint, V, fastest_wave, flow_ylow_advection);
 
-    E_VgradP = V * Grad_par(P);
-    ddt(P) += (2. / 3) * E_VgradP;
+      E_PdivV = -Pfloor * Div_par(V);
+      ddt(P) += (2. / 3) * E_PdivV;
+    } else {
+      // EOS-aware V * Grad(P) form
+      ddt(P) -= FV::Div_par_mod<hermes::Limiter>(Pint + (2. / 3) * P, V, fastest_wave,
+                                                 flow_ylow_advection);
+
+      E_VgradP = V * Grad_par(P);
+      ddt(P) += (2. / 3) * E_VgradP;
+    }
 
     flow_ylow_advection *= 5. / 2; // Energy flow
     flow_ylow = flow_ylow_advection;
@@ -476,15 +491,28 @@ void EvolvePressure::outputVars(Options& state) {
                     {"species", name},
                     {"source", "evolve_pressure"}});
 
-    if (E_VgradP.isAllocated()) {
-      set_with_attrs(state["E" + name + "_VgradP"], E_VgradP,
-                     {{"time_dimension", "t"},
-                      {"units", "W / m^-3"},
-                      {"conversion", Pnorm * Omega_ci},
-                      {"standard_name", "energy source"},
-                      {"long_name", name + " energy source due to pressure gradient"},
-                      {"species", name},
-                      {"source", "evolve_pressure"}});
+    if (p_div_v) {
+      if (E_PdivV.isAllocated()) {
+        set_with_attrs(state["E" + name + "_PdivV"], E_PdivV,
+                       {{"time_dimension", "t"},
+                        {"units", "W / m^-3"},
+                        {"conversion", Pnorm * Omega_ci},
+                        {"standard_name", "energy source"},
+                        {"long_name", name + " energy source due to pressure gradient"},
+                        {"species", name},
+                        {"source", "evolve_pressure"}});
+      }
+    } else {
+      if (E_VgradP.isAllocated()) {
+        set_with_attrs(state["E" + name + "_VgradP"], E_VgradP,
+                       {{"time_dimension", "t"},
+                        {"units", "W / m^-3"},
+                        {"conversion", Pnorm * Omega_ci},
+                        {"standard_name", "energy source"},
+                        {"long_name", name + " energy source due to pressure gradient"},
+                        {"species", name},
+                        {"source", "evolve_pressure"}});
+      }
     }
     if (flow_xlow.isAllocated()) {
       set_with_attrs(

@@ -26,6 +26,7 @@ struct EvolvePressure : public Component {
   ///   - poloidal_flows       Include poloidal ExB flows? Default is true
   ///   - precon               Enable preconditioner? Note: solver may not use it even if
   ///                          enabled.
+  ///   - p_div_v              Use p * Div(v) form? Default is v * Grad(p) form
   ///   - thermal_conduction   Include parallel heat conduction? Default is true
   ///
   /// - P<name>  e.g. "Pe", "Pd+"
@@ -67,6 +68,7 @@ private:
   bool neumann_boundary_average_z; ///< Apply neumann boundary with Z average?
   bool poloidal_flows;
   bool thermal_conduction; ///< Include thermal conduction?
+  bool p_div_v;            ///< Use p*Div(v) form? False -> v * Grad(p)
 
   bool evolve_log; ///< Evolve logarithm of P?
   Field3D logP;    ///< Natural logarithm of P

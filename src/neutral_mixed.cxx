@@ -98,12 +98,42 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
   lax_flux =
       options["lax_flux"].doc("Enable stabilising lax flux?").withDefault<bool>(true);
 
-  neutral_lmax = 0.1 / meters; // Normalised length
+  neutral_lmax = options["neutral_lmax"]
+                     .doc("Maximum neutral mean free path in [m]. Used to calculate "
+                          "collisionality floor.")
+                     .withDefault(1.0)
+                 / meters;
+
+  limiter_gradient_floor =
+      options["limiter_gradient_floor"]
+          .doc("Floor for |grad log Pn| in the D limiter "
+               "denominator in SI [1/m]. Higher values improve robustness "
+               "in shallow Pn gradients but may affect the answer. ")
+          .withDefault(10.0)
+      * meters;
+
+  limiter_gradient_ceiling =
+      options["limiter_gradient_ceiling"]
+          .doc("Ceiling for |grad log Pn| in the D limiter "
+               "denominator in SI [1/m]. Lower values can improve robustness "
+               "in steep Pn gradients but may affect the answer. ")
+          .withDefault(100.0)
+      * meters;
 
   flux_limit =
       options["flux_limit"]
-          .doc("Limit diffusive fluxes to fraction of thermal speed. <0 means off.")
-          .withDefault(0.2);
+          .doc("Limit diffusive fluxes to fraction of free-streaming flux. <0 means off.")
+          .withDefault(0.5);
+
+  flux_limiter_sharpness = options["flux_limiter_sharpness"]
+                               .doc("Sharpness parameter for flux limiter. Higher values "
+                                    "make the limiter more abrupt. Must be >0")
+                               .withDefault(1.0);
+
+  if (flux_limiter_sharpness <= 0.0) {
+    throw BoutException("flux_limiter_sharpness must be > 0.0, got {:g}",
+                        flux_limiter_sharpness);
+  }
 
   diffusion_limit = options["diffusion_limit"]
                         .doc("Upper limit on diffusion coefficient [m^2/s]. <0 means off")
@@ -130,7 +160,7 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
   diffusion_collisions_mode = options["diffusion_collisions_mode"]
                                   .doc("Can be multispecies: all enabled collisions "
                                        "excl. IZ, or afn: CX, IZ and NN collisions")
-                                  .withDefault<std::string>("multispecies");
+                                  .withDefault<std::string>("afn");
 
   if (precondition) {
     inv = Laplacian::create(&options["precon_laplace"]);
@@ -353,12 +383,12 @@ void NeutralMixed::finally(const Options& state) {
   //
   //
 
-  const Field3D Rnn = sqrt(Tnlim / AA)
-                      / neutral_lmax; // Neutral-neutral collisions [normalised frequency]
+  // Pseudo-collisionality. A collision frequency calculated from user-set
+  // maximum neutral mean free path to use as a floor for neutral collisionality.
+  const Field3D nu_pseudo_mfp = sqrt(Tnlim / AA) / neutral_lmax;
   if (collisionality_override > 0.0) {
     // user has set an override for collision frequency
-    Dnn = (Tn / AA) / collisionality_override;
-
+    Dnn_unlimited = (Tn / AA) / collisionality_override;
   } else {
     if (localstate.isSet("collision_frequency")) {
       // Collisionality
@@ -422,26 +452,53 @@ void NeutralMixed::finally(const Options& state) {
         nu += GET_VALUE(Field3D, localstate["collision_frequencies"][collision_name]);
       }
 
+      // Floor collisionality to avoid unphysically large Dnn at low plasma densities
+      Field3D nu_floored = nu + nu_pseudo_mfp * exp(-nu / nu_pseudo_mfp);
+
       // Dnn = Vth^2 / sigma
-      Dnn = (Tnlim / AA) / (nu + Rnn);
+      Dnn_unlimited = (Tnlim / AA) / nu_floored;
     } else {
-      Dnn = (Tnlim / AA) / Rnn;
-    }
-  }
-  if (flux_limit > 0.0) {
-    // Apply flux limit to diffusion,
-    // using the local thermal speed and pressure gradient magnitude
-    Field3D Dmax =
-        flux_limit * sqrt(Tnlim / AA) / (abs(Grad(logPnlim)) + 1. / neutral_lmax);
-    BOUT_FOR(i, Dnn.getRegion("RGN_NOBNDRY")) {
-      Dnn[i] = Dnn[i] * Dmax[i] / (Dnn[i] + Dmax[i]);
+      Dnn_unlimited = (Tnlim / AA) / nu_pseudo_mfp;
     }
   }
 
+  // Start from the unlimited coefficient. copy() forces independent storage, so
+  // that later writes to Dnn / Dmax do not alias back onto Dnn_unlimited.
+  Dnn = copy(Dnn_unlimited);
+  Dmax = copy(Dnn_unlimited);
+
+  // Flux limit: cap diffusion at a fraction of the free-streaming particle flux,
+  // set through the ceiling coefficient Dmax.
+  if (flux_limit > 0.0) {
+    const Field3D vn_bar = sqrt(8.0 * Tnlim / (PI * AA));
+    const Vector3D g = Grad_perp(logPnlim);
+    const Field3D g_sq = g * g;
+    const BoutReal g_max_sq = SQ(limiter_gradient_ceiling);
+    const Field3D g_ceil = g_sq * g_max_sq / (g_sq + g_max_sq);
+    const Field3D g_reg = sqrt(g_ceil + SQ(limiter_gradient_floor));
+
+    Dmax = flux_limit * 0.25 * vn_bar / g_reg;
+  }
+
+  // Hard upper limit on the diffusion coefficient. Clamp Dmax down to whichever
+  // cap is tighter, so both limiters compose through the single blend below.
   if (diffusion_limit > 0.0) {
-    // Impose an upper limit on the diffusion coefficient
-    BOUT_FOR(i, Dnn.getRegion("RGN_NOBNDRY")) {
-      Dnn[i] = Dnn[i] * diffusion_limit / (Dnn[i] + diffusion_limit);
+    BOUT_FOR(i, Dmax.getRegion("RGN_ALL")) {
+      Dmax[i] = BOUTMIN(Dmax[i], diffusion_limit);
+    }
+  }
+
+  if (flux_limit > 0.0 || diffusion_limit > 0.0) {
+    if (flux_limiter_sharpness == 1.0) {
+      BOUT_FOR(i, Dnn.getRegion("RGN_NOBNDRY")) {
+        Dnn[i] = Dnn_unlimited[i] * Dmax[i] / (Dnn_unlimited[i] + Dmax[i]);
+      }
+    } else {
+      BOUT_FOR(i, Dnn.getRegion("RGN_NOBNDRY")) {
+        Dnn[i] = Dnn_unlimited[i]
+                 * pow(1.0 + pow(Dnn_unlimited[i] / Dmax[i], flux_limiter_sharpness),
+                       -1.0 / flux_limiter_sharpness);
+      }
     }
   }
 
