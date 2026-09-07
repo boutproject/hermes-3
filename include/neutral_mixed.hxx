@@ -65,6 +65,7 @@ private:
   BoutReal neutral_lmax;                 ///< Used for collisionality floor
 
   bool sheath_ydown, sheath_yup;
+  bool zero_sheath_conductivity, zero_sheath_viscosity;
 
   BoutReal density_floor; ///< Minimum Nn used when dividing NVn by Nn to get Vn.
   BoutReal temperature_floor;

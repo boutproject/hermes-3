@@ -75,6 +75,20 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
                    .doc("Enable wall boundary conditions at yup")
                    .withDefault<bool>(true);
 
+  zero_sheath_conductivity = options["zero_sheath_conductivity"]
+                                 .doc("Prevents heat conduction through the sheath "
+                                      "by zeroing the conductivity coefficient at "
+                                      "the boundary. Applies only where sheath_ydown/ "
+                                      "sheath_yup are enabled.")
+                                 .withDefault<bool>(true);
+
+  zero_sheath_viscosity = options["zero_sheath_viscosity"]
+                              .doc("Prevents neutral viscosity through the sheath "
+                                   "by zeroing the viscosity coefficient at "
+                                   "the boundary. Applies only where sheath_ydown/ "
+                                   "sheath_yup are enabled.")
+                              .withDefault<bool>(true);
+
   density_floor = options["density_floor"]
                       .doc("A minimum density used when dividing NVn by Nn. "
                            "Normalised units.")
@@ -801,9 +815,21 @@ void NeutralMixed::finally(const Options& state) {
     }
   };
 
-  for (Field3D* f : {&Dnn, &DnnNn, &DnnPn, &DnnNVn, &kappa_n_perp, &kappa_n_par,
-                     &kappa_n_unlimited, &eta_n_perp, &eta_n_par, &eta_n_unlimited}) {
-    zero_at_boundary(*f);
+  zero_at_boundary(Dnn);
+  zero_at_boundary(DnnNn);
+  zero_at_boundary(DnnPn);
+  zero_at_boundary(DnnNVn);
+
+  if (zero_sheath_conductivity) {
+    zero_at_boundary(kappa_n_unlimited);
+    zero_at_boundary(kappa_n_par);
+    zero_at_boundary(kappa_n_perp);
+  }
+
+  if (zero_sheath_viscosity) {
+    zero_at_boundary(eta_n_unlimited);
+    zero_at_boundary(eta_n_perp);
+    zero_at_boundary(eta_n_par);
   }
 
   // Sound speed appearing in Lax flux for advection terms
