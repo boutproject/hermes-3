@@ -61,7 +61,7 @@ struct SpeciesInformation {
         electrons.push_back(sp);
       } else if (type == SpeciesType::ion) {
         positive_ions.push_back(sp);
-      } else if (type == SpeciesType::neutral) {
+      } else if (isNeutralSpeciesType(type)) {
         neutrals.push_back(sp);
       } else {
         throw BoutException("Species {} has unrecognised type {}", sp, toString(type));
