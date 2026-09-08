@@ -2,6 +2,7 @@
 #ifndef ANOMALOUS_DIFFUSION_H
 #define ANOMALOUS_DIFFUSION_H
 
+#include "../include/div_ops.hxx"
 #include "component.hxx"
 
 /// Add anomalous diffusion of density, momentum and energy
@@ -33,11 +34,13 @@ private:
 
   bool diagnose;                           ///< Outputting diagnostics?
   bool include_D, include_chi, include_nu; ///< Which terms should be included?
-  Field2D anomalous_D;                     ///< Anomalous density diffusion coefficient
-  Field2D anomalous_chi;                   ///< Anomalous thermal diffusion coefficient
-  Field2D anomalous_nu;                    ///< Anomalous momentum diffusion coefficient
+  Coordinates::FieldMetric anomalous_D;    ///< Anomalous density diffusion coefficient
+  Coordinates::FieldMetric anomalous_chi;  ///< Anomalous thermal diffusion coefficient
+  Coordinates::FieldMetric anomalous_nu;   ///< Anomalous momentum diffusion coefficient
 
   bool anomalous_sheath_flux; ///< Allow anomalous diffusion into sheath?
+
+  std::shared_ptr<FCI::dagp_fv> dagp_op; ///< Perp. diffusion operator for Fci
 
   /// Inputs
   /// - species
