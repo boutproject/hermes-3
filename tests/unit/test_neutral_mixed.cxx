@@ -632,6 +632,35 @@ TEST_F(NeutralMixedTest, CombinedLimitersRejectPerChannelOptions) {
 }
 
 /////////////////////////////////////////////////////////////////////////////////
+// REGULARISATION
+/////////////////////////////////////////////////////////////////////////////////
+
+// Test Dmax in each limit of the regularisation.
+TEST_F(NeutralMixedTest, DmaxRegularisationLimits) {
+
+  const auto regularise_Dmax = [](const std::string& key, BoutReal value) {
+    return runNeutralMixedTest({{"d",
+                                 {{"type", "neutral_mixed"},
+                                  {"diagnose", true},
+                                  {"AA", 2.0},
+                                  {key, value}}}})["Dnnd_max"]
+        .as<Field3D>();
+  };
+
+  Field3D Dmax_unregularised = regularise_Dmax("limiter_gradient_floor", 1e-10);
+  Field3D Dmax_floored = regularise_Dmax("limiter_gradient_floor", 1e3);
+  Field3D Dmax_ceilinged = regularise_Dmax("limiter_gradient_ceiling", 1e-4);
+
+  BOUT_FOR_SERIAL(i, Dmax_unregularised.getRegion("RGN_NOBNDRY")) {
+    // Flooring the gradient reduces Dmax
+    EXPECT_LT(Dmax_floored[i], Dmax_unregularised[i]);
+
+    // Ceiling the gradient increases Dmax
+    EXPECT_GT(Dmax_ceilinged[i], Dmax_unregularised[i]);
+  }
+}
+
+/////////////////////////////////////////////////////////////////////////////////
 // SHEATH TESTS
 /////////////////////////////////////////////////////////////////////////////////
 
