@@ -1,0 +1,110 @@
+#!/usr/bin/env python3
+
+# Python script to run and analyse MMS test
+
+import sys
+from pathlib import Path
+
+from boutdata.collect import collect
+from boututils.run_wrapper import launch_safe, shell
+from numpy import abs, array, log, max, mean, sqrt
+
+gridpath = "../../../grids/MMS_slab_y/"
+
+
+def gridname(ny):
+    return gridpath + f"MMS_straight_slab_6_{ny}_4_False.fci.grid.nc"
+
+
+# List of NY values to use
+nylist = [32, 64]
+
+nout = 10
+timestep = 50 / nout
+
+nproc = 1
+
+varnames = ["NVe"]
+
+results = {}
+for var in varnames:
+    results[var] = {"l2": [], "inf": []}
+
+for ny in nylist:
+    args = f"mesh:file={gridname(ny)} nout={nout} timestep={timestep}"
+
+    print("Running with " + args)
+
+    # Delete old data
+    shell("rm data/BOUT.dmp.*.nc")
+
+    # Command to run
+    cmd = "../../../hermes-3 " + args
+    # Launch using MPI
+    _, out = launch_safe(cmd, nproc=nproc, pipe=True)
+    Path(f"run.log.{ny}").write_text(out)
+
+    # Collect data
+    for var in varnames:
+        E = collect("E_" + var, tind=[nout, nout], path="data", info=False)
+        E = E[:, 2:-2, :, :]
+
+        l2 = sqrt(mean(E**2))
+        linf = max(abs(E))
+        results[var]["l2"].append(l2)
+        results[var]["inf"].append(linf)
+
+        print(f"Error norm {var}: l-2 {l2:f} l-inf {linf:f}")
+
+# Calculate grid spacing
+dy = 1.0 / array(nylist)
+
+success = True
+
+for var in varnames:
+    l2 = results[var]["l2"]
+    order = log(l2[-1] / l2[-2]) / log(dy[-1] / dy[-2])
+    print(f"Convergence order {var} = {order:f}")
+
+    if order < 1.8:
+        success = False
+
+# plot errors
+try:
+    import matplotlib.pyplot as plt
+
+    for var in varnames:
+        l2 = results[var]["l2"]
+        inf = results[var]["inf"]
+        order = log(l2[-1] / l2[-2]) / log(dy[-1] / dy[-2])
+
+        plt.plot(dy, l2, "-o", label=r"$l_2$ (" + var + ")")
+        plt.plot(dy, inf, "-x", label=r"$l_\infty$ (" + var + ")")
+        plt.plot(dy, l2[-1] * (dy / dy[-1]) ** order, "--", label=f"Order {order:.1f}")
+
+    plt.legend(loc="upper left")
+    plt.grid()
+
+    plt.yscale("log")
+    plt.xscale("log")
+
+    plt.xlabel(r"Mesh spacing $\delta y$")
+    plt.ylabel("Error norm")
+
+    plt.savefig("fluid_norm.pdf")
+    plt.savefig("fluid_norm.png")
+
+    # plt.show()
+    plt.close()
+except:  # noqa
+    # Plotting could fail for any number of reasons, and the actual
+    # error raised may depend on, among other things, the current
+    # matplotlib backend, so catch everything
+    pass
+
+if success:
+    print(" => Test passed")
+    sys.exit(0)
+else:
+    print(" => Test failed")
+    sys.exit(1)
