@@ -103,6 +103,11 @@ SheathBoundarySimple::SheathBoundarySimple(std::string name, Options& alloptions
                               .doc("Ion polytropic coefficient in Bohm sound speed")
                               .withDefault(1.0);
 
+  sheath_electron_polytropic =
+      options["sheath_electron_polytropic"]
+          .doc("Electron polytropic coefficient in Bohm sound speed")
+          .withDefault(1.0);
+
   lower_y = options["lower_y"].doc("Boundary on lower y?").withDefault<bool>(true);
   upper_y = options["upper_y"].doc("Boundary on upper y?").withDefault<bool>(true);
 
@@ -240,7 +245,9 @@ void SheathBoundarySimple::transform_impl(GuardedOptions& state) {
                 floor(0.5 * (Ti_im + Ti[i]), 1e-5); // ion temperature
 
             // Sound speed squared
-            BoutReal C_i_sq = (sheath_ion_polytropic * tisheath + Zi * tesheath) / Mi;
+            BoutReal C_i_sq = (sheath_ion_polytropic * tisheath
+                               + Zi * sheath_electron_polytropic * tesheath)
+                              / Mi;
 
             const BoutReal visheath = std::min(Vi[i], -sqrt(C_i_sq));
 
@@ -268,7 +275,9 @@ void SheathBoundarySimple::transform_impl(GuardedOptions& state) {
             const BoutReal tisheath =
                 floor(0.5 * (Ti_ip + Ti[i]), 1e-5); // ion temperature
 
-            BoutReal C_i_sq = (sheath_ion_polytropic * tisheath + Zi * tesheath) / Mi;
+            BoutReal C_i_sq = (sheath_ion_polytropic * tisheath
+                               + Zi * sheath_electron_polytropic * tesheath)
+                              / Mi;
 
             const BoutReal visheath = std::max(Vi[i], sqrt(C_i_sq));
 
@@ -586,7 +595,9 @@ void SheathBoundarySimple::transform_impl(GuardedOptions& state) {
               floor(0.5 * (Ti[im] + Ti[i]), 1e-5); // ion temperature
 
           // Ion speed into sheath
-          BoutReal C_i_sq = (sheath_ion_polytropic * tisheath + Zi * tesheath) / Mi;
+          BoutReal C_i_sq = (sheath_ion_polytropic * tisheath
+                             + Zi * sheath_electron_polytropic * tesheath)
+                            / Mi;
 
           // Negative -> into sheath
           BoutReal visheath = std::min(Vi[i], -sqrt(C_i_sq));
@@ -656,7 +667,9 @@ void SheathBoundarySimple::transform_impl(GuardedOptions& state) {
               floor(0.5 * (Ti[ip] + Ti[i]), 1e-5); // ion temperature
 
           // Ion speed into sheath
-          BoutReal C_i_sq = (sheath_ion_polytropic * tisheath + Zi * tesheath) / Mi;
+          BoutReal C_i_sq = (sheath_ion_polytropic * tisheath
+                             + Zi * sheath_electron_polytropic * tesheath)
+                            / Mi;
 
           // Positive -> into sheath
           BoutReal visheath = std::max(Vi[i], sqrt(C_i_sq));
