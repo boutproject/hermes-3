@@ -292,10 +292,11 @@ TEST_F(SheathBoundaryPenaltyTest, CalculateVolumetricPenaltyReturnsElectronPenal
   const BoutReal Me = 0.1;
   const BoutReal gamma_e = 3.5;
   const BoutReal penalty_timescale = 4.0;
+  const BoutReal mask_source_factor = 1.0;
 
   const auto result = SheathBoundaryPenalty::calculateVolumetricPenalty(
-      penalty_data, Ne, Te, Ve, Me, gamma_e, penalty_timescale, density_source,
-      momentum_source, energy_source);
+      penalty_data, Ne, Te, Ve, Me, gamma_e, mask_source_factor, penalty_timescale,
+      density_source, momentum_source, energy_source);
 
   EXPECT_DOUBLE_EQ(result.density[active],
                    -0.25 * 7.0 - 0.25 * (0.5 - 1e-5) / penalty_timescale);
@@ -326,12 +327,13 @@ TEST_F(SheathBoundaryPenaltyTest, CalculateVolumetricPenaltyReturnsIonPenaltyTer
 
   const BoutReal Mi = 2.0;
   const BoutReal gamma_i = 4.0;
+  const BoutReal mask_source_factor = 1.0;
   const BoutReal penalty_timescale = 10.0;
   const BoutReal density_floor = 1.0;
 
   const auto result = SheathBoundaryPenalty::calculateVolumetricPenalty(
-      penalty_data, Ni, Ti, Vi, Mi, gamma_i, penalty_timescale, density_source,
-      momentum_source, energy_source, density_floor);
+      penalty_data, Ni, Ti, Vi, Mi, gamma_i, mask_source_factor, penalty_timescale,
+      density_source, momentum_source, energy_source, density_floor);
 
   EXPECT_DOUBLE_EQ(result.density[active], -0.5 * 5.0);
   EXPECT_DOUBLE_EQ(result.momentum[active],

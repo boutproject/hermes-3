@@ -66,11 +66,13 @@ struct SheathBoundaryPenalty : public NamedComponent<SheathBoundaryPenalty> {
                                                         BoutReal threshold = 1e-5);
 
   /// Calculate the volumetric penalty terms for a species
-  static PenaltySourceData calculateVolumetricPenalty(
-      const PenaltyMaskData& penalty_data, const Field3D& Ni, const Field3D& Ti,
-      const Field3D& Vi, BoutReal Mi, BoutReal gamma_i, BoutReal penalty_timescale,
-      const Field3D& density_source, const Field3D& momentum_source,
-      const Field3D& energy_source, BoutReal density_floor = 1e-5);
+  static PenaltySourceData
+  calculateVolumetricPenalty(const PenaltyMaskData& penalty_data, const Field3D& Ni,
+                             const Field3D& Ti, const Field3D& Vi, BoutReal Mi,
+                             BoutReal gamma_i, BoutReal mask_source_factor,
+                             BoutReal penalty_timescale, const Field3D& density_source,
+                             const Field3D& momentum_source, const Field3D& energy_source,
+                             BoutReal density_floor = 1e-5);
 
   /// Calculate electron surface momentum penalty terms in field-aligned coordinates
   static Field3D calculateElectronSurfaceMomentumPenalty(
@@ -97,6 +99,9 @@ private:
   BoutReal sheath_ion_polytropic; ///< Ion polytropic coefficient in Bohm sound speed
   BoutReal
       sheath_electron_polytropic; ///< Electron polytropic coefficient in Bohm sound speed
+
+  /// Scale the source mask. Between 0 and 1.
+  BoutReal mask_source_factor{1.0};
 
   /// Timescale of penalisation [normalised]
   BoutReal penalty_timescale;

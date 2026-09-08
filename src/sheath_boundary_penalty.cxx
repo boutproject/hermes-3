@@ -8,6 +8,7 @@
 #include <cmath>
 #include <string>
 
+#include <bout/assert.hxx>
 #include <bout/bout_types.hxx>
 #include <bout/boutexception.hxx>
 #include <bout/constants.hxx>
@@ -63,9 +64,10 @@ SheathBoundaryPenalty::prepareFieldAlignedPenaltyMask(Field3D mask_fa, Mesh& loc
 SheathBoundaryPenalty::PenaltySourceData
 SheathBoundaryPenalty::calculateVolumetricPenalty(
     const PenaltyMaskData& penalty_data, const Field3D& Ni, const Field3D& Ti,
-    const Field3D& Vi, BoutReal Mi, BoutReal gamma_i, BoutReal penalty_timescale,
-    const Field3D& density_source, const Field3D& momentum_source,
-    const Field3D& energy_source, BoutReal density_floor) {
+    const Field3D& Vi, BoutReal Mi, BoutReal gamma_i, BoutReal mask_source_factor,
+    BoutReal penalty_timescale, const Field3D& density_source,
+    const Field3D& momentum_source, const Field3D& energy_source,
+    BoutReal density_floor) {
   Field3D density_penalty{zeroFrom(Ni)};
   Field3D momentum_penalty{zeroFrom(Ni)};
   Field3D energy_penalty{zeroFrom(Ni)};
@@ -75,12 +77,12 @@ SheathBoundaryPenalty::calculateVolumetricPenalty(
     const BoutReal nfloor = std::max(Ni[i], density_floor);
 
     density_penalty[i] =
-        -mask * density_source[i]
+        -(mask * density_source[i] * mask_source_factor)
         - mask * std::max(Ni[i] - density_floor, 0.0) / penalty_timescale;
-    momentum_penalty[i] =
-        -mask * momentum_source[i] - mask * Mi * nfloor * Vi[i] / penalty_timescale;
-    energy_penalty[i] =
-        -mask * energy_source[i] - mask * gamma_i * nfloor * Ti[i] / penalty_timescale;
+    momentum_penalty[i] = -(mask * momentum_source[i] * mask_source_factor)
+                          - mask * Mi * nfloor * Vi[i] / penalty_timescale;
+    energy_penalty[i] = -(mask * energy_source[i] * mask_source_factor)
+                        - mask * gamma_i * nfloor * Ti[i] / penalty_timescale;
   }
 
   return {density_penalty, momentum_penalty, energy_penalty};
@@ -218,6 +220,11 @@ SheathBoundaryPenalty::SheathBoundaryPenalty(std::string name, Options& alloptio
           .doc("Electron polytropic coefficient in Bohm sound speed")
           .withDefault(1.0);
 
+  mask_source_factor = options["mask_source_factor"]
+                           .doc("Scale the source mask. Must be between 0 and 1.")
+                           .withDefault(mask_source_factor);
+  ASSERT0((mask_source_factor) >= 0.0 && (mask_source_factor <= 1.0));
+
   penalty_timescale = options["penalty_timescale"]
                           .doc("Timescale of penalisation [seconds]")
                           .withDefault(1e-6)
@@ -292,8 +299,8 @@ void SheathBoundaryPenalty::transform_impl(GuardedOptions& state) {
                                       : zeroFrom(Ne);
 
     auto electron_penalty = calculateVolumetricPenalty(
-        penalty_data, Ne, Te, Ve, Me, gamma_e, penalty_timescale, density_source,
-        momentum_source, energy_source);
+        penalty_data, Ne, Te, Ve, Me, gamma_e, mask_source_factor, penalty_timescale,
+        density_source, momentum_source, energy_source);
 
     if (surface_terms and has_phi) {
       // Surface penalty terms, to impose sheath current
@@ -368,9 +375,9 @@ void SheathBoundaryPenalty::transform_impl(GuardedOptions& state) {
                                       ? getNonFinal<Field3D>(species["energy_source"])
                                       : zeroFrom(Ni);
 
-    auto ion_penalty = calculateVolumetricPenalty(penalty_data, Ni, Ti, Vi, Mi, gamma_i,
-                                                  penalty_timescale, density_source,
-                                                  momentum_source, energy_source);
+    auto ion_penalty = calculateVolumetricPenalty(
+        penalty_data, Ni, Ti, Vi, Mi, gamma_i, mask_source_factor, penalty_timescale,
+        density_source, momentum_source, energy_source);
 
     if (surface_terms) {
       // Surface penalty terms.
