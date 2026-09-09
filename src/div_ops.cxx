@@ -152,10 +152,8 @@ Field3D Div_n_bxGrad_f_B_XPPM(const Field3D& n, const Field3D& f, bool bndry_flu
   for (int i = mesh->xstart; i <= mesh->xend; i++) {
     for (int j = mesh->ystart; j <= mesh->yend; j++) {
       for (int k = 0; k < nz; k++) {
-        int kp = (k + 1) % nz;
-        int kpp = (kp + 1) % nz;
-        int km = (k - 1 + nz) % nz;
-        int kmm = (km - 1 + nz) % nz;
+        const int kp = (k + 1) % nz;
+        const int km = (k - 1 + nz) % nz;
 
         // 1) Interpolate stream function f onto corners fmp, fpp, fpm
 
@@ -181,9 +179,9 @@ Field3D Div_n_bxGrad_f_B_XPPM(const Field3D& n, const Field3D& f, bool bndry_flu
         Stencil1D s;
         s.c = n(i, j, k);
         s.m = n(i - 1, j, k);
-        s.mm = n(i - 2, j, k);
+        s.mm = BoutNaN;
         s.p = n(i + 1, j, k);
-        s.pp = n(i + 2, j, k);
+        s.pp = BoutNaN;
 
         MC(s);
 
@@ -254,9 +252,9 @@ Field3D Div_n_bxGrad_f_B_XPPM(const Field3D& n, const Field3D& f, bool bndry_flu
 
         // Z direction
         s.m = n(i, j, km);
-        s.mm = n(i, j, kmm);
+        s.mm = BoutNaN;
         s.p = n(i, j, kp);
-        s.pp = n(i, j, kpp);
+        s.pp = BoutNaN;
 
         MC(s);
 
@@ -1676,9 +1674,7 @@ Field3D Div_n_g_bxGrad_f_B_XZ(const Field3D& n, const Field3D& g, const Field3D&
     for (int j = mesh->ystart; j <= mesh->yend; j++) {
       for (int k = 0; k < nz; k++) {
         int kp = (k + 1) % nz;
-        int kpp = (kp + 1) % nz;
         int km = (k - 1 + nz) % nz;
-        int kmm = (km - 1 + nz) % nz;
 
         // 1) Interpolate stream function f onto corners fmp, fpp, fpm
 
@@ -1716,9 +1712,9 @@ Field3D Div_n_g_bxGrad_f_B_XZ(const Field3D& n, const Field3D& g, const Field3D&
         Stencil1D s;
         s.c = n(i, j, k);
         s.m = n(i - 1, j, k);
-        s.mm = n(i - 2, j, k);
+        s.mm = BoutNaN;
         s.p = n(i + 1, j, k);
-        s.pp = n(i + 2, j, k);
+        s.pp = BoutNaN;
 
         MC(s);
 
@@ -1786,9 +1782,9 @@ Field3D Div_n_g_bxGrad_f_B_XZ(const Field3D& n, const Field3D& g, const Field3D&
 
         // Z direction
         s.m = n(i, j, km);
-        s.mm = n(i, j, kmm);
+        s.mm = BoutNaN;
         s.p = n(i, j, kp);
-        s.pp = n(i, j, kpp);
+        s.pp = BoutNaN;
 
         MC(s);
 
