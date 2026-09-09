@@ -40,6 +40,8 @@ if(HERMES_REVISION STREQUAL "GITDIR-NOTFOUND")
 endif()
 message(STATUS "Git revision: ${HERMES_REVISION}")
 
+option(BUILD_SHARED_LIBS "Build shared libs" ON)
+
 # BOUT++ is a dependency
 option(HERMES_BUILD_BOUT "Build BOUT++ in external/BOUT-dev" ON)
 if(HERMES_BUILD_BOUT)
