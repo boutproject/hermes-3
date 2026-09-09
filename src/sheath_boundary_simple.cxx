@@ -3,17 +3,13 @@
 #include "../include/hermes_utils.hxx"
 #include "../include/sheath_boundary_simple.hxx"
 
-#include "bout/constants.hxx"
-#include "bout/mesh.hxx"
+#include <bout/constants.hxx>
+#include <bout/field.hxx>
+#include <bout/mesh.hxx>
+
 using bout::globals::mesh;
 
 namespace {
-Ind3D indexAt(const Field3D& f, int x, int y, int z) {
-  int ny = f.getNy();
-  int nz = f.getNz();
-  return Ind3D{(x * ny + y) * nz + z, ny, nz};
-}
-
 /// Limited free gradient of log of a quantity
 /// This ensures that the guard cell values remain positive
 /// while also ensuring that the quantity never increases
@@ -278,8 +274,7 @@ void SheathBoundarySimple::transform_impl(GuardedOptions& state) {
       }
     }
 
-    phi.allocate();
-    phi.setDirectionY(YDirectionType::Aligned);
+    phi = emptyFrom(Ne);
 
     // ion_sum now contains the ion current, sum Z_i n_i C_i over all ion species
     // at mesh->ystart and mesh->yend indices
@@ -619,7 +614,7 @@ void SheathBoundarySimple::transform_impl(GuardedOptions& state) {
           BoutReal power = heatflow / dv; // [Wm^-3]
           ASSERT2(std::isfinite(power));
           energy_source[i] += power; // Note: Sign negative because power > 0
-          particle_source[i] -=
+          particle_source[i] +=
               nisheath * visheath * da / dv; // [m^-3s^-1] Diagnostics only
 
           // Total heat flux for diagnostic purposes
@@ -762,8 +757,8 @@ void SheathBoundarySimple::outputVars(Options& state) {
                        {{"time_dimension", "t"},
                         {"units", "m^-3 s^-1"},
                         {"conversion", Nnorm * Omega_ci},
-                        {"standard_name", "energy source"},
-                        {"long_name", species_name + " sheath energy source"},
+                        {"standard_name", "particle source"},
+                        {"long_name", species_name + " sheath particle source"},
                         {"source", "sheath_boundary_simple"}});
       }
     }
