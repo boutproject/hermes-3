@@ -138,6 +138,17 @@ Field3D Div_n_bxGrad_f_B_XPPM(const Field3D& n, const Field3D& f, bool bndry_flu
   //
 
   int nz = mesh->LocalNz;
+  auto f_lowx_lowz = emptyFrom(f);
+  for (int i = mesh->xstart; i <= mesh->xend + 1; i++) {
+    for (int j = mesh->ystart; j <= mesh->yend; j++) {
+      for (int k = 0; k < nz; k++) {
+        const int km = (k - 1 + nz) % nz;
+        f_lowx_lowz(i, j, k) =
+            0.25 * (f(i, j, k) + f(i - 1, j, k) + f(i, j, km) + f(i - 1, j, km));
+      }
+    }
+  }
+
   for (int i = mesh->xstart; i <= mesh->xend; i++) {
     for (int j = mesh->ystart; j <= mesh->yend; j++) {
       for (int k = 0; k < nz; k++) {
@@ -148,15 +159,10 @@ Field3D Div_n_bxGrad_f_B_XPPM(const Field3D& n, const Field3D& f, bool bndry_flu
 
         // 1) Interpolate stream function f onto corners fmp, fpp, fpm
 
-        BoutReal fmm =
-            0.25 * (f(i, j, k) + f(i - 1, j, k) + f(i, j, km) + f(i - 1, j, km));
-        BoutReal fmp = 0.25
-                       * (f(i, j, k) + f(i, j, kp) + f(i - 1, j, k)
-                          + f(i - 1, j, kp)); // 2nd order accurate
-        BoutReal fpp =
-            0.25 * (f(i, j, k) + f(i, j, kp) + f(i + 1, j, k) + f(i + 1, j, kp));
-        BoutReal fpm =
-            0.25 * (f(i, j, k) + f(i + 1, j, k) + f(i, j, km) + f(i + 1, j, km));
+        BoutReal fmm = f_lowx_lowz(i, j, k);
+        BoutReal fmp = f_lowx_lowz(i, j, kp);
+        BoutReal fpp = f_lowx_lowz(i + 1, j, kp);
+        BoutReal fpm = f_lowx_lowz(i + 1, j, k);
 
         // 2) Calculate velocities on cell faces
 
