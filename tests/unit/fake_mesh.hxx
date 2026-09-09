@@ -41,13 +41,13 @@ class Options;
 ///   else will likely **not** work!
 class FakeMesh : public Mesh {
 public:
-  FakeMesh(int nx, int ny, int nz, MpiWrapper& mpi_in) {
+  FakeMesh(int nx, int ny, int nz, MpiWrapper& mpi_in, int mxg = 1) {
     // Mesh only on one process, so global and local indices are the
     // same
     GlobalNx = nx;
     GlobalNy = ny;
     GlobalNz = nz;
-    GlobalNxNoBoundaries = nx - 2;
+    GlobalNxNoBoundaries = nx - 2 * mxg;
     GlobalNyNoBoundaries = ny - 2;
     GlobalNzNoBoundaries = nz;
     LocalNx = nx;
@@ -58,19 +58,19 @@ public:
     OffsetZ = 0;
 
     // These bits only for ADIOS2, also boring due to single process
-    MapCountX = nx - 2;
+    MapCountX = nx - 2 * mxg;
     MapCountY = ny - 2;
     MapCountZ = nz;
     MapGlobalX = nx;
     MapGlobalY = ny;
     MapGlobalZ = nz;
-    MapLocalX = nx - 2;
+    MapLocalX = nx - 2 * mxg;
     MapLocalY = ny - 2;
     MapLocalZ = nz;
 
     // Small "inner" region
-    xstart = 1;
-    xend = nx - 2;
+    xstart = mxg;
+    xend = nx - 2 * mxg;
     ystart = 1;
     yend = ny - 2;
     zstart = 0; // no guards
