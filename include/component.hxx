@@ -76,6 +76,40 @@ private:
   }
 };
 
+/// Lightweight type to store information used to build a component.
+struct ComponentInformation {
+  std::string name;
+  std::string type;
+
+  ComponentInformation() {};
+
+  ComponentInformation(const std::string& name_, const std::string& type_)
+      : name(name_), type(type_) {}
+
+  ComponentInformation(std::string&& name_, std::string&& type_)
+      : name(std::move(name_)), type(std::move(type_)) {}
+
+  bool operator<(const ComponentInformation& other) const {
+    return std::pair(name, type) < std::pair(other.name, other.type);
+  }
+
+  bool operator==(const ComponentInformation& other) const {
+    return std::pair(name, type) == std::pair(other.name, other.type);
+  }
+};
+
+/// Format `ComponentInformation` to string. Format string specification is the
+/// same as when formatting a string.
+/// See https://fmt.dev/12.0/syntax/#format-specification-mini-language.
+///
+/// TODO: provide custom formatting to configure exactly how the
+/// component name and type are displayed.
+template <>
+struct fmt::formatter<ComponentInformation> : formatter<std::string> {
+  auto format(const ComponentInformation& ci, format_context& ctx) const
+      -> format_context::iterator;
+};
+
 /// Interface for a component of a simulation model
 ///
 /// The constructor of derived types should have signature
@@ -91,6 +125,11 @@ struct Component {
       : name(name), state_variable_access(access_permissions) {}
 
   virtual ~Component() {}
+
+  /// Return a list of names/types of other components needed by this
+  /// component. All configurations for these components will take the
+  /// default value, unless set in the input file.
+  virtual std::vector<ComponentInformation> additionalComponents() { return {}; }
 
   /// Modify the given simulation state. This method will wrap the
   /// state in a GuardedOptions object and pass that to the private
