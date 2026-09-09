@@ -58,19 +58,19 @@ BoutReal limitFree(BoutReal fm, BoutReal fc, BoutReal mode) {
 
 SheathBoundarySimple::SheathBoundarySimple(std::string name, Options& alloptions, Solver*)
     : NamedComponent(name, {
-                               readIfSet("species:e:{e_whole_domain}"),
-                               writeBoundary("species:e:{e_boundary}"),
+                               readIfSet("species:e:AA"),
+                               writeBoundaryFinal("species:e:{e_boundary}"),
                                readWrite("species:e:energy_source"),
                                readWrite("species:e:energy_flow_ylow"),
-                               writeBoundaryIfSet("species:e:{e_optional}"),
+                               writeBoundaryFinalIfSet("species:e:{e_optional}"),
                                writeBoundaryReadInteriorIfSet("species:e:pressure"),
                                readIfSet("species:{all_species}:charge"),
                                readOnly("species:{ions}:AA"),
                                readWrite("species:{ions}:energy_source"),
                                readWrite("species:{ions}:energy_flow_ylow"),
-                               writeBoundary("species:{ions}:{ion_boundary}"),
+                               writeBoundaryFinal("species:{ions}:{ion_boundary}"),
                                writeBoundaryReadInteriorIfSet("species:{ions}:pressure"),
-                               writeBoundaryIfSet("species:{ions}:{ion_optional}"),
+                               writeBoundaryFinalIfSet("species:{ions}:{ion_optional}"),
                            }) {
 
   Options& options = alloptions[name];
@@ -145,7 +145,6 @@ SheathBoundarySimple::SheathBoundarySimple(std::string name, Options& alloptions
                  .doc("Save additional output diagnostics")
                  .withDefault<bool>(false);
 
-  substitutePermissions("e_whole_domain", {"AA", "charge"});
   substitutePermissions("e_boundary", {"density", "temperature"});
   substitutePermissions("e_optional", {"velocity", "momentum"});
   substitutePermissions("ion_boundary", {"density", "temperature"});

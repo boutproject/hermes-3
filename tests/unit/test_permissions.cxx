@@ -126,6 +126,8 @@ TEST(PermissionsTests, TestGetHighestPermission) {
        {Regions::Nowhere, Regions::Nowhere, Regions::Interior, Regions::Nowhere}},
       {"species:d:collision_frequencies",
        {Regions::Nowhere, Regions::Nowhere, Regions::Boundaries, Regions::Nowhere}},
+      writeBoundary("fields:phi"),
+      writeBoundaryIfSet("species:he+:temperature"),
   });
 
   auto no_permission = make_permission(PermissionTypes::None, "");
@@ -148,6 +150,10 @@ TEST(PermissionsTests, TestGetHighestPermission) {
   EXPECT_EQ(example.getHighestPermission("species:d:collision_frequencies:d_d_coll"),
             make_permission(PermissionTypes::None, "species:d:collision_frequencies"));
   EXPECT_EQ(example.getHighestPermission("unset"), no_permission);
+  EXPECT_EQ(example.getHighestPermission("fields:phi"),
+            make_permission(PermissionTypes::Read, "fields:phi"));
+  EXPECT_EQ(example.getHighestPermission("species:he+:temperature"),
+            make_permission(PermissionTypes::ReadIfSet, "species:he+:temperature"));
 
   // Get the highest permission on the boundaries
   EXPECT_EQ(example.getHighestPermission("species:he:charge", Regions::Boundaries),
@@ -169,6 +175,10 @@ TEST(PermissionsTests, TestGetHighestPermission) {
                                          Regions::Boundaries),
             make_permission(PermissionTypes::Write, "species:d:collision_frequencies"));
   EXPECT_EQ(example.getHighestPermission("unset", Regions::Boundaries), no_permission);
+  EXPECT_EQ(example.getHighestPermission("fields:phi", Regions::Boundaries),
+            make_permission(PermissionTypes::Write, "fields:phi"));
+  EXPECT_EQ(example.getHighestPermission("species:he+:temperature", Regions::Boundaries),
+            make_permission(PermissionTypes::Write, "species:he+:temperature"));
 
   // Get the highest permission on the interior
   EXPECT_EQ(example.getHighestPermission("species:he:charge", Regions::Interior),
@@ -190,6 +200,10 @@ TEST(PermissionsTests, TestGetHighestPermission) {
                                          Regions::Interior),
             make_permission(PermissionTypes::None, "species:d:collision_frequencies"));
   EXPECT_EQ(example.getHighestPermission("unset", Regions::Interior), no_permission);
+  EXPECT_EQ(example.getHighestPermission("fields:phi", Regions::Interior),
+            make_permission(PermissionTypes::Read, "fields:phi"));
+  EXPECT_EQ(example.getHighestPermission("species:he+:temperature", Regions::Interior),
+            make_permission(PermissionTypes::ReadIfSet, "species:he+:temperature"));
 
   // Check the permission for the "Nowhere" region is always "None"
   EXPECT_EQ(example.getHighestPermission("species:he:charge", Regions::Nowhere),
@@ -211,6 +225,9 @@ TEST(PermissionsTests, TestGetHighestPermission) {
                                          Regions::Nowhere),
             no_permission);
   EXPECT_EQ(example.getHighestPermission("unset", Regions::Nowhere), no_permission);
+  EXPECT_EQ(example.getHighestPermission("fields:phi", Regions::Nowhere), no_permission);
+  EXPECT_EQ(example.getHighestPermission("species:he+:temperature", Regions::Nowhere),
+            no_permission);
 
   // Check permissions for a species that might be mistaken for one of
   // the sections we've given permissions for
@@ -358,7 +375,7 @@ TEST(PermissionsTests, TestIO) {
   const Permissions empty({});
   const Permissions single({readOnly("test")});
   const Permissions multiple(
-      {readIfSet("a", Regions::Interior), writeBoundary("b"), readWrite("c:d")});
+      {readIfSet("a", Regions::Interior), writeBoundaryFinal("b"), readWrite("c:d")});
   Permissions new_perm;
 
   std::stringstream ss1;

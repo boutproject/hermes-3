@@ -265,14 +265,14 @@ This is important as it uses a single dictionary-like ``state`` class to hold al
 the variables in one place, which could allow some components to overwrite others.
 
 In ``component.hxx`` there is the function ``get``, which once called sets the
-"final" and "final-domain" attributes:
+"final-bounds" and "final-domain" attributes:
 
 .. code-block:: ini
 
    T get(const Options& option, const std::string& location = "") {
    #if CHECKLEVEL >= 1
    // Mark option as final, both inside the domain and the boundary
-   const_cast<Options&>(option).attributes["final"] = location;
+   const_cast<Options&>(option).attributes["final-bounds"] = location;
    const_cast<Options&>(option).attributes["final-domain"] = location;
    #endif
    return getNonFinal<T>(option);
@@ -286,7 +286,7 @@ already been "gotten", they can't be set again:
    Options& set(Options& option, T value) {
    // Check that the value has not already been used
    #if CHECKLEVEL >= 1
-   if (option.hasAttribute("final")) {
+   if (option.hasAttribute("final-bounds")) {
       throw BoutException("Setting value of {} but it has already been used in {}.",
                            option.name(), option.attributes["final"].as<std::string>());
    }
@@ -301,8 +301,9 @@ already been "gotten", they can't be set again:
    }
    #endif
 
-There is a special use case which allows you to use this "locking" scheme for only
-the domain cells, leaving the guard cells to be settable using ``getNoBoundary``:
+There are special use cases which allows you to use this "locking" scheme for only
+the domain (guard) cells, leaving the guard (domain) cells
+to be settable using ``getNoBoundary`` (``getBoundary``) :
 
 .. code-block:: ini
 
@@ -314,14 +315,15 @@ the domain cells, leaving the guard cells to be settable using ``getNoBoundary``
    return getNonFinal<T>(option);
    }
 
-And there is a corresponding ``setBoundary`` that can be used for BC operations:
+And there are corresponding ``setBoundary`` and ``setNoBoundary``
+functions that can be used for BC and domain operations:
 
 .. code-block:: ini
 
    Options& setBoundary(Options& option, T value) {
    // Check that the value has not already been used
    #if CHECKLEVEL >= 1
-   if (option.hasAttribute("final")) {
+   if (option.hasAttribute("final-bounds")) {
       throw BoutException("Setting boundary of {} but it has already been used in {}.",
                            option.name(), option.attributes["final"].as<std::string>());
    }
@@ -333,9 +335,10 @@ And there is a corresponding ``setBoundary`` that can be used for BC operations:
 All of these functions are overloaded to accept both `Options` and
 `GuardedOptions` objects.
 
-These functions take a second argument which tells you where they were set, which is easier for debugging.
-They are wrapped into additional functions, ``GET_VALUE`` and ``GET_NOBOUNDARY`` which automatically
-include this argument.
+These functions take a second argument which tells you where they were
+set, which is easier for debugging.  They are wrapped into additional
+functions, ``GET_VALUE``, ``GET_BOUNDARY``, and ``GET_NOBOUNDARY``
+which automatically include this argument.
 
 Please review `component.hxx <https://github.com/boutproject/hermes-3/blob/master/include/component.hxx#L163>`__
 for more details.
@@ -586,7 +589,6 @@ The `name` is a string labelling the instance. The `alloptions` tree contains at
 * ``alloptions[name]`` options for this instance
 * ``alloptions['units']``
 
-
 Component Permissions
 `````````````````````
 
@@ -628,9 +630,14 @@ and then in `Hermes::rhs` the components are run by a call::
   scheduler->transform(state);
 
 The call to `ComponentScheduler::create` treats the "components"
-option as a comma-separated list of names. The order of the components
-is the order that they are run in. For each name in the list, the
-scheduler looks up the options under the section of that name.
+option as a comma-separated list of names. For each name in the list,
+the scheduler looks up the options under the section of that name. The
+``ComponentScheduler`` will use permission information stored by each
+component in `Component::state_variable_access` to work out the order
+to execute components. It will ensure that all writes to a variable
+have occurred before the first time it is read. If there is a variable
+needed by some component which is never set or if there is a circular
+dependency then it will throw an exception.
 
 .. code-block:: ini
 
@@ -647,8 +654,9 @@ scheduler looks up the options under the section of that name.
 
 This would create two `Component` objects, of type `component1` and
 `component2`. Each time `Hermes::rhs` is run, the `transform`
-functions of `component1` and then `component2` will be called,
-followed by their `finally` functions.
+functions of `component1` and `component2` will be called, with the
+order depending on what state variables each reads and writes. This is
+followed by a call to their `finally` functions.
 
 It is often useful to group components together, for example to
 define the governing equations for different species. A `type` setting
@@ -670,11 +678,48 @@ of components
    # options to control component3
 
 This will create three components, which will be run in the order
-`component1`, `component2`, `component3`: First all the components
-in `group1`, and then `component3`.
+`component1`, `component2`, `component3`: First all the components in
+`group1`, and then `component3`. Grouped components will be sorted
+individually when determining the run order; they may not be run
+together.
 
 .. doxygenclass:: ComponentScheduler
    :members:
+
+Component sorting algorithm
+```````````````````````````
+
+The algorithm for sorting components is slightly complicated. Normally
+users and developers will not need to be concerned with it but, in the
+event that it is ever necessary to modify or debug the algorithm, the
+steps are provided below.
+
+1. Construct a map between names and the variable(s) to which
+   they refer (section names refer to all variables contained within
+   the section). This is used so that, when a permission is set for
+   a whole section, we can work out what are the actual variables
+   to which the permission applies.
+2. Identify the components which have permission to do final writes
+   and non- final writes on each variable.
+3. Construct a map between variable names and which components last
+   write to them.
+
+   - For variables where a component has final write permission,
+     it is that component.
+   - Otherwise, it is all components which have non-final write
+     permission for the variable.
+
+4. Establish the dependencies between components.
+
+   - Components which have final-write permission for a variable
+     depend on any components that have non-final write permission for
+     that variable.
+   - Components that have read permission for a variable will depend
+     on whichever component(s) last write to that variable, as
+     determined in the previous step.
+
+5. Use this dependency information to perform a topological sort on
+   the components.
 
 
 .. _sec-permissions:

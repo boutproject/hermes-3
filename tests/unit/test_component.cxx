@@ -116,6 +116,18 @@ TEST(ComponentTest, SetBoundaryAfterGetThrows) {
   // that all values are final including boundary cells.
   ASSERT_THROW(setBoundary<int>(option, 3), BoutException);
 }
+
+TEST(ComponentTest, SetNoBoundaryAfterGetThrows) {
+  Options option;
+
+  option = 42;
+
+  ASSERT_EQ(get<int>(option), 42);
+
+  // Setting after get should fail because get indicates an assumption
+  // that all values are final including boundary cells.
+  ASSERT_THROW(setNoBoundary<int>(option, 3), BoutException);
+}
 #endif
 
 TEST(ComponentTest, SetBoundaryAfterGetNoBoundary) {
@@ -130,12 +142,40 @@ TEST(ComponentTest, SetBoundaryAfterGetNoBoundary) {
   ASSERT_EQ(getNonFinal<int>(option), 3);
 }
 
+TEST(ComponentTest, SetNoBoundaryAfterGetBoundary) {
+  Options option;
+
+  option = 42;
+
+  ASSERT_EQ(getBoundary<int>(option), 42);
+
+  setNoBoundary<int>(option, 3); // ok because domain not assumed final
+
+  ASSERT_EQ(getNonFinal<int>(option), 3);
+}
+
 TEST(ComponentTest, IsSetFinalStaysFalse) {
   Options option;
 
   ASSERT_EQ(isSetFinal(option["test"]), false);
   // Shouldn't change if called again
   ASSERT_EQ(isSetFinal(option["test"]), false);
+}
+
+TEST(ComponentTest, IsSetFinalNoBoundaryStaysFalse) {
+  Options option;
+
+  ASSERT_EQ(isSetFinalNoBoundary(option["test"]), false);
+  // Shouldn't change if called again
+  ASSERT_EQ(isSetFinalNoBoundary(option["test"]), false);
+}
+
+TEST(ComponentTest, IsSetFinalBoundaryStaysFalse) {
+  Options option;
+
+  ASSERT_EQ(isSetFinalBoundary(option["test"]), false);
+  // Shouldn't change if called again
+  ASSERT_EQ(isSetFinalBoundary(option["test"]), false);
 }
 
 TEST(ComponentTest, GetAfterIsSetFinal) {
@@ -146,6 +186,23 @@ TEST(ComponentTest, GetAfterIsSetFinal) {
   // Can get the value
   ASSERT_EQ(get<int>(option["test"]), 1);
 }
+TEST(ComponentTest, GetAfterIsSetFinalNoBoundary) {
+  Options option;
+  option["test"] = 1;
+
+  ASSERT_EQ(isSetFinalNoBoundary(option["test"]), true);
+  // Can get the value
+  ASSERT_EQ(getNoBoundary<int>(option["test"]), 1);
+}
+
+TEST(ComponentTest, GetAfterIsSetFinalBoundary) {
+  Options option;
+  option["test"] = 1;
+
+  ASSERT_EQ(isSetFinalBoundary(option["test"]), true);
+  // Can get the value
+  ASSERT_EQ(getBoundary<int>(option["test"]), 1);
+}
 
 #if CHECKLEVEL >= 1
 TEST(ComponentTest, SetAfterIsSetFinal) {
@@ -154,6 +211,32 @@ TEST(ComponentTest, SetAfterIsSetFinal) {
   ASSERT_EQ(isSetFinal(option["test"]), false);
   // Can't now set the value
   ASSERT_THROW(set<int>(option["test"], 3), BoutException);
+  ASSERT_THROW(setNoBoundary<int>(option["test"], 3), BoutException);
+  ASSERT_THROW(setBoundary<int>(option["test"], 3), BoutException);
+}
+
+TEST(ComponentTest, SetAfterIsSetFinalNoBoundary) {
+  Options option;
+
+  ASSERT_EQ(isSetFinalNoBoundary(option["test"]), false);
+  // Can't now set the value in the domain
+  ASSERT_THROW(set<int>(option["test"], 3), BoutException);
+  ASSERT_THROW(setNoBoundary<int>(option["test"], 3), BoutException);
+  // Can still set the value for the bounds
+  setBoundary<int>(option["test"], 1);
+  ASSERT_EQ(getBoundary<int>(option["test"]), 1);
+}
+
+TEST(ComponentTest, SetAfterIsSetFinalBoundary) {
+  Options option;
+
+  ASSERT_EQ(isSetFinalBoundary(option["test"]), false);
+  // Can't now set the value in the bounds
+  ASSERT_THROW(set<int>(option["test"], 3), BoutException);
+  ASSERT_THROW(setBoundary<int>(option["test"], 3), BoutException);
+  // Can still set the value for the domain
+  setNoBoundary<int>(option["test"], 1);
+  ASSERT_EQ(getNoBoundary<int>(option["test"]), 1);
 }
 #endif
 

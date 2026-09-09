@@ -156,7 +156,7 @@ void IznRecReaction::transform_additional(GuardedOptions& state,
   const Field3D& T_e = electron_temperature.GetRef<Field3D>();
   const int e_pop_change = this->parser->pop_change("e");
   if (e_pop_change != 0) {
-    if (electron.isSet("velocity")) {
+    if (IS_SET(electron["velocity"])) {
       // Transfer of electron kinetic to thermal energy due to density source
       // For ionisation:
       // Electrons with zero average velocity are created, diluting the kinetic energy.
