@@ -127,7 +127,7 @@ private:
   bool split_n0;                        // Split phi into n=0 and n!=0 components
   std::unique_ptr<LaplaceXY> laplacexy; // Laplacian solver in X-Y (n=0)
 
-  Coordinates::FieldMetric Bsq;       // SQ(coord->Bxy)
+  Coordinates::FieldMetric Bsq;       // SQ(coord->Bxy())
   VectorMetric Curlb_B;               // Curvature vector Curl(b/B)
   BoutReal hyper_z;                   ///< Hyper-viscosity in Z
   Coordinates::FieldMetric viscosity; ///< Kinematic viscosity

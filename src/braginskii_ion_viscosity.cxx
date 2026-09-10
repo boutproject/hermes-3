@@ -120,7 +120,7 @@ BraginskiiIonViscosity::BraginskiiIonViscosity(const std::string& name,
     Curlb_B.y *= SQ(Lnorm);
     Curlb_B.z *= SQ(Lnorm);
 
-    Curlb_B *= 2. / coord->Bxy;
+    Curlb_B *= 2. / coord->Bxy();
   }
   if (bounce_frequency) {
     const Options& units = alloptions["units"];
@@ -146,7 +146,7 @@ void BraginskiiIonViscosity::transform_impl(GuardedOptions& state) {
   GuardedOptions allspecies = state["species"];
 
   auto coord = mesh->getCoordinates();
-  const auto Bxy = coord->Bxy;
+  const auto Bxy = coord->Bxy();
   const auto sqrtB = sqrt(Bxy);
   const auto Grad_par_logB = Grad_par(log(Bxy));
 

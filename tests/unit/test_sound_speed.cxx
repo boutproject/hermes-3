@@ -125,13 +125,13 @@ public:
         Field2D{0.0}, Field2D{0.0}, Field2D{1.0}, Field2D{1.0}, Field2D{1.0},
         Field2D{0.0}, Field2D{0.0}, Field2D{0.0}, Field2D{0.0}, Field2D{0.0});
 
-    test_coords->G1 = test_coords->G2 = test_coords->G3 = 0.1;
-    test_coords->non_uniform = true;
-    test_coords->d1_dx = test_coords->d1_dy = 0.2;
-    test_coords->d1_dz = 0.0;
+    test_coords->setNon_uniform(true);
 #if BOUT_USE_METRIC_3D
-    test_coords->Bxy.splitParallelSlices();
-    test_coords->Bxy.yup() = test_coords->Bxy.ydown() = test_coords->Bxy;
+    auto Bxy = test_coords->Bxy();
+    auto B = Bxy;
+    Bxy.splitParallelSlices();
+    Bxy.yup() = Bxy.ydown() = B;
+    test_coords->setBxy(Bxy);
 #endif
 
     mesh_m.setGridDataSource(new FakeGridDataSource());
@@ -242,7 +242,7 @@ TEST_F(SoundSpeedTest, AlfvenWaveUsesSoundSpeedAtHighBeta) {
   Options options = makeSoundSpeedOptions(1.0, 1e38, 1e19, 1.0, 1.0, true);
   SoundSpeed component("test", options, nullptr);
 
-  mesh->getCoordinates()->Bxy = 1.0;
+  mesh->getCoordinates()->setBxy(1.0);
   options["species"]["i"]["density"] = 1.0;
   options["species"]["i"]["pressure"] = 4.0;
   options["species"]["i"]["AA"] = 1.0;
@@ -266,7 +266,7 @@ TEST_F(SoundSpeedTest, AlfvenWaveUsesAlfvenSpeedAtLowBeta) {
   Options options = makeSoundSpeedOptions(1.0, 1.0, 1.0, 1.0, 1.0, true);
   SoundSpeed component("test", options, nullptr);
 
-  mesh->getCoordinates()->Bxy = 1.0;
+  mesh->getCoordinates()->setBxy(1.0);
   options["species"]["i"]["density"] = 1.0;
   options["species"]["i"]["pressure"] = 1.0;
   options["species"]["i"]["AA"] = 1.0;

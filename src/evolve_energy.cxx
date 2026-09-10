@@ -280,7 +280,7 @@ void EvolveEnergy::finally(const Options& state) {
 
   if (hyper_z > 0.) {
     auto* coord = N.getCoordinates();
-    ddt(E) -= hyper_z * SQ(SQ(coord->dz)) * D4DZ4(E);
+    ddt(E) -= hyper_z * SQ(SQ(coord->dz())) * D4DZ4(E);
   }
 
   //////////////////////

@@ -156,7 +156,7 @@ struct RateHelper {
     // Populate cell_props differently according to the rate function type
     std::visit(
         [this, &cell_props, &do_averaging, &result](auto&& rate_calc_func) {
-          auto J = result.rate.getCoordinates()->J;
+          auto J = result.rate.getCoordinates()->J();
           BOUT_FOR(i, region) {
             // Get densities for this cell
             collect_densities(i, cell_props, do_averaging);

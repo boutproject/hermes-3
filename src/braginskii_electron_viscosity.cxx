@@ -50,7 +50,7 @@ void BraginskiiElectronViscosity::transform_impl(GuardedOptions& state) {
   const Field3D V = get<Field3D>(species["velocity"]);
 
   Coordinates* coord = P.getCoordinates();
-  const Field3D Bxy = coord->Bxy;
+  const Field3D Bxy = coord->Bxy();
   const Field3D sqrtB = sqrt(Bxy);
 
   // Parallel electron viscosity

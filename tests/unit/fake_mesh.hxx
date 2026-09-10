@@ -13,6 +13,7 @@
 #include <bout/griddata.hxx>
 #include <bout/mesh.hxx>
 #include <bout/mpi_wrapper.hxx>
+#include <bout/paralleltransform.hxx>
 #include <bout/region.hxx>
 #include <bout/sys/range.hxx>
 #include <bout/unused.hxx>
@@ -40,13 +41,13 @@ class Options;
 ///   else will likely **not** work!
 class FakeMesh : public Mesh {
 public:
-  FakeMesh(int nx, int ny, int nz, MpiWrapper& mpi_in) {
+  FakeMesh(int nx, int ny, int nz, MpiWrapper& mpi_in, int mxg = 1) {
     // Mesh only on one process, so global and local indices are the
     // same
     GlobalNx = nx;
     GlobalNy = ny;
     GlobalNz = nz;
-    GlobalNxNoBoundaries = nx - 2;
+    GlobalNxNoBoundaries = nx - 2 * mxg;
     GlobalNyNoBoundaries = ny - 2;
     GlobalNzNoBoundaries = nz;
     LocalNx = nx;
@@ -57,19 +58,19 @@ public:
     OffsetZ = 0;
 
     // These bits only for ADIOS2, also boring due to single process
-    MapCountX = nx - 2;
+    MapCountX = nx - 2 * mxg;
     MapCountY = ny - 2;
     MapCountZ = nz;
     MapGlobalX = nx;
     MapGlobalY = ny;
     MapGlobalZ = nz;
-    MapLocalX = nx - 2;
+    MapLocalX = nx - 2 * mxg;
     MapLocalY = ny - 2;
     MapLocalZ = nz;
 
     // Small "inner" region
-    xstart = 1;
-    xend = nx - 2;
+    xstart = mxg;
+    xend = nx - 2 * mxg;
     ystart = 1;
     yend = ny - 2;
     zstart = 0; // no guards
@@ -90,7 +91,7 @@ public:
 
   void setCoordinates(std::shared_ptr<Coordinates> coords,
                       CELL_LOC location = CELL_CENTRE) {
-    coords_map[location] = coords;
+    coords_map[location] = std::move(coords);
   }
 
   void setGridDataSource(GridDataSource* source_in) { source = source_in; }
@@ -365,4 +366,55 @@ public:
 
 private:
   Options values; ///< Store values to be returned by get()
+};
+
+// A mock ParallelTransform to test transform_from_field_aligned
+// property of FieldFactory. For now, the transform just returns the
+// negative of the input. Ideally, this will get moved to GoogleMock
+// when we start using it.
+//
+// Can turn off the ability to do the transform. Should still be valid
+class MockParallelTransform : public ParallelTransform {
+public:
+  MockParallelTransform(Mesh& mesh, bool allow_transform_)
+      : ParallelTransform(mesh), allow_transform(allow_transform_) {}
+  ~MockParallelTransform() = default;
+
+  void calcParallelSlices(Field3D&) override {}
+
+  bool canToFromFieldAligned() const override { return allow_transform; }
+
+  bool requiresTwistShift(bool, YDirectionType) override { return false; }
+
+  void checkInputGrid() override {}
+
+  Field3D fromFieldAligned(const Field3D& f, const std::string&) override {
+    if (f.getDirectionY() != YDirectionType::Aligned) {
+      throw BoutException("Unaligned field passed to fromFieldAligned");
+    }
+    return -f;
+  }
+
+  FieldPerp fromFieldAligned(const FieldPerp& f, const std::string&) override {
+    if (f.getDirectionY() != YDirectionType::Aligned) {
+      throw BoutException("Unaligned field passed to fromFieldAligned");
+    }
+    return -f;
+  }
+
+  Field3D toFieldAligned(const Field3D& f, const std::string&) override {
+    if (f.getDirectionY() != YDirectionType::Standard) {
+      throw BoutException("Aligned field passed to toFieldAligned");
+    }
+    return -f;
+  }
+  FieldPerp toFieldAligned(const FieldPerp& f, const std::string&) override {
+    if (f.getDirectionY() != YDirectionType::Standard) {
+      throw BoutException("Aligned field passed to toFieldAligned");
+    }
+    return -f;
+  }
+
+private:
+  const bool allow_transform;
 };
