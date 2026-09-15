@@ -1,7 +1,7 @@
 3D Fci example with conduction and diffusion in a dommaschk potential
 ====================================
 
-This example demonstrates the work flow of a typical stellarator application of Hermes-3. For simplicity, the chosen magnetic field is a Dommaschk potential. Divertor targets are omitted and sheath physics is excluded in the example. To keep the example numerically lightweight, only ion pressure is evolved with heat conduction and anomalous diffusion. 
+This example demonstrates the work flow of a typical stellarator application of Hermes-3. For simplicity, the chosen magnetic field is a Dommaschk potential. Divertor targets are omitted and sheath physics is excluded in the example. To keep the example numerically lightweight, only ion pressure is evolved with heat conduction and anomalous diffusion. If there are any further questions or suggestions you encounter while trying this example, please feel free to send an e-mail to tobias.tork@ipp.mpg.de :) 
 
 # Grid generation
 
