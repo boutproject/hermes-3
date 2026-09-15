@@ -1,0 +1,158 @@
+# 1D system contrived to test the LowNSources component.
+# d, d+, t, t+, e are evolved
+# Initial densities of d, d+, t and t+ species are set below their respective density floors to differing degrees.
+# All physical reactions are disabled to make analysis easier.
+
+nout = 100
+timestep = 50
+# No guard cells in X
+MXG = 0
+
+[mesh]
+nx = 1
+# Resolution along field-line
+ny = 50
+nz = 1
+# Length of the domain in meters
+length = 50
+
+# Parallel grid spacing
+dy = (length / ny)
+J = 1  # Identity metric
+ixseps1 = -1
+ixseps2 = -1
+
+[hermes]
+# Everything turned off other than the species components and LowNSources.
+components = (d+, d, t+, t, e, low_n_sources)
+# Normalisation values
+Nnorm = 1e19
+Bnorm = 1
+Tnorm = 100
+
+[solver]
+# Backward Euler steady-state solver
+type = pvode
+mxstep = 50000
+# Tolerances
+atol = 1e-7
+rtol = 1e-5
+
+[low_n_sources]
+low_n_floor_fac = 10
+# Arbitrarily increase the source timescale to make visualising the result easier
+low_n_timescale = 1000
+diagnose = true
+
+# ======================================== Deuterium atoms ========================================
+[d]
+type = (evolve_density, evolve_pressure, evolve_momentum, noflow_boundary)
+
+charge = 0
+AA = 2
+
+density_floor = 1e-7
+thermal_conduction = true
+diagnose = true
+
+[Nd]
+# Initial values are
+# - first half of the distribution below the source activation threshold (low-n recombination source should turn on immediately)
+# - second half of the distribution above the source activation threshold
+function = `low_n_sources:low_n_floor_fac` * `d:density_floor` * (y / (2*pi) + 0.5)
+
+[Pd]
+function = `low_n_sources:low_n_floor_fac` * `d:density_floor` * (y / (2*pi) + 0.5) / 10
+
+# ======================================== Deuterium ions =========================================
+[d+]
+type = (evolve_density, evolve_pressure, evolve_momentum, noflow_boundary)
+# BCs
+noflow_lower_y = true
+noflow_upper_y = true
+# Physical properties
+charge = 1
+AA = 2
+# Add thermal conduction in evolve_pressure
+thermal_conduction = true
+# Set floor
+density_floor = 1e-6
+# Output diagnostics
+diagnose = true
+
+[Nd+]
+# Starts at 0.5x the threshold for the low-n source
+function = 0.5 * `low_n_sources:low_n_floor_fac` * `d+:density_floor`
+
+[Pd+]
+function = 0.5 * `low_n_sources:low_n_floor_fac` * `d+:density_floor` / 10
+
+[NVd+]
+function = 0
+
+# ========================================= Tritium atoms =========================================
+[t]
+type = (evolve_density, evolve_pressure, evolve_momentum, noflow_boundary)
+
+# Physical properties
+charge = 0
+AA = 3
+# Add thermal conduction in evolve_pressure
+thermal_conduction = true
+# Set floor
+density_floor = 1e-8
+# Output diagnostics
+diagnose = true
+
+[Nt]
+# Start at density floor (10x below threshold) - pseudo-recombination source should turn on immediately
+function = `t:density_floor`
+
+[Pt]
+function = `t:density_floor` / 10
+
+# ========================================== Tritium ions =========================================
+[t+]
+type = (evolve_density, evolve_pressure, evolve_momentum, noflow_boundary)
+
+# BCs
+noflow_lower_y = true
+noflow_upper_y = true
+# Physical properties
+charge = 1
+AA = 3
+# Add thermal conduction in evolve_pressure
+thermal_conduction = true
+# Set floor
+density_floor = 1e-8
+# Output diagnostics
+diagnose = true
+
+[Nt+]
+# Start at density floor (10x below threshold) - external ion source should turn on immediately
+function = `t+:density_floor`
+
+[Pt+]
+function = `t+:density_floor` / 10
+
+[NVt+]
+function = 0
+
+# =========================================== Electrons ===========================================
+[e]
+type = quasineutral, evolve_pressure, zero_current, noflow_boundary
+
+# BCs
+noflow_lower_y = true
+noflow_upper_y = true
+# Physical properties
+charge = -1
+AA = 1/1836
+# Add thermal conduction in evolve_pressure
+thermal_conduction = true
+# Output diagnostics
+diagnose = true
+
+[Pe]
+# Same as d+ pressure
+function = `Pd+:function`

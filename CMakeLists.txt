@@ -70,6 +70,7 @@ set(HERMES_SOURCES
     src/cx_reaction.cxx
     src/ionisation.cxx
     src/izn_rec_reaction.cxx
+    src/low_n_sources.cxx
     src/div_ops.cxx
     src/neutral_mixed.cxx
     src/neutral_full_velocity.cxx
@@ -151,6 +152,7 @@ set(HERMES_SOURCES
     include/integrate.hxx
     include/ionisation.hxx
     include/izn_rec_reaction.hxx
+    include/low_n_sources.hxx
     include/neutral_boundary.hxx
     include/neutral_mixed.hxx
     include/neutral_parallel_diffusion.hxx
@@ -370,6 +372,7 @@ if(HERMES_TESTS)
 
   hermes_add_integrated_test(1D-density CONFLICTS BOUT_ENABLE_METRIC_3D)
   hermes_add_integrated_test(1D-fluid CONFLICTS BOUT_ENABLE_METRIC_3D)
+  hermes_add_integrated_test(1D-low-n-srcs CONFLICTS BOUT_ENABLE_METRIC_3D)
   hermes_add_integrated_test(1D-recycling CONFLICTS BOUT_ENABLE_METRIC_3D)
   hermes_add_integrated_test(1D-recycling-dthe CONFLICTS BOUT_ENABLE_METRIC_3D)
   hermes_add_integrated_test(diffusion CONFLICTS BOUT_ENABLE_METRIC_3D)
