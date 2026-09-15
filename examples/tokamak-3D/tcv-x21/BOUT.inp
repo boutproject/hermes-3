@@ -9,7 +9,8 @@ zperiod = 5
 
 [mesh]
 
-file = "65402_68x32_revIp_wide_fixBp_curv.nc"
+#file = "65402_68x32_revIp_wide_fixBp_curv.nc"
+file = tokamak.nc
 
 extrapolate_y = false  # Can result in negative Jacobians in guard cells
 
@@ -18,7 +19,7 @@ type = shifted
 
 [solver]
 
-use_precon = true
+cvode_precon_method = user
 mxstep = 100000
 cvode_max_order = 3
 
@@ -134,4 +135,3 @@ function = 3*(1.0 - 0.9*x)^2
 
 source = Pe:source
 source_only_in_core = true
-
