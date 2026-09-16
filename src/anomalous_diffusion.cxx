@@ -91,6 +91,7 @@ void AnomalousDiffusion::transform_impl(GuardedOptions& state) {
   // to zero by imposing neumann boundary conditions.
   const Field3D N = GET_NOBOUNDARY(Field3D, species["density"]);
 
+  // Not averaging when in Fci
   Field2D N2D = N.isFci() ? Field2D{} : DC(N);
 
   const Field3D T = species.isSet("temperature")
@@ -133,43 +134,54 @@ void AnomalousDiffusion::transform_impl(GuardedOptions& state) {
     // diffusion operator for curvilinear coordinates that needs special
     // variables in the grid.
 
-    Field3D src_N =
-        N.isFci() ? (*dagp_op)(anomalous_D, N, flow_xlow, flow_ylow, false)
-                  : Div_a_Grad_perp_upwind_flows(anomalous_D, N2D, flow_xlow, flow_ylow);
-    add(species["density_source"], src_N);
+    if (N.isFci()) {
+      add(species["density_source"],
+          (*dagp_op)(anomalous_D, N, flow_xlow, flow_ylow, false));
+    } else {
+      add(species["density_source"],
+          Div_a_Grad_perp_upwind_flows(anomalous_D, N2D, flow_xlow, flow_ylow));
+    }
     add(species["particle_flow_xlow"], flow_xlow);
     add(species["particle_flow_ylow"], flow_ylow);
 
     // Note: Upwind operators used, or unphysical increases
     // in temperature and flow can be produced
     auto AA = get<BoutReal>(species["AA"]);
-    Field3D src_NV =
-        N.isFci() ? (*dagp_op)(AA * V * anomalous_D, N, flow_xlow, flow_ylow, false)
-                  : Div_a_Grad_perp_upwind_flows(
-                        Coordinates::FieldMetric{AA * V2D * anomalous_D}, N2D, flow_xlow,
-                        flow_ylow);
-    add(species["momentum_source"], src_NV);
+
+    if (N.isFci()) {
+      add(species["momentum_source"],
+          (*dagp_op)(AA * V * anomalous_D, N, flow_xlow, flow_ylow, false));
+    } else {
+      add(species["momentum_source"],
+          Div_a_Grad_perp_upwind_flows(Coordinates::FieldMetric{AA * V2D * anomalous_D},
+                                       N2D, flow_xlow, flow_ylow));
+    }
     add(species["momentum_flow_xlow"], flow_xlow);
     add(species["momentum_flow_ylow"], flow_ylow);
 
-    Field3D src_E =
-        N.isFci() ? (*dagp_op)((3. / 2) * T * anomalous_D, N, flow_xlow, flow_ylow, false)
-                  : Div_a_Grad_perp_upwind_flows(
-                        Coordinates::FieldMetric{(3. / 2) * T2D * anomalous_D}, N2D,
-                        flow_xlow, flow_ylow);
-    add(species["energy_source"], src_E);
+    if (N.isFci()) {
+      add(species["energy_source"],
+          (*dagp_op)((3. / 2) * T * anomalous_D, N, flow_xlow, flow_ylow, false));
+    } else {
+      add(species["energy_source"],
+          Div_a_Grad_perp_upwind_flows(
+              Coordinates::FieldMetric{(3. / 2) * T2D * anomalous_D}, N2D, flow_xlow,
+              flow_ylow));
+    }
     add(species["energy_flow_xlow"], flow_xlow);
     add(species["energy_flow_ylow"], flow_ylow);
   }
 
   if (include_chi) {
     // Gradients in temperature that drive energy flows
-    Field3D src_E =
-        N.isFci()
-            ? (*dagp_op)(anomalous_chi * N, T, flow_xlow, flow_ylow, false)
-            : Div_a_Grad_perp_upwind_flows(Coordinates::FieldMetric{anomalous_chi * N2D},
-                                           T2D, flow_xlow, flow_ylow);
-    add(species["energy_source"], src_E);
+    if (N.isFci()) {
+      add(species["energy_source"],
+          (*dagp_op)(anomalous_chi * N, T, flow_xlow, flow_ylow, false));
+    } else {
+      add(species["energy_source"],
+          Div_a_Grad_perp_upwind_flows(Coordinates::FieldMetric{anomalous_chi * N2D}, T2D,
+                                       flow_xlow, flow_ylow));
+    }
     add(species["energy_flow_xlow"], flow_xlow);
     add(species["energy_flow_ylow"], flow_ylow);
   }
@@ -177,12 +189,14 @@ void AnomalousDiffusion::transform_impl(GuardedOptions& state) {
   if (include_nu) {
     // Gradients in flow speed that drive momentum flows
     auto AA = get<BoutReal>(species["AA"]);
-    Field3D src_NV =
-        N.isFci() ? (*dagp_op)(anomalous_nu * AA * N, V, flow_xlow, flow_ylow, false)
-                  : Div_a_Grad_perp_upwind_flows(
-                        Coordinates::FieldMetric{anomalous_nu * AA * N2D}, V2D, flow_xlow,
-                        flow_ylow);
-    add(species["momentum_source"], src_NV);
+    if (N.isFci()) {
+      add(species["momentum_source"],
+          (*dagp_op)(anomalous_nu * AA * N, V, flow_xlow, flow_ylow, false));
+    } else {
+      add(species["momentum_source"],
+          Div_a_Grad_perp_upwind_flows(Coordinates::FieldMetric{anomalous_nu * AA * N2D},
+                                       V2D, flow_xlow, flow_ylow));
+    }
     add(species["momentum_flow_xlow"], flow_xlow);
     add(species["momentum_flow_ylow"], flow_ylow);
   }
