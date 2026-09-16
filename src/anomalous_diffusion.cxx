@@ -91,25 +91,18 @@ void AnomalousDiffusion::transform_impl(GuardedOptions& state) {
   // to zero by imposing neumann boundary conditions.
   const Field3D N = GET_NOBOUNDARY(Field3D, species["density"]);
 
-  Field2D N2D;
-  // Only perform the toroidal averaging when not Fci
-  if (!N.isFci()) {
-    N2D = DC(N);
-  }
+  Field2D N2D = N.isFci() ? Field2D{} : DC(N);
+
   const Field3D T = species.isSet("temperature")
                         ? GET_NOBOUNDARY(Field3D, species["temperature"])
                         : 0.0;
-  Field2D T2D;
-  if (!N.isFci()) {
-    T2D = DC(T);
-  }
+
+  Field2D T2D = N.isFci() ? Field2D{} : DC(T);
 
   const Field3D V =
       species.isSet("velocity") ? GET_NOBOUNDARY(Field3D, species["velocity"]) : 0.0;
-  Field2D V2D;
-  if (!N.isFci()) {
-    V2D = DC(V);
-  }
+
+  Field2D V2D = N.isFci() ? Field2D{} : DC(V);
 
   // This boundary operator does not work for Fci, so skip if Fci
   if (!anomalous_sheath_flux && !N.isFci()) {
