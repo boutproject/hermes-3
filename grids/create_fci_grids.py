@@ -1,12 +1,11 @@
+import argparse
+import os
+import uuid
+from pathlib import Path
+
+import numpy as np
 import zoidberg
 from zoidberg.field import Slab
-import numpy as np
-
-import argparse
-import uuid
-import os
-
-from pathlib import Path
 
 parser = argparse.ArgumentParser()
 parser.add_argument(
@@ -129,6 +128,7 @@ create_grid(folder_y, 6, 16, 4)
 create_grid(folder_y, 6, 32, 4)
 create_grid(folder_y, 6, 64, 4)
 
+create_grid(folder_xz, 20, 4, 16)
 create_grid(folder_xz, 36, 4, 32)
 create_grid(folder_xz, 68, 4, 64)
 create_grid(folder_xz, 132, 4, 128)
