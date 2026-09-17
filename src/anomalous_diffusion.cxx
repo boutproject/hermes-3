@@ -48,9 +48,15 @@ AnomalousDiffusion::AnomalousDiffusion(std::string name, Options& alloptions, So
                      .withDefault(anomalous_nu)
                  / diffusion_norm;
 
-  anomalous_sheath_flux = options["anomalous_sheath_flux"]
-                              .doc("Allow anomalous diffusion into sheath?")
-                              .withDefault<bool>(false);
+  // Set anomalous_sheath_flux manually to true so it does not appear in the log files
+  // anomalous_sheath_flux has no effect when using Fci
+  if (anomalous_D.isFci()) {
+    anomalous_sheath_flux = true;
+  } else {
+    anomalous_sheath_flux = options["anomalous_sheath_flux"]
+                                .doc("Allow anomalous diffusion into sheath?")
+                                .withDefault<bool>(false);
+  }
 
   diagnose = alloptions[name]["diagnose"]
                  .doc("Output additional diagnostics?")
