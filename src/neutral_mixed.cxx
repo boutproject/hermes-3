@@ -118,37 +118,79 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
                      .withDefault(1.0)
                  / meters;
 
+  legacy_regularisation =
+      options["legacy_regularisation"]
+          .doc("Use same floor for parallel and perpendicular directions "
+               "instead of a ratio, and an explicit viscosity regularisation "
+               "instead of one derived from thermal speed.")
+          .withDefault<bool>(false);
+
+  if (legacy_regularisation) {
+    if (options.isSet("limiter_gradient_floor_ratio")) {
+      throw BoutException("limiter_gradient_floor_ratio has no effect when "
+                          "legacy_regularisation = true, because the old scheme "
+                          "applies one floor to both directions.");
+    }
+    limiter_gradient_floor_ratio = 1.0;
+
+    limiter_gradient_floor_eta =
+        options["limiter_gradient_floor_eta"]
+            .doc("Floor for |grad Vn| in the eta limiter denominator in SI "
+                 "[1/s]. Only read when legacy_regularisation = true.")
+            .withDefault(9.5788e4)
+        * seconds;
+
+    limiter_gradient_ceiling_eta =
+        options["limiter_gradient_ceiling_eta"]
+            .doc("Ceiling for |grad Vn| in the eta limiter denominator in SI "
+                 "[1/s]. Only read when legacy_regularisation = true.")
+            .withDefault(1.0e12)
+        * seconds;
+
+  } else {
+    limiter_gradient_floor_eta = limiter_gradient_ceiling_eta = -1.0;
+
+    for (const auto& key :
+         {"limiter_gradient_floor_eta", "limiter_gradient_ceiling_eta"}) {
+      if (options.isSet(key)) {
+        throw BoutException("{:s} has no effect unless legacy_regularisation = true. "
+                            "The viscous denominator is otherwise divided by the "
+                            "thermal speed and shares limiter_gradient_floor and "
+                            "limiter_gradient_ceiling with the other channels.",
+                            key);
+      }
+    }
+
+    limiter_gradient_floor_ratio =
+        options["limiter_gradient_floor_ratio"]
+            .doc("Ratio of the perpendicular gradient floor to the parallel one. "
+                 "The parallel floor is limiter_gradient_floor divided by this. "
+                 "Dimensionless. ")
+            .withDefault(40.0);
+  }
+
+  if (limiter_gradient_floor_ratio <= 0.0) {
+    throw BoutException("limiter_gradient_floor_ratio must be positive, got {:g}",
+                        limiter_gradient_floor_ratio);
+  }
+
   limiter_gradient_floor =
       options["limiter_gradient_floor"]
-          .doc("Floor for |grad log Pn| in the D limiter "
+          .doc("Floor for the perpendicular gradient in every limiter "
                "denominator in SI [1/m]. Higher values improve robustness "
-               "in shallow Pn gradients but may affect the answer. ")
-          .withDefault(10.0)
+               "in shallow gradients but may affect the answer. ")
+          .withDefault(legacy_regularisation ? 10.0 : 1.0)
       * meters;
-
-  limiter_gradient_floor_eta =
-      options["limiter_gradient_floor_eta"]
-          .doc("Floor for |grad Vn| in the eta limiter "
-               "denominator in SI [1/s]. Higher values improve robustness "
-               "in shallow Vn gradients but may affect the answer. ")
-          .withDefault(9.5788e4)
-      * seconds;
 
   limiter_gradient_ceiling =
       options["limiter_gradient_ceiling"]
-          .doc("Ceiling for |grad log Pn| in the D limiter "
+          .doc("Ceiling for the gradient in every limiter "
                "denominator in SI [1/m]. Lower values can improve robustness "
-               "in steep Pn gradients but may affect the answer. ")
+               "in steep gradients but may affect the answer. ")
           .withDefault(100.0)
       * meters;
 
-  limiter_gradient_ceiling_eta =
-      options["limiter_gradient_ceiling_eta"]
-          .doc("Ceiling for |grad Vn| in the eta limiter "
-               "denominator in SI [1/s]. Lower values can improve robustness "
-               "in steep Vn gradients but may affect the answer. ")
-          .withDefault(1.0e12)
-      * seconds;
+  limiter_gradient_floor_par = limiter_gradient_floor / limiter_gradient_floor_ratio;
 
   flux_limit_adv =
       options["flux_limit"]
@@ -663,7 +705,7 @@ void NeutralMixed::finally(const Options& state) {
     if (flux_limit_cond_par >= 0.0) {
       kappa_n_max_par =
           flux_limit_cond_par * (1. / 2) * vn_bar * Nnlim
-          / regularise_gradient(Grad_par(Tn) / Tnlim, limiter_gradient_floor,
+          / regularise_gradient(Grad_par(Tn) / Tnlim, limiter_gradient_floor_par,
                                 limiter_gradient_ceiling);
     }
     blend_explicit_limit_with_fraction_limit(kappa_n_max_par, conduction_limit,
@@ -671,21 +713,39 @@ void NeutralMixed::finally(const Options& state) {
 
     // Viscosity
     // Viscous momentum flux cannot exceed the pressure.
+    // The regularisation is derived from the advection/conduction regularisation
+    // using vn_bar, the mean thermal speed. This is necessary as viscosity uses
+    // Grad_perp(Vn), which has units of [s^-1] as opposed to the conductivity
+    // and advection which have [m^-1].
 
     // perpendicular
     if (flux_limit_visc_perp >= 0.0) {
-      eta_n_max_perp = flux_limit_visc_perp * Pnlim
-                       / regularise_gradient(Grad_perp(Vn), limiter_gradient_floor_eta,
-                                             limiter_gradient_ceiling_eta);
+      if (legacy_regularisation) {
+        eta_n_max_perp = flux_limit_visc_perp * Pnlim
+                         / regularise_gradient(Grad_perp(Vn), limiter_gradient_floor_eta,
+                                               limiter_gradient_ceiling_eta);
+      } else {
+        eta_n_max_perp =
+            flux_limit_visc_perp * Pnlim / vn_bar
+            / regularise_gradient(Grad_perp(Vn) / vn_bar, limiter_gradient_floor,
+                                  limiter_gradient_ceiling);
+      }
     }
     blend_explicit_limit_with_fraction_limit(eta_n_max_perp, viscosity_limit,
                                              flux_limit_visc_perp);
 
     // parallel
     if (flux_limit_visc_par >= 0.0) {
-      eta_n_max_par = flux_limit_visc_par * Pnlim
-                      / regularise_gradient(Grad_par(Vn), limiter_gradient_floor_eta,
-                                            limiter_gradient_ceiling_eta);
+      if (legacy_regularisation) {
+        eta_n_max_par = flux_limit_visc_par * Pnlim
+                        / regularise_gradient(Grad_par(Vn), limiter_gradient_floor_eta,
+                                              limiter_gradient_ceiling_eta);
+      } else {
+        eta_n_max_par =
+            flux_limit_visc_par * Pnlim / vn_bar
+            / regularise_gradient(Grad_par(Vn) / vn_bar, limiter_gradient_floor_par,
+                                  limiter_gradient_ceiling);
+      }
     }
     blend_explicit_limit_with_fraction_limit(eta_n_max_par, viscosity_limit,
                                              flux_limit_visc_par);

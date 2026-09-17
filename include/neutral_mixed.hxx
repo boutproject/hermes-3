@@ -49,16 +49,19 @@ private:
   Field3D Dnn_unlimited, Dmax;   ///< Unlimited and max Dnn
   Field3D DnnNn, DnnPn, DnnTn, DnnNVn; ///< Used for operators
   bool combined_limiters;              ///< Derive kappa, eta limiters from Dnn
-  BoutReal flux_limit_adv;           ///< Advective flux limit, fraction of free streaming
-  BoutReal flux_limit_cond_perp;     ///< Perpendicular conductive flux limit
-  BoutReal flux_limit_cond_par;      ///< Parallel conductive flux limit
-  BoutReal flux_limit_visc_perp;     ///< Perpendicular viscous flux limit
-  BoutReal flux_limit_visc_par;      ///< Parallel viscous flux limit
-  BoutReal flux_limiter_sharpness;   ///< Sharpness of the diffusive flux limiter
-  BoutReal limiter_gradient_floor;   ///< Floor for gradient in Dmax denominator
-  BoutReal limiter_gradient_ceiling; ///< Ceiling for gradient in Dmax denominator
-  BoutReal limiter_gradient_floor_eta;   ///< Floor for gradient in eta denominator
-  BoutReal limiter_gradient_ceiling_eta; ///< Ceiling for gradient in eta denominator
+  BoutReal flux_limit_adv;         ///< Advective flux limit, fraction of free streaming
+  BoutReal flux_limit_cond_perp;   ///< Perpendicular conductive flux limit
+  BoutReal flux_limit_cond_par;    ///< Parallel conductive flux limit
+  BoutReal flux_limit_visc_perp;   ///< Perpendicular viscous flux limit
+  BoutReal flux_limit_visc_par;    ///< Parallel viscous flux limit
+  BoutReal flux_limiter_sharpness; ///< Sharpness of the diffusive flux limiter
+  BoutReal limiter_gradient_floor; ///< Perpendicular floor, all limiter denominators
+  BoutReal limiter_gradient_floor_ratio; ///< Perpendicular floor / parallel floor
+  BoutReal limiter_gradient_floor_par;   ///< Parallel floor, derived from the two above
+  BoutReal limiter_gradient_ceiling;     ///< Ceiling for gradient in every denominator
+  bool legacy_regularisation;            ///< Use the pre-unification scheme
+  BoutReal limiter_gradient_floor_eta;   ///< Legacy viscous floor [1/s]
+  BoutReal limiter_gradient_ceiling_eta; ///< Legacy viscous ceiling [1/s]
   BoutReal diffusion_limit;              ///< Explicit cap on Dnn [m^2/s]
   BoutReal conduction_limit;             ///< Explicit cap on kappa_n [m^-1 s^-1]
   BoutReal viscosity_limit;              ///< Explicit cap on eta_n [Pa s]
