@@ -32,7 +32,7 @@ yperiod = 2.0 * np.pi / symmetry
 
 # Grid size. Full torus results in ny = 40, while module simulations result in ny = 8
 nx = 32 + 4
-ny = int(5 * 8 / symmetry)
+ny = 5 * 8 // symmetry
 nz = 256
 
 # Generate the actual magnetic field
@@ -158,7 +158,8 @@ else:
     )
 
     # These are the maps of the tracing that contain the information for the parallel derivatives
-    maps = zoidberg.make_maps(grid, field, nslice=2)
+    nslice = 1
+    maps = zoidberg.make_maps(grid, field, nslice=nslice)
 
     # This step is crucial. The tracing is allways a little bit inaccurate. This results in some fieldlines exiting the flux surface
     # by incremental distances. This results in application of boundary conditions at all of these positions.
@@ -168,10 +169,11 @@ else:
     maps["backward_xt_prime"][-3, :, :] = nx - 3
     maps["forward_xt_prime"][-3, :, :] = nx - 3
 
-    maps["forward_xt_prime_2"][2, :, :] = 2.0
-    maps["backward_xt_prime_2"][2, :, :] = 2.0
-    maps["backward_xt_prime_2"][-3, :, :] = nx - 3
-    maps["forward_xt_prime_2"][-3, :, :] = nx - 3
+    if nslice == 2:
+        maps["forward_xt_prime_2"][2, :, :] = 2.0
+        maps["backward_xt_prime_2"][2, :, :] = 2.0
+        maps["backward_xt_prime_2"][-3, :, :] = nx - 3
+        maps["forward_xt_prime_2"][-3, :, :] = nx - 3
 
     # Writing the complete grid file
     zoidberg.write_maps(grid, field, maps, metric2d=False, gridfile=filename)
