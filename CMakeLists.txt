@@ -406,23 +406,20 @@ if(HERMES_TESTS)
       # again causes errors
       add_subdirectory(external/googletest)
     endif()
-    if(BOUT_ENABLE_METRIC_3D)
-      message(STATUS "CONFLICT unit-tests and BOUT_ENABLE_METRIC_3D")
-    else()
-      file(GLOB_RECURSE TEST_SOURCES tests/unit/test_*.cxx)
 
-      add_executable(hermes_unit_tests tests/unit/main.cxx ${TEST_SOURCES})
+    file(GLOB_RECURSE TEST_SOURCES tests/unit/test_*.cxx)
 
-      target_link_libraries(hermes_unit_tests PRIVATE hermes_warnings)
+    add_executable(hermes_unit_tests tests/unit/main.cxx ${TEST_SOURCES})
 
-      add_test(NAME hermes_unit_tests COMMAND hermes_unit_tests)
-      set_tests_properties(hermes_unit_tests PROPERTIES LABELS unit)
-      target_link_libraries(hermes_unit_tests PRIVATE gtest bout++::bout++
-                                                      hermes-3-lib)
-      # Have hermes_unit_tests look for dynamic libs in ./ before searching
-      # elsewhere
-      set_target_properties(hermes_unit_tests PROPERTIES BUILD_RPATH "$ORIGIN")
-    endif()
+    target_link_libraries(hermes_unit_tests PRIVATE hermes_warnings)
+
+    add_test(NAME hermes_unit_tests COMMAND hermes_unit_tests)
+    set_tests_properties(hermes_unit_tests PROPERTIES LABELS unit)
+    target_link_libraries(hermes_unit_tests PRIVATE gtest bout++::bout++
+                                                    hermes-3-lib)
+    # Have hermes_unit_tests look for dynamic libs in ./ before searching
+    # elsewhere
+    set_target_properties(hermes_unit_tests PROPERTIES BUILD_RPATH "$ORIGIN")
   endif()
 
   # Method of manufactured solutions (MMS) tests of operators
