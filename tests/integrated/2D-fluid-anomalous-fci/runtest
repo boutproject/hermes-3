@@ -13,11 +13,11 @@ gridpath = "../../../../grids/MMS_slab_xz/"
 
 
 def gridname(ny):
-    return gridpath + f"MMS_straight_slab_{ny + 4}_4_{ny}_False.fci.grid.nc"
+    return gridpath + f"MMS_straight_slab_{ny + 4}_1_{ny}_False.fci.grid.nc"
 
 
 # List of NY values to use
-nylist = [32, 64]
+nylist = [16, 32]
 
 nout = 20
 timestep = 1e6 / nout
