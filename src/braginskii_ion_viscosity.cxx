@@ -28,6 +28,8 @@
 #include "../include/div_ops.hxx"
 #include "../include/hermes_utils.hxx"
 
+// FIXME: Why does it matter if upstream_density_feedback executed after this? Is there some wierd interaction of the readIfSet variables?
+
 using bout::globals::mesh;
 
 BraginskiiIonViscosity::BraginskiiIonViscosity(const std::string& name,
@@ -36,10 +38,11 @@ BraginskiiIonViscosity::BraginskiiIonViscosity(const std::string& name,
           name,
           {
               readIfSet("species:{non_electrons}:pressure"),
-              readIfSet("species:{non_electrons}:temperature"),
-              readIfSet("species:{non_electrons}:density"),
-              readIfSet("species:{non_electrons}:velocity"),
               readIfSet("species:{non_electrons}:charge"),
+              // FIXME: The rest of these (except DivJextra) only
+              // apply for species in which the above are set
+              readOnly("species:{non_electrons}:temperature"),
+              readOnly("species:{non_electrons}:density"),
               readIfSet("species:{non_electrons}:collision_frequencies:{coll_type}"),
               readWrite("species:{non_electrons}:momentum_source"),
               readWrite("species:{non_electrons}:energy_source"),
@@ -121,11 +124,20 @@ BraginskiiIonViscosity::BraginskiiIonViscosity(const std::string& name,
     Curlb_B.z *= SQ(Lnorm);
 
     Curlb_B *= 2. / coord->Bxy;
+
+    setPermissions(readOnly("fields:phi"));
   }
+
+  if (parallel) {
+    setPermissions(readOnly("species:{non_electrons}:velocity"));
+  }
+
   if (bounce_frequency) {
     const Options& units = alloptions["units"];
     const BoutReal Lnorm = units["meters"];
     bounce_frequency_R /= Lnorm;
+
+    setPermissions(readOnly("species:{non_electrons}:pressure"));
   }
 
   std::vector<std::string> coll_types;
@@ -134,9 +146,6 @@ BraginskiiIonViscosity::BraginskiiIonViscosity(const std::string& name,
   } else if (viscosity_collisions_mode == "multispecies") {
     coll_types.push_back("{non_electrons}_{all_species}_coll");
     coll_types.push_back("{non_electrons}_{all_species}_cx");
-  }
-  if (perpendicular) {
-    setPermissions(readOnly("fields:phi"));
   }
   substitutePermissions("coll_type", coll_types);
 }
