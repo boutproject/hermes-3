@@ -9,7 +9,7 @@ from boutdata.collect import collect
 from boututils.run_wrapper import launch_safe, shell
 from numpy import abs, array, log, max, mean, sqrt
 
-gridpath = "../../../../grids/MMS_slab_xz/"
+gridpath = "../../../grids/MMS_slab_xz/"
 
 
 def gridname(ny):
