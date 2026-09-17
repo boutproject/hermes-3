@@ -108,7 +108,8 @@ def create_grid(folder, nx, ny, nz, BC=False, inp_Ly=None):
     with zoidberg.zoidberg.MapWriter(tmpname) as mw:
         mw.add_grid_field(rectangle, magnetic_field)
         mw.add_maps(maps)
-        mw.add_dagp()
+        if nz > 1:
+            mw.add_dagp()
     os.replace(tmpname, filename)
 
 
