@@ -74,8 +74,8 @@ private:
     Field3D nu_star;
   };
 
-  Field3DParallel Bxy, sqrtB, Grad_par_logB; ///< Magnetic field variables
-
+  Field3DParallel Bxy, sqrtB; ///< Magnetic field variables
+  Field3D Grad_par_logB;
   /// Store diagnostics for each species
   std::map<std::string, Diagnostics> diagnostics;
 
