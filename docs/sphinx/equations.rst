@@ -670,9 +670,11 @@ it is recommended to set ``dneut`` according to the field line pitch at the targ
 2D/3D: neutral_mixed
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+Equations
+^^^^^^^^^
 
-The below describes the `neutral_mixed` component used for 2D and 3D simulations. Note that all dimensionalities
-are compatible with the `neutral_boundary` component which facilitates energy losses to the wall through neutral reflection.
+The below describes the `neutral_mixed` component used for 2D and 3D simulations. See :ref:`sec-neutral_mixed_bc` for the
+corresponding boundary conditions and :ref:`sec-neutral_boundary` on enabling wall energy losses due to neutral reflection.
 
 The `neutral_mixed` component solves fluid equations along :math:`y`
 (parallel to the magnetic field), and uses diffusive transport in :math:`x`
@@ -688,12 +690,12 @@ new AFN (Advanced Fluid Neutral) model in SOLPS-ITER [N. Horsten, N.F. (2017)].
          &    + S \\
    \frac{\partial}{\partial t}\left(m_nn_nv_{\parallel, n}\right) =& -m_n \nabla\cdot\left(n_n v_{\parallel, n} (\mathbf{b}v_{||n} + \mathbf{v}_{\perp n}\right)) \\
          &    - \nabla_{\parallel}p_n \\
-         &    + \nabla \cdot (\eta_{n} (\nabla_{\perp} v_{\parallel n} + \mathbf{b} \nabla_{\parallel} v_{\parallel n} )) \\
+         &    + \nabla \cdot (\eta_{n,\perp} \nabla_{\perp} v_{\parallel n} + \mathbf{b} \eta_{n,\parallel} \nabla_{\parallel} v_{\parallel n} ) \\
          &    + F \\
    \frac{\partial p_n}{\partial t} =& -\frac{5}{3} \nabla\cdot\left(p_n\mathbf{b}v_{\parallel, n} +  p_n\mathbf{v}_{\perp n}\right) \\
          &    + \frac{2}{3}v_{\parallel, n} \nabla_{\parallel} p_n \\
-         &    + \frac{2}{3} \nabla\cdot\left(\kappa_n \left(\nabla_\perp T_n + \mathbf{b} \nabla_{\parallel} T_n\right)\right) \\
-         &    - \frac{2}{3} v_{\parallel,n} \nabla \cdot \left(\eta_{n} \left( \nabla_{\perp} v_{\parallel n} + \mathbf{b} \nabla_{\parallel} v_{\parallel n} \right) \right) \\
+         &    + \frac{2}{3} \nabla\cdot\left(\kappa_{n,\perp} \nabla_\perp T_n + \mathbf{b} \kappa_{n,\parallel} \nabla_{\parallel} T_n\right) \\
+         &    - \frac{2}{3} v_{\parallel,n} \nabla \cdot \left( \eta_{n,\perp} \nabla_{\perp} v_{\parallel n} + \mathbf{b} \eta_{n,\parallel} \nabla_{\parallel} v_{\parallel n} \right) \\
          &    + \frac{2}{3}E \\
 
    \end{aligned}
@@ -767,83 +769,283 @@ enabled for neutrals (set in the `braginskii_collisions` component), but ionisat
 is neglected.  ``afn`` is the recommended mode, and is based on the Advanced Fluid Neutral
 model in SOLPS-ITER.
 
+Flux limiting
+^^^^^^^^^^^^^
 
-The primary mechanism for limiting the diffusivity is the flux limiter, which
-smoothly limits :math:`D_n` to :math:`D_{n,\max}`, calculated from a
-user-set fraction of the free-streaming neutral particle flux:
+The diffusive closure places no bound on the transport speed. As the neutral
+mean free path grows, the collision frequency falls and the transport
+coefficients tend towards infinity. This unphysical behaviour is mitigated
+by flux limitation where a flux cap is calculated from a user-specified fraction
+of the free-streaming flux.
+Hermes-3 limits all three diffusive transport channels: perpendicular
+particle diffusion :math:`D_n`, heat conduction :math:`\kappa_n` and viscosity
+:math:`\eta_n`.
 
+Each channel is treated in the same four steps:
+
+1. The unlimited coefficient is calculated from the collisionality, as described
+   above.
+2. The maximum coefficient according to the desired free-streaming fraction
+   is calculated.
+3. Optionally, an additional, explicit user-set diffusion coefficient cap
+   is blended with the free-streaming maximum. The model can also run with a
+   purely explicit cap and no free-streaming based limit.
+4. The unlimited coefficient and the maximum are blended into the final
+   coefficient using a smooth limiter function.
+
+Each flux is the product of a coefficient and a gradient, so step 2 is a
+division by the local gradient. That gradient is first regularised using the
+function :math:`R`, which is described in the next section:
 
 .. math::
 
    \begin{aligned}
-   D_{n,\max} =& \frac{\alpha \frac{1}{4} \bar{v}_{n}}{g_{reg}}, \\
+   D_{n,\max} =& \alpha_{D} \frac{1}{4} \bar{v}_{n}
+       \;\Big/\; R\!\left(\nabla_{\perp}\ln p_n\right) \\
+   \kappa_{n,\max}^{\perp,\parallel} =& \alpha_{\kappa}^{\perp,\parallel}
+       \frac{1}{2} \bar{v}_{n} n_n
+       \;\Big/\; R\!\left(\nabla_{\perp,\parallel} T_n / T_n\right) \\
+   \eta_{n,\max}^{\perp,\parallel} =& \alpha_{\eta}^{\perp,\parallel} p_n
+       \;\Big/\; R_{\eta}\!\left(\nabla_{\perp,\parallel} v_{\parallel n}\right) \\
    \end{aligned}
 
-where :math:`\alpha` is the free-streaming fraction set by the ``flux_limit`` option
-and :math:`\bar{v}_{n} = \sqrt{8T_n / \pi m_n}` is the mean speed of a
-non-drifting Maxwellian, with the :math:`\frac{1}{4}` due to the 1D free-streaming particle
-flux being calculated as :math:`\frac{1}{4} n_n \bar{v}_n`. The denominator
-:math:`g_{reg}` is a regularised inverse pressure-gradient length, where it is smoothly
-clamped to to the range
-:math:`[g_{\min}, g_{\max}]`, where :math:`g_{\max}` and :math:`g_{\min}` are set by
-``limiter_gradient_ceiling`` and ``limiter_gradient_floor`` respectively:
+Here :math:`\bar{v}_{n} = \sqrt{8T_n / \pi m_n}` is the mean speed of a
+non-drifting Maxwellian [Stangeby eq. 2.21, p.67]. The numerators are the
+free-streaming fluxes of each quantity: :math:`\frac{1}{4} n_n \bar{v}_n` for
+particles [Stangeby, under eq. 2.24, p.67], :math:`\frac{1}{2} p_n \bar{v}_n`
+for heat, and :math:`p_n` for parallel momentum. The density factor cancels in
+:math:`D_{n,\max}` because the perpendicular particle flux is
+:math:`\Gamma_{\perp} = -D_n n_n \nabla_{\perp} \ln p_n`.
+
+Conduction and viscosity are limited separately in the parallel and
+perpendicular directions, each using the corresponding component of its
+gradient. Only the perpendicular direction is
+limited for particle transport, because parallel particle transport is
+advective rather than diffusive.
+
+Regularising the gradient
+^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The gradient in the denominator is smoothly clamped to the range
+:math:`[g_{\min}, g_{\max}]` before the division:
 
 .. math::
 
    \begin{aligned}
-   g =& \nabla_{\perp}\ln p_n = \frac{1}{p_n} \nabla_{\perp} p_n \\
-   g_{ceil} =&
-      \frac{g\,g_{\max}}{\sqrt{g^2 + g_{\max}^2}} \\
-   g_{reg} =& \sqrt{g_{ceil}^2 + g_{\min}^2}. \\
+   R(g) =& \sqrt{\frac{g^{2} g_{\max}^{2}}{g^{2} + g_{\max}^{2}} + g_{\min}^{2}}
    \end{aligned}
 
-The floor prevents division by zero, helping to regularise the fraction in regions
-of small gradient at the cost of a small additional reduction in flux. It is applied
-in a way to prevent a non-differentiable kink at :math:`g=0`.
+This has three limits:
 
-The ceiling improves numerical robustness at very steep gradients when the flux limiter
-is saturated. By default, it is set to a value which should only activate during
-the initial transients of a simulation where it can prevent crashes and performance
-degradation. The numerical instability is due to the fact that
-the neutral transport becomes advective in the saturated limit, where the central difference
-scheme implemented for this term is not stable. In the future, a blended operator will be implemented
-which transitions to upwind in the advective limit.
+- :math:`|g| \ll g_{\min}`: :math:`R \rightarrow g_{\min}`. The floor prevents
+  division by zero where the gradient vanishes. It is applied as a sum of
+  squares so that :math:`R` remains smooth at :math:`g = 0` instead of
+  developing a kink. The cost is a small additional reduction of the flux limit
+  in shallow gradients.
+- :math:`g_{\min} \ll |g| \ll g_{\max}`: :math:`R \rightarrow |g|`, so the
+  gradient passes through unmodified.
+- :math:`|g| \gg g_{\max}`: :math:`R \rightarrow g_{\max}`. The ceiling stops
+  the maximum coefficient from becoming arbitrarily small at very steep
+  gradients, which improves robustness where the limiter is saturated. In the
+  saturated limit the neutral transport depends on the free-streaming speed
+  without a dependence on a gradient, making it behave like an advective term.
+  This makes the central difference scheme implemented in its operator unstable
+  due to the risk of checkerboarding. The gradient ceiling ensures that the term
+  can never become fully advective and improves simulation robustness during transients.
+  The default value is set so that it has very little impact in steady state.
 
-Both the floor and the ceiling are in SI units of :math:`m^{-1}`.
+Two sets of floor and ceiling parameters are used, because the gradients do not
+all have the same units. The particle and conduction limiters both divide by an
+inverse gradient length in :math:`m^{-1}` and share one pair, denoted :math:`R`
+above. The viscosity limiter divides by a velocity gradient in :math:`s^{-1}`
+and has its own pair, denoted :math:`R_{\eta}`. All four parameters are set in
+SI units.
 
-The final diffusion coefficient is a smooth blend of the unlimited
-coefficient and the :math:`D_{n,\max}` cap, using a smooth limiter function:
+.. list-table::
+   :header-rows: 1
+   :widths: 26 14 12 24 24
+
+   * - Gradient
+     - Used in
+     - Units
+     - Floor option (default)
+     - Ceiling option (default)
+   * - :math:`\nabla_{\perp}\ln p_n`
+     - :math:`D_{n,\max}`
+     - :math:`m^{-1}`
+     - ``limiter_gradient_floor`` (10)
+     - ``limiter_gradient_ceiling`` (100)
+   * - :math:`\nabla_{\perp,\parallel} T_n / T_n`
+     - :math:`\kappa_{n,\max}`
+     - :math:`m^{-1}`
+     - ``limiter_gradient_floor`` (10)
+     - ``limiter_gradient_ceiling`` (100)
+   * - :math:`\nabla_{\perp,\parallel} v_{\parallel n}`
+     - :math:`\eta_{n,\max}`
+     - :math:`s^{-1}`
+     - ``limiter_gradient_floor_eta`` (9.5788e4)
+     - ``limiter_gradient_ceiling_eta`` (1e12)
+
+Raising a floor or lowering a ceiling improves robustness but changes the
+answer, so both should be checked for convergence.
+
+Applying the limit
+^^^^^^^^^^^^^^^^^^
+
+The final coefficient is a smooth blend of the unlimited coefficient and the
+maximum. Writing this for :math:`D_n`, and with the same form used for
+:math:`\kappa_n` and :math:`\eta_n`:
 
 .. math::
+
    \begin{aligned}
    D_n = D_{n,unlim}
       \left[1 + \left(\frac{D_{n,unlim}}{D_{n,\max}}\right)^\gamma
       \right]^{-1/\gamma},
    \end{aligned}
 
-where :math:`\gamma` is ``flux_limiter_sharpness``. The default :math:`\gamma=1`
-gives the harmonic mean
+where :math:`\gamma` is set by ``flux_limiter_sharpness``. The default
+:math:`\gamma = 1` gives the harmonic mean
 
 .. math::
+
    \begin{aligned}
    D_n = \frac{D_{n,unlim}D_{n,\max}}
-              {D_{n,unlim} + D_{n,\max}} .
+              {D_{n,unlim} + D_{n,\max}} ,
    \end{aligned}
 
-Larger values of :math:`\gamma` make the transition sharper. Setting
-``flux_limit`` below zero disables the flux limiter. The separate
-``diffusion_limit`` option can also impose a hard upper bound on
-:math:`D_{n,\max}`.
+and larger values of :math:`\gamma` make the transition sharper.
 
-The neutral conductivity and viscosity coefficients, which control
-both the parallel and perpendicular diffusion of temperature and
-parallel momentum, are then calculated from the limited diffusion coefficient:
+The flux limit fraction :math:`\alpha` also acts as a switch on its channel:
+
+- :math:`\alpha < 0` disables the free-streaming limiter, so the unlimited
+  coefficient is used unless an explicit cap is set.
+- :math:`\alpha = 0` sets the coefficient to zero, switching the channel off.
+  Note that with ``combined_limiters = true``, setting ``flux_limit = 0``
+  switches off diffusion, conduction and viscosity together.
+
+Explicit coefficient caps
+^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Each channel can also be capped by an explicit, user-set maximum coefficient,
+using ``diffusion_limit``, ``conduction_limit`` and ``viscosity_limit``. These
+are set in SI units and are negative by default, which disables them.
+
+If both the flux limit fraction and the explicit cap are set for a channel, the
+maximum coefficient is the harmonic mean of the two. If only the explicit cap is
+set, the maximum coefficient is that value. If neither is set, the channel is
+not limited at all.
+
+Combined and separate limiters
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The conduction and viscosity coefficients are related to the diffusion
+coefficient by the Chapman-Enskog approximation:
 
 .. math::
+
    \begin{aligned}
-   \kappa_{n} =& \frac{5}{2} D_n N_n \\
+   \kappa_{n} =& \frac{5}{2} D_n n_n \\
    \eta_{n} =& \frac{2}{5} m_n \kappa_{n} \\
    \end{aligned}
+
+This relation always holds for the unlimited coefficients. Whether it also holds
+for the limited coefficients is controlled by ``combined_limiters``.
+
+With ``combined_limiters = true``, which is the default, only :math:`D_n` is
+limited, and the limited :math:`\kappa_n` and :math:`\eta_n` are calculated from
+the limited :math:`D_n` using the relation above. The limiting is then isotropic
+and is driven by the pressure gradient alone. This is cheaper and more robust,
+but less physically accurate. In this mode, the conduction and viscosity limiter
+options have no effect, and setting any of ``flux_limit_cond_perp``,
+``flux_limit_cond_par``, ``flux_limit_visc_perp``, ``flux_limit_visc_par``,
+``conduction_limit`` or ``viscosity_limit`` raises an exception rather than
+being silently ignored.
+
+With ``combined_limiters = false``, each channel is limited by its own
+free-streaming flux and its own gradient, separately in the parallel and
+perpendicular directions, as described above.
+
+Flux limiter options
+^^^^^^^^^^^^^^^^^^^^
+
+.. list-table::
+   :header-rows: 1
+   :widths: 30 18 52
+
+   * - Option
+     - Default
+     - Meaning
+   * - ``combined_limiters``
+     - ``true``
+     - Derive the :math:`\kappa_n` and :math:`\eta_n` limits from :math:`D_n`
+   * - ``flux_limit``
+     - 0.5
+     - :math:`\alpha_{D}`, fraction of free-streaming particle flux
+   * - ``flux_limit_cond_perp``
+     - ``flux_limit``
+     - :math:`\alpha_{\kappa}^{\perp}`, fraction of free-streaming heat flux
+   * - ``flux_limit_cond_par``
+     - ``flux_limit_cond_perp``
+     - :math:`\alpha_{\kappa}^{\parallel}`
+   * - ``flux_limit_visc_perp``
+     - ``flux_limit``
+     - :math:`\alpha_{\eta}^{\perp}`, fraction of free-streaming momentum flux
+   * - ``flux_limit_visc_par``
+     - ``flux_limit_visc_perp``
+     - :math:`\alpha_{\eta}^{\parallel}`
+   * - ``flux_limiter_sharpness``
+     - 1.0
+     - :math:`\gamma`, sharpness of the blend between unlimited and maximum
+   * - ``diffusion_limit``
+     - -1
+     - Explicit cap on :math:`D_n` in :math:`m^{2} s^{-1}`
+   * - ``conduction_limit``
+     - -1
+     - Explicit cap on :math:`\kappa_n` in :math:`m^{-1} s^{-1}`
+   * - ``viscosity_limit``
+     - -1
+     - Explicit cap on :math:`\eta_n` in :math:`Pa\,s`
+   * - ``limiter_gradient_floor``
+     - 10
+     - :math:`g_{\min}` for :math:`D_n` and :math:`\kappa_n`, in :math:`m^{-1}`
+   * - ``limiter_gradient_ceiling``
+     - 100
+     - :math:`g_{\max}` for :math:`D_n` and :math:`\kappa_n`, in :math:`m^{-1}`
+   * - ``limiter_gradient_floor_eta``
+     - 9.5788e4
+     - :math:`g_{\min}` for :math:`\eta_n`, in :math:`s^{-1}`
+   * - ``limiter_gradient_ceiling_eta``
+     - 1e12
+     - :math:`g_{\max}` for :math:`\eta_n`, in :math:`s^{-1}`
+
+Setting a flux limit fraction or an explicit cap below zero disables it.
+
+Flux limiter diagnostics
+^^^^^^^^^^^^^^^^^^^^^^^^
+
+Setting ``diagnose = true`` writes the coefficients at each stage of the
+limiting to the output. The names below are for a species ``d``.
+
+.. list-table::
+   :header-rows: 1
+   :widths: 34 66
+
+   * - Diagnostic
+     - Meaning
+   * - ``Dnnd_unlimited``, ``kappa_d_unlimited``, ``eta_d_unlimited``
+     - Coefficients from the collisionality, before any limiting
+   * - ``Dnnd_max``, ``kappa_d_max_perp``, ``kappa_d_max_par``,
+       ``eta_d_max_perp``, ``eta_d_max_par``
+     - Maximum coefficients, after any explicit cap is blended in
+   * - ``Dnnd``, ``kappa_d_perp``, ``kappa_d_par``, ``eta_d_perp``,
+       ``eta_d_par``
+     - Final coefficients used in the equations
+
+The maximum coefficients are only written if the corresponding limiter is
+enabled. With ``combined_limiters = true``, the conduction and viscosity
+maximums are derived from ``Dnnd_max`` and are written for diagnostic purposes
+only.
 
 
 .. doxygenstruct:: NeutralMixed
