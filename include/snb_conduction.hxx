@@ -5,7 +5,7 @@
 #include "component.hxx"
 
 #include <bout/snb.hxx>
-
+#if !BOUT_USE_METRIC_3D
 /// Calculate electron heat flux using the Shurtz-Nicolai-Busquet (SNB) model
 ///
 /// This component will only calculate divergence of heat flux for the
@@ -92,5 +92,11 @@ private:
 namespace {
 RegisterComponent<SNBConduction> registercomponentsnbconduction;
 }
-
+#else // not BOUT_USE_METRIC_3D
+namespace {
+RegisterUnavailableComponent
+    register_snb_conduction("snb_conduction",
+                            "This not (yet) compatible with 3D metrics");
+}
+#endif
 #endif // SNB_CONDUCTION_H

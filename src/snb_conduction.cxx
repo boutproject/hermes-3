@@ -1,6 +1,7 @@
 #include "../include/snb_conduction.hxx"
 #include <bout/constants.hxx>
 
+#if !BOUT_USE_METRIC_3D
 #include <bout/bout.hxx>
 using bout::globals::mesh;
 
@@ -57,3 +58,4 @@ void SNBConduction::outputVars(Options& state) {
                     {"source", "snb_conduction"}});
   }
 }
+#endif
