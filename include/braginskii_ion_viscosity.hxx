@@ -6,11 +6,10 @@
 #include <string>
 #include <vector>
 
+#include "component.hxx"
 #include <bout/bout_types.hxx>
 #include <bout/options.hxx>
 #include <bout/vectormetric.hxx>
-
-#include "component.hxx"
 
 /// Ion viscosity terms
 ///
@@ -64,7 +63,7 @@ private:
   BoutReal bounce_frequency_R;       ///< Input major radius
   BoutReal density_floor;            ///< Minimum density used in calculating Pi_ciperp
   bool diagnose;                     ///< Output additional diagnostics?
-
+  bool viscous_heating;              ///< yInclude the heating due to viscosity?
   /// Per-species diagnostics
   struct Diagnostics {
     Field3D Pi_ciperp; ///< Perpendicular part of Pi scalar
@@ -74,6 +73,8 @@ private:
     Field3D nu_star;
   };
 
+  bout::FieldMetricParallel Bxy, sqrtB; ///< Magnetic field variables
+  Field3D Grad_par_logB;
   /// Store diagnostics for each species
   std::map<std::string, Diagnostics> diagnostics;
 
