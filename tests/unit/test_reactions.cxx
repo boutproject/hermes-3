@@ -101,14 +101,26 @@ TEST(CXReactionTest, OrderIndependentReactionStrs) {
 //====================== Reaction source regression tests =====================
 
 // H isotopes ionization
-TEST_F(HIznTest, SourcesRegression) { sources_regression_test(); }
-TEST_F(DIznTest, SourcesRegression) { sources_regression_test(); }
-TEST_F(TIznTest, SourcesRegression) { sources_regression_test(); }
+TEST_F(HIznTest, SourcesRegression) {
+  sources_regression_test<bout::build::use_metric_3d>();
+}
+TEST_F(DIznTest, SourcesRegression) {
+  sources_regression_test<bout::build::use_metric_3d>();
+}
+TEST_F(TIznTest, SourcesRegression) {
+  sources_regression_test<bout::build::use_metric_3d>();
+}
 
 // H isotopes recombination
-TEST_F(HRecTest, SourcesRegression) { sources_regression_test(); }
-TEST_F(DRecTest, SourcesRegression) { sources_regression_test(); }
-TEST_F(TRecTest, SourcesRegression) { sources_regression_test(); }
+TEST_F(HRecTest, SourcesRegression) {
+  sources_regression_test<bout::build::use_metric_3d>();
+}
+TEST_F(DRecTest, SourcesRegression) {
+  sources_regression_test<bout::build::use_metric_3d>();
+}
+TEST_F(TRecTest, SourcesRegression) {
+  sources_regression_test<bout::build::use_metric_3d>();
+}
 
 // H isotopes CX (non-exhaustive)
 TEST_F(HHpCXTest, SourcesRegression) { sources_regression_test(); }
@@ -122,10 +134,14 @@ TEST_F(DTpCXTest, SourcesRegression) { sources_regression_test(); }
 TEST_F(HHpCXTest_noNeutralMomGain, SourcesRegression) { sources_regression_test(); }
 
 // He ionization
-TEST_F(HeIzn01Test, SourcesRegression) { sources_regression_test(); }
+TEST_F(HeIzn01Test, SourcesRegression) {
+  sources_regression_test<bout::build::use_metric_3d>();
+}
 
 // He recombination
-TEST_F(HeRec10Test, SourcesRegression) { sources_regression_test(); }
+TEST_F(HeRec10Test, SourcesRegression) {
+  sources_regression_test<bout::build::use_metric_3d>();
+}
 
 } // namespace hermes
 
