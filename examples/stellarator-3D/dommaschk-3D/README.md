@@ -23,3 +23,4 @@ cmake . -B build -DBOUT_USE_PETSC=ON -DBOUT_ENABLE_METRIC_3D=ON ...
 PETSC can either be supplied by compiling it yourself or via module systems at the HPC system. As this example is not aiming at guiding through the whole compilation process, we skip further details and continue on the assumption, that Hermes-3 is properly compiled. 
 The last remaining step is to create a directory that includes the generated grid and the input file also given in this example folder. 
 # Running the simulation
+Simulations in Fci are usually more expensive. This is in part due to the requirement of higher resolutions because of the interpolation for parallel derivatives. It is advised to run the simulation on at least 8 cores. 
