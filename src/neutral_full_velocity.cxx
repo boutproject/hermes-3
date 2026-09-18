@@ -347,7 +347,7 @@ void NeutralFullVelocity::transform_impl(GuardedOptions& state) {
   // Vn2D is covariant and b = e_y / (JB) to write:
   //
   // V_{||n} = b dot V_n = Vn2D.y / (JB)
-  Vnpar = Vn2D.y / (coord->J * coord->Bxy);
+  Vnpar = Vn2D.y / (coord->J() * coord->Bxy());
 
   // Set values in the state
   auto localstate = state["species"][objectName()];
@@ -596,19 +596,20 @@ void NeutralFullVelocity::finally(const Options& state) {
   if (localstate.isSet("momentum_source")) {
     Snv = DC(get<Field3D>(localstate["momentum_source"]));
     Field2D Fpar_mN = Snv / (AA * Nn2D_floor);
-    ddt(Vn2D).y += Fpar_mN * (coord->J * coord->Bxy); // Parallel flow
+    ddt(Vn2D).y += Fpar_mN * (coord->J() * coord->Bxy()); // Parallel flow
 
     if (toroidal_flow) {
-      ddt(Vn2D).z += Fpar_mN * coord->g_23 / (coord->J * coord->Bxy); // Toroidal flow
+      ddt(Vn2D).z +=
+          Fpar_mN * coord->g_23() / (coord->J() * coord->Bxy()); // Toroidal flow
     }
 
     // NOTE: Should we add the contribution of Sn here?
     // Sn is introduced in the momentum equation
     // because we solve for Vn instead of AA*Nn*Vn
     // It is propably something like that:
-    // ddt(Vn2D).y += Vn2D.y * Sn / Nn2D_floor * (coord->J * coord->Bxy); // Parallel flow
+    // ddt(Vn2D).y += Vn2D.y * Sn / Nn2D_floor * (coord->J() * coord->Bxy()); // Parallel flow
     // if (toroidal_flow) {
-    //   ddt(Vn2D).z += Vn2D.z * Sn / Nn2D_floor * coord->g_23 / (coord->J * coord->Bxy);
+    //   ddt(Vn2D).z += Vn2D.z * Sn / Nn2D_floor * coord->g_23() / (coord->J() * coord->Bxy());
     //   // Toroidal flow
     // }
 
@@ -622,7 +623,7 @@ void NeutralFullVelocity::finally(const Options& state) {
     // Radial flow
     ddt(Vn2D).x -= Vn2D.x * collision_freq;
     // Binormal flow
-    ddt(Vn2D).z -= (Vn2D.z - (coord->g_23 / coord->g_22) * Vn2D.y) * collision_freq;
+    ddt(Vn2D).z -= (Vn2D.z - (coord->g_23() / coord->g_22()) * Vn2D.y) * collision_freq;
   }
 
   //////////////////////////////////////////////////////

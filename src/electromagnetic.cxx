@@ -245,7 +245,7 @@ void Electromagnetic::transform_impl(GuardedOptions& state) {
     Vector3D A;
     A.covariant = true;
     A.x = A.z = 0.0;
-    A.y = Apar_flutter * (coords->J * coords->Bxy);
+    A.y = Apar_flutter * (coords->J() * coords->Bxy());
 
     // Perturbed magnetic field vector
     // Note: Contravariant components (dB_x, dB_y, dB_z)
@@ -253,8 +253,8 @@ void Electromagnetic::transform_impl(GuardedOptions& state) {
 
     // Set components of the perturbed unit vector
     // Note: Options can't (yet) contain vectors
-    setNoBoundary(state["fields"]["deltab_flutter_x"], delta_B.x / coords->Bxy);
-    setNoBoundary(state["fields"]["deltab_flutter_z"], delta_B.z / coords->Bxy);
+    setNoBoundary(state["fields"]["deltab_flutter_x"], delta_B.x / coords->Bxy());
+    setNoBoundary(state["fields"]["deltab_flutter_z"], delta_B.z / coords->Bxy());
 #endif
   }
 }

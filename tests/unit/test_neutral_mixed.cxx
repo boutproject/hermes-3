@@ -105,6 +105,9 @@ TEST_F(NeutralMixedTest, Finally) {
                              {"momentum_source", 0.75},
                              {"temperature", 1.0},
                              {"velocity", 1.0}}}}}};
+#if BOUT_USE_METRIC_3D
+  EXPECT_THROW(component.finally(state), BoutException);
+#else
   component.finally(state);
 
   Options ddt = solver.getTimeDerivs();
@@ -129,6 +132,7 @@ TEST_F(NeutralMixedTest, Finally) {
   BOUT_FOR_SERIAL(i, ddt_NVd.getRegion("RGN_NOBNDRY")) {
     ASSERT_DOUBLE_EQ(0.75, ddt_NVd[i]);
   }
+#endif
 }
 // Identical to the test above, but using the collisionality_override variable.
 TEST_F(NeutralMixedTest, FinallyCollisionalityOverride) {
@@ -155,6 +159,9 @@ TEST_F(NeutralMixedTest, FinallyCollisionalityOverride) {
                              {"momentum_source", 0.75},
                              {"temperature", 1.0},
                              {"velocity", 1.0}}}}}};
+#if BOUT_USE_METRIC_3D
+  EXPECT_THROW(component.finally(state), BoutException);
+#else
   component.finally(state);
 
   Options ddt = solver.getTimeDerivs();
@@ -179,6 +186,7 @@ TEST_F(NeutralMixedTest, FinallyCollisionalityOverride) {
   BOUT_FOR_SERIAL(i, ddt_NVd.getRegion("RGN_NOBNDRY")) {
     ASSERT_DOUBLE_EQ(0.75, ddt_NVd[i]);
   }
+#endif
 }
 // Identical to the test above, but using evolve_momentum = false.
 TEST_F(NeutralMixedTest, FinallyEvolveMomentumFalse) {
@@ -201,6 +209,9 @@ TEST_F(NeutralMixedTest, FinallyEvolveMomentumFalse) {
                              {"momentum_source", 0.75},
                              {"temperature", 1.0},
                              {"velocity", 1.0}}}}}};
+#if BOUT_USE_METRIC_3D
+  EXPECT_THROW(component.finally(state), BoutException);
+#else
   component.finally(state);
 
   Options ddt = solver.getTimeDerivs();
@@ -220,6 +231,7 @@ TEST_F(NeutralMixedTest, FinallyEvolveMomentumFalse) {
   }
 
   EXPECT_FALSE(ddt.isSet("NVd"));
+#endif
 }
 // Identical to the test above, but using nonorthogonal_operators = true.
 TEST_F(NeutralMixedTest, FinallyNonorthogonalOperators) {
@@ -246,6 +258,9 @@ TEST_F(NeutralMixedTest, FinallyNonorthogonalOperators) {
                              {"momentum_source", 0.75},
                              {"temperature", 1.0},
                              {"velocity", 1.0}}}}}};
+#if BOUT_USE_METRIC_3D
+  EXPECT_THROW(component.finally(state), BoutException);
+#else
   component.finally(state);
 
   Options ddt = solver.getTimeDerivs();
@@ -270,6 +285,7 @@ TEST_F(NeutralMixedTest, FinallyNonorthogonalOperators) {
   BOUT_FOR_SERIAL(i, ddt_NVd.getRegion("RGN_NOBNDRY")) {
     ASSERT_DOUBLE_EQ(0.75, ddt_NVd[i]);
   }
+#endif
 }
 
 // Function to test cross-field diffusion in presence of a radial pressure gradient.
@@ -308,6 +324,10 @@ auto runDnnTest(Options options, bool with_collisions = false) {
   state["species"]["d"]["limiter_gradient_floor"] = 1e-10;
   state["species"]["d"]["limiter_gradient_ceiling"] = 1e10;
 
+#if BOUT_USE_METRIC_3D
+  EXPECT_THROW(component.finally(state), BoutException);
+  return std::make_tuple(Field3D{}, Field3D{}, Field3D{});
+#else
   component.finally(state);
 
   // Construct state with norms for outputVars to add diagnostics to
@@ -321,6 +341,7 @@ auto runDnnTest(Options options, bool with_collisions = false) {
   Field3D Dmax = out["Dnnd_max"].as<Field3D>();
 
   return std::make_tuple(Dnn, Dunl, Dmax);
+#endif
 }
 } // namespace
 
@@ -334,10 +355,11 @@ TEST_F(NeutralMixedTest, DnnHarmonicLimiter) {
                                             {"AA", 2.0},
                                             {"flux_limiter_sharpness", 1.0},
                                         }}});
-
+#if !BOUT_USE_METRIC_3D
   BOUT_FOR_SERIAL(i, Dnn.getRegion("RGN_NOBNDRY")) {
     EXPECT_DOUBLE_EQ(Dnn[i], Dunl[i] * Dmax[i] / (Dunl[i] + Dmax[i]));
   }
+#endif
 }
 
 // Check that an aggressive flux limit limits the flux.
@@ -349,11 +371,13 @@ TEST_F(NeutralMixedTest, DnnTightLimit) {
                                          {"AA", 2.0},
                                          {"flux_limit", 1e-5}}}});
 
+#if !BOUT_USE_METRIC_3D
   BOUT_FOR_SERIAL(i, Dnn.getRegion("RGN_NOBNDRY")) {
     EXPECT_LT(Dmax[i], Dunl[i]);
     EXPECT_LT(Dnn[i], Dunl[i]);
     EXPECT_NEAR(Dnn[i], Dmax[i], Dnn[i] * 1e-3);
   }
+#endif
 }
 
 // Check that a loose flux limit doesn't limit the flux.
@@ -365,10 +389,12 @@ TEST_F(NeutralMixedTest, DnnLooseLimit) {
                                          {"AA", 2.0},
                                          {"flux_limit", 1e6}}}});
 
+#if !BOUT_USE_METRIC_3D
   BOUT_FOR_SERIAL(i, Dnn.getRegion("RGN_NOBNDRY")) {
     EXPECT_GT(Dmax[i], Dunl[i]);
     EXPECT_NEAR(Dnn[i], Dunl[i], Dnn[i] * 1e-3);
   }
+#endif
 }
 
 // Check that the explicit diffusion limit can override the flux limitation.
@@ -381,10 +407,12 @@ TEST_F(NeutralMixedTest, DnnExplicitLimit) {
                                          {"flux_limit", 0.2},
                                          {"diffusion_limit", 1e-5}}}});
 
+#if !BOUT_USE_METRIC_3D
   BOUT_FOR_SERIAL(i, Dnn.getRegion("RGN_NOBNDRY")) {
     EXPECT_DOUBLE_EQ(Dmax[i], 1e-5);
     EXPECT_NEAR(Dnn[i], 1e-5, 1e-3 * Dnn[i]);
   }
+#endif
 }
 
 // Check that adding collisionality reduces Dnn.
@@ -395,7 +423,9 @@ TEST_F(NeutralMixedTest, DnnCollisionalityImpact) {
   auto [Dnn, Dunl, Dmax] = runDnnTest(options.copy(), false);
   auto [Dnn_coll, Dunl_coll, Dmax_coll] = runDnnTest(options.copy(), true);
 
+#if !BOUT_USE_METRIC_3D
   BOUT_FOR_SERIAL(i, Dnn.getRegion("RGN_NOBNDRY")) { EXPECT_LT(Dnn_coll[i], Dnn[i]); }
+#endif
 }
 
 // Check that reducing neutral_lmax raises collisionality floor.
@@ -417,7 +447,9 @@ TEST_F(NeutralMixedTest, DnnCollisionalityFloor) {
                     {"AA", 2.0},
                     {"neutral_lmax", 100}}}});
 
+#if !BOUT_USE_METRIC_3D
   BOUT_FOR_SERIAL(i, Dnn_lo_lmax.getRegion("RGN_NOBNDRY")) {
     EXPECT_LT(Dnn_lo_lmax[i], Dnn_hi_lmax[i]);
   }
+#endif
 }

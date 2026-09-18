@@ -45,7 +45,7 @@ TEST_F(AnomalousDiffusionTest, NoDiffusion) {
 TEST_F(AnomalousDiffusionTest, ParticleDiffusion) {
 
   Coordinates* coords = mesh->getCoordinates();
-  coords->Bxy = 1.0; // Note: This is non-finite or zero?
+  coords->setBxy(1.0); // Note: This is non-finite or zero?
 
   Options options;
   options["units"]["meters"] = 1.0;
@@ -74,7 +74,7 @@ TEST_F(AnomalousDiffusionTest, ParticleDiffusion) {
                            "RGN_NOBNDRY"));
 
   // Expect the sum over all cells of density source to be zero
-  auto dV = coords->J * coords->dx * coords->dy * coords->dz; // Cell volume
+  auto dV = coords->cell_volume(); // Cell volume
 
   Field3D source = get<Field3D>(state["species"]["h"]["density_source"]);
   BoutReal integral = 0.0;

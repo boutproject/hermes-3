@@ -1,12 +1,11 @@
+import argparse
+import os
+import uuid
+from pathlib import Path
+
+import numpy as np
 import zoidberg
 from zoidberg.field import Slab
-import numpy as np
-
-import argparse
-import uuid
-import os
-
-from pathlib import Path
 
 parser = argparse.ArgumentParser()
 parser.add_argument(
@@ -109,7 +108,8 @@ def create_grid(folder, nx, ny, nz, BC=False, inp_Ly=None):
     with zoidberg.zoidberg.MapWriter(tmpname) as mw:
         mw.add_grid_field(rectangle, magnetic_field)
         mw.add_maps(maps)
-        mw.add_dagp()
+        if nz > 1:
+            mw.add_dagp()
     os.replace(tmpname, filename)
 
 
@@ -129,9 +129,10 @@ create_grid(folder_y, 6, 16, 4)
 create_grid(folder_y, 6, 32, 4)
 create_grid(folder_y, 6, 64, 4)
 
-create_grid(folder_xz, 36, 4, 32)
-create_grid(folder_xz, 68, 4, 64)
-create_grid(folder_xz, 132, 4, 128)
+create_grid(folder_xz, 20, 1, 16)
+create_grid(folder_xz, 36, 1, 32)
+create_grid(folder_xz, 68, 1, 64)
+create_grid(folder_xz, 132, 1, 128)
 
 create_grid(folder_BC, 8, 128, 4, BC=True)
 create_grid(folder_BC, 8, 512, 4, BC=True)
