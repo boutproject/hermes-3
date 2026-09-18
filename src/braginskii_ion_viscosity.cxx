@@ -47,6 +47,8 @@ BraginskiiIonViscosity::BraginskiiIonViscosity(const std::string& name,
           }) {
   auto& options = alloptions[name];
 
+  auto coord = mesh->getCoordinates();
+
   eta_limit_alpha = options["eta_limit_alpha"]
                         .doc("Viscosity flux limiter coefficient. <0 = turned off")
                         .withDefault(-1.0);
@@ -114,8 +116,6 @@ BraginskiiIonViscosity::BraginskiiIonViscosity(const std::string& name,
     const BoutReal Bnorm = units["Tesla"];
     const BoutReal Lnorm = units["meters"];
 
-    auto coord = mesh->getCoordinates();
-
     Curlb_B.x /= Bnorm;
     Curlb_B.y *= SQ(Lnorm);
     Curlb_B.z *= SQ(Lnorm);
@@ -139,18 +139,15 @@ BraginskiiIonViscosity::BraginskiiIonViscosity(const std::string& name,
     setPermissions(readOnly("fields:phi"));
   }
   substitutePermissions("coll_type", coll_types);
+
+  Bxy = coord->Bxy();
+  sqrtB = sqrt(Bxy);
+  Grad_par_logB = Grad_par(log(Bxy));
 }
 
 void BraginskiiIonViscosity::transform_impl(GuardedOptions& state) {
 
   GuardedOptions allspecies = state["species"];
-
-  auto coord = mesh->getCoordinates();
-  const Field3DParallel Bxy = coord->Bxy;
-  const Field3DParallel sqrtB = sqrt(Bxy.asField3DParallel());
-  const Field3DParallel logB = log(Bxy.asField3DParallel());
-
-  const Field3D Grad_par_logB = Grad_par(logB);
 
   // Loop through all species
   for (auto& kv : allspecies.getChildren()) {
@@ -282,25 +279,17 @@ void BraginskiiIonViscosity::transform_impl(GuardedOptions& state) {
 
         eta = eta / (1. + abs(q_cl / q_fl));
       }
-      if (P.isFci()) {
-        eta.applyBoundary("neumann");
-        mesh->communicate(eta);
-        eta.applyParallelBoundary("parallel_neumann_o2");
-      } else {
-        eta.getMesh()->communicate(eta);
-        eta.applyBoundary("neumann");
-      }
+
+      eta.applyBoundary("neumann");
+      mesh->communicate(eta);
+      eta.applyParallelBoundary("parallel_neumann_o2");
 
       // This term is the parallel flow part of
       // -(2/3) B^(3/2) Grad_par(Pi_ci / B^(3/2))
-      Field3D dummy;
 
-      const Field3D div_Pi_cipar =
-          P.isFci()
-              ? sqrtB
-                    * Div_par_K_Grad_par_mod(Field3DParallel{eta / Bxy},
-                                             Field3DParallel{sqrtB * V}, dummy, true)
-              : sqrtB * FV::Div_par_K_Grad_par(eta / Bxy, sqrtB * V);
+      const Field3D div_Pi_cipar = sqrtB
+                                   * FV::Div_par_K_Grad_par(Field3DParallel{eta / Bxy},
+                                                            Field3DParallel{sqrtB * V});
 
       add(species["momentum_source"], div_Pi_cipar);
       subtract(species["energy_source"], V * div_Pi_cipar); // Internal energy

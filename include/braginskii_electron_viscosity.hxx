@@ -39,6 +39,8 @@ private:
   bool diagnose;            ///< Output viscosity diagnostic?
   Field3D viscosity;        ///< The viscosity momentum source
 
+  Field3DParallel Bxy, sqrtB; ///< Magnetic field variables
+
   /// Inputs
   /// - species
   ///   - e

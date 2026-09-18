@@ -33,6 +33,10 @@ BraginskiiElectronViscosity::BraginskiiElectronViscosity(const std::string& name
                         .withDefault(-1.0);
 
   diagnose = options["diagnose"].doc("Output diagnostics?").withDefault<bool>(false);
+
+  auto coord = mesh->getCoordinates();
+  Bxy = coord->Bxy();
+  sqrtB = sqrt(Bxy);
 }
 
 void BraginskiiElectronViscosity::transform_impl(GuardedOptions& state) {
@@ -51,10 +55,6 @@ void BraginskiiElectronViscosity::transform_impl(GuardedOptions& state) {
   const Field3D P = get<Field3D>(species["pressure"]);
   const Field3D V = get<Field3D>(species["velocity"]);
 
-  Coordinates* coord = P.getCoordinates();
-  const Field3DParallel Bxy = coord->Bxy;
-  const Field3DParallel sqrtB = sqrt(Bxy);
-
   // Parallel electron viscosity
   Field3D eta = (4. / 3) * 0.73 * P * tau;
 
@@ -68,22 +68,14 @@ void BraginskiiElectronViscosity::transform_impl(GuardedOptions& state) {
     eta = eta / (1. + abs(q_cl / q_fl));
   }
 
-  if (P.isFci()) {
-    eta.applyBoundary("neumann");
-    mesh->communicate(eta);
-    eta.applyParallelBoundary("parallel_neumann_o2");
-  } else {
-    eta.getMesh()->communicate(eta);
-    eta.applyBoundary("neumann");
-  }
+  eta.applyBoundary("neumann");
+  mesh->communicate(eta);
+  eta.applyParallelBoundary("parallel_neumann_o2");
 
   // Save term for output diagnostic
-  Field3D dummy;
-  viscosity = P.isFci()
-                  ? sqrtB
-                        * Div_par_K_Grad_par_mod(Field3DParallel{eta / Bxy},
-                                                 Field3DParallel{sqrtB * V}, dummy, true)
-                  : sqrtB * FV::Div_par_K_Grad_par(eta / Bxy, sqrtB * V);
+  viscosity =
+      sqrtB
+      * FV::Div_par_K_Grad_par(Field3DParallel{eta / Bxy}, Field3DParallel{sqrtB * V});
   add(species["momentum_source"], viscosity);
 }
 
