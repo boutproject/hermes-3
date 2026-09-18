@@ -13,7 +13,11 @@ It is advised to ensure that zoidberg is using the latest commit available. This
 ```bash
 python create_grid.py
 ```
-Some comments are present in the python script regarding some details of this script. After executing the python script, there should be a new grid file called `dommaschk_...`. 
+Some comments are present in the python script regarding some details of this script. After executing the python script, there should be a new grid file called `dommaschk_...`. Below is a poincare plot of the magnetic field which includes 9 magnetic islands. 
+
+<p align="center">
+  <img src="Dommaschk_poincare.png" alt="Dommaschk grid">
+</p>
 
 # Setting up the simulation  
 Generally, Fci does work the same as the field-aligned version of the code. The only difference is (at this point in time, September 2026), that Fci **allways** needs a grid file. There is no built-in BOUT++ grid generation in the input file. Hermes-3 itself needs a few special compilation options to run with Fci, mainly compiling with 3D metrics and PETSC. A typical compilation command would look like 
