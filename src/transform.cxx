@@ -25,8 +25,8 @@ Transform::Transform(std::string name, Options& alloptions, Solver* UNUSED(solve
     const auto right = trim(assign_lr.back(), trim_chars);
 
     transforms[left] = right;
-    inputs.push_back(left);
-    outputs.push_back(right);
+    inputs.push_back(right);
+    outputs.push_back(left);
   }
 
   substitutePermissions("inputs", inputs);

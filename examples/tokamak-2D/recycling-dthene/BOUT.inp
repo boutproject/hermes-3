@@ -53,10 +53,6 @@ function = 1
 bndry_core = dirichlet(1.0)  # Core boundary
 bndry_all = dirichlet(0.01)   # All other boundaries
 
-[Td+]
-bndry_core = dirichlet(1.0)  # Core boundary
-bndry_all = dirichlet(0.1)   # All other boundaries
-
 ################################################################
 # Deuterium neutrals
 
@@ -94,10 +90,6 @@ function = 1
 bndry_core = dirichlet(1.0)  # Core boundary
 bndry_all = dirichlet(0.01)   # All other boundaries
 
-[Tt+]
-bndry_core = dirichlet(1.0)  # Core boundary
-bndry_all = dirichlet(0.1)   # All other boundaries
-
 ################################################################
 # Tritium neutrals
 
@@ -132,12 +124,8 @@ bndry_all = dirichlet(0.1)   # All other boundaries low density
 
 [Phe+]
 function = 0.01
-bndry_core = dirichlet(0.1)  # Core boundary 
+bndry_core = dirichlet(0.1)  # Core boundary
 bndry_all = dirichlet(0.01)   # All other boundaries
-
-[The+]
-bndry_core = dirichlet(1.0)  # Core boundary
-bndry_all = dirichlet(0.1)   # All other boundaries
 
 ################################################################
 # Helium neutrals
@@ -176,10 +164,6 @@ function = 0.001
 bndry_core = dirichlet(0.01)  # Core boundary
 bndry_all = dirichlet(0.001)   # All other boundaries
 
-[Tne+]
-bndry_core = dirichlet(1.0)  # Core boundary
-bndry_all = dirichlet(0.1)   # All other boundaries
-
 ################################################################
 # Neon neutrals
 
@@ -207,10 +191,6 @@ thermal_conduction = true
 function = 1
 bndry_core = dirichlet(1.0)  # Core boundary high density
 bndry_all = dirichlet(0.01)   # All other boundaries low density
-
-[Te]
-bndry_core = dirichlet(1.0)  # Core boundary high density
-bndry_all = dirichlet(0.1)   # All other boundaries low density
 
 ################################################################
 

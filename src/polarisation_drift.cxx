@@ -23,7 +23,7 @@ PolarisationDrift::PolarisationDrift(std::string name, Options& alloptions,
 
   // Cache the B^2 value
   auto coord = mesh->getCoordinates();
-  Bsq = SQ(coord->Bxy);
+  Bsq = SQ(coord->Bxy());
 
   phiSolver = Laplacian::create(&options["laplacian"]);
 

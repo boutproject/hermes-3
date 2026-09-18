@@ -120,7 +120,7 @@ BraginskiiIonViscosity::BraginskiiIonViscosity(const std::string& name,
     Curlb_B.y *= SQ(Lnorm);
     Curlb_B.z *= SQ(Lnorm);
 
-    Curlb_B *= 2. / coord->Bxy;
+    Curlb_B *= 2. / coord->Bxy();
   }
   if (bounce_frequency) {
     const Options& units = alloptions["units"];

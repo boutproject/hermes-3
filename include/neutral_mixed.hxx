@@ -46,10 +46,14 @@ private:
       diffusion_collisions_mode; ///< Collision selection, either afn or multispecies
   Field3D nu;                    ///< Collisionality to use for diffusion
   Field3D Dnn;                   ///< Diffusion coefficient
+  Field3D Dnn_unlimited, Dmax;   ///< Unlimited and max Dnn
   Field3D DnnNn, DnnPn, DnnTn, DnnNVn; ///< Used for operators
   BoutReal flux_limit;                 ///< Diffusive flux limit
+  BoutReal flux_limiter_sharpness;     ///< Sharpness of the diffusive flux limiter
+  BoutReal limiter_gradient_floor;     ///< Floor for gradient in Dmax denominator
+  BoutReal limiter_gradient_ceiling;   ///< Ceiling for gradient in Dmax denominator
   BoutReal diffusion_limit;            ///< Maximum diffusion coefficient
-  BoutReal neutral_lmax;
+  BoutReal neutral_lmax;               ///< Used for collisionality floor
 
   bool sheath_ydown, sheath_yup;
 
@@ -82,7 +86,7 @@ private:
   bool output_ddt; ///< Save time derivatives?
   bool diagnose;   ///< Save additional diagnostics?
 
-  std::string conduction_method{"orginal"};
+  bout::ConductionMethod conduction_method{bout::ConductionMethod::Original};
 
   // Flow diagnostics
   Field3D pf_adv_perp_xlow, pf_adv_perp_ylow, pf_adv_par_ylow;

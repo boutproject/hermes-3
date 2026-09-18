@@ -164,8 +164,8 @@ struct izn_component_name {
       std::string_view(species_name<level>::value);
   static constexpr std::string_view product =
       std::string_view(species_name<level + 1>::value);
-  static constexpr char other_reactants_arr[] = " + e -> ";
-  static constexpr char other_products_arr[] = " + 2e";
+  static constexpr char other_reactants_arr[] = {' ', '+', ' ', 'e', ' ', '-', '>', ' '};
+  static constexpr char other_products_arr[] = {' ', '+', ' ', '2', 'e'};
   static constexpr std::string_view other_reactants = to_string_view(other_reactants_arr);
   static constexpr std::string_view other_products = to_string_view(other_products_arr);
   static constexpr std::string_view value =
@@ -180,7 +180,7 @@ struct rec_component_name {
       std::string_view(species_name<level + 1>::value);
   static constexpr std::string_view product =
       std::string_view(species_name<level>::value);
-  static constexpr char other_reactants_arr[] = " + e -> ";
+  static constexpr char other_reactants_arr[] = {' ', '+', ' ', 'e', ' ', '-', '>', ' '};
   static constexpr std::string_view other_reactants = to_string_view(other_reactants_arr);
   static constexpr std::string_view value = join_v<reactant, other_reactants, product>;
 };

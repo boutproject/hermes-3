@@ -20,6 +20,8 @@ using namespace bout::globals;
 // Reuse the "standard" fixture for FakeMesh
 using EvolveDensityTest = FakeMeshFixture;
 
+/// Check that EvolveDensity can be constructed and will register the
+/// density variable for this species with the solver.
 TEST_F(EvolveDensityTest, CreateComponent) {
   FakeSolver solver;
 
@@ -32,6 +34,7 @@ TEST_F(EvolveDensityTest, CreateComponent) {
   ASSERT_TRUE(state.isSet("Ni"));
 }
 
+/// Check that EvolveDensity::transform sets density and atomic mass for species
 TEST_F(EvolveDensityTest, Transform) {
   FakeSolver solver;
 
@@ -48,6 +51,7 @@ TEST_F(EvolveDensityTest, Transform) {
   ASSERT_TRUE(species.isSet("charge"));
 }
 
+/// Check that EvolveDensity::finally sets the time derivative from the density source
 TEST_F(EvolveDensityTest, Finally) {
   FakeSolver solver;
 
@@ -67,5 +71,45 @@ TEST_F(EvolveDensityTest, Finally) {
 
   BOUT_FOR_SERIAL(i, ddt_Ni.getRegion("RGN_NOBNDRY")) {
     ASSERT_DOUBLE_EQ(0.5, ddt_Ni[i]);
+  }
+}
+
+/// Check that EvolveDensity::outputVars save sthe required diagnostics (with the correct values)
+TEST_F(EvolveDensityTest, Output) {
+  FakeSolver solver;
+
+  Options options{{"units", {{"eV", 1.0}, {"inv_meters_cubed", 1.0}, {"seconds", 1.0}}},
+                  {"i", {{"AA", 2.0}, {"charge", 1.0}, {"diagnose", true}}}};
+  EvolveDensity component("i", options, &solver);
+
+  // Call the finally() method with a density source so that all
+  // member variables of the EvolveDensity object are set
+  // appropriately
+  Options state = {{"species",
+                    {{"i",
+                      {{"density", 1.0},
+                       {"density_source", 0.5},
+                       {"particle_flow_xlow", -0.1},
+                       {"particle_flow_ylow", 0.1}}}}}};
+  component.transform(state);
+  component.finally(state);
+
+  Options outputs{{"Nnorm", 1.}, {"Omega_ci", 1.}, {"rho_s0", 1.}};
+  component.outputVars(outputs);
+
+  Field3D ddt_Ni = get<Field3D>(outputs["ddt(Ni)"]);
+  Field3D SNi = get<Field3D>(outputs["SNi"]);
+  Field3D Si = get<Field3D>(outputs["Si_src"]);
+  Field3D pfi_xlow = get<Field3D>(outputs["pfi_tot_xlow"]);
+  Field3D pfi_ylow = get<Field3D>(outputs["pfi_tot_ylow"]);
+
+  ASSERT_EQ("density", outputs["Ni"].attributes["standard_name"].as<std::string>());
+  ASSERT_EQ("i", outputs["Ni"].attributes["species"].as<std::string>());
+  BOUT_FOR_SERIAL(i, ddt_Ni.getRegion("RGN_NOBNDRY")) {
+    ASSERT_DOUBLE_EQ(0.5, ddt_Ni[i]);
+    ASSERT_DOUBLE_EQ(0.5, SNi[i]);
+    ASSERT_DOUBLE_EQ(0., Si[i]);
+    ASSERT_DOUBLE_EQ(-0.1, pfi_xlow[i]);
+    ASSERT_DOUBLE_EQ(0.1, pfi_ylow[i]);
   }
 }
