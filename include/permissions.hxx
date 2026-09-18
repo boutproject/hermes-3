@@ -115,10 +115,9 @@ public:
   /// If a variable is not included in the initialiser list then it is
   /// assumed there are no access rights. If a section name appears in
   /// the list then those permissions apply to all children of that
-  /// section. The section name must end in a colon (e.g.,
-  /// "species:he:"). If an additional entry is present for somethign
+  /// section. If an additional entry is present for something
   /// located in that section, then the more specific entry takes
-  /// precidences.
+  /// precidence.
   ///
   /// Placeholders can be used in variable names by surrounding a
   /// label with curly braces. Multiple values can then be substituted

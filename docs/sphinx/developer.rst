@@ -288,7 +288,7 @@ already been "gotten", they can't be set again:
    #if CHECKLEVEL >= 1
    if (option.hasAttribute("final-bounds")) {
       throw BoutException("Setting value of {} but it has already been used in {}.",
-                           option.name(), option.attributes["final"].as<std::string>());
+                           option.name(), option.attributes["final-bounds"].as<std::string>());
    }
    if (option.hasAttribute("final-domain")) {
       throw BoutException("Setting value of {} but it has already been used in {}.",
@@ -301,9 +301,10 @@ already been "gotten", they can't be set again:
    }
    #endif
 
-There are special use cases which allows you to use this "locking" scheme for only
-the domain (guard) cells, leaving the guard (domain) cells
-to be settable using ``getNoBoundary`` (``getBoundary``) :
+There are special use cases which allows you to use this "locking"
+scheme for only some cells: ``getNoBoundary`` locks the domain cells
+while leaving the boundary cells settable. ``getBoundary`` locks the
+boundary cells while leaving the domain cells settable.
 
 .. code-block:: ini
 
@@ -325,7 +326,7 @@ functions that can be used for BC and domain operations:
    #if CHECKLEVEL >= 1
    if (option.hasAttribute("final-bounds")) {
       throw BoutException("Setting boundary of {} but it has already been used in {}.",
-                           option.name(), option.attributes["final"].as<std::string>());
+                           option.name(), option.attributes["final-bounds"].as<std::string>());
    }
    #endif
    option.force(std::move(value));
@@ -678,10 +679,13 @@ of components
    # options to control component3
 
 This will create three components, which will be run in the order
-`component1`, `component2`, `component3`: First all the components in
-`group1`, and then `component3`. Grouped components will be sorted
-individually when determining the run order; they may not be run
-together.
+determined by the topological sorting algorithm. First all the
+components in `group1`, and then `component3` are flattened into a
+single list. The access permissions of each component, i.e. which
+quantities each component reads or writes, are used to put the
+components in order. This means that grouped components may not run
+together: The scheduler may run `component1` then `component3` then
+`component2` if the inputs and outputs of the components require this.
 
 .. doxygenclass:: ComponentScheduler
    :members:
