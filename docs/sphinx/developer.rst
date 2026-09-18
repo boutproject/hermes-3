@@ -661,7 +661,7 @@ followed by a call to their `finally` functions.
 It is often useful to group components together, for example to
 define the governing equations for different species. A `type` setting
 in the option section overrides the name of the section, and can be another list
-of components
+of components.
 
 .. code-block:: ini
 
@@ -720,6 +720,80 @@ steps are provided below.
 
 5. Use this dependency information to perform a topological sort on
    the components.
+
+Debugging component order
+````````````````````````
+
+Use these options in the ``[hermes]`` section:
+
+- ``topological_sort_components = true``
+  This turns sorting on or off.
+- ``debug_component_order = 0``
+  This controls how much order debug output the scheduler prints.
+
+Set ``debug_component_order = 1`` to print the input order and the
+final order. Set ``debug_component_order = 2`` to also print the
+permissions for each component.
+
+.. code-block:: ini
+
+   [hermes]
+   components = b, a
+   topological_sort_components = true
+   debug_component_order = 2
+
+How to check the order
+^^^^^^^^^^^^^^^^^^^^^^
+
+Set ``debug_component_order = 1`` and run the case. Read the
+``input component order`` list and the ``final component order``
+list. If the two lists differ, the scheduler found a dependency and
+moved one or more components.
+
+How to find the cause
+^^^^^^^^^^^^^^^^^^^^^
+
+Set ``debug_component_order = 2`` and run the case again. Read the
+permissions for the components that moved. Look for:
+
+- a component that reads a field
+- a component that writes that field
+- a component that marks that field as ``Final``
+
+Check the region too. ``Interior`` and ``Boundaries`` can sort in
+different ways.
+
+What the common errors mean
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+If the scheduler says ``required variables are not written by any
+component``, some component reads a field that no component writes.
+
+If the scheduler says ``Circular dependency among components``, one
+component needs data from a second component, and the second component
+also needs data from the first.
+
+If the scheduler says ``Multiple components have permission to make
+final write``, more than one component claims it makes the last write
+to the same field.
+
+How to narrow the problem
+^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Cut the ``components`` list down to the smallest case that still
+fails. Start with the components named in the error. Check the
+``Permissions`` declared in each constructor. Check if a section
+permission covers more fields than you meant. Check if a boundary
+helper should be ``writeBoundaryFinal`` or
+``writeBoundaryFinalIfSet``.
+
+How to compare with input order
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Set ``topological_sort_components = false`` only while you debug. The
+scheduler will then use the input order as written. This can show
+whether the problem is in the sort rules or in the component code. Do
+not leave this off for normal runs.
 
 
 .. _sec-permissions:
