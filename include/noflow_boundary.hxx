@@ -4,6 +4,9 @@
 
 #include "component.hxx"
 
+/// Permission is writeBoundaryIfSet rather than writeBoundaryFinalIfSet
+/// because sheath boundaries may be applied to select boundaries
+/// after NoFlowBoundary is applied to all boundaries.
 struct NoFlowBoundary : public NamedComponent<NoFlowBoundary> {
   NoFlowBoundary(std::string name, Options& alloptions, Solver*)
       : NamedComponent(name, {writeBoundaryIfSet("species:{name}:{variables}")}) {
