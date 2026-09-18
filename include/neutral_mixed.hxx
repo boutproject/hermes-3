@@ -6,9 +6,14 @@
 #include <memory>
 #include <string>
 
+#include <bout/bout_enum_class.hxx>
 #include <bout/invert_laplace.hxx>
 
 #include "component.hxx"
+
+/// Flux limiter lagging level. Either the gradient or coefficient
+/// can be evaluated only when the timestep advances.
+BOUT_ENUM_CLASS(NeutralLagLevel, off, gradient, coefficient);
 
 /// Evolve density, parallel momentum and pressure
 /// for a neutral gas species with cross-field diffusion
@@ -66,6 +71,26 @@ private:
   BoutReal conduction_limit;             ///< Explicit cap on kappa_n [m^-1 s^-1]
   BoutReal viscosity_limit;              ///< Explicit cap on eta_n [Pa s]
   BoutReal neutral_lmax;                 ///< Used for collisionality floor
+
+  NeutralLagLevel lag_adv;     ///< Dnn lagging level
+  NeutralLagLevel lag_cond;    ///< Conduction lagging level
+  NeutralLagLevel lag_visc;    ///< Viscosity lagging level
+  BoutReal limiter_cache_time; ///< Solver time the lagged quantities were computed at
+  bool limiter_cache_valid;    ///< True until timestep advances
+  Field3D grad_reg_adv;        ///< Lagged gradient, Dmax denominator
+  Field3D grad_reg_cond_perp, grad_reg_cond_par; ///< Lagged gradients, conduction caps
+  Field3D grad_reg_visc_perp, grad_reg_visc_par; ///< Lagged gradients, viscosity caps
+
+  /// Is any lagging present?
+  bool anyLagging() const {
+    if (lag_adv != NeutralLagLevel::off) {
+      return true;
+    }
+    if (lag_cond != NeutralLagLevel::off) {
+      return true;
+    }
+    return lag_visc != NeutralLagLevel::off;
+  }
 
   bool sheath_ydown, sheath_yup;
   bool zero_sheath_conductivity, zero_sheath_viscosity;

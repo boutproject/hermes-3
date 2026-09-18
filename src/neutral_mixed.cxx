@@ -228,11 +228,33 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
                                "performant but less physically accurate.")
                           .withDefault<bool>(true);
 
+  lag_adv =
+      options["lag_limiter"]
+          .doc("Freeze flux limiter inside nonlinear/linear iterations, advancing "
+               "only when timestep changes. Can be either off, gradient or coefficient, "
+               "lagging the gradient in the limiter denominator and the entire diffusion "
+               "coefficient, respectively. "
+               "Requires a solver with one evaluation time per state, "
+               "such as backward Euler or BDF.")
+          .withDefault(NeutralLagLevel::off);
+
+  lag_cond = options["lag_limiter_cond"]
+                 .doc("Lagging level for conduction. Defaults to same as lag_limiter.")
+                 .withDefault(lag_adv);
+
+  lag_visc = options["lag_limiter_visc"]
+                 .doc("Lagging level for viscosity. Defaults to same as lag_limiter.")
+                 .withDefault(lag_adv);
+
+  limiter_cache_time = 0.0;
+  limiter_cache_valid = false;
+
   // Prevent viscosity and conduction specific options when limiters are combined
   if (combined_limiters) {
     for (const auto& key :
          {"flux_limit_cond_perp", "flux_limit_cond_par", "flux_limit_visc_perp",
-          "flux_limit_visc_par", "conduction_limit", "viscosity_limit"}) {
+          "flux_limit_visc_par", "conduction_limit", "viscosity_limit",
+          "lag_limiter_cond", "lag_limiter_visc"}) {
       if (options.isSet(key)) {
         throw BoutException("{:s} has no effect when combined_limiters = true, because "
                             "conduction and viscosity inherit the Dnn limiter. Set "
@@ -416,6 +438,10 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
   DnnNn.setBoundary(std::string("Dnn") + name);
   DnnPn.setBoundary(std::string("Dnn") + name);
   DnnNVn.setBoundary(std::string("Dnn") + name);
+
+  if (anyLagging()) {
+    setPermissions(readOnly("time"));
+  }
 
   substitutePermissions("name", {name});
   substitutePermissions(
@@ -636,11 +662,61 @@ void NeutralMixed::finally(const Options& state) {
 
   // Assemble flux limits
   /////////////////////////////////////////////////
-  Dnn = copy(Dnn_unlimited);
-  kappa_n_perp = copy(kappa_n_unlimited);
-  kappa_n_par = copy(kappa_n_unlimited);
-  eta_n_perp = copy(eta_n_unlimited);
-  eta_n_par = copy(eta_n_unlimited);
+  // Limiter lagging: update the limiter only at new timestep.
+  // Either through freezing the gradient in the denominator or entire coefficient.
+  bool cache_stale = true;
+  if (anyLagging() && state.isSet("time")) {
+    const BoutReal solve_time = get<BoutReal>(state["time"]);
+    const bool first_call = !limiter_cache_valid;
+    const bool new_time = solve_time != limiter_cache_time;
+
+    // Refreshing limiter happens if the cache is stale.
+    cache_stale = first_call || new_time;
+    limiter_cache_time = solve_time;
+    limiter_cache_valid = true;
+  }
+  // Refresh a gradient if the cache is stale, or if lagging is off.
+  auto refresh_grad = [&](NeutralLagLevel lag) {
+    if (cache_stale) {
+      return true;
+    }
+    if (lag == NeutralLagLevel::off) {
+      return true;
+    } else {
+      return false;
+    }
+  };
+
+  // Refresh the coefficient if the cache is stale, or
+  // if lagging is either off or set to gradient only.
+  auto refresh_coef = [&](NeutralLagLevel lag) {
+    if (cache_stale) {
+      return true;
+    }
+    if (lag != NeutralLagLevel::coefficient) {
+      return true;
+    } else {
+      return false;
+    }
+  };
+  const bool refresh_grad_adv = refresh_grad(lag_adv);
+  const bool refresh_grad_cond = refresh_grad(lag_cond);
+  const bool refresh_grad_visc = refresh_grad(lag_visc);
+  const bool refresh_adv = refresh_coef(lag_adv);
+  const bool refresh_cond = refresh_coef(lag_cond);
+  const bool refresh_visc = refresh_coef(lag_visc);
+
+  if (refresh_adv) {
+    Dnn = copy(Dnn_unlimited);
+  }
+  if (refresh_cond) {
+    kappa_n_perp = copy(kappa_n_unlimited);
+    kappa_n_par = copy(kappa_n_unlimited);
+  }
+  if (refresh_visc) {
+    eta_n_perp = copy(eta_n_unlimited);
+    eta_n_par = copy(eta_n_unlimited);
+  }
 
   // Take smooth absolute of a gradient and regularise with:
   // Smooth user-set ceiling, which aids robustness in transients.
@@ -679,37 +755,47 @@ void NeutralMixed::finally(const Options& state) {
   // Advection
   // Particle flux is (1/4)*vbar*Nn [Stangeby, under eq. 2.24, p.67];
   // the Nn factor enters at the operator through DnnNn.
-  if (flux_limit_adv >= 0.0) {
-    Dmax = flux_limit_adv * (1. / 4) * vn_bar
-           / regularise_gradient(Grad_perp(logPnlim), limiter_gradient_floor,
-                                 limiter_gradient_ceiling);
+  if (refresh_grad_adv && flux_limit_adv >= 0.0) {
+    grad_reg_adv = regularise_gradient(Grad_perp(logPnlim), limiter_gradient_floor,
+                                       limiter_gradient_ceiling);
   }
-  blend_explicit_limit_with_fraction_limit(Dmax, diffusion_limit, flux_limit_adv);
+  if (refresh_adv && flux_limit_adv >= 0.0) {
+    Dmax = flux_limit_adv * (1. / 4) * vn_bar / grad_reg_adv;
+  }
+  if (refresh_adv) {
+    blend_explicit_limit_with_fraction_limit(Dmax, diffusion_limit, flux_limit_adv);
+  }
 
   if (!combined_limiters) {
 
     // Conduction
     // Heat flux is (1/2)*vbar*Pn. The Nn is here, and the Tn comes from the
     // denominator being grad(Tn)/Tn rather than grad(Tn).
-    // perpendicular
-    if (flux_limit_cond_perp >= 0.0) {
-      kappa_n_max_perp =
-          flux_limit_cond_perp * (1. / 2) * vn_bar * Nnlim
-          / regularise_gradient(Grad_perp(Tn) / Tnlim, limiter_gradient_floor,
-                                limiter_gradient_ceiling);
-    }
-    blend_explicit_limit_with_fraction_limit(kappa_n_max_perp, conduction_limit,
-                                             flux_limit_cond_perp);
+    if (refresh_cond) {
+      // perpendicular
+      if (flux_limit_cond_perp >= 0.0) {
+        if (refresh_grad_cond) {
+          grad_reg_cond_perp = regularise_gradient(
+              Grad_perp(Tn) / Tnlim, limiter_gradient_floor, limiter_gradient_ceiling);
+        }
+        kappa_n_max_perp =
+            flux_limit_cond_perp * (1. / 2) * vn_bar * Nnlim / grad_reg_cond_perp;
+      }
+      blend_explicit_limit_with_fraction_limit(kappa_n_max_perp, conduction_limit,
+                                               flux_limit_cond_perp);
 
-    // parallel
-    if (flux_limit_cond_par >= 0.0) {
-      kappa_n_max_par =
-          flux_limit_cond_par * (1. / 2) * vn_bar * Nnlim
-          / regularise_gradient(Grad_par(Tn) / Tnlim, limiter_gradient_floor_par,
-                                limiter_gradient_ceiling);
+      // parallel
+      if (flux_limit_cond_par >= 0.0) {
+        if (refresh_grad_cond) {
+          grad_reg_cond_par = regularise_gradient(
+              Grad_par(Tn) / Tnlim, limiter_gradient_floor_par, limiter_gradient_ceiling);
+        }
+        kappa_n_max_par =
+            flux_limit_cond_par * (1. / 2) * vn_bar * Nnlim / grad_reg_cond_par;
+      }
+      blend_explicit_limit_with_fraction_limit(kappa_n_max_par, conduction_limit,
+                                               flux_limit_cond_par);
     }
-    blend_explicit_limit_with_fraction_limit(kappa_n_max_par, conduction_limit,
-                                             flux_limit_cond_par);
 
     // Viscosity
     // Viscous momentum flux cannot exceed the pressure.
@@ -717,38 +803,46 @@ void NeutralMixed::finally(const Options& state) {
     // using vn_bar, the mean thermal speed. This is necessary as viscosity uses
     // Grad_perp(Vn), which has units of [s^-1] as opposed to the conductivity
     // and advection which have [m^-1].
-
-    // perpendicular
-    if (flux_limit_visc_perp >= 0.0) {
-      if (legacy_regularisation) {
-        eta_n_max_perp = flux_limit_visc_perp * Pnlim
-                         / regularise_gradient(Grad_perp(Vn), limiter_gradient_floor_eta,
-                                               limiter_gradient_ceiling_eta);
-      } else {
-        eta_n_max_perp =
-            flux_limit_visc_perp * Pnlim / vn_bar
-            / regularise_gradient(Grad_perp(Vn) / vn_bar, limiter_gradient_floor,
-                                  limiter_gradient_ceiling);
+    if (refresh_visc) {
+      // perpendicular
+      if (flux_limit_visc_perp >= 0.0) {
+        if (legacy_regularisation) {
+          if (refresh_grad_visc) {
+            grad_reg_visc_perp = regularise_gradient(
+                Grad_perp(Vn), limiter_gradient_floor_eta, limiter_gradient_ceiling_eta);
+          }
+          eta_n_max_perp = flux_limit_visc_perp * Pnlim / grad_reg_visc_perp;
+        } else {
+          if (refresh_grad_visc) {
+            grad_reg_visc_perp = regularise_gradient(
+                Grad_perp(Vn) / vn_bar, limiter_gradient_floor, limiter_gradient_ceiling);
+          }
+          eta_n_max_perp = flux_limit_visc_perp * Pnlim / vn_bar / grad_reg_visc_perp;
+        }
       }
-    }
-    blend_explicit_limit_with_fraction_limit(eta_n_max_perp, viscosity_limit,
-                                             flux_limit_visc_perp);
+      blend_explicit_limit_with_fraction_limit(eta_n_max_perp, viscosity_limit,
+                                               flux_limit_visc_perp);
 
-    // parallel
-    if (flux_limit_visc_par >= 0.0) {
-      if (legacy_regularisation) {
-        eta_n_max_par = flux_limit_visc_par * Pnlim
-                        / regularise_gradient(Grad_par(Vn), limiter_gradient_floor_eta,
-                                              limiter_gradient_ceiling_eta);
-      } else {
-        eta_n_max_par =
-            flux_limit_visc_par * Pnlim / vn_bar
-            / regularise_gradient(Grad_par(Vn) / vn_bar, limiter_gradient_floor_par,
-                                  limiter_gradient_ceiling);
+      // parallel
+      if (flux_limit_visc_par >= 0.0) {
+        if (legacy_regularisation) {
+          if (refresh_grad_visc) {
+            grad_reg_visc_par = regularise_gradient(
+                Grad_par(Vn), limiter_gradient_floor_eta, limiter_gradient_ceiling_eta);
+          }
+          eta_n_max_par = flux_limit_visc_par * Pnlim / grad_reg_visc_par;
+        } else {
+          if (refresh_grad_visc) {
+            grad_reg_visc_par =
+                regularise_gradient(Grad_par(Vn) / vn_bar, limiter_gradient_floor_par,
+                                    limiter_gradient_ceiling);
+          }
+          eta_n_max_par = flux_limit_visc_par * Pnlim / vn_bar / grad_reg_visc_par;
+        }
       }
+      blend_explicit_limit_with_fraction_limit(eta_n_max_par, viscosity_limit,
+                                               flux_limit_visc_par);
     }
-    blend_explicit_limit_with_fraction_limit(eta_n_max_par, viscosity_limit,
-                                             flux_limit_visc_par);
   }
 
   // Apply flux limits
@@ -771,39 +865,41 @@ void NeutralMixed::finally(const Options& state) {
   };
 
   // Apply the limiter to each diffusion coefficient
-  BOUT_FOR(i, Dnn.getRegion("RGN_NOBNDRY")) {
-    if (Dmax.isAllocated()) {
-      Dnn[i] = apply_limiter(Dnn_unlimited[i], Dmax[i], flux_limiter_sharpness);
-    }
+  if (refresh_adv || refresh_cond || refresh_visc) {
+    BOUT_FOR(i, Dnn.getRegion("RGN_NOBNDRY")) {
+      if (refresh_adv && Dmax.isAllocated()) {
+        Dnn[i] = apply_limiter(Dnn_unlimited[i], Dmax[i], flux_limiter_sharpness);
+      }
 
-    if (!combined_limiters) {
+      if (!combined_limiters) {
 
-      if (kappa_n_max_perp.isAllocated()) {
-        kappa_n_perp[i] = apply_limiter(kappa_n_unlimited[i], kappa_n_max_perp[i],
+        if (refresh_cond && kappa_n_max_perp.isAllocated()) {
+          kappa_n_perp[i] = apply_limiter(kappa_n_unlimited[i], kappa_n_max_perp[i],
+                                          flux_limiter_sharpness);
+        }
+        if (refresh_cond && kappa_n_max_par.isAllocated()) {
+          kappa_n_par[i] = apply_limiter(kappa_n_unlimited[i], kappa_n_max_par[i],
+                                         flux_limiter_sharpness);
+        }
+        if (refresh_visc && eta_n_max_perp.isAllocated()) {
+          eta_n_perp[i] = apply_limiter(eta_n_unlimited[i], eta_n_max_perp[i],
                                         flux_limiter_sharpness);
-      }
-      if (kappa_n_max_par.isAllocated()) {
-        kappa_n_par[i] = apply_limiter(kappa_n_unlimited[i], kappa_n_max_par[i],
-                                       flux_limiter_sharpness);
-      }
-      if (eta_n_max_perp.isAllocated()) {
-        eta_n_perp[i] =
-            apply_limiter(eta_n_unlimited[i], eta_n_max_perp[i], flux_limiter_sharpness);
-      }
-      if (eta_n_max_par.isAllocated()) {
-        eta_n_par[i] =
-            apply_limiter(eta_n_unlimited[i], eta_n_max_par[i], flux_limiter_sharpness);
+        }
+        if (refresh_visc && eta_n_max_par.isAllocated()) {
+          eta_n_par[i] =
+              apply_limiter(eta_n_unlimited[i], eta_n_max_par[i], flux_limiter_sharpness);
+        }
       }
     }
   }
 
-  // Communicate Dnn before potentially using it to derive kappa and eta
-  mesh->communicate(Dnn);
-  Dnn.clearParallelSlices();
-  Dnn.applyBoundary();
+  if (refresh_adv) {
+    mesh->communicate(Dnn);
+    Dnn.clearParallelSlices();
+    Dnn.applyBoundary();
+  }
 
-  // If limiters are combined, derive conduction and viscosity from Dnn
-  if (combined_limiters) {
+  if (combined_limiters && refresh_adv) {
     kappa_n_perp = (5. / 2) * (Nnlim * Dnn);
     eta_n_perp = (2. / 5) * AA * kappa_n_perp;
     kappa_n_par = copy(kappa_n_perp);
@@ -824,25 +920,29 @@ void NeutralMixed::finally(const Options& state) {
   kappa_n_unlimited.clearParallelSlices();
   kappa_n_unlimited.applyBoundary();
 
-  mesh->communicate(kappa_n_perp);
-  kappa_n_perp.clearParallelSlices();
-  kappa_n_perp.applyBoundary();
+  if (refresh_cond) {
+    mesh->communicate(kappa_n_perp);
+    kappa_n_perp.clearParallelSlices();
+    kappa_n_perp.applyBoundary();
 
-  mesh->communicate(kappa_n_par);
-  kappa_n_par.clearParallelSlices();
-  kappa_n_par.applyBoundary();
+    mesh->communicate(kappa_n_par);
+    kappa_n_par.clearParallelSlices();
+    kappa_n_par.applyBoundary();
+  }
 
   mesh->communicate(eta_n_unlimited);
   eta_n_unlimited.clearParallelSlices();
   eta_n_unlimited.applyBoundary();
 
-  mesh->communicate(eta_n_perp);
-  eta_n_perp.clearParallelSlices();
-  eta_n_perp.applyBoundary();
+  if (refresh_visc) {
+    mesh->communicate(eta_n_perp);
+    eta_n_perp.clearParallelSlices();
+    eta_n_perp.applyBoundary();
 
-  mesh->communicate(eta_n_par);
-  eta_n_par.clearParallelSlices();
-  eta_n_par.applyBoundary();
+    mesh->communicate(eta_n_par);
+    eta_n_par.clearParallelSlices();
+    eta_n_par.applyBoundary();
+  }
 
   // Neutral diffusion parameters have the same boundary condition as Dnn
   DnnNn = Dnn * Nnlim;
