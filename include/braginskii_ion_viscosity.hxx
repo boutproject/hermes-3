@@ -6,11 +6,10 @@
 #include <string>
 #include <vector>
 
+#include "component.hxx"
 #include <bout/bout_types.hxx>
 #include <bout/options.hxx>
 #include <bout/vectormetric.hxx>
-
-#include "component.hxx"
 
 /// Ion viscosity terms
 ///
@@ -74,7 +73,7 @@ private:
     Field3D nu_star;
   };
 
-  Field3DParallel Bxy, sqrtB; ///< Magnetic field variables
+  bout::FieldMetricParallel Bxy, sqrtB; ///< Magnetic field variables
   Field3D Grad_par_logB;
   /// Store diagnostics for each species
   std::map<std::string, Diagnostics> diagnostics;
