@@ -89,6 +89,11 @@ BraginskiiIonViscosity::BraginskiiIonViscosity(const std::string& name,
                                 "frequency modification to viscosity")
                            .withDefault(2.0);
 
+  viscous_heating = options["viscous_heating"]
+                        .doc("Include viscous heating? Can be turned off to make start "
+                             "of simulations (possibly) less violent.")
+                        .withDefault<bool>(true);
+
   density_floor = options["density_floor"].doc("Minimum density floor").withDefault(1e-7);
 
   if (perpendicular) {
@@ -292,7 +297,10 @@ void BraginskiiIonViscosity::transform_impl(GuardedOptions& state) {
                                                             Field3DParallel{sqrtB * V});
 
       add(species["momentum_source"], div_Pi_cipar);
-      subtract(species["energy_source"], V * div_Pi_cipar); // Internal energy
+
+      if (viscous_heating) {
+        subtract(species["energy_source"], V * div_Pi_cipar); // Internal energy
+      }
 
       // Parallel ion stress tensor component
       Pi_cipar = -0.96 * P * tau * bounce_factor * (2. * Grad_par(V) + V * Grad_par_logB);
@@ -351,7 +359,10 @@ void BraginskiiIonViscosity::transform_impl(GuardedOptions& state) {
       // const Field3D div_Pi_ciperp = - (2. / 3) * B32 * Grad_par(Pi_ciperp / B32);
 
       add(species["momentum_source"], div_Pi_ciperp);
-      subtract(species["energy_source"], V * div_Pi_ciperp);
+
+      if (viscous_heating) {
+        subtract(species["energy_source"], V * div_Pi_ciperp);
+      }
     }
 
     // Total scalar ion viscous pressure

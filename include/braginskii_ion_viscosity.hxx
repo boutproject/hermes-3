@@ -63,7 +63,7 @@ private:
   BoutReal bounce_frequency_R;       ///< Input major radius
   BoutReal density_floor;            ///< Minimum density used in calculating Pi_ciperp
   bool diagnose;                     ///< Output additional diagnostics?
-
+  bool viscous_heating;              ///< yInclude the heating due to viscosity?
   /// Per-species diagnostics
   struct Diagnostics {
     Field3D Pi_ciperp; ///< Perpendicular part of Pi scalar
