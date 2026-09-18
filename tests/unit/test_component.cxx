@@ -116,6 +116,20 @@ TEST(ComponentTest, SetBoundaryAfterGetThrows) {
   // that all values are final including boundary cells.
   ASSERT_THROW(setBoundary<int>(option, 3), BoutException);
 }
+
+// Check an exception is thrown if you try to set the interior after
+// reading the entire field
+TEST(ComponentTest, SetNoBoundaryAfterGetThrows) {
+  Options option;
+
+  option = 42;
+
+  ASSERT_EQ(get<int>(option), 42);
+
+  // Setting after get should fail because get indicates an assumption
+  // that all values are final including boundary cells.
+  ASSERT_THROW(setNoBoundary<int>(option, 3), BoutException);
+}
 #endif
 
 TEST(ComponentTest, SetBoundaryAfterGetNoBoundary) {
@@ -130,6 +144,19 @@ TEST(ComponentTest, SetBoundaryAfterGetNoBoundary) {
   ASSERT_EQ(getNonFinal<int>(option), 3);
 }
 
+// Check still allowed to set interior even after having read the boundary
+TEST(ComponentTest, SetNoBoundaryAfterGetBoundary) {
+  Options option;
+
+  option = 42;
+
+  ASSERT_EQ(getBoundary<int>(option), 42);
+
+  setNoBoundary<int>(option, 3); // ok because domain not assumed final
+
+  ASSERT_EQ(getNonFinal<int>(option), 3);
+}
+
 TEST(ComponentTest, IsSetFinalStaysFalse) {
   Options option;
 
@@ -138,6 +165,27 @@ TEST(ComponentTest, IsSetFinalStaysFalse) {
   ASSERT_EQ(isSetFinal(option["test"]), false);
 }
 
+// Confirm that checking whether the interior has been set does not
+// mark the interior as set.
+TEST(ComponentTest, IsSetFinalNoBoundaryStaysFalse) {
+  Options option;
+
+  ASSERT_EQ(isSetFinalNoBoundary(option["test"]), false);
+  // Shouldn't change if called again
+  ASSERT_EQ(isSetFinalNoBoundary(option["test"]), false);
+}
+
+// Confirm that checking whether the boundary has been set does not
+// mark the boundary as set.
+TEST(ComponentTest, IsSetFinalBoundaryStaysFalse) {
+  Options option;
+
+  ASSERT_EQ(isSetFinalBoundary(option["test"]), false);
+  // Shouldn't change if called again
+  ASSERT_EQ(isSetFinalBoundary(option["test"]), false);
+}
+
+// Confirm you can read a value after having confirmed it's been set.
 TEST(ComponentTest, GetAfterIsSetFinal) {
   Options option;
   option["test"] = 1;
@@ -147,13 +195,67 @@ TEST(ComponentTest, GetAfterIsSetFinal) {
   ASSERT_EQ(get<int>(option["test"]), 1);
 }
 
+// Confirm you can read an interior value after having confirmed the
+// interior has been been set.
+TEST(ComponentTest, GetAfterIsSetFinalNoBoundary) {
+  Options option;
+  option["test"] = 1;
+
+  ASSERT_EQ(isSetFinalNoBoundary(option["test"]), true);
+  // Can get the value
+  ASSERT_EQ(getNoBoundary<int>(option["test"]), 1);
+}
+
+// Confirm you can read a boundary value after having confirmed the
+// boundary has been been set.
+TEST(ComponentTest, GetAfterIsSetFinalBoundary) {
+  Options option;
+  option["test"] = 1;
+
+  ASSERT_EQ(isSetFinalBoundary(option["test"]), true);
+  // Can get the value
+  ASSERT_EQ(getBoundary<int>(option["test"]), 1);
+}
+
 #if CHECKLEVEL >= 1
+// Confirm you can not set the value on any part of the domain after
+// checking whether it has been set.
 TEST(ComponentTest, SetAfterIsSetFinal) {
   Options option;
 
   ASSERT_EQ(isSetFinal(option["test"]), false);
   // Can't now set the value
   ASSERT_THROW(set<int>(option["test"], 3), BoutException);
+  ASSERT_THROW(setNoBoundary<int>(option["test"], 3), BoutException);
+  ASSERT_THROW(setBoundary<int>(option["test"], 3), BoutException);
+}
+
+// Confirm you can not set the value in the interior after checking
+// whether it has been set there, but you can still set the boundary.
+TEST(ComponentTest, SetAfterIsSetFinalNoBoundary) {
+  Options option;
+
+  ASSERT_EQ(isSetFinalNoBoundary(option["test"]), false);
+  // Can't now set the value in the domain
+  ASSERT_THROW(set<int>(option["test"], 3), BoutException);
+  ASSERT_THROW(setNoBoundary<int>(option["test"], 3), BoutException);
+  // Can still set the value for the bounds
+  setBoundary<int>(option["test"], 1);
+  ASSERT_EQ(getBoundary<int>(option["test"]), 1);
+}
+
+// Confirm you can not set the value in the boundary after checking
+// whether it has been set there, but you can still set the interior.
+TEST(ComponentTest, SetAfterIsSetFinalBoundary) {
+  Options option;
+
+  ASSERT_EQ(isSetFinalBoundary(option["test"]), false);
+  // Can't now set the value in the bounds
+  ASSERT_THROW(set<int>(option["test"], 3), BoutException);
+  ASSERT_THROW(setBoundary<int>(option["test"], 3), BoutException);
+  // Can still set the value for the domain
+  setNoBoundary<int>(option["test"], 1);
+  ASSERT_EQ(getNoBoundary<int>(option["test"]), 1);
 }
 #endif
 

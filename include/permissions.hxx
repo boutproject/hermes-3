@@ -115,10 +115,9 @@ public:
   /// If a variable is not included in the initialiser list then it is
   /// assumed there are no access rights. If a section name appears in
   /// the list then those permissions apply to all children of that
-  /// section. The section name must end in a colon (e.g.,
-  /// "species:he:"). If an additional entry is present for somethign
+  /// section. If an additional entry is present for something
   /// located in that section, then the more specific entry takes
-  /// precidences.
+  /// precidence.
   ///
   /// Placeholders can be used in variable names by surrounding a
   /// label with curly braces. Multiple values can then be substituted
@@ -142,7 +141,7 @@ public:
   ///     permissions.setAccess("species:he:density",
   ///                           {Regions::Nowhere, Regions::All,
   ///                           Regions::Interior, Regions::Nowhere})
-  /// 
+  ///
   /// or, equivalently,
   ///
   ///     permissions.setAccess("species:he:density",
@@ -230,7 +229,6 @@ public:
   friend std::ostream& operator<<(std::ostream& os, const Permissions& permissions);
   friend std::istream& operator>>(std::istream& is, Permissions& permissions);
 
-private:
   /// Returns the access rights for the most specific entry in this
   /// object which matches the variable name. If there are no matching
   /// entries then the result will indicate no access rights. The
@@ -239,6 +237,7 @@ private:
   /// entries.
   VarRights bestMatchRights(const std::string& variable) const;
 
+private:
   std::map<std::string, AccessRights> variable_permissions;
 
   static const std::regex LABEL_RE;
@@ -290,12 +289,35 @@ inline Permissions::VarRights writeFinal(std::string varname,
 }
 
 /// Convenience function to return an object expressing that the
-/// variable should have Final write permissions on the boundaries. It
+/// variable should have write permissions on the boundaries. It
 /// will have Read permissions in the interior, as this is normally
 /// required to set the boundaries correctly.
 inline Permissions::VarRights writeBoundary(std::string varname) {
   return {std::move(varname),
+          {Regions::Nowhere, Regions::Interior, Regions::Boundaries, Regions::Nowhere}};
+}
+
+/// Convenience function to return an object expressing that the
+/// variable should have Final write permissions on the boundaries. It
+/// will have Read permissions in the interior, as this is normally
+/// required to set the boundaries correctly.
+inline Permissions::VarRights writeBoundaryFinal(std::string varname) {
+  return {std::move(varname),
           {Regions::Nowhere, Regions::Interior, Regions::Nowhere, Regions::Boundaries}};
+}
+
+/// Convenience function to return an object expressing that, if the
+/// interior has been set, then the variable should have write
+/// permissions on the boundaries and read permissions for the
+/// interior.
+///
+/// FIXME: Currently these permissiosn are not expressed properly, due
+/// to limitations in how the permission system. The boundary will
+/// have write permission regardless of whether or not the interior is
+/// set.
+inline Permissions::VarRights writeBoundaryIfSet(std::string varname) {
+  return {std::move(varname),
+          {Regions::Interior, Regions::Nowhere, Regions::Boundaries, Regions::Nowhere}};
 }
 
 /// Convenience function to return an object expressing that, if the
@@ -307,7 +329,7 @@ inline Permissions::VarRights writeBoundary(std::string varname) {
 /// to limitations in how the permission system. The boundary will
 /// have write permission regardless of whether or not the interior is
 /// set.
-inline Permissions::VarRights writeBoundaryIfSet(std::string varname) {
+inline Permissions::VarRights writeBoundaryFinalIfSet(std::string varname) {
   return {std::move(varname),
           {Regions::Interior, Regions::Nowhere, Regions::Nowhere, Regions::Boundaries}};
 }
@@ -337,3 +359,5 @@ std::ostream& operator<<(std::ostream& os, const Permissions& permissions);
 /// behaviour if the input is corrupted; an exception may be thrown or
 /// the permissions that are read may be incomplete.
 std::istream& operator>>(std::istream& is, Permissions& permissions);
+
+std::string toString(const Permissions& value);
