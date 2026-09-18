@@ -11,6 +11,12 @@
 auto make_access = std::make_pair<bool, std::string>;
 auto make_permission = std::make_pair<PermissionTypes, std::string>;
 
+// Check whether a particular variable can be accessed with the
+// specified permission and, if so, where it gets permission
+// from. I.e., was it specified for this particular variable or was it
+// inherited from the permission for an entire section of variables?
+// This can be further complicated if there are different permissions
+// for different regions.
 TEST(PermissionsTests, TestCanAccess) {
   const Permissions example({
       readIfSet("species:he:charge"),
@@ -106,6 +112,12 @@ TEST(PermissionsTests, TestCanAccess) {
             no_access);
 }
 
+// Check that the highest permission applying to a certain variable is
+// correctly determined. This can be complicated, due to some
+// permissions applying to entire sections of variables, but
+// potentially overridden for specific variables within that
+// section. Furthermore, the permission returned must the the highest
+// one whcih applies to all the specified regions of the variable.
 TEST(PermissionsTests, TestGetHighestPermission) {
   const Permissions example({
       {"species:he:charge",
@@ -237,6 +249,8 @@ TEST(PermissionsTests, TestGetHighestPermission) {
             no_permission);
 }
 
+// Check that getHighestPermission returns the expected results as the
+// setAccess method is used to change permissions.
 TEST(PermissionsTests, TestSetAccess) {
   Permissions example({
       {"species:he:density",
@@ -278,6 +292,9 @@ TEST(PermissionsTests, TestSetAccess) {
             make_permission(PermissionTypes::Final, "unset"));
 }
 
+// Check the getVariablesWithPermission method returns the set of all
+// variables/regions for which we have the desired level of permission
+// to access.
 TEST(PermissionsTests, TestGetVariablesWithPermissions) {
   const Permissions example(
       {{"species:he:density",
@@ -326,6 +343,8 @@ TEST(PermissionsTests, TestGetVariablesWithPermissions) {
                BoutException);
 }
 
+// Check that placeholders in variable names in a permissions object
+// will be correctly replaced by the substitute method.
 TEST(PermissionsTests, TestSubstitute) {
   Permissions example(
       {{"species:{s1}:collision_frequencies:{s1}_{s2}_coll",
@@ -358,6 +377,9 @@ TEST(PermissionsTests, TestSubstitute) {
             make_permission(PermissionTypes::ReadIfSet, "d"));
 }
 
+// Confirm the checkNoRemainingSubstitutions method throws an
+// excpetion if there are any placeholders remaining in any
+// variable names in the permission object.
 TEST(PermissionsTests, TestRemainingSubstitutions) {
   const Permissions p1 = {readOnly("species:h+:density"), readWrite("fields:phi")};
   const Permissions p2 = {readOnly("species:{all_species}:density"),
@@ -371,6 +393,8 @@ TEST(PermissionsTests, TestRemainingSubstitutions) {
   p4.checkNoRemainingSubstitutions();
 }
 
+// Test permissions objects can be converted to strings and then back
+// into identical permissions.
 TEST(PermissionsTests, TestIO) {
   const Permissions empty({});
   const Permissions single({readOnly("test")});
