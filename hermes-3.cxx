@@ -86,6 +86,7 @@
 #include <bout/boundary_op.hxx>
 #include <bout/constants.hxx>
 #include <bout/field_factory.hxx>
+#include <bout/tokamak_coordinates.hxx>
 
 #include "include/recalculate_metric.hxx"
 
@@ -121,8 +122,8 @@ public:
 
     // Get cell radial length
     Coordinates* coord = mesh->getCoordinates();
-    auto dx = coord->dx;
-    auto g11 = coord->g11;
+    auto dx = coord->dx();
+    auto g11 = coord->g11();
     Coordinates::FieldMetric dr =
         dx / sqrt(g11); // cell radial length. dr = dx/(Bpol * R) and g11 = (Bpol*R)**2
 
@@ -253,29 +254,8 @@ int Hermes::init(bool restarting) {
     if (options["normalise_metric"]
             .doc("Normalise input metric tensor? (assumes input is in SI units)")
             .withDefault<bool>(true)) {
-      Coordinates* coord = mesh->getCoordinates();
-      // To use non-orthogonal metric
-      // Normalise
-      coord->dx /= rho_s0 * rho_s0 * Bnorm;
-      coord->Bxy /= Bnorm;
-      // Metric is in grid file - just need to normalise
-      coord->g11 /= SQ(Bnorm * rho_s0);
-      coord->g22 *= SQ(rho_s0);
-      coord->g33 *= SQ(rho_s0);
-      coord->g12 /= Bnorm;
-      coord->g13 /= Bnorm;
-      coord->g23 *= SQ(rho_s0);
-
-      coord->J *= Bnorm / rho_s0;
-
-      coord->g_11 *= SQ(Bnorm * rho_s0);
-      coord->g_22 /= SQ(rho_s0);
-      coord->g_33 /= SQ(rho_s0);
-      coord->g_12 *= Bnorm;
-      coord->g_13 *= Bnorm;
-      coord->g_23 /= SQ(rho_s0);
-
-      coord->geometry(); // Calculate other metrics
+      mesh->getCoordinates()->normaliseMetric(
+          bout::TokamakOrFCIMetricNormaliser(mesh, Bnorm, rho_s0));
     }
   }
 

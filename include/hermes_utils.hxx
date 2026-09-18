@@ -32,6 +32,19 @@ inline T softFloor(const T& var, BoutReal f, const std::string& rgn = "RGN_ALL")
 
   BOUT_FOR(d, var.getRegion(rgn)) { result[d] = softFloor(var[d], f); }
 
+  if constexpr (std::is_base_of_v<Field3DParallel, T>) {
+    if (var.isFci()) {
+      for (size_t i = 0; i < var.numberParallelSlices(); ++i) {
+        result.yup(i) =
+            softFloor(var.yup(i), f,
+                      fmt::format(FMT_STRING("RGN_YPAR_{:+d}"), static_cast<int>(i + 1)));
+        result.ydown(i) = softFloor(
+            var.ydown(i), f,
+            fmt::format(FMT_STRING("RGN_YPAR_{:+d}"), -static_cast<int>(i + 1)));
+      }
+    }
+  }
+
   return result;
 }
 
@@ -46,6 +59,19 @@ inline T clamp(const T& var, BoutReal lo, BoutReal hi,
       result[d] = lo;
     } else if (result[d] > hi) {
       result[d] = hi;
+    }
+  }
+
+  if constexpr (std::is_base_of_v<Field3DParallel, T>) {
+    if (var.isFci()) {
+      for (size_t i = 0; i < var.numberParallelSlices(); ++i) {
+        result.yup(i) =
+            clamp(var.yup(i), lo, hi,
+                  fmt::format(FMT_STRING("RGN_YPAR_{:+d}"), static_cast<int>(i + 1)));
+        result.ydown(i) =
+            clamp(var.ydown(i), lo, hi,
+                  fmt::format(FMT_STRING("RGN_YPAR_{:+d}"), -static_cast<int>(i + 1)));
+      }
     }
   }
 

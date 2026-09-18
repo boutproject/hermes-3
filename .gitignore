@@ -8,7 +8,7 @@ BOUT.settings
 .DS_Store
 /build*
 __pycache__
-uv.lock
+*.bk
 
 # Docs
 /docs/build
@@ -19,6 +19,9 @@ uv.lock
 
 # IDE config files
 .vscode
+compile_commands.json
+.ccls-cache/
+.cache/clangd/
 
 # spack-related
 spack-build*
@@ -31,3 +34,10 @@ views
 docker/work/
 docker/.env
 docker/docker-compose.override.yaml
+
+# asv-related
+.asv/
+
+# Python-related directories
+*venv/
+dist/

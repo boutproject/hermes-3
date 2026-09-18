@@ -2,9 +2,6 @@
 
 # Test that a 1D-recyling-D-T-He example produces expected results
 
-from __future__ import division
-from __future__ import print_function
-
 from boututils.run_wrapper import launch
 import numpy
 import pathlib
