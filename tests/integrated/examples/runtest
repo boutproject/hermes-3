@@ -31,7 +31,7 @@ def run_examples(
     ):
         category_name = str(category.relative_to(examples_dir))
         print(f"\033[1mRunning tests in category '{category_name}'.\033[0m")
-        if category == "stellarator-3D":
+        if str(category) == "stellarator-3D":
             print("Skipping stellarator 3D examples in the CI")
             continue
         else:
