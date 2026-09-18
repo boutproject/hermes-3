@@ -24,8 +24,8 @@ a1 = R0 + 0.08
 a2 = R0 + 0.1
 
 # n-fold symmetry. Because the coefficients are all 5-fold symmetric, we can simulate only one fifth of the whole device.
-# symmetry = 1.0 results in a full-torus simulation
-symmetry = 5.0
+# symmetry = 1 results in a full-torus simulation
+symmetry = 5
 
 # Toroidal extend of the domain in rad
 yperiod = 2.0 * np.pi / symmetry
