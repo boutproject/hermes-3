@@ -159,8 +159,8 @@ void AnomalousDiffusion::transform_impl(GuardedOptions& state) {
           (*dagp_op)(AA * V * anomalous_D, N, flow_xlow, flow_ylow, false));
     } else {
       add(species["momentum_source"],
-          Div_a_Grad_perp_upwind_flows(Coordinates::FieldMetric{AA * V2D * anomalous_D},
-                                       N2D, flow_xlow, flow_ylow));
+          Div_a_Grad_perp_upwind_flows(AA * V2D * anomalous_D, N2D, flow_xlow,
+                                       flow_ylow));
     }
     add(species["momentum_flow_xlow"], flow_xlow);
     add(species["momentum_flow_ylow"], flow_ylow);
@@ -170,9 +170,8 @@ void AnomalousDiffusion::transform_impl(GuardedOptions& state) {
           (*dagp_op)((3. / 2) * T * anomalous_D, N, flow_xlow, flow_ylow, false));
     } else {
       add(species["energy_source"],
-          Div_a_Grad_perp_upwind_flows(
-              Coordinates::FieldMetric{(3. / 2) * T2D * anomalous_D}, N2D, flow_xlow,
-              flow_ylow));
+          Div_a_Grad_perp_upwind_flows((3. / 2) * T2D * anomalous_D, N2D, flow_xlow,
+                                       flow_ylow));
     }
     add(species["energy_flow_xlow"], flow_xlow);
     add(species["energy_flow_ylow"], flow_ylow);
@@ -185,8 +184,7 @@ void AnomalousDiffusion::transform_impl(GuardedOptions& state) {
           (*dagp_op)(anomalous_chi * N, T, flow_xlow, flow_ylow, false));
     } else {
       add(species["energy_source"],
-          Div_a_Grad_perp_upwind_flows(Coordinates::FieldMetric{anomalous_chi * N2D}, T2D,
-                                       flow_xlow, flow_ylow));
+          Div_a_Grad_perp_upwind_flows(anomalous_chi * N2D, T2D, flow_xlow, flow_ylow));
     }
     add(species["energy_flow_xlow"], flow_xlow);
     add(species["energy_flow_ylow"], flow_ylow);
@@ -200,8 +198,8 @@ void AnomalousDiffusion::transform_impl(GuardedOptions& state) {
           (*dagp_op)(anomalous_nu * AA * N, V, flow_xlow, flow_ylow, false));
     } else {
       add(species["momentum_source"],
-          Div_a_Grad_perp_upwind_flows(Coordinates::FieldMetric{anomalous_nu * AA * N2D},
-                                       V2D, flow_xlow, flow_ylow));
+          Div_a_Grad_perp_upwind_flows(anomalous_nu * AA * N2D, V2D, flow_xlow,
+                                       flow_ylow));
     }
     add(species["momentum_flow_xlow"], flow_xlow);
     add(species["momentum_flow_ylow"], flow_ylow);

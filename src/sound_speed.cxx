@@ -57,7 +57,7 @@ void SoundSpeed::transform_impl(GuardedOptions& state) {
   if (alfven_wave) {
     auto* coord = fastest_wave.getCoordinates();
     for (const auto& i : fastest_wave.getRegion("RGN_NOBNDRY")) {
-      const BoutReal alfven_speed = beta_norm * coord->Bxy[i] / sqrt(total_density[i]);
+      const BoutReal alfven_speed = beta_norm * coord->Bxy()[i] / sqrt(total_density[i]);
       fastest_wave[i] = BOUTMAX(fastest_wave[i], alfven_speed);
     }
   }

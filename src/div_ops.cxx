@@ -26,6 +26,7 @@
 
 #include <bout/assert.hxx>
 #include <bout/bout_types.hxx>
+#include <bout/build_config.hxx>
 #include <bout/coordinates.hxx>
 #include <bout/derivs.hxx>
 #include <bout/field.hxx>
@@ -137,25 +138,29 @@ Field3D Div_n_bxGrad_f_B_XPPM(const Field3D& n, const Field3D& f, bool bndry_flu
   //
 
   int nz = mesh->LocalNz;
+  auto f_lowx_lowz = emptyFrom(f);
+  for (int i = mesh->xstart; i <= mesh->xend + 1; i++) {
+    for (int j = mesh->ystart; j <= mesh->yend; j++) {
+      for (int k = 0; k < nz; k++) {
+        const int km = (k - 1 + nz) % nz;
+        f_lowx_lowz(i, j, k) =
+            0.25 * (f(i, j, k) + f(i - 1, j, k) + f(i, j, km) + f(i - 1, j, km));
+      }
+    }
+  }
+
   for (int i = mesh->xstart; i <= mesh->xend; i++) {
     for (int j = mesh->ystart; j <= mesh->yend; j++) {
       for (int k = 0; k < nz; k++) {
-        int kp = (k + 1) % nz;
-        int kpp = (kp + 1) % nz;
-        int km = (k - 1 + nz) % nz;
-        int kmm = (km - 1 + nz) % nz;
+        const int kp = (k + 1) % nz;
+        const int km = (k - 1 + nz) % nz;
 
         // 1) Interpolate stream function f onto corners fmp, fpp, fpm
 
-        BoutReal fmm =
-            0.25 * (f(i, j, k) + f(i - 1, j, k) + f(i, j, km) + f(i - 1, j, km));
-        BoutReal fmp = 0.25
-                       * (f(i, j, k) + f(i, j, kp) + f(i - 1, j, k)
-                          + f(i - 1, j, kp)); // 2nd order accurate
-        BoutReal fpp =
-            0.25 * (f(i, j, k) + f(i, j, kp) + f(i + 1, j, k) + f(i + 1, j, kp));
-        BoutReal fpm =
-            0.25 * (f(i, j, k) + f(i + 1, j, k) + f(i, j, km) + f(i + 1, j, km));
+        BoutReal fmm = f_lowx_lowz(i, j, k);
+        BoutReal fmp = f_lowx_lowz(i, j, kp);
+        BoutReal fpp = f_lowx_lowz(i + 1, j, kp);
+        BoutReal fpm = f_lowx_lowz(i + 1, j, k);
 
         // 2) Calculate velocities on cell faces
 
@@ -174,9 +179,9 @@ Field3D Div_n_bxGrad_f_B_XPPM(const Field3D& n, const Field3D& f, bool bndry_flu
         Stencil1D s;
         s.c = n(i, j, k);
         s.m = n(i - 1, j, k);
-        s.mm = n(i - 2, j, k);
+        s.mm = BoutNaN;
         s.p = n(i + 1, j, k);
-        s.pp = n(i + 2, j, k);
+        s.pp = BoutNaN;
 
         MC(s);
 
@@ -247,9 +252,9 @@ Field3D Div_n_bxGrad_f_B_XPPM(const Field3D& n, const Field3D& f, bool bndry_flu
 
         // Z direction
         s.m = n(i, j, km);
-        s.mm = n(i, j, kmm);
+        s.mm = BoutNaN;
         s.p = n(i, j, kp);
-        s.pp = n(i, j, kpp);
+        s.pp = BoutNaN;
 
         MC(s);
 
@@ -313,9 +318,9 @@ Field3D Div_n_bxGrad_f_B_XPPM(const Field3D& n, const Field3D& f, bool bndry_flu
           BoutReal f_R =
               0.5
               * ((coord->g11(i + 1, j, k) * coord->g23(i + 1, j, k)
-                  / SQ(coord->Bxy(i + 1, j, k)))
+                  / SQ(coord->Bxy()(i + 1, j, k)))
                      * dfdy(i + 1, j, k)
-                 + (coord->g11(i, j, k) * coord->g23(i, j, k) / SQ(coord->Bxy(i, j, k)))
+                 + (coord->g11(i, j, k) * coord->g23(i, j, k) / SQ(coord->Bxy()(i, j, k)))
                        * dfdy(i, j, k));
 
           // Advection velocity across cell face
@@ -384,9 +389,9 @@ Field3D Div_n_bxGrad_f_B_XPPM(const Field3D& n, const Field3D& f, bool bndry_flu
           BoutReal f_U =
               0.5
               * ((coord->g11(i, j + 1, k) * coord->g23(i, j + 1, k)
-                  / SQ(coord->Bxy(i, j + 1, k)))
+                  / SQ(coord->Bxy()(i, j + 1, k)))
                      * dfdx(i, j + 1, k)
-                 + (coord->g11(i, j, k) * coord->g23(i, j, k) / SQ(coord->Bxy(i, j, k)))
+                 + (coord->g11(i, j, k) * coord->g23(i, j, k) / SQ(coord->Bxy()(i, j, k)))
                        * dfdx(i, j, k));
 
           BoutReal Vy = -0.5 * (coord->J(i, j + 1, k) + coord->J(i, j, k)) * f_U;
@@ -745,12 +750,12 @@ Field3D Div_a_Grad_perp_flows(const Field3D& a, const Field3D& f, Field3D& flow_
   Field3D fc = f;
   Field3D ac = a;
 
-  Field3D g23c = coord->g23;
-  Field3D g_23c = coord->g_23;
-  Field3D Jc = coord->J;
-  Field3D dyc = coord->dy;
-  Field3D dzc = coord->dz;
-  Field3D Bxyc = coord->Bxy;
+  Field3D g23c = coord->g23();
+  Field3D g_23c = coord->g_23();
+  Field3D Jc = coord->J();
+  Field3D dyc = coord->dy();
+  Field3D dzc = coord->dz();
+  Field3D Bxyc = coord->Bxy();
 
   // Result of the Y and Z fluxes
   Field3D yzresult(mesh);
@@ -779,39 +784,39 @@ Field3D Div_a_Grad_perp_flows(const Field3D& a, const Field3D& f, Field3D& flow_
     // 3D Metric, need yup/ydown fields.
     // Requires previous communication of metrics
     // -- should insert communication here?
-    if (!coord->g23.hasParallelSlices() || !coord->g_23.hasParallelSlices()
-        || !coord->dy.hasParallelSlices() || !coord->dz.hasParallelSlices()
-        || !coord->Bxy.hasParallelSlices() || !coord->J.hasParallelSlices()) {
+    if (!coord->g23().hasParallelSlices() || !coord->g_23().hasParallelSlices()
+        || !coord->dy().hasParallelSlices() || !coord->dz().hasParallelSlices()
+        || !coord->Bxy().hasParallelSlices() || !coord->J().hasParallelSlices()) {
       throw BoutException("metrics have no yup/down: Maybe communicate in init?");
     }
 
-    g23up = coord->g23.yup();
-    g23down = coord->g23.ydown();
+    g23up = coord->g23().yup();
+    g23down = coord->g23().ydown();
 
-    g_23up = coord->g_23.yup();
-    g_23down = coord->g_23.ydown();
+    g_23up = coord->g_23().yup();
+    g_23down = coord->g_23().ydown();
 
-    Jup = coord->J.yup();
-    Jdown = coord->J.ydown();
+    Jup = coord->J().yup();
+    Jdown = coord->J().ydown();
 
-    dyup = coord->dy.yup();
-    dydown = coord->dy.ydown();
+    dyup = coord->dy().yup();
+    dydown = coord->dy().ydown();
 
-    dzup = coord->dz.yup();
-    dzdown = coord->dz.ydown();
+    dzup = coord->dz().yup();
+    dzdown = coord->dz().ydown();
 
-    Bxyup = coord->Bxy.yup();
-    Bxydown = coord->Bxy.ydown();
+    Bxyup = coord->Bxy().yup();
+    Bxydown = coord->Bxy().ydown();
 
   } else {
     // No 3D metrics
     // Need to shift to/from field aligned coordinates
-    g23up = g23down = g23c = toFieldAligned(coord->g23);
-    g_23up = g_23down = g_23c = toFieldAligned(coord->g_23);
-    Jup = Jdown = Jc = toFieldAligned(coord->J);
-    dyup = dydown = dyc = toFieldAligned(coord->dy);
-    dzup = dzdown = dzc = toFieldAligned(coord->dz);
-    Bxyup = Bxydown = Bxyc = toFieldAligned(coord->Bxy);
+    g23up = g23down = g23c = toFieldAligned(coord->g23());
+    g_23up = g_23down = g_23c = toFieldAligned(coord->g_23());
+    Jup = Jdown = Jc = toFieldAligned(coord->J());
+    dyup = dydown = dyc = toFieldAligned(coord->dy());
+    dzup = dzdown = dzc = toFieldAligned(coord->dz());
+    Bxyup = Bxydown = Bxyc = toFieldAligned(coord->Bxy());
   }
 
   // Y flux
@@ -1117,15 +1122,15 @@ Field3D Div_a_Grad_perp_nonorthog(const Field3D& a, const Field3D& f, Field3D& f
   Field3D fc = f;
   Field3D ac = a;
 
-  Field3D g23c = coord->g23;
-  Field3D g_23c = coord->g_23;
-  Field3D g12c = coord->g12;
-  Field3D g_12c = coord->g_12;
-  Field3D Jc = coord->J;
-  Field3D dxc = coord->dx;
-  Field3D dyc = coord->dy;
-  Field3D dzc = coord->dz;
-  Field3D Bxyc = coord->Bxy;
+  Field3D g23c = coord->g23();
+  Field3D g_23c = coord->g_23();
+  Field3D g12c = coord->g12();
+  Field3D g_12c = coord->g_12();
+  Field3D Jc = coord->J();
+  Field3D dxc = coord->dx();
+  Field3D dyc = coord->dy();
+  Field3D dzc = coord->dz();
+  Field3D Bxyc = coord->Bxy();
 
   // Calculate the X derivative at cell edge (X + 1/2), including in Y guard cells
   // This is used to calculate Y flux contribution from g21 * d/dx
@@ -1176,48 +1181,48 @@ Field3D Div_a_Grad_perp_nonorthog(const Field3D& a, const Field3D& f, Field3D& f
     // 3D Metric, need yup/ydown fields.
     // Requires previous communication of metrics
     // -- should insert communication here?
-    if (!coord->g23.hasParallelSlices() || !coord->g_23.hasParallelSlices()
-        || !coord->dy.hasParallelSlices() || !coord->dz.hasParallelSlices()
-        || !coord->Bxy.hasParallelSlices() || !coord->J.hasParallelSlices()) {
+    if (!coord->g23().hasParallelSlices() || !coord->g_23().hasParallelSlices()
+        || !coord->dy().hasParallelSlices() || !coord->dz().hasParallelSlices()
+        || !coord->Bxy().hasParallelSlices() || !coord->J().hasParallelSlices()) {
       throw BoutException("metrics have no yup/down");
     }
 
-    g23up = coord->g23.yup();
-    g23down = coord->g23.ydown();
+    g23up = coord->g23().yup();
+    g23down = coord->g23().ydown();
 
-    g_23up = coord->g_23.yup();
-    g_23down = coord->g_23.ydown();
+    g_23up = coord->g_23().yup();
+    g_23down = coord->g_23().ydown();
 
-    g12up = coord->g12.yup();
-    g12down = coord->g12.ydown();
+    g12up = coord->g12().yup();
+    g12down = coord->g12().ydown();
 
-    g_12up = coord->g_12.yup();
-    g_12down = coord->g_12.ydown();
+    g_12up = coord->g_12().yup();
+    g_12down = coord->g_12().ydown();
 
-    Jup = coord->J.yup();
-    Jdown = coord->J.ydown();
+    Jup = coord->J().yup();
+    Jdown = coord->J().ydown();
 
-    dyup = coord->dy.yup();
-    dydown = coord->dy.ydown();
+    dyup = coord->dy().yup();
+    dydown = coord->dy().ydown();
 
-    dzup = coord->dz.yup();
-    dzdown = coord->dz.ydown();
+    dzup = coord->dz().yup();
+    dzdown = coord->dz().ydown();
 
-    Bxyup = coord->Bxy.yup();
-    Bxydown = coord->Bxy.ydown();
+    Bxyup = coord->Bxy().yup();
+    Bxydown = coord->Bxy().ydown();
 
   } else {
     // No 3D metrics
     // Need to shift to/from field aligned coordinates
-    g23up = g23down = g23c = toFieldAligned(coord->g23);
-    g_23up = g_23down = g_23c = toFieldAligned(coord->g_23);
-    g12up = g12down = g12c = toFieldAligned(coord->g12);
-    g_12up = g_12down = g_12c = toFieldAligned(coord->g_12);
-    Jup = Jdown = Jc = toFieldAligned(coord->J);
-    dxc = toFieldAligned(coord->dx);
-    dyup = dydown = dyc = toFieldAligned(coord->dy);
-    dzup = dzdown = dzc = toFieldAligned(coord->dz);
-    Bxyup = Bxydown = Bxyc = toFieldAligned(coord->Bxy);
+    g23up = g23down = g23c = toFieldAligned(coord->g23());
+    g_23up = g_23down = g_23c = toFieldAligned(coord->g_23());
+    g12up = g12down = g12c = toFieldAligned(coord->g12());
+    g_12up = g_12down = g_12c = toFieldAligned(coord->g_12());
+    Jup = Jdown = Jc = toFieldAligned(coord->J());
+    dxc = toFieldAligned(coord->dx());
+    dyup = dydown = dyc = toFieldAligned(coord->dy());
+    dzup = dzdown = dzc = toFieldAligned(coord->dz());
+    Bxyup = Bxydown = Bxyc = toFieldAligned(coord->Bxy());
   }
 
   // Y flux
@@ -1467,7 +1472,7 @@ Field3D Div_a_Grad_perp_upwind_flows(const Field3D& a, const Field3D& f,
 
   Field3D result{zeroFrom(f)};
 
-  Coordinates* coord = f.getCoordinates();
+  const Coordinates* coord = f.getCoordinates();
 
   // Zero all flows
   flow_xlow = 0.0;
@@ -1475,8 +1480,8 @@ Field3D Div_a_Grad_perp_upwind_flows(const Field3D& a, const Field3D& f,
 
   // Flux in x
 
-  int xs = mesh->xstart - 1;
-  int xe = mesh->xend;
+  const int xs = mesh->xstart - 1;
+  const int xe = mesh->xend;
 
   for (int i = xs; i <= xe; i++) {
     for (int j = mesh->ystart; j <= mesh->yend; j++) {
@@ -1540,13 +1545,13 @@ Field3D Div_a_Grad_perp_upwind_flows(const Field3D& a, const Field3D& f,
   for (int i = mesh->xstart; i <= mesh->xend; i++) {
     for (int j = mesh->ystart; j <= mesh->yend; j++) {
       for (int k = zstart; k <= zend; k++) {
-        BoutReal coef_u =
+        const BoutReal coef_u =
             0.5
             * (coord->g_23(i, j, k) / SQ(coord->J(i, j, k) * coord->Bxy(i, j, k))
                + coord->g_23(i, j + 1, k)
                      / SQ(coord->J(i, j + 1, k) * coord->Bxy(i, j + 1, k)));
 
-        BoutReal coef_d =
+        const BoutReal coef_d =
             0.5
             * (coord->g_23(i, j, k) / SQ(coord->J(i, j, k) * coord->Bxy(i, j, k))
                + coord->g_23(i, j - 1, k)
@@ -1556,8 +1561,8 @@ Field3D Div_a_Grad_perp_upwind_flows(const Field3D& a, const Field3D& f,
         const auto zend = bout::build::use_metric_3d ? k : mesh->zend;
         for (int k = zstart; k <= zend; k++) {
           // Calculate flux between j and j+1
-          int kp = (k + 1) % mesh->LocalNz;
-          int km = (k - 1 + mesh->LocalNz) % mesh->LocalNz;
+          const int kp = (k + 1) % mesh->LocalNz;
+          const int km = (k - 1 + mesh->LocalNz) % mesh->LocalNz;
 
           // Calculate Z derivative at y boundary
           BoutReal dfdz =
@@ -1604,7 +1609,7 @@ Field3D Div_a_Grad_perp_upwind_flows(const Field3D& a, const Field3D& f,
     for (int j = mesh->ystart; j <= mesh->yend; j++) {
       for (int k = zstart; k <= zend; k++) {
         // Coefficient in front of df/dy term
-        BoutReal coef =
+        const BoutReal coef =
             coord->g_23(i, j, k)
             / (coord->dy(i, j + 1, k) + 2. * coord->dy(i, j, k) + coord->dy(i, j - 1, k))
             / SQ(coord->J(i, j, k) * coord->Bxy(i, j, k));
@@ -1613,9 +1618,9 @@ Field3D Div_a_Grad_perp_upwind_flows(const Field3D& a, const Field3D& f,
         const auto zend = bout::build::use_metric_3d ? k : mesh->zend;
         for (int k = zstart; k <= zend; k++) {
           // Calculate flux between k and k+1
-          int kp = (k + 1) % mesh->LocalNz;
+          const int kp = (k + 1) % mesh->LocalNz;
 
-          BoutReal gradient =
+          const BoutReal gradient =
               // df/dz
               (fc(i, j, kp) - fc(i, j, k)) / coord->dz(i, j, k)
 
@@ -1624,7 +1629,7 @@ Field3D Div_a_Grad_perp_upwind_flows(const Field3D& a, const Field3D& f,
                     * (fup(i, j + 1, k) + fup(i, j + 1, kp) - fdown(i, j - 1, k)
                        - fdown(i, j - 1, kp));
 
-          BoutReal fout = gradient * ((gradient > 0) ? ac(i, j, kp) : ac(i, j, k));
+          const BoutReal fout = gradient * ((gradient > 0) ? ac(i, j, kp) : ac(i, j, k));
 
           yzresult(i, j, k) += fout / coord->dz(i, j, k);
           yzresult(i, j, kp) -= fout / coord->dz(i, j, k);
@@ -1647,7 +1652,7 @@ Field3D Div_n_g_bxGrad_f_B_XZ(const Field3D& n, const Field3D& g, const Field3D&
                               bool bndry_flux) {
   Field3D result{0.0};
 
-  Coordinates* coord = mesh->getCoordinates();
+  const Coordinates* coord = mesh->getCoordinates();
 
   //////////////////////////////////////////
   // X-Z advection.
@@ -1669,9 +1674,7 @@ Field3D Div_n_g_bxGrad_f_B_XZ(const Field3D& n, const Field3D& g, const Field3D&
     for (int j = mesh->ystart; j <= mesh->yend; j++) {
       for (int k = 0; k < nz; k++) {
         int kp = (k + 1) % nz;
-        int kpp = (kp + 1) % nz;
         int km = (k - 1 + nz) % nz;
-        int kmm = (km - 1 + nz) % nz;
 
         // 1) Interpolate stream function f onto corners fmp, fpp, fpm
 
@@ -1709,9 +1712,9 @@ Field3D Div_n_g_bxGrad_f_B_XZ(const Field3D& n, const Field3D& g, const Field3D&
         Stencil1D s;
         s.c = n(i, j, k);
         s.m = n(i - 1, j, k);
-        s.mm = n(i - 2, j, k);
+        s.mm = BoutNaN;
         s.p = n(i + 1, j, k);
-        s.pp = n(i + 2, j, k);
+        s.pp = BoutNaN;
 
         MC(s);
 
@@ -1779,9 +1782,9 @@ Field3D Div_n_g_bxGrad_f_B_XZ(const Field3D& n, const Field3D& g, const Field3D&
 
         // Z direction
         s.m = n(i, j, km);
-        s.mm = n(i, j, kmm);
+        s.mm = BoutNaN;
         s.p = n(i, j, kp);
-        s.pp = n(i, j, kpp);
+        s.pp = BoutNaN;
 
         MC(s);
 
