@@ -368,6 +368,7 @@ if(HERMES_TESTS)
     endif()
   endfunction()
 
+  hermes_add_integrated_test(1D-density CONFLICTS BOUT_ENABLE_METRIC_3D)
   hermes_add_integrated_test(1D-fluid CONFLICTS BOUT_ENABLE_METRIC_3D)
   hermes_add_integrated_test(1D-recycling CONFLICTS BOUT_ENABLE_METRIC_3D)
   hermes_add_integrated_test(1D-recycling-dthe CONFLICTS BOUT_ENABLE_METRIC_3D)
@@ -391,6 +392,11 @@ if(HERMES_TESTS)
   hermes_add_integrated_test(1D-density-fci REQUIRES BOUT_ENABLE_METRIC_3D)
   hermes_add_integrated_test(1D-momentum-fci REQUIRES BOUT_ENABLE_METRIC_3D)
   hermes_add_integrated_test(1D-pressure-fci REQUIRES BOUT_ENABLE_METRIC_3D)
+  hermes_add_integrated_test(2D-density-anomalous-fci REQUIRES
+                             BOUT_ENABLE_METRIC_3D)
+  hermes_add_integrated_test(2D-fluid-anomalous-fci REQUIRES
+                             BOUT_ENABLE_METRIC_3D)
+  hermes_add_integrated_test(1D-conduction-fci REQUIRES BOUT_ENABLE_METRIC_3D)
 
   # Unit tests
   option(HERMES_UNIT_TESTS "Build the unit tests" ON)

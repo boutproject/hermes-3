@@ -566,11 +566,11 @@ void SheathBoundary::transform_impl(GuardedOptions& state) {
         q = std::min(q, 0.0);
 
         // Multiply by cell area to get power
-        const BoutReal flux = q * (coord->J[i] + coord->J[im])
-                              / (sqrt(coord->g_22[i]) + sqrt(coord->g_22[im]));
+        const BoutReal flux = q * (coord->J()[i] + coord->J()[im])
+                              / (sqrt(coord->g_22()[i]) + sqrt(coord->g_22()[im]));
 
         // Divide by volume of cell to get energy loss rate (< 0)
-        const BoutReal power = flux / (coord->dy[i] * coord->J[i]);
+        const BoutReal power = flux / (coord->dy()[i] * coord->J()[i]);
 
 #if CHECKLEVEL >= 1
         if (!std::isfinite(power)) {
@@ -633,11 +633,11 @@ void SheathBoundary::transform_impl(GuardedOptions& state) {
                      * nesheath * vesheath;
         q = std::max(q, 0.0);
         // Multiply by cell area to get power
-        BoutReal flux = q * (coord->J[i] + coord->J[ip])
-                        / (sqrt(coord->g_22[i]) + sqrt(coord->g_22[ip]));
+        BoutReal flux = q * (coord->J()[i] + coord->J()[ip])
+                        / (sqrt(coord->g_22()[i]) + sqrt(coord->g_22()[ip]));
 
         // Divide by volume of cell to get energy loss rate (> 0)
-        BoutReal power = flux / (coord->dy[i] * coord->J[i]);
+        BoutReal power = flux / (coord->dy()[i] * coord->J()[i]);
 #if CHECKLEVEL >= 1
         if (!std::isfinite(power)) {
           throw BoutException(
@@ -773,11 +773,11 @@ void SheathBoundary::transform_impl(GuardedOptions& state) {
           q = std::min(q, 0.0);
 
           // Multiply by cell area to get power
-          const BoutReal flux = q * (coord->J[i] + coord->J[im])
-                                / (sqrt(coord->g_22[i]) + sqrt(coord->g_22[im]));
+          const BoutReal flux = q * (coord->J()[i] + coord->J()[im])
+                                / (sqrt(coord->g_22()[i]) + sqrt(coord->g_22()[im]));
 
           // Divide by volume of cell to get energy loss rate (< 0)
-          const BoutReal power = flux / (coord->dy[i] * coord->J[i]);
+          const BoutReal power = flux / (coord->dy()[i] * coord->J()[i]);
           ASSERT1(std::isfinite(power));
           ASSERT2(power <= 0.0);
 
@@ -874,11 +874,11 @@ void SheathBoundary::transform_impl(GuardedOptions& state) {
           q = std::max(q, 0.0);
 
           // Multiply by cell area to get power
-          const BoutReal flux = q * (coord->J[i] + coord->J[ip])
-                                / (sqrt(coord->g_22[i]) + sqrt(coord->g_22[ip]));
+          const BoutReal flux = q * (coord->J()[i] + coord->J()[ip])
+                                / (sqrt(coord->g_22()[i]) + sqrt(coord->g_22()[ip]));
 
           // Divide by volume of cell to get energy loss rate (> 0)
-          const BoutReal power = flux / (coord->dy[i] * coord->J[i]);
+          const BoutReal power = flux / (coord->dy()[i] * coord->J()[i]);
           ASSERT1(std::isfinite(power));
           ASSERT2(power >= 0.0);
 

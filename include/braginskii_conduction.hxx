@@ -79,7 +79,7 @@ private:
   ///
   void transform_impl(GuardedOptions& state) override;
 
-  std::string conduction_method{"orginal"};
+  bout::ConductionMethod conduction_method{bout::ConductionMethod::Original};
 };
 
 namespace {
