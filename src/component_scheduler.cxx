@@ -11,6 +11,7 @@
 #include <bout/bout_types.hxx>
 #include <bout/boutexception.hxx>
 #include <bout/options.hxx>
+#include <bout/output.hxx>
 #include <bout/utils.hxx> // for trim, strsplit
 #include <fmt/format.h>
 #include <fmt/ranges.h>
@@ -245,6 +246,45 @@ expandVariableName(const std::map<std::string, std::set<std::string>>& hierarchy
 
 using Var = std::pair<std::string, Regions>;
 
+std::string formatVariablePermissions(const std::map<std::string, Regions>& variables) {
+  if (variables.empty()) {
+    return "[]";
+  }
+
+  std::vector<std::string> formatted;
+  formatted.reserve(variables.size());
+  for (const auto& [name, regions] : variables) {
+    formatted.push_back(fmt::format("{} ({})", name, Permissions::regionNames(regions)));
+  }
+  return fmt::format("[{}]", fmt::join(formatted, ", "));
+}
+
+void logComponentOrder(const std::vector<std::unique_ptr<Component>>& components,
+                       const std::string& label, int debug_level) {
+  output_info.write("ComponentScheduler: {} component order:\n", label);
+  for (size_t i = 0; i < components.size(); ++i) {
+    output_info.write("  {:>2}: {}\n", i + 1, *components[i]);
+
+    if (debug_level < 2) {
+      continue;
+    }
+
+    const Permissions& permissions = components[i]->getPermissions();
+    output_info.write("      read-if-set: {}\n",
+                      formatVariablePermissions(permissions.getVariablesWithPermission(
+                          PermissionTypes::ReadIfSet)));
+    output_info.write("      read:        {}\n",
+                      formatVariablePermissions(
+                          permissions.getVariablesWithPermission(PermissionTypes::Read)));
+    output_info.write("      write:       {}\n",
+                      formatVariablePermissions(permissions.getVariablesWithPermission(
+                          PermissionTypes::Write)));
+    output_info.write("      final:       {}\n",
+                      formatVariablePermissions(permissions.getVariablesWithPermission(
+                          PermissionTypes::Final)));
+  }
+}
+
 /// Create a map between a variable and the set of components that
 /// access it with the specified permission level.
 std::map<Var, std::set<size_t>>
@@ -431,9 +471,21 @@ void sortComponents(std::vector<std::unique_ptr<Component>>& components) {
 ComponentScheduler::ComponentScheduler(Options& scheduler_options,
                                        Options& component_options, Solver* solver) {
 
-  const std::string component_names = scheduler_options["components"]
-                                          .doc("Components in order of execution")
-                                          .as<std::string>();
+  const std::string component_names =
+      scheduler_options["components"].doc("Components to be executed").as<std::string>();
+  const bool topological_sort_components =
+      scheduler_options["topological_sort_components"]
+          .doc("Sort components based on declared permissions?")
+          .withDefault<bool>(true);
+  const int debug_component_order =
+      scheduler_options["debug_component_order"]
+          .doc("Debug component ordering: 0=off, 1=print order, 2=also print permissions")
+          .withDefault<int>(0);
+
+  if (debug_component_order < 0) {
+    throw BoutException("debug_component_order must be non-negative, got {}",
+                        debug_component_order);
+  }
 
   std::vector<std::string> electrons;
   std::vector<std::string> neutrals;
@@ -494,7 +546,20 @@ ComponentScheduler::ComponentScheduler(Options& scheduler_options,
     component->declareAllSpecies(species);
   }
 
-  ::sortComponents(components);
+  if (debug_component_order > 0) {
+    logComponentOrder(components, "input", debug_component_order);
+  }
+
+  if (topological_sort_components) {
+    ::sortComponents(components);
+  } else {
+    output_warn.write(
+        "WARNING: topological sorting disabled; using input component order.\n");
+  }
+
+  if (debug_component_order > 0) {
+    logComponentOrder(components, "final", debug_component_order);
+  }
 }
 
 std::unique_ptr<ComponentScheduler> ComponentScheduler::create(Options& scheduler_options,

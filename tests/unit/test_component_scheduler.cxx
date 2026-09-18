@@ -2,6 +2,8 @@
 
 #include "../../include/component_scheduler.hxx"
 
+#include <string>
+
 namespace {
 struct TestComponent : public NamedComponent<TestComponent> {
   TestComponent(std::string name, Options&, Solver*)
@@ -90,6 +92,68 @@ TEST(SchedulerTest, SubComponents) {
   scheduler->transform(options);
   ASSERT_TRUE(options.isSet("answer"));
   ASSERT_TRUE(options["answer"] == 42 * 2);
+}
+
+TEST(SchedulerTest, CanDisableTopologicalSort) {
+  OrderChecker::resetOrderInfo();
+
+  Options options{{"components", "b,a"},
+                  {"topological_sort_components", false},
+                  {"a",
+                   {{"type", "orderchecker"},
+                    {"permissions", toString(Permissions({writeFinal("1")}))}}},
+                  {"b",
+                   {{"type", "orderchecker"},
+                    {"permissions", toString(Permissions({readOnly("1")}))}}}};
+
+  auto scheduler = ComponentScheduler::create(options, options, nullptr);
+  scheduler->transform(options);
+
+  EXPECT_EQ(OrderChecker::execution_order, std::vector<std::string>({"b", "a"}));
+}
+
+TEST(SchedulerTest, DebugComponentOrderPrintsOrdersAndPermissions) {
+  Options options{{"components", "b,a"},
+                  {"debug_component_order", 2},
+                  {"a",
+                   {{"type", "orderchecker"},
+                    {"permissions", toString(Permissions({writeFinal("1")}))}}},
+                  {"b",
+                   {{"type", "orderchecker"},
+                    {"permissions", toString(Permissions({readOnly("1")}))}}}};
+
+  testing::internal::CaptureStdout();
+  auto scheduler = ComponentScheduler::create(options, options, nullptr);
+  const std::string output = testing::internal::GetCapturedStdout();
+
+  EXPECT_NE(output.find("ComponentScheduler: input component order:"), std::string::npos);
+  EXPECT_NE(output.find("ComponentScheduler: final component order:"), std::string::npos);
+  EXPECT_NE(output.find("read-if-set:"), std::string::npos);
+  EXPECT_NE(output.find("read:"), std::string::npos);
+  EXPECT_NE(output.find("write:"), std::string::npos);
+  EXPECT_NE(output.find("final:"), std::string::npos);
+  EXPECT_NE(output.find("1"), std::string::npos);
+
+  // Keep the object alive long enough that the constructor side effects complete.
+  EXPECT_NE(scheduler, nullptr);
+}
+
+TEST(SchedulerTest, DebugComponentOrderDoesNotChangeSorting) {
+  OrderChecker::resetOrderInfo();
+
+  Options options{{"components", "b,a"},
+                  {"debug_component_order", 1},
+                  {"a",
+                   {{"type", "orderchecker"},
+                    {"permissions", toString(Permissions({writeFinal("1")}))}}},
+                  {"b",
+                   {{"type", "orderchecker"},
+                    {"permissions", toString(Permissions({readOnly("1")}))}}}};
+
+  auto scheduler = ComponentScheduler::create(options, options, nullptr);
+  scheduler->transform(options);
+
+  EXPECT_EQ(OrderChecker::execution_order, std::vector<std::string>({"a", "b"}));
 }
 
 using Parameter = std::pair<Options, std::vector<std::string>>;
