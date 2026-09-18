@@ -31,9 +31,9 @@ symmetry = 5.0
 yperiod = 2.0 * np.pi / symmetry
 
 # Grid size. Full torus results in ny = 40, while module simulations result in ny = 8
-nx = 32 + 4
-ny = 5 * 8 // symmetry
-nz = 256
+nx = 64 + 4
+ny = int(5 * 8 / symmetry)
+nz = 512
 
 # Generate the actual magnetic field
 field = zoidberg.field.DommaschkPotentials(C, R_0=R0, B_0=Btor)
@@ -176,6 +176,8 @@ else:
         maps["forward_xt_prime_2"][-3, :, :] = nx - 3
 
     # Writing the complete grid file
-    zoidberg.write_maps(grid, field, maps, metric2d=False, gridfile=filename)
-
+    with zoidberg.zoidberg.MapWriter(filename) as mw:
+        mw.add_grid_field(grid, field)
+        mw.add_maps(maps)
+        mw.add_dagp()
     print("Finished creating the dommaschk grid!")
