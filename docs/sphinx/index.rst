@@ -18,6 +18,7 @@ Hermes-3 documentation
    postprocessing
    examples
    solver_numerics
+   low_density_regions
    equations
    boundary_conditions
    reactions
