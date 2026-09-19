@@ -37,8 +37,9 @@ jobs:
             test_type: unit
             coverage: ON
             name: "CMake default options"
-            configure_options: "-DPACKAGE_TESTS=OFF -DHERMES_ERROR_ON_WARNINGS=ON"
-          - cmake_build_type: Release
+            configure_options: "-DPACKAGE_TESTS=OFF
+                                -DHERMES_ERROR_ON_WARNINGS=ON"
+          - cmake_build_type: RelWithDebInfo
             test_type: integration
             coverage: OFF
             name: "CMake default options"
@@ -49,15 +50,29 @@ jobs:
                                 -DBOUT_USE_SUNDIALS=ON
                                 -DSUNDIALS_ROOT=/home/runner/local
                                 -DBOUT_USE_HYPRE=ON"
-          - cmake_build_type: Debug
+          - cmake_build_type: RelWithDebInfo
             test_type: unit
             coverage: ON
             name: "3D metrics"
-            configure_options: "-DPACKAGE_TESTS=OFF -DHERMES_ERROR_ON_WARNINGS=ON -DBOUT_ENABLE_METRIC_3D=ON"
-          - cmake_build_type: Debug
+            configure_options: "-DPACKAGE_TESTS=OFF
+                                -DHERMES_ERROR_ON_WARNINGS=ON
+                                -DBOUT_USE_PETSC=ON
+                                -DBOUT_USE_SLEPC=ON
+                                -DBOUT_USE_SUNDIALS=ON
+                                -DSUNDIALS_ROOT=/home/runner/local
+                                -DBOUT_USE_HYPRE=ON
+                                -DBOUT_ENABLE_METRIC_3D=ON"
+          - cmake_build_type: RelWithDebInfo
             test_type: integration
             name: "3D metrics"
-            configure_options: "-DPACKAGE_TESTS=OFF -DHERMES_ERROR_ON_WARNINGS=ON -DBOUT_ENABLE_METRIC_3D=ON"
+            configure_options: "-DPACKAGE_TESTS=OFF
+                                -DHERMES_ERROR_ON_WARNINGS=ON
+                                -DBOUT_USE_PETSC=ON
+                                -DBOUT_USE_SLEPC=ON
+                                -DBOUT_USE_SUNDIALS=ON
+                                -DSUNDIALS_ROOT=/home/runner/local
+                                -DBOUT_USE_HYPRE=ON
+                                -DBOUT_ENABLE_METRIC_3D=ON"
             coverage: OFF
 
     steps:

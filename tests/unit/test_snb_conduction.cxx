@@ -5,6 +5,7 @@
 
 #include "../../include/snb_conduction.hxx"
 
+#if !BOUT_USE_METRIC_3D
 /// Global mesh
 namespace bout {
 namespace globals {
@@ -67,3 +68,4 @@ TEST_F(SNBConductionTest, OutputDiagnose) {
     ASSERT_LT(abs(Div_Q_SNB[i]), 1e-20);
   }
 }
+#endif

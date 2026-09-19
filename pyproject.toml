@@ -1,3 +1,11 @@
+[build-system]
+requires = ["scikit-build-core", "boutdata", "jinja2"]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "hermes-3"
+version = "1.5.0"
+
 [dependency-groups]
 dev = [
      "cmake~=4.2",
@@ -11,6 +19,30 @@ dev = [
      "ruff~=0.16",
      "sphinx-lint~=1.0",
      "sync-with-uv~=0.6.0",
+     "scikit-build-core~=1.0.3",
+     "asv~=0.6.6",
 ]
 
 [tool.uv.workspace]
+
+[tool.scikit-build]
+cmake.version = ">=3.25"
+cmake.build-type = "Release"
+wheel.packages = []
+wheel.install-dir = "${SKBUILD_DATA_DIR}"
+sdist.exclude = [".github", "scripts", "external/BOUT-spack",
+"googletest", "benchmarks", "ci", "docker", "doc", "docs", "examples",
+"performance", "test", "tests", "external/BOUT-dev/tools",
+"external/BOUT-dev/manual", "build-aux", "external/BOUT-dev/bin",
+"CHANGELOG.md"]
+sdist.include = ["external/BOUT-dev/bin/bout-config.in",
+                 # For some reason this file isn't automatically being included in the SDIST
+                 "external/BOUT-dev/include/bout/build_config.hxx",
+                 "external/BOUT-dev/tools/pylib/boutconfig/__init__.py.cin",
+]
+
+[tool.scikit-build.cmake.define]
+BUILD_SHARED_LIBS = false
+BOUT_ENABLE_PYTHON = "OFF"
+HERMES_TESTS = false
+BOUT_BUILD_EXAMPLES = false

@@ -103,9 +103,6 @@ RelaxPotential::RelaxPotential(std::string name, Options& alloptions, Solver* so
               readIfSet("species:{charged}:pressure", Regions::Interior),
           }) {
 
-  solver->add(Vort, "Vort"); // Vorticity evolving
-  solver->add(phi1, "phi1"); // Evolving scaled potential ϕ_1 = λ_2 ϕ
-
   auto& options = alloptions[name];
 
   evolve_vorticity = options["evolve_vorticity"].doc("").withDefault<bool>(true);
@@ -281,9 +278,9 @@ RelaxPotential::RelaxPotential(std::string name, Options& alloptions, Solver* so
   Curlb_B.y *= SQ(Lnorm);
   Curlb_B.z *= SQ(Lnorm);
 
-  Curlb_B *= 2. / coord->Bxy;
+  Curlb_B *= 2. / coord->Bxy();
 
-  Bsq = SQ(coord->Bxy);
+  Bsq = SQ(coord->Bxy());
 
   diagnose =
       options["diagnose"].doc("Output additional diagnostics?").withDefault<bool>(false);
@@ -661,7 +658,12 @@ Field3D RelaxPotential::calculateParallelCurrentSource(const Options& state) {
 
     if (state["fields"].isSet("Apar_flutter")) {
       const Field3D Apar_flutter = get<Field3D>(state["fields"]["Apar_flutter"]);
-      result += coord->Bxy * bracket(jpar / coord->Bxy, Apar_flutter, BRACKET_ARAKAWA);
+      // Div_par(jpar) = B * Grad_par(jpar / B)
+      // Using the approximation for small delta-B/B
+      // b dot Grad(jpar) = Grad_par(jpar) + [jpar, Apar]
+
+      result +=
+          coord->Bxy() * bracket(jpar / coord->Bxy(), Apar_flutter, BRACKET_ARAKAWA);
     }
   }
 
@@ -687,8 +689,9 @@ Field3D RelaxPotential::calculateDissipationSource(const Options& state,
   }
 
   if (hyper_z > 0) {
+    // Form of hyper-viscosity to suppress zig-zags in Z
     auto* coord = vort.getCoordinates();
-    result -= hyper_z * SQ(SQ(coord->dz)) * D4DZ4(vort);
+    result -= hyper_z * SQ(SQ(coord->dz())) * D4DZ4(vort);
   }
 
   if (phi_sheath_dissipation) {
