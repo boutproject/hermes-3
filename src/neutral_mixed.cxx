@@ -1071,38 +1071,35 @@ void NeutralMixed::precon([[maybe_unused]] const Options& state, BoutReal gamma)
     return;
   }
 
-  // First matrix
-  //   ( I   0)
-  //   (-LE  I)
+  // Clean-Schur preconditioner for the (Nn, Pn) system.
+  // With kappa = (5/2) Dn, the perpendicular neutral transport collapses to a
+  // single diffusion, so the reduced Jacobian perp blocks are
+  //   dP/dt|_perp = (10/3) Div(D Grad_perp P) - (5/3) Div(D T Grad_perp N)   [advection + conduction]
+  //   dN/dt|_perp =        Div( (Dn/p) Grad_perp P )
+  // Leading-order Schur complement:  S = I - gamma*(10/3) Div_perp(D Grad_perp).
+  // (The previous default kept only (5/3) D and dropped the conduction term and the
+  //  N->P coupling; that under-preconditions the neutral stiffness.)
+  // Cross-couplings are applied as frozen-coefficient Laplacians.
+  const Field3D Tnlim = softFloor(Tn, temperature_floor);
+  const Field3D DnTn = Dnn * Tnlim;  // D*T       (N->P conduction coupling, coeff C)
+  const Field3D Dn_Tn = Dnn / Tnlim; // D/T = Dn/p (P->N coupling, coeff B)
 
-  Field3D DTdtN = Dnn * Tn * ddt(Nn);
-  mesh->communicate(DTdtN);
-  DTdtN.applyBoundary("dirichlet");
+  // First matrix (L): couple the dN residual into dP,
+  //   ddt(Pn) += gamma * C * Laplace_perp(ddt(Nn)),  C = -(5/3) D T
+  mesh->communicate(ddt(Nn));
+  ddt(Nn).applyBoundary("dirichlet");
+  ddt(Pn) -= (gamma * 5. / 3) * DnTn * Laplace_perp(ddt(Nn));
 
-  ddt(Pn) -= (gamma * 5. / 3) * FV::Div_a_Grad_perp(DTdtN, logPnlim);
-
-  // Second matrix: Invert Pshur
-  //   (E^-1   0  )
-  //   ( 0    P^-1)
-  //
-  // d Laplace_perp(x) + a x + (1/c1)Grad(c2) dot Grad_perp(x) = b
-  inv->setCoefA(1 - gamma * FV::Div_a_Grad_perp(Dnn, logPnlim));
-  inv->setCoefC1(-1. / ((gamma * 5. / 3) * Dnn));
-  inv->setCoefC2(logPnlim);
-  inv->setCoefD((-gamma * 5. / 3) * Dnn);
-
-  // inv->setInnerBoundaryFlags(INVERT_DC_GRAD);
-  // inv->setOuterBoundaryFlags(INVERT_DC_GRAD);
-
+  // Second matrix: invert the Schur complement  (I - gamma*(10/3) Dnn Laplace_perp)
+  inv->setCoefA(1.0);
+  inv->setCoefD((-gamma * 10. / 3) * Dnn);
   ddt(Pn) = inv->solve(ddt(Pn));
   mesh->communicate(ddt(Pn));
   ddt(Pn).applyBoundary("dirichlet");
 
-  // Third matrix: update Nn and NVn equations
-  // ( I   E^-1U )
-  // ( 0     I   )
-
-  ddt(Nn) -= gamma * FV::Div_a_Grad_perp(DnnNn / Pnlim, ddt(Pn));
+  // Third matrix (U): update dN from the new dP,
+  //   ddt(Nn) -= gamma * B * Laplace_perp(ddt(Pn)),  B = Dn/p = D/T
+  ddt(Nn) -= gamma * Dn_Tn * Laplace_perp(ddt(Pn));
 
   if (evolve_momentum) {
     ddt(NVn) -= gamma * FV::Div_a_Grad_perp(DnnNVn / Pnlim, ddt(Pn));
