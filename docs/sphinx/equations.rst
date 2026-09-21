@@ -728,6 +728,17 @@ with the perpendicular velocity :math:`v_{\perp}` calculated as:
 
 In the code, :math:`\frac{1}{P_n} \nabla_{\perp}P_n` is represented as :math:`\nabla_{\perp} \ln P_n` for numerical reasons.
 
+If `wall_pressure_factor > 0`, `neutral_mixed` modifies this perpendicular pressure-gradient drive using a mesh
+field `wall_depth`, replacing :math:`\log(P_n)` with
+
+.. math::
+
+   \log\left(P_n \left(1 + f_w d_w\right)\right)
+
+where :math:`f_w` is `wall_pressure_factor` and :math:`d_w` is `wall_depth`. This biases the effective neutral
+pressure to increase into the wall when calculating perpendicular transport, without directly adding a separate
+evolving pressure term. The option is off by default, and enabling it requires `wall_depth` to be present in the mesh.
+
 The unlimited diffusion coefficient is defined as:
 
 .. math::
@@ -844,7 +855,6 @@ parallel momentum, are then calculated from the limited diffusion coefficient:
    \kappa_{n} =& \frac{5}{2} D_n N_n \\
    \eta_{n} =& \frac{2}{5} m_n \kappa_{n} \\
    \end{aligned}
-
 
 .. doxygenstruct:: NeutralMixed
    :members:
