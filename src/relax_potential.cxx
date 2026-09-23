@@ -267,6 +267,11 @@ RelaxPotential::RelaxPotential(std::string name, Options& alloptions, Solver* so
     setPermissions(readWrite("fields:DivJcol"));
   }
 
+  if (!boussinesq) {
+    // Non-Boussinesq so need fluid mass density
+    setPermissions(readOnly("species:{charged}:density", Regions::Interior));
+  }
+
   if (Options::root()["mesh"]["paralleltransform"]["type"].as<std::string>()
       == "shifted") {
     Field2D I;
