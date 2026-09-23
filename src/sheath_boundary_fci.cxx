@@ -145,11 +145,6 @@ SheathBoundaryFci::SheathBoundaryFci(std::string name, Options& alloptions, Solv
   substitutePermissions("ion_optional", {"velocity", "momentum"});
   setPermissions(always_set_phi ? writeBoundaryReadInteriorIfSet("fields:phi")
                                 : writeBoundaryIfSet("fields:phi"));
-
-  if (!mesh->isFci()) {
-    throw BoutException("Using the Fci sheath variant while not using Fci. Please use "
-                        "sheath_boundary or sheath_boundary_simple instead!");
-  }
 }
 
 void SheathBoundaryFci::transform_impl(GuardedOptions& state) {
