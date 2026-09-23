@@ -46,7 +46,7 @@ BoutReal limitFree(BoutReal fm, BoutReal fc) {
 } // namespace
 
 SheathBoundaryPerp::SheathBoundaryPerp(std::string name, Options& alloptions, Solver*)
-    : Component({
+    : NamedComponent(name, {
           readIfSet("species:{all_species}:charge"),
           readIfSet("species:e:{e_whole_domain}"),
           writeBoundary("species:e:{e_boundary}"),
@@ -129,7 +129,7 @@ void SheathBoundaryPerp::transform_impl(GuardedOptions& state) {
 
   // Need electron properties
   // Not const because boundary conditions will be set
-  Field3D Ne = toFieldAligned(floor(GET_NOBOUNDARY(Field3D, electrons["density"]), 0.0));
+  Field3D Ne = toFieldAligned(Field3D{floor(GET_NOBOUNDARY(Field3D, electrons["density"]), 0.0)});
   Field3D Te = toFieldAligned(GET_NOBOUNDARY(Field3D, electrons["temperature"]));
   Field3D Pe = IS_SET_NOBOUNDARY(electrons["pressure"])
                    ? toFieldAligned(getNoBoundary<Field3D>(electrons["pressure"]))
@@ -182,7 +182,7 @@ void SheathBoundaryPerp::transform_impl(GuardedOptions& state) {
       }
 
       const Field3D Ni =
-          toFieldAligned(floor(GET_NOBOUNDARY(Field3D, species["density"]), 0.0));
+          toFieldAligned(Field3D{floor(GET_NOBOUNDARY(Field3D, species["density"]), 0.0)});
       const Field3D Ti = toFieldAligned(GET_NOBOUNDARY(Field3D, species["temperature"]));
       const BoutReal Mi = GET_NOBOUNDARY(BoutReal, species["AA"]);
       const BoutReal Zi = GET_NOBOUNDARY(BoutReal, species["charge"]);
@@ -373,11 +373,11 @@ void SheathBoundaryPerp::transform_impl(GuardedOptions& state) {
         q = std::min(q, 0.0);
 
         // Multiply by cell area to get power
-        BoutReal flux = q * (coord->J[i] + coord->J[im])
-                        / (sqrt(coord->g_11[i]) + sqrt(coord->g_11[im]));
+        BoutReal flux = q * (coord->J()[i] + coord->J()[im])
+                        / (sqrt(coord->g_11()[i]) + sqrt(coord->g_11()[im]));
 
         // Divide by volume of cell to get energy loss rate (< 0)
-        BoutReal power = flux / (coord->dx[i] * coord->J[i]);
+        BoutReal power = flux / (coord->dx()[i] * coord->J()[i]);
 
 #if CHECKLEVEL >= 1
         if (!std::isfinite(power)) {
@@ -442,11 +442,11 @@ void SheathBoundaryPerp::transform_impl(GuardedOptions& state) {
                      * nesheath * vesheath;
         q = std::max(q, 0.0);
         // Multiply by cell area to get power
-        BoutReal flux = q * (coord->J[i] + coord->J[ip])
-                        / (sqrt(coord->g_11[i]) + sqrt(coord->g_11[ip]));
+        BoutReal flux = q * (coord->J()[i] + coord->J()[ip])
+                        / (sqrt(coord->g_11()[i]) + sqrt(coord->g_11()[ip]));
 
         // Divide by volume of cell to get energy loss rate (> 0)
-        BoutReal power = flux / (coord->dx[i] * coord->J[i]);
+        BoutReal power = flux / (coord->dx()[i] * coord->J()[i]);
 #if CHECKLEVEL >= 1
         if (!std::isfinite(power)) {
           throw BoutException(
@@ -512,7 +512,7 @@ void SheathBoundaryPerp::transform_impl(GuardedOptions& state) {
                                    : 5. / 3; // Ratio of specific heats (ideal gas)
 
     // Density and temperature boundary conditions will be imposed (free)
-    Field3D Ni = toFieldAligned(floor(getNoBoundary<Field3D>(species["density"]), 0.0));
+    Field3D Ni = toFieldAligned(Field3D{floor(getNoBoundary<Field3D>(species["density"]), 0.0)});
     Field3D Ti = toFieldAligned(getNoBoundary<Field3D>(species["temperature"]));
     Field3D Pi = species.isSet("pressure")
                      ? toFieldAligned(getNoBoundary<Field3D>(species["pressure"]))
@@ -600,11 +600,11 @@ void SheathBoundaryPerp::transform_impl(GuardedOptions& state) {
           q = std::min(q, 0.0);
 
           // Multiply by cell area to get power
-          BoutReal flux = q * (coord->J[i] + coord->J[im])
-                          / (sqrt(coord->g_11[i]) + sqrt(coord->g_11[im]));
+          BoutReal flux = q * (coord->J()[i] + coord->J()[im])
+                          / (sqrt(coord->g_11()[i]) + sqrt(coord->g_11()[im]));
 
           // Divide by volume of cell to get energy loss rate (< 0)
-          BoutReal power = flux / (coord->dx[i] * coord->J[i]);
+          BoutReal power = flux / (coord->dx()[i] * coord->J()[i]);
           ASSERT1(std::isfinite(power));
           ASSERT2(power <= 0.0);
 
@@ -677,11 +677,11 @@ void SheathBoundaryPerp::transform_impl(GuardedOptions& state) {
           q = std::max(q, 0.0);
 
           // Multiply by cell area to get power
-          BoutReal flux = q * (coord->J[i] + coord->J[ip])
-                          / (sqrt(coord->g_11[i]) + sqrt(coord->g_11[ip]));
+          BoutReal flux = q * (coord->J()[i] + coord->J()[ip])
+                          / (sqrt(coord->g_11()[i]) + sqrt(coord->g_11()[ip]));
 
           // Divide by volume of cell to get energy loss rate (> 0)
-          BoutReal power = flux / (coord->dx[i] * coord->J[i]);
+          BoutReal power = flux / (coord->dx()[i] * coord->J()[i]);
           ASSERT1(std::isfinite(power));
           ASSERT2(power >= 0.0);
 

@@ -19,7 +19,7 @@
 ///   - Boundary conditions are applied to field-aligned fields
 ///     using to/fromFieldAligned
 ///
-struct SheathBoundaryPerp : public Component {
+struct SheathBoundaryPerp : public NamedComponent<SheathBoundaryPerp> {
   /// # Input options
   /// - <name>  e.g. "sheath_boundary_perp"
   ///   - inner_x                  Boundary on inner x?
@@ -30,6 +30,8 @@ struct SheathBoundaryPerp : public Component {
   ///   - sin_alpha                Sine of the angle between magnetic field line and wall surface (0 to 1)
   ///   - always_set_phi           Always set phi field? Default is to only modify if already set
   SheathBoundaryPerp(std::string name, Options &options, Solver *);
+
+  static constexpr auto type = "sheath_boundary_perp";
 
 private:
   BoutReal Ge; // Secondary electron emission coefficient
@@ -95,8 +97,7 @@ private:
 };
 
 namespace {
-RegisterComponent<SheathBoundaryPerp>
-    registercomponentsheathboundaryperp("sheath_boundary_perp");
+RegisterComponent<SheathBoundaryPerp> registercomponentsheathboundaryperp;
 }
 
 #endif // SHEATH_BOUNDARY_PERP_H

@@ -54,7 +54,7 @@ Isothermal::Isothermal(std::string name, Options& alloptions, Solver* UNUSED(sol
 
 void Isothermal::transform_impl(GuardedOptions& state) {
 
-  GuardedOptions species = state["species"][name];
+  GuardedOptions species = state["species"][objectName()];
   Field3D T_= T;
   if (temperature_3D)
   {

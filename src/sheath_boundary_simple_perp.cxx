@@ -58,7 +58,7 @@ BoutReal limitFree(BoutReal fm, BoutReal fc, BoutReal mode) {
 } // namespace
 
 SheathBoundarySimplePerp::SheathBoundarySimplePerp(std::string name, Options& alloptions, Solver*)
-    : Component({
+    : NamedComponent(name, {
           readIfSet("species:e:{e_whole_domain}"),
           writeBoundary("species:e:{e_boundary}"),
           readWrite("species:e:energy_source"),
@@ -160,7 +160,7 @@ void SheathBoundarySimplePerp::transform_impl(GuardedOptions& state) {
 
   // Need electron properties
   // Not const because boundary conditions will be set
-  Field3D Ne = toFieldAligned(floor(GET_NOBOUNDARY(Field3D, electrons["density"]), 0.0));
+  Field3D Ne = toFieldAligned(Field3D{floor(GET_NOBOUNDARY(Field3D, electrons["density"]), 0.0)});
   Field3D Te = toFieldAligned(GET_NOBOUNDARY(Field3D, electrons["temperature"]));
   Field3D Pe = IS_SET_NOBOUNDARY(electrons["pressure"])
     ? toFieldAligned(getNoBoundary<Field3D>(electrons["pressure"]))
@@ -396,9 +396,9 @@ void SheathBoundarySimplePerp::transform_impl(GuardedOptions& state) {
         q -= (2.5 * tesheath + 0.5 * Me * SQ(vesheath)) * nesheath * vesheath;
 
         // Cross-sectional area in YZ plane and cell volume
-        BoutReal da = (coord->J[i] + coord->J[im]) / (sqrt(coord->g_11[i]) + sqrt(coord->g_11[im]))
-                        * 0.5*(coord->dy[i] + coord->dy[im]) * 0.5*(coord->dz[i] + coord->dz[im]);   // [m^2]
-        BoutReal dv = (coord->dx[i] * coord->dy[i] * coord->dz[i] * coord->J[i]);  // [m^3]
+        BoutReal da = (coord->J()[i] + coord->J()[im]) / (sqrt(coord->g_11()[i]) + sqrt(coord->g_11()[im]))
+                        * 0.5*(coord->dy()[i] + coord->dy()[im]) * 0.5*(coord->dz()[i] + coord->dz()[im]);   // [m^2]
+        BoutReal dv = (coord->dx()[i] * coord->dy()[i] * coord->dz()[i] * coord->J()[i]);  // [m^3]
 
         // Get power and energy source
         BoutReal heatflow = q * da;   // [W]
@@ -460,9 +460,9 @@ void SheathBoundarySimplePerp::transform_impl(GuardedOptions& state) {
         q -= (2.5 * tesheath + 0.5 * Me * SQ(vesheath)) * nesheath * vesheath;
 
         // Cross-sectional area in YZ plane and cell volume
-        BoutReal da = (coord->J[i] + coord->J[ip]) / (sqrt(coord->g_11[i]) + sqrt(coord->g_11[ip]))
-                        * 0.5*(coord->dy[i] + coord->dy[ip]) * 0.5*(coord->dz[i] + coord->dz[ip]);   // [m^2]
-        BoutReal dv = (coord->dx[i] * coord->dy[i] * coord->dz[i] * coord->J[i]);  // [m^3]
+        BoutReal da = (coord->J()[i] + coord->J()[ip]) / (sqrt(coord->g_11()[i]) + sqrt(coord->g_11()[ip]))
+                        * 0.5*(coord->dy()[i] + coord->dy()[ip]) * 0.5*(coord->dz()[i] + coord->dz()[ip]);   // [m^2]
+        BoutReal dv = (coord->dx()[i] * coord->dy()[i] * coord->dz()[i] * coord->J()[i]);  // [m^3]
 
         // Get power and energy source
         BoutReal heatflow = q * da;   // [W]
@@ -534,7 +534,7 @@ void SheathBoundarySimplePerp::transform_impl(GuardedOptions& state) {
     const BoutReal Mi = get<BoutReal>(species["AA"]);
 
     // Density and temperature boundary conditions will be imposed (free)
-    Field3D Ni = toFieldAligned(floor(getNoBoundary<Field3D>(species["density"]), 0.0));
+    Field3D Ni = toFieldAligned(Field3D{floor(getNoBoundary<Field3D>(species["density"]), 0.0)});
     Field3D Ti = toFieldAligned(getNoBoundary<Field3D>(species["temperature"]));
     Field3D Pi = species.isSet("pressure")
       ? toFieldAligned(getNoBoundary<Field3D>(species["pressure"]))
@@ -606,9 +606,9 @@ void SheathBoundarySimplePerp::transform_impl(GuardedOptions& state) {
           q -= (2.5 * tisheath + 0.5 * Mi * SQ(visheath)) * nisheath * visheath;
 
           // Cross-sectional area in YZ plane and cell volume
-          BoutReal da = (coord->J[i] + coord->J[ip]) / (sqrt(coord->g_11[i]) + sqrt(coord->g_11[ip]))
-                        * 0.5*(coord->dy[i] + coord->dy[ip]) * 0.5*(coord->dz[i] + coord->dz[ip]);   // [m^2]
-          BoutReal dv = (coord->dx[i] * coord->dy[i] * coord->dz[i] * coord->J[i]);  // [m^3]
+          BoutReal da = (coord->J()[i] + coord->J()[ip]) / (sqrt(coord->g_11()[i]) + sqrt(coord->g_11()[ip]))
+                        * 0.5*(coord->dy()[i] + coord->dy()[ip]) * 0.5*(coord->dz()[i] + coord->dz()[ip]);   // [m^2]
+          BoutReal dv = (coord->dx()[i] * coord->dy()[i] * coord->dz()[i] * coord->J()[i]);  // [m^3]
 
           // Get power and energy source
           BoutReal heatflow = q * da;   // [W]
@@ -673,9 +673,9 @@ void SheathBoundarySimplePerp::transform_impl(GuardedOptions& state) {
           q -= (2.5 * tisheath + 0.5 * Mi * SQ(visheath)) * nisheath * visheath;
 
           // Cross-sectional area in YZ plane and cell volume
-          BoutReal da = (coord->J[i] + coord->J[ip]) / (sqrt(coord->g_11[i]) + sqrt(coord->g_11[ip]))
-                        * 0.5*(coord->dy[i] + coord->dy[ip]) * 0.5*(coord->dz[i] + coord->dz[ip]);   // [m^2]
-          BoutReal dv = (coord->dx[i] * coord->dy[i] * coord->dz[i] * coord->J[i]);  // [m^3]
+          BoutReal da = (coord->J()[i] + coord->J()[ip]) / (sqrt(coord->g_11()[i]) + sqrt(coord->g_11()[ip]))
+                        * 0.5*(coord->dy()[i] + coord->dy()[ip]) * 0.5*(coord->dz()[i] + coord->dz()[ip]);   // [m^2]
+          BoutReal dv = (coord->dx()[i] * coord->dy()[i] * coord->dz()[i] * coord->J()[i]);  // [m^3]
 
           // Get power and energy source
           BoutReal heatflow = q * da;   // [W]

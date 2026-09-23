@@ -8,7 +8,7 @@ using bout::globals::mesh;
 
 DipoleAnomalousDiffusion::DipoleAnomalousDiffusion(std::string name, Options& alloptions,
                                                    Solver*)
-    : Component({readOnly("species:{name}:density"),
+    : NamedComponent(name, {readOnly("species:{name}:density"),
                  readIfSet("species:{name}:{optional}"),
                  readWrite("species:{name}:{output}")}),
       name(name) {
@@ -45,7 +45,7 @@ DipoleAnomalousDiffusion::DipoleAnomalousDiffusion(std::string name, Options& al
   // factor_B = options["factor_B"].doc("Factor multiplying B in anomalous diffusion coefficient").withDefault(2.0);
   BoutReal dipole_model = options["dipole_model"].doc("Which dipole model to use? 0: no dipole transport, 1: simple diffusion, 2: quasilinear").withDefault(2);
   BoutReal qs_norm;
-  Field3D B = mesh->getCoordinates()->Bxy;
+  Field3D B = mesh->getCoordinates()->Bxy();
   B2D = DC(B);
   Kn = 0;
   Field2D rescale_qs_D = zeroFrom(dipole_quasilinear_D) +1.0;
@@ -54,18 +54,18 @@ DipoleAnomalousDiffusion::DipoleAnomalousDiffusion(std::string name, Options& al
     qs_norm = diffusion_norm
                   * (rho_s0 * rho_s0 * Bnorm * Bnorm);
     BOUT_FOR(i, dipole_quasilinear_D.getRegion("RGN_ALL")) {
-      rescale_qs_D[i] = coord->g11[i];
+      rescale_qs_D[i] = coord->g11()[i];
     }
     }
     else if (dipole_model == 2) {
       qs_norm = diffusion_norm * (rho_s0 * rho_s0);
       BOUT_FOR(i, dipole_quasilinear_D.getRegion("RGN_ALL")) {
-        rescale_qs_D[i] = coord->g11[i] / B2D[i] / B2D[i];
+        rescale_qs_D[i] = coord->g11()[i] / B2D[i] / B2D[i];
       }
     } else if (dipole_model == 3) {
       qs_norm = diffusion_norm * (rho_s0 * rho_s0 * Bnorm * Bnorm * Bnorm * Bnorm);
       BOUT_FOR(i, dipole_quasilinear_D.getRegion("RGN_ALL")) {
-        rescale_qs_D[i] = coord->g11[i] * B2D[i] * B2D[i];
+        rescale_qs_D[i] = coord->g11()[i] * B2D[i] * B2D[i];
       }
     } else {
       qs_norm = diffusion_norm;
@@ -82,8 +82,7 @@ DipoleAnomalousDiffusion::DipoleAnomalousDiffusion(std::string name, Options& al
     dipole_quasilinear_D[i] = dipole_quasilinear_D[i] / rescale_qs_D[i];;
   }
     
-    mesh->communicate(coord->g11);
-    // BOUT_FOR(i, R2D.getRegion("RGN_ALL")) { R2D[i] = R2D[i] / (coord->g11[i]); }
+    // BOUT_FOR(i, R2D.getRegion("RGN_ALL")) { R2D[i] = R2D[i] / (coord->g11()[i]); }
     Field2D Psixy;
     Psixy.allocate();
     mesh->get(Psixy, "psixy"); // get Psi
@@ -130,26 +129,28 @@ DipoleAnomalousDiffusion::DipoleAnomalousDiffusion(std::string name, Options& al
     // }
     
     Coordinates* coord5 = dipole_eq_D.getCoordinates();
-    mesh->communicate(coord5->g11);
+    auto g11_5 = coord5->g11();
+    mesh->communicate(g11_5);
     BOUT_FOR(i, dipole_eq_D.getRegion("RGN_ALL")) {
-      dipole_eq_D[i] = dipole_eq_D[i] / (coord5->g11[i]);
+      dipole_eq_D[i] = dipole_eq_D[i] / (g11_5[i]);
     }
   Coordinates* coord2 = dipole_anomalous_D.getCoordinates();
-    mesh->communicate(coord2->g11);
+    auto g11_2 = coord2->g11();
+    mesh->communicate(g11_2);
     BOUT_FOR(i, dipole_anomalous_D.getRegion("RGN_ALL")) {
-      dipole_anomalous_D[i] = dipole_anomalous_D[i] / (coord->g11[i]) ;
+      dipole_anomalous_D[i] = dipole_anomalous_D[i] / (g11_2[i]) ;
     }
     // Coordinates* coord3 = dipole_quasilinear_v.getCoordinates();
-    // mesh->communicate(coord3->g11);
-    // // BOUT_FOR(i, R2D.getRegion("RGN_ALL")) { R2D[i] = R2D[i] / (coord->g11[i]); }
+    // mesh->communicate(coord3->g11());
+    // // BOUT_FOR(i, R2D.getRegion("RGN_ALL")) { R2D[i] = R2D[i] / (coord->g11()[i]); }
     // // BOUT_FOR(i, dipole_quasilinear_v.getRegion("RGN_ALL")) {
-    // //   dipole_quasilinear_v[i] = dipole_quasilinear_v[i] / sqrt(coord3->g11[i]);
+    // //   dipole_quasilinear_v[i] = dipole_quasilinear_v[i] / sqrt(coord3->g11()[i]);
     // // }
     // output.write("dipole_quasilinear_v: {:e}", dipole_quasilinear_v(2,2));
     //     // BOUT_FOR(i, dipole_quasilinear_D.getRegion("RGN_GUARDS")) {
     //     //   dipole_quasilinear_D[i] = 0.0;
     //     // }
-    // // loghtheta = log(sqrt(mesh->getCoordinates()->g22));
+    // // loghtheta = log(sqrt(mesh->getCoordinates()->g22()));
     //     dipole_gamma = ;
     dipole_gamma = options["dipole_gamma"].doc("Dipole gamma").withDefault(5.0 / 3.0);
     dipole_upwind = options["dipole_upwind"].doc("Dipole gamma").withDefault(false);
@@ -171,13 +172,13 @@ DipoleAnomalousDiffusion::DipoleAnomalousDiffusion(std::string name, Options& al
         / diffusion_norm / (rho_s0 * rho_s0 * Bnorm * Bnorm);
     // model_U = options["model_U"].doc("Use U instead of B in diffusion coefficient?").withDefault(false);
     // Coordinates* coord2 = dipole_quasilinear_chi.getCoordinates();
-    // mesh->communicate(coord2->g11);
+    // mesh->communicate(coord2->g11());
     // BOUT_FOR(i, dipole_quasilinear_chi.getRegion("RGN_ALL")) {
     //   dipole_quasilinear_chi[i] =
-    //       dipole_quasilinear_chi[i] / (coord2->g11[i]);
+    //       dipole_quasilinear_chi[i] / (coord2->g11()[i]);
     // }
     // BOUT_FOR(i, dipole_anomalous_chi.getRegion("RGN_ALL")) {
-    //   dipole_anomalous_chi[i] = dipole_anomalous_chi[i] / (coord2->g11[i]);
+    //   dipole_anomalous_chi[i] = dipole_anomalous_chi[i] / (coord2->g11()[i]);
     // }
 
   
@@ -318,7 +319,7 @@ DipoleAnomalousDiffusion::DipoleAnomalousDiffusion(std::string name, Options& al
         add(species["particle_flow_ylow"], flow_ylow);
 
         // -- quasilinear dipole transport --
-        Field2D htheta2D = 1/sqrt(mesh->getCoordinates()->g22);
+        Field2D htheta2D = 1/sqrt(mesh->getCoordinates()->g22());
         mesh->communicate(htheta2D);
         Kn = compute_Kn(N2D, B2D, htheta2D);
         mesh->communicate(Kn);

@@ -4,13 +4,13 @@
 #include <bout/fv_ops.hxx>
 
 ClassicalDiffusion::ClassicalDiffusion(std::string name, Options& alloptions, Solver*)
-    : Component({readIfSet("species:{all_species}:{optional}"),
-                 readOnly("species:{all_species}:AA"), readOnly("species:e:{e_vals}"),
-                 readWrite("species:{all_species}:{output}")}), name(name) {
-                 readOnly("species:e:{e_vals}"),
-                 // FIXME: This is only read velocity or temperature are set for the species.
-                 readOnly("species:{all_species}:AA"),
-                 readWrite("species:{all_species}:{output}")}) {
+    : NamedComponent(
+          name,
+          {readIfSet("species:{all_species}:{optional}"), readOnly("species:e:{e_vals}"),
+           // FIXME: This is only read velocity or temperature are set for the species.
+           readOnly("species:{all_species}:AA"),
+           readWrite("species:{all_species}:{output}")}),
+      name(name) {
   Options& options = alloptions[name];
 
   Bsq = SQ(bout::globals::mesh->getCoordinates()->Bxy());

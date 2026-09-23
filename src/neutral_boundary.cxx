@@ -262,12 +262,12 @@ void NeutralBoundary::transform_impl(GuardedOptions& state) {
           // Expanded form of the calculation for clarity
 
           // Converts dy to poloidal length: dl = dy / sqrt(g22) = dy * h_theta
-          BoutReal dpol = 0.5 * (coord->dy[i] + coord->dy[ig]) * 1
-                          / (0.5 * (sqrt(coord->g22[i]) + sqrt(coord->g22[ig])));
+          BoutReal dpol = 0.5 * (coord->dy()[i] + coord->dy()[ig]) * 1
+                          / (0.5 * (sqrt(coord->g22()[i]) + sqrt(coord->g22()[ig])));
 
           // Converts dz to toroidal length:  = dz*sqrt(g_33) = dz * R = 2piR
-          BoutReal dtor = 0.5 * (coord->dz[i] + coord->dz[ig]) * 0.5
-                          * (sqrt(coord->g_33[i]) + sqrt(coord->g_33[ig]));
+          BoutReal dtor = 0.5 * (coord->dz()[i] + coord->dz()[ig]) * 0.5
+                          * (sqrt(coord->g_33()[i]) + sqrt(coord->g_33()[ig]));
 
           BoutReal da = dpol * dtor; // [m^2]
 
@@ -277,7 +277,7 @@ void NeutralBoundary::transform_impl(GuardedOptions& state) {
           // Divide by cell volume to get source [W/m^3]
           BoutReal cooling_source =
               flow
-              / (coord->J[i] * coord->dx[i] * coord->dy[i] * coord->dz[i]); // [W m^-3]
+              / (coord->J()[i] * coord->dx()[i] * coord->dy()[i] * coord->dz()[i]); // [W m^-3]
 
           // Subtract from cell next to boundary
           energy_source[i] -= cooling_source;

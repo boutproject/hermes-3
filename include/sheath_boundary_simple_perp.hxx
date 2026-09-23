@@ -15,7 +15,7 @@
 ///   - It is recommended to use SheathBoundaryPerp rather than SheathBoundarySimplePerp;
 ///     this is here for comparison to that more complete model.
 ///
-struct SheathBoundarySimplePerp : public Component {
+struct SheathBoundarySimplePerp : public NamedComponent<SheathBoundarySimplePerp> {
   /// # Input options
   /// - <name>  e.g. "sheath_boundary_simple_perp"
   ///   - inner_x                  Boundary on inner x?
@@ -28,6 +28,8 @@ struct SheathBoundarySimplePerp : public Component {
   ///   - sin_alpha                Sine of the angle between magnetic field line and wall surface (0 to 1)
   ///   - always_set_phi           Always set phi field? Default is to only modify if already set
   SheathBoundarySimplePerp(std::string name, Options &options, Solver *);
+
+  static constexpr auto type = "sheath_boundary_simple_perp";
 
   void outputVars(Options &state) override;
 
@@ -102,8 +104,7 @@ private:
 };
 
 namespace {
-RegisterComponent<SheathBoundarySimplePerp>
-    registercomponentsheathboundarysimpleperp("sheath_boundary_simple_perp");
+RegisterComponent<SheathBoundarySimplePerp> registercomponentsheathboundarysimpleperp;
 }
 
 #endif // SHEATH_BOUNDARY_SIMPLE__PERP_H

@@ -13,7 +13,7 @@
 ///
 /// in units of m^2/s
 ///
-struct DipoleAnomalousDiffusion : public Component {
+struct DipoleAnomalousDiffusion : public NamedComponent<DipoleAnomalousDiffusion> {
   /// # Inputs
   ///
   /// - <name>
@@ -23,6 +23,8 @@ struct DipoleAnomalousDiffusion : public Component {
   ///   - anomalous_sheath_flux  Allow anomalous flux into sheath?
   //                             Default false.
   DipoleAnomalousDiffusion(std::string name, Options &alloptions, Solver *);
+
+  static constexpr auto type = "dipole_anomalous_diffusion";
 
   void outputVars(Options &state) override;
 
@@ -89,8 +91,7 @@ const Field2D isnegative_dnBthetadpsi(const Field2D& N2D, const Field2D& B2D,
 const Field2D compute_Kn(const Field2D& N2D, const Field2D& B2D, const Field2D& htheta2D);
 const Field2D set_quasilinear_transport_on(const Field2D& Kn, BoutReal transport_off_factor);
     namespace {
-  RegisterComponent<DipoleAnomalousDiffusion> registercomponentdipoleanomalousdiffusion(
-      "dipole_anomalous_diffusion");
+  RegisterComponent<DipoleAnomalousDiffusion> registercomponentdipoleanomalousdiffusion;
 }
 
 #endif // DIPOLE_ANOMALOUS_DIFFUSION_H

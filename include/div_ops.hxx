@@ -71,23 +71,31 @@ Field2D Laplace_FV(const Field2D& k, const Field2D& f);
 
 /// Perpendicular diffusion including X and Y directions
 /// Takes Div_a_Grad_perp from BOUT++ and adds flows
-const Field3D Div_a_Grad_perp_flows(const Field3D& a, const Field3D& f,
-                                           Field3D& flux_xlow, Field3D& flux_ylow);
-const Field3D Div_a_Grad_perpB_flows(const Field3D& a, const Field3D& f,
-                                    Field3D& flux_xlow, Field3D& flux_ylow);
+Field3D Div_a_Grad_perp_flows(const Field3D& a, const Field3D& f, Field3D& flux_xlow,
+                              Field3D& flux_ylow);
+inline Field3D Div_a_Grad_perp_flows(const Field2D& a, const Field2D& f,
+                                     Field3D& flux_xlow, Field3D& flux_ylow) {
+  return Div_a_Grad_perp_flows(Field3D{a}, Field3D{f}, flux_xlow, flux_ylow);
+}
+/// Div ( a B Grad_perp(f / B) ) with flows
+Field3D Div_a_Grad_perpB_flows(const Field3D& a, const Field3D& f, Field3D& flux_xlow,
+                               Field3D& flux_ylow);
 /// Same but with upwinding
 /// WARNING: Causes checkerboarding in neutral_mixed integrated test
 Field3D Div_a_Grad_perp_upwind(const Field3D& a, const Field3D& f);
 /// Same but with upwinding and flows
 /// WARNING: Causes checkerboarding in neutral_mixed integrated test
-const Field3D Div_a_Grad_perp_upwind_flows(const Field3D& a, const Field3D& f,
-                                           Field3D& flux_xlow, Field3D& flux_ylow);
-const Field3D Div_a_Grad_perpB_upwind_flows(const Field3D& a, const Field3D& f,
-                                            Field3D& flux_xlow, Field3D& flux_ylow);
+Field3D Div_a_Grad_perp_upwind_flows(const Field3D& a, const Field3D& f,
+                                     Field3D& flux_xlow, Field3D& flux_ylow);
+inline Field3D Div_a_Grad_perp_upwind_flows(const Field2D& a, const Field2D& f,
+                                            Field3D& flux_xlow, Field3D& flux_ylow) {
+  return Div_a_Grad_perp_upwind_flows(Field3D{a}, Field3D{f}, flux_xlow, flux_ylow);
+}
+/// Div ( a B Grad_perp(f / B) ) with upwinding and flows
+Field3D Div_a_Grad_perpB_upwind_flows(const Field3D& a, const Field3D& f,
+                                      Field3D& flux_xlow, Field3D& flux_ylow);
+/// Radial convection of f with velocity a, returning the X flow
 Field3D Conv_flows(const Field3D& a, const Field3D& f, Field3D& flow_xlow);
-/// Version with energy flow diagnostic
-const Field3D Div_par_K_Grad_par_mod(const Field3D& k, const Field3D& f,
-                                     Field3D& flow_ylow, bool bndry_flux = true);
 
 /*!
  * Div ( a Grad_perp(f) ) -- ∇⊥ ( a ⋅ ∇⊥ f) -- Vorticity

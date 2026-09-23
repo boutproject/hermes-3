@@ -15,10 +15,10 @@ struct NoFlowBoundary : public NamedComponent<NoFlowBoundary> {
     noflow_upper_y = options["noflow_upper_y"]
                          .doc("No-flow boundary on upper y?")
                          .withDefault<bool>(true);
-    noflow_inner_x = options["noflow_lower_y"]
+    noflow_inner_x = options["noflow_inner_x"]
                          .doc("No-flow boundary on inner x?")
                          .withDefault<bool>(false);
-    noflow_outer_x = options["noflow_upper_y"]
+    noflow_outer_x = options["noflow_outer_x"]
                          .doc("No-flow boundary on outer x?")
                          .withDefault<bool>(false);
 

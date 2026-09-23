@@ -14,7 +14,6 @@ struct Isothermal : public NamedComponent<Isothermal> {
   static constexpr auto type = "isothermal";
 
 private:
-  std::string name; // Species name
   bool dipole_scaling; ///< Apply dipole scaling ~ B to the temperature
   BoutReal T; ///< The normalised temperature
   Field3D P; ///< The normalised pressure
