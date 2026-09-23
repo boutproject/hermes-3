@@ -482,6 +482,10 @@ void Recycling::transform_impl(GuardedOptions& state) {
       if (species_from.isSet("energy_flow_xlow")) {
         energy_flow_xlow = get<Field3D>(species_from["energy_flow_xlow"]);
       } 
+      else
+      {
+       energy_flow_xlow =0.0
+      }
       if (species_from.isSet("cls_energy_flow_xlow")) 
       {
         if (energy_flow_xlow.isAllocated()) {
@@ -645,8 +649,8 @@ void Recycling::transform_impl(GuardedOptions& state) {
 
       // PFR is flipped compared to edge: x=0 is at the PFR edge. Therefore outflow is
       // in the negative coordinate direction.
-      Field3D radial_particle_outflow = particle_flow_xlow * -1;
-      Field3D radial_energy_outflow = energy_flow_xlow * -1;
+      Field3D radial_particle_outflow = particle_flow_xlow * -1.0;
+      Field3D radial_energy_outflow = energy_flow_xlow * -1.0;
 
       if (mesh->firstX()) { // Only do this for the processor which has the core region
         if (mesh->periodicY(mesh->xstart)) { // Only do this for the processor with a

@@ -19,6 +19,7 @@ private:
   BoutReal T; ///< The normalised temperature
   Field3D P; ///< The normalised pressure
   Field2D T2D, B2D, B2D_edge; ///< The normalised temperature, averaged to 2D (for dipole scaling)
+  bool temperature_3D; ///< Should the temperature be a 3D field (true) or a constant (false)?
   bool diagnose; ///< Output additional diagnostics?
 
   /// Inputs

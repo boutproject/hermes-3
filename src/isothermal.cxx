@@ -16,17 +16,26 @@ Isothermal::Isothermal(std::string name, Options& alloptions, Solver* UNUSED(sol
   auto Tnorm = get<BoutReal>(alloptions["units"]["eV"]);
   T = options["temperature"].doc("Constant temperature [eV]").as<BoutReal>()
       / Tnorm; // Normalise
-    
+  temperature_3D = options["temperature_3D"]
+    .doc("Should the temperature be a 3D field (true) or a constant (false)?")
+    .withDefault<bool>(true);
   diagnose = options["diagnose"]
     .doc("Save additional output diagnostics")
     .withDefault<bool>(false);
   dipole_scaling = options["dipole_scaling"]
                  .doc("Apply dipole scaling ~ B to the temperature")
                  .withDefault<bool>(false);
+
+  if (dipole_scaling && !temperature_3D) {
+    throw std::runtime_error("Isothermal: dipole_scaling requires temperature_3D = true");
+  }
+
   T2D.allocate();
   B2D.allocate();
   B2D_edge.allocate();
   if (dipole_scaling) {
+    
+     // Dipole scaling is only implemented for 3D temperature profile only at the moment
     B2D_edge = 0;
   mesh->communicate(B2D_edge);
     mesh->get(B2D_edge, "B_edge", 0.0, true);
@@ -39,34 +48,33 @@ Isothermal::Isothermal(std::string name, Options& alloptions, Solver* UNUSED(sol
       }
       mesh->communicate(T2D);
   }
+
 }
 
 
 void Isothermal::transform_impl(GuardedOptions& state) {
 
   GuardedOptions species = state["species"][name];
+  Field3D T_= T;
+  if (temperature_3D)
+  {
+  
   if (dipole_scaling) {
     // Set the temperature to a dipole profile, using the pressure if it's set, otherwise using a fixed temperature
-    set(species["temperature"], T2D);
+    set(species["temperature"], T2D);T_ = T2D;
   }
-  else{
-  set(species["temperature"], T);
+  else{T_ = T;}
   }
+
+  
+  set(species["temperature"], T_);
+
   // If density is set, also set pressure
   if (isSetFinalNoBoundary(species["density"])) {
     // Note: The boundary of N may not be set yet
     auto N = GET_NOBOUNDARY(Field3D, species["density"]);
-    if (dipole_scaling) {
-      //mesh->communicate(T2D);
-      P = N * DC(T2D);
-      //mesh->communicate(P);
-      set(species["pressure"], P);
-    }
-    else{
-    P = N * T;
+      P = N * T_;
     set(species["pressure"], P);
-    }
-    
   }
 }
 
