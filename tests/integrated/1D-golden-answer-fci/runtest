@@ -3,24 +3,23 @@
 # Python script to run and analyse MMS test
 
 import sys
-from pathlib import Path
 
+import numpy as np
 from boutdata.collect import collect
 from boututils.run_wrapper import launch_safe, shell
-from numpy import abs, array, log, max, mean, sqrt
-import numpy as np
+from numpy import abs
+
 gridpath = "../../../grids/slab_with_BC/"
 
 
 def gridname(ny):
-    return gridpath + f"MMS_straight_slab_8_128_4_True.fci.grid.nc"
+    return gridpath + "MMS_straight_slab_8_128_4_True.fci.grid.nc"
 
 
 nout = 10
 timestep = 1e4 / nout
 
 nproc = 1
-
 
 
 args = f"nout={nout} timestep={timestep}"
@@ -36,17 +35,20 @@ cmd = "../../../hermes-3 " + args
 _, out = launch_safe(cmd, nproc=nproc, pipe=True)
 
 
-
 success = True
 
 
-Pi = np.mean(collect( "Ph+", tind=[nout, nout], path="data", info=False)[-1],axis=(0,2))
-Pe = np.mean(collect( "Pe", tind=[nout, nout], path="data", info=False)[-1],axis=(0,2))
-Ni = np.mean(collect( "Nh+", tind=[nout, nout], path="data", info=False)[-1],axis=(0,2))
+Pi = np.mean(
+    collect("Ph+", tind=[nout, nout], path="data", info=False)[-1], axis=(0, 2)
+)
+Pe = np.mean(collect("Pe", tind=[nout, nout], path="data", info=False)[-1], axis=(0, 2))
+Ni = np.mean(
+    collect("Nh+", tind=[nout, nout], path="data", info=False)[-1], axis=(0, 2)
+)
 
 tol = 1e-5
-    
-for var, lab in zip([Pe,Pi,Ni],["Pe", "Pi", "Ni"]):
+
+for var, lab in zip([Pe, Pi, Ni], ["Pe", "Pi", "Ni"]):
     if abs(var[0] - var[-1]) > tol:
         print(f"Asymmetry in {lab}!", var[0], var[-1])
         success = False
@@ -68,7 +70,7 @@ Peval = 0.25205122346033126
 if abs(Pe[0] - Peval) > tol:
     print("Pe mismatch. ", abs(Pe[0] - Peval))
     success = False
-    
+
 
 if success:
     print(" => Test passed")
