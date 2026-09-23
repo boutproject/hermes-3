@@ -88,6 +88,7 @@ set(HERMES_SOURCES
     src/relax_potential.cxx
     src/sheath_closure.cxx
     src/sheath_boundary.cxx
+    src/sheath_boundary_fci.cxx
     src/sheath_boundary_simple.cxx
     src/sheath_boundary_insulating.cxx
     src/snb_conduction.cxx
@@ -166,6 +167,7 @@ set(HERMES_SOURCES
     include/recycling.hxx
     include/relax_potential.hxx
     include/sheath_boundary.hxx
+    include/sheath_boundary_fci.hxx
     include/sheath_boundary_simple.hxx
     include/sheath_boundary_insulating.hxx
     include/simple_conduction.hxx
@@ -397,7 +399,9 @@ if(HERMES_TESTS)
   hermes_add_integrated_test(2D-fluid-anomalous-fci REQUIRES
                              BOUT_ENABLE_METRIC_3D)
   hermes_add_integrated_test(1D-conduction-fci REQUIRES BOUT_ENABLE_METRIC_3D)
+  hermes_add_integrated_test(1D-golden-answer-fci REQUIRES BOUT_ENABLE_METRIC_3D)
 
+  
   # Unit tests
   option(HERMES_UNIT_TESTS "Build the unit tests" ON)
   if(HERMES_UNIT_TESTS)
