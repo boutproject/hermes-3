@@ -134,9 +134,9 @@ create_grid(folder_xz, 36, 1, 32)
 create_grid(folder_xz, 68, 1, 64)
 create_grid(folder_xz, 132, 1, 128)
 
-create_grid(folder_BC, 8, 128, 4, BC=True)
-create_grid(folder_BC, 8, 512, 4, BC=True)
-create_grid(folder_BC, 8, 256, 4, BC=True)
+create_grid(folder_BC, 6, 128, 4, BC=True)
+create_grid(folder_BC, 6, 512, 4, BC=True)
+create_grid(folder_BC, 6, 256, 4, BC=True)
 
 
 def create_blob_grid(nx, ny, nz, filename):
