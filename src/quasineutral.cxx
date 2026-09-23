@@ -59,7 +59,7 @@ void Quasineutral::transform_impl(GuardedOptions& state) {
     bout::globals::mesh->communicate(density);
     density.applyParallelBoundary("parallel_neumann_o2");
   }
-  
+
   set(species["density"], density);
 
   set(species["charge"], charge);

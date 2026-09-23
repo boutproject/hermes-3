@@ -3,8 +3,8 @@
 #define SHEATH_BOUNDARY_FCI_H
 
 #include "component.hxx"
-#include <bout/yboundary_regions.hxx>
 #include <bout/field3d.hxx>
+#include <bout/yboundary_regions.hxx>
 /// Boundary condition at the wall in Y
 ///
 /// This is a collective component, because it couples all charged species
@@ -49,11 +49,11 @@ private:
 
   Field3D wall_potential; ///< Voltage of the wall. Normalised units.
 
-  Field3D hflux_e; // Electron heat flux through sheath
+  Field3D hflux_e;         // Electron heat flux through sheath
   Field3DParallel phi;     // Phi at sheath
   Field3DParallel ion_sum; // Sum of ion current at sheath
-  bool diagnose;       // Save diagnostic variables?
-  Options diagnostics; // Options object to store diagnostic fields like a dict
+  bool diagnose;           // Save diagnostic variables?
+  Options diagnostics;     // Options object to store diagnostic fields like a dict
 
   bool no_flow; ///< No flow speed, only remove energy
 

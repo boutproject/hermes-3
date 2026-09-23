@@ -74,7 +74,7 @@ void ZeroCurrent::transform_impl(GuardedOptions& state) {
   Field3D N = getNoBoundary<Field3D>(species["density"]);
 
   velocity = current / (-charge * softFloor(N, 1e-7));
-  
+
   momentum = GET_VALUE(BoutReal, species["AA"]) * N * velocity;
 
   if (bout::globals::mesh->isFci()) {
