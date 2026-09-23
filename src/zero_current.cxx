@@ -74,9 +74,17 @@ void ZeroCurrent::transform_impl(GuardedOptions& state) {
   Field3D N = getNoBoundary<Field3D>(species["density"]);
 
   velocity = current / (-charge * softFloor(N, 1e-7));
-  set(species["velocity"], velocity);
 
   momentum = GET_VALUE(BoutReal, species["AA"]) * N * velocity;
+
+  if (bout::globals::mesh->isFci()) {
+    bout::globals::mesh->communicate(velocity, momentum);
+    velocity.applyParallelBoundary("parallel_neumann_o2");
+    momentum.applyParallelBoundary("parallel_neumann_o2");
+  }
+
+  set(species["velocity"], velocity);
+
   set(species["momentum"], momentum);
 }
 
