@@ -220,7 +220,6 @@ void SheathBoundaryFci::transform_impl(GuardedOptions& state) {
                                : zeroFrom(Ni);
 
       mesh->getCoordinates()->getYBoundary().iter([&](auto& pnt) {
-        const auto& i = pnt.ind();
         const BoutReal Ni_im =
             limitFree(pnt.prev(Ni), pnt.current(Ni), density_boundary_mode);
         const BoutReal Ti_im =
