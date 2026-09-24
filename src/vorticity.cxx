@@ -229,7 +229,7 @@ Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver)
       mesh->get(curv2d, "bxcv");
       Curlb_B = curv2d;
     } catch (BoutException& e) {
-      if (diamagnetic) {
+      if (diamagnetic && !mesh->isFci()) {
         // Need curvature
         throw;
       }
@@ -252,6 +252,14 @@ Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver)
   Curlb_B *= 2. / coord->Bxy();
 
   Bsq = SQ(coord->Bxy());
+
+  if (mesh->isFci()) {
+    bracket_factor = sqrt(coord->g_22()) / (coord->J() * coord->Bxy());
+  } else {
+    bracket_factor = 1.0;
+  }
+
+  logB = log(coord->Bxy());
 
   diagnose =
       options["diagnose"].doc("Output additional diagnostics?").withDefault<bool>(false);
@@ -635,36 +643,42 @@ void Vorticity::transform_impl(GuardedOptions& state) {
 
   // Note: The below calculation requires phi derivatives at the Y boundaries
   //       Setting to free boundaries
-  if (phi.hasParallelSlices()) {
-    Field3D& phi_ydown = phi.ydown();
-    Field3D& phi_yup = phi.yup();
-    for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
-      for (int jz = 0; jz < mesh->LocalNz; jz++) {
-        phi_ydown(r.ind, mesh->ystart - 1, jz) =
-            2 * phi(r.ind, mesh->ystart, jz) - phi_yup(r.ind, mesh->ystart + 1, jz);
-      }
-    }
-    for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
-      for (int jz = 0; jz < mesh->LocalNz; jz++) {
-        phi_yup(r.ind, mesh->yend + 1, jz) =
-            2 * phi(r.ind, mesh->yend, jz) - phi_ydown(r.ind, mesh->yend - 1, jz);
-      }
-    }
+  // Fci can't use this boundary iterator
+  if (mesh->isFci()) {
+    phi.applyParallelBoundary("parallel_neumann_o2");
   } else {
-    Field3D phi_fa = toFieldAligned(phi);
-    for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
-      for (int jz = 0; jz < mesh->LocalNz; jz++) {
-        phi_fa(r.ind, mesh->ystart - 1, jz) =
-            2 * phi_fa(r.ind, mesh->ystart, jz) - phi_fa(r.ind, mesh->ystart + 1, jz);
+    if (phi.hasParallelSlices()) {
+
+      Field3D& phi_ydown = phi.ydown();
+      Field3D& phi_yup = phi.yup();
+      for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
+        for (int jz = 0; jz < mesh->LocalNz; jz++) {
+          phi_ydown(r.ind, mesh->ystart - 1, jz) =
+              2 * phi(r.ind, mesh->ystart, jz) - phi_yup(r.ind, mesh->ystart + 1, jz);
+        }
       }
-    }
-    for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
-      for (int jz = 0; jz < mesh->LocalNz; jz++) {
-        phi_fa(r.ind, mesh->yend + 1, jz) =
-            2 * phi_fa(r.ind, mesh->yend, jz) - phi_fa(r.ind, mesh->yend - 1, jz);
+      for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
+        for (int jz = 0; jz < mesh->LocalNz; jz++) {
+          phi_yup(r.ind, mesh->yend + 1, jz) =
+              2 * phi(r.ind, mesh->yend, jz) - phi_ydown(r.ind, mesh->yend - 1, jz);
+        }
       }
+    } else {
+      Field3D phi_fa = toFieldAligned(phi);
+      for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
+        for (int jz = 0; jz < mesh->LocalNz; jz++) {
+          phi_fa(r.ind, mesh->ystart - 1, jz) =
+              2 * phi_fa(r.ind, mesh->ystart, jz) - phi_fa(r.ind, mesh->ystart + 1, jz);
+        }
+      }
+      for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
+        for (int jz = 0; jz < mesh->LocalNz; jz++) {
+          phi_fa(r.ind, mesh->yend + 1, jz) =
+              2 * phi_fa(r.ind, mesh->yend, jz) - phi_fa(r.ind, mesh->yend - 1, jz);
+        }
+      }
+      phi = fromFieldAligned(phi_fa);
     }
-    phi = fromFieldAligned(phi_fa);
   }
 
   ddt(Vort) = 0.0;
@@ -672,7 +686,36 @@ void Vorticity::transform_impl(GuardedOptions& state) {
   if (diamagnetic) {
     // Diamagnetic current. This is calculated here so that the energy sources/sinks
     // can be calculated for the evolving species.
-    DivJdia = calculateDivJdia(phi, state["species"]);
+    if (mesh->isFci()) {
+      DivJdia = 0.0;
+      GuardedOptions allspecies = state["species"];
+
+      for (const auto& kv : allspecies.getChildren()) {
+        const GuardedOptions species = allspecies[kv.first];
+        if (!(IS_SET_NOBOUNDARY(species["pressure"]) and IS_SET(species["charge"]))) {
+          continue; // No pressure or charge -> no diamagnetic current
+        }
+
+        if (fabs(get<BoutReal>(species["charge"])) < 1e-5) {
+          // No charge
+          continue;
+        }
+
+        auto P = GET_NOBOUNDARY(Field3D, species["pressure"]);
+        Field3D DivJdia_species =
+            2.0 * bracket(logB, P, BRACKET_ARAKAWA) * bracket_factor;
+        DivJdia += DivJdia_species;
+        if (diamagnetic_polarisation) {
+          add(species["energy_source"], P * DivJdia_species);
+        }
+        subtract(species["energy_source"],
+                 P * 2.0 * bracket(logB, phi, BRACKET_ARAKAWA) * bracket_factor);
+      }
+
+    } else {
+      DivJdia = calculateDivJdia(phi, state["species"]);
+    }
+
     ddt(Vort) += DivJdia;
 
     set(fields["DivJdia"], DivJdia);
@@ -799,7 +842,8 @@ void Vorticity::finally(const Options& state) {
 
     if (exb_advection_simplified) {
       // By default this is a simplified nonlinear term
-      ddt(Vort) -= Div_n_bxGrad_f_B_XPPM(Vort, phi, bndry_flux, poloidal_flows);
+      ddt(Vort) -=
+          Div_n_bxGrad_f_B_XPPM(Vort, phi, bndry_flux, poloidal_flows) * bracket_factor;
 
     } else {
       // If diamagnetic_polarisation = false and B is constant, then
@@ -808,7 +852,8 @@ void Vorticity::finally(const Options& state) {
       // Because this is implemented in terms of an operation on the result
       // of an operation, we need to communicate and the resulting stencil is
       // wider than the simple form.
-      ddt(Vort) -= Div_n_bxGrad_f_B_XPPM(0.5 * Vort, phi, bndry_flux, poloidal_flows);
+      ddt(Vort) -= Div_n_bxGrad_f_B_XPPM(0.5 * Vort, phi, bndry_flux, poloidal_flows)
+                   * bracket_factor;
 
       // V_ExB dot Grad(Pi)
       Field3D vEdotGradPi = bracket(phi, Pi_hat, BRACKET_ARAKAWA);
@@ -823,7 +868,8 @@ void Vorticity::finally(const Options& state) {
       ddt(Vort) -=
           FV::Div_a_Grad_perp(Field3D{0.5 * average_atomic_mass / Bsq}, vEdotGradPi);
       ddt(Vort) -=
-          Div_n_bxGrad_f_B_XPPM(DelpPhi_2B2, phi + Pi_hat, bndry_flux, poloidal_flows);
+          Div_n_bxGrad_f_B_XPPM(DelpPhi_2B2, phi + Pi_hat, bndry_flux, poloidal_flows)
+          * bracket_factor;
     }
   }
 
@@ -847,8 +893,8 @@ void Vorticity::finally(const Options& state) {
       continue; // Not charged
     }
 
-    const Field3D N = get<Field3D>(species["density"]);
-    const Field3D NV = get<Field3D>(species["momentum"]);
+    const Field3DParallel N = get<Field3D>(species["density"]);
+    const Field3DParallel NV = get<Field3D>(species["momentum"]);
     const BoutReal A = get<BoutReal>(species["AA"]);
 
     // Note: Using NV rather than N*V so that the cell boundary flux is correct
