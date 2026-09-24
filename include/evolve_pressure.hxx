@@ -88,6 +88,8 @@ private:
   Field3D Sp;                   ///< Total pressure source
   FieldGeneratorPtr source_prefactor_function;
 
+  Field3D bracket_factor; ///< Multiplication factor for bracket operator (Fci ExB)
+
   BoutReal hyper_z;   ///< Hyper-diffusion
   BoutReal hyper_z_T; ///< 4th-order dissipation in T
 

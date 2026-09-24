@@ -82,7 +82,7 @@ private:
   BoutReal source_normalisation; ///< Normalisation factor [m^-3/s]
   BoutReal time_normalisation;   ///< Normalisation factor [s]
   FieldGeneratorPtr source_prefactor_function;
-
+  Field3D bracket_factor; ///< Multiplication factor for bracket operator (Fci ExB)
   /// Modifies the `source` member variable
   void updateSource(BoutReal time);
 

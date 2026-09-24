@@ -177,6 +177,13 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
                            .doc("Include parallel heat conduction?")
                            .withDefault<bool>(true);
 
+  if (mesh->isFci()) {
+    const auto* coord = mesh->getCoordinates();
+    bracket_factor = sqrt(coord->g_22()) / (coord->J() * coord->Bxy());
+  } else {
+    bracket_factor = 1.0;
+  }
+
   if (source_time_dependent) {
     setPermissions(readOnly("time"));
   }
@@ -268,7 +275,8 @@ void EvolvePressure::finally(const Options& state) {
 
     const Field3D phi = get<Field3D>(state["fields"]["phi"]);
 
-    ddt(P) = -Div_n_bxGrad_f_B_XPPM(P, phi, bndry_flux, poloidal_flows, true);
+    ddt(P) =
+        -Div_n_bxGrad_f_B_XPPM(P, phi, bndry_flux, poloidal_flows, true) * bracket_factor;
   } else {
     ddt(P) = 0.0;
   }
