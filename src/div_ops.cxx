@@ -118,6 +118,11 @@ void MC(Stencil1D& n) {
  */
 Field3D Div_n_bxGrad_f_B_XPPM(const Field3D& n, const Field3D& f, bool bndry_flux,
                               bool poloidal, bool positive) {
+
+  if (n.isFci()) {
+    return -bracket(n, f, BRACKET_ARAKAWA);
+  }
+
   Field3D result{0.0};
 
   Coordinates* coord = mesh->getCoordinates();
