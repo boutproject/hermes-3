@@ -119,13 +119,97 @@ void MC(Stencil1D& n) {
 Field3D Div_n_bxGrad_f_B_XPPM(const Field3D& n, const Field3D& f, bool bndry_flux,
                               bool poloidal, bool positive) {
 
-  if (n.isFci()) {
-    return -bracket(n, f, BRACKET_ARAKAWA);
-  }
-
   Field3D result{0.0};
 
   Coordinates* coord = mesh->getCoordinates();
+
+  if (n.isFci()) {
+
+    const auto& cellvolume = coord->cell_volume();
+
+    const auto& cellarea_R = coord->cell_area_xhigh();
+    const auto& cellarea_L = coord->cell_area_xlow();
+
+    const auto& cellarea_U = coord->cell_area_zhigh();
+    const auto& cellarea_D = coord->cell_area_zlow();
+
+    BOUT_FOR(i, n.getRegion("RGN_NOBNDRY")) {
+      const auto xp = i.xp();
+      const auto xm = i.xm();
+      const auto zp = i.zp();
+      const auto zm = i.zm();
+
+      const auto xpzp = xp.zp();
+      const auto xmzm = xm.zm();
+      const auto xpzm = xp.zm();
+      const auto xmzp = xm.zp();
+
+      BoutReal cellwidth_D =
+          0.5 * coord->dx()[i] * (sqrt(coord->g_11()[i]) + sqrt(coord->g_11()[zm]));
+      BoutReal cellwidth_U =
+          0.5 * coord->dx()[i] * (sqrt(coord->g_11()[i]) + sqrt(coord->g_11()[zp]));
+      BoutReal cellheight_R =
+          0.5 * coord->dz()[i] * (sqrt(coord->g_33()[i]) + sqrt(coord->g_33()[xp]));
+      BoutReal cellheight_L =
+          0.5 * coord->dz()[i] * (sqrt(coord->g_33()[i]) + sqrt(coord->g_33()[xm]));
+
+      BoutReal fmm = 0.25 * (f[i] + f[xm] + f[zm] + f[xmzm]);
+      BoutReal fmp = 0.25 * (f[i] + f[xm] + f[zp] + f[xmzp]);
+      BoutReal fpm = 0.25 * (f[i] + f[xp] + f[zm] + f[xpzm]);
+      BoutReal fpp = 0.25 * (f[i] + f[xp] + f[zp] + f[xpzp]);
+
+      BoutReal vU = (fmp - fpp) / cellwidth_U; // -J*df/dx
+      BoutReal vD = (fmm - fpm) / cellwidth_D; // -J*df/dx
+
+      BoutReal vR = (fpp - fpm) / cellheight_R; // J*df/dz
+      BoutReal vL = (fmp - fmm) / cellheight_L;
+
+      // X Fluxes
+      Stencil1D sx;
+      sx.c = n[i];
+      sx.m = n[xm];
+      sx.p = n[xp];
+      sx.mm = BoutNaN;
+      sx.pp = BoutNaN;
+      MC(sx);
+
+      Stencil1D sz;
+      sz.c = n[i];
+      sz.m = n[zm];
+      sz.p = n[zp];
+      sz.mm = BoutNaN;
+      sz.pp = BoutNaN;
+      MC(sz);
+
+      if (vR > 0.0) {
+        BoutReal flux = vR * sx.R * cellarea_R[i];
+        result[i] += flux / cellvolume[i];
+        result[xp] -= flux / cellvolume[xp];
+      }
+
+      if (vL < 0.0) {
+        BoutReal flux = vL * sx.L * cellarea_L[i];
+        result[i] -= flux / cellvolume[i];
+        result[xm] += flux / cellvolume[xm];
+      }
+
+      if (vU > 0.0) {
+        BoutReal flux = vU * sz.R * cellarea_U[i];
+        result[i] += flux / cellvolume[i];
+        result[zp] -= flux / cellvolume[zp];
+      }
+
+      if (vD < 0.0) {
+        BoutReal flux = vD * sz.L * cellarea_D[i];
+        result[i] -= flux / cellvolume[i];
+        result[zm] += flux / cellvolume[zm];
+      }
+    }
+
+    FV::communicateFluxes(result);
+
+    return result;
+  }
 
   //////////////////////////////////////////
   // X-Z advection.
