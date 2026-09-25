@@ -80,13 +80,6 @@ EvolveMomentum::EvolveMomentum(std::string name, Options& alloptions, Solver* so
           .doc("Fix Y boundary momentum flux to boundary midpoint value?")
           .withDefault<bool>(false);
 
-  if (mesh->isFci()) {
-    const auto* coord = mesh->getCoordinates();
-    bracket_factor = sqrt(coord->g_22()) / (coord->J() * coord->Bxy());
-  } else {
-    bracket_factor = 1.0;
-  }
-
   // Set to zero so set for output
   momentum_source = 0.0;
   NV_err = 0.0;
@@ -168,8 +161,7 @@ void EvolveMomentum::finally(const Options& state) {
       const Field3D phi = get<Field3D>(state["fields"]["phi"]);
 
       ddt(NV) = -Div_n_bxGrad_f_B_XPPM(NV, phi, bndry_flux, poloidal_flows,
-                                       true)
-                * bracket_factor; // ExB drift
+                                       true); // ExB drift
 
       // Parallel electric field
       // Force density = - Z N ∇ϕ
@@ -188,8 +180,7 @@ void EvolveMomentum::finally(const Options& state) {
         // This is Z * Apar * dn/dt, keeping just leading order terms
         Field3D dndt = density_source
                        - FV::Div_par_mod<hermes::Limiter>(N, V, fastest_wave, dummy)
-                       - Div_n_bxGrad_f_B_XPPM(N, phi, bndry_flux, poloidal_flows, true)
-                             * bracket_factor;
+                       - Div_n_bxGrad_f_B_XPPM(N, phi, bndry_flux, poloidal_flows, true);
         if (low_n_diffuse_perp) {
           dndt += Div_Perp_Lap_FV_Index(
               density_floor / softFloor(N, 1e-3 * density_floor), N);

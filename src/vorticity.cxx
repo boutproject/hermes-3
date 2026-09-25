@@ -842,8 +842,7 @@ void Vorticity::finally(const Options& state) {
 
     if (exb_advection_simplified) {
       // By default this is a simplified nonlinear term
-      ddt(Vort) -=
-          Div_n_bxGrad_f_B_XPPM(Vort, phi, bndry_flux, poloidal_flows) * bracket_factor;
+      ddt(Vort) -= Div_n_bxGrad_f_B_XPPM(Vort, phi, bndry_flux, poloidal_flows);
 
     } else {
       // If diamagnetic_polarisation = false and B is constant, then
@@ -852,8 +851,7 @@ void Vorticity::finally(const Options& state) {
       // Because this is implemented in terms of an operation on the result
       // of an operation, we need to communicate and the resulting stencil is
       // wider than the simple form.
-      ddt(Vort) -= Div_n_bxGrad_f_B_XPPM(0.5 * Vort, phi, bndry_flux, poloidal_flows)
-                   * bracket_factor;
+      ddt(Vort) -= Div_n_bxGrad_f_B_XPPM(0.5 * Vort, phi, bndry_flux, poloidal_flows);
 
       // V_ExB dot Grad(Pi)
       Field3D vEdotGradPi = bracket(phi, Pi_hat, BRACKET_ARAKAWA);
@@ -868,8 +866,7 @@ void Vorticity::finally(const Options& state) {
       ddt(Vort) -=
           FV::Div_a_Grad_perp(Field3D{0.5 * average_atomic_mass / Bsq}, vEdotGradPi);
       ddt(Vort) -=
-          Div_n_bxGrad_f_B_XPPM(DelpPhi_2B2, phi + Pi_hat, bndry_flux, poloidal_flows)
-          * bracket_factor;
+          Div_n_bxGrad_f_B_XPPM(DelpPhi_2B2, phi + Pi_hat, bndry_flux, poloidal_flows);
     }
   }
 

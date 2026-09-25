@@ -144,13 +144,6 @@ EvolveDensity::EvolveDensity(std::string name, Options& alloptions, Solver* solv
     }
   }
 
-  if (mesh->isFci()) {
-    const auto* coord = mesh->getCoordinates();
-    bracket_factor = sqrt(coord->g_22()) / (coord->J() * coord->Bxy());
-  } else {
-    bracket_factor = 1.0;
-  }
-
   neumann_boundary_average_z =
       alloptions[std::string("N") + name]["neumann_boundary_average_z"]
           .doc("Apply neumann boundary with Z average?")
@@ -269,8 +262,7 @@ void EvolveDensity::finally(const Options& state) {
     const Field3D phi = get<Field3D>(state["fields"]["phi"]);
 
     ddt(N) = -Div_n_bxGrad_f_B_XPPM(N, phi, bndry_flux, poloidal_flows,
-                                    true)
-             * bracket_factor; // ExB drift
+                                    true); // ExB drift
   } else {
     ddt(N) = 0.0;
   }

@@ -45,7 +45,6 @@ private:
   BoutReal pressure_floor;
   bool low_p_diffuse_perp;    ///< Cross-field diffusion at low pressure?
   bool use_div_par_fvv{true}; ///< Use Div_par_fvv instead of Div_par
-  Field3D bracket_factor;     ///< Multiplication factor for bracket operator (Fci ExB)
   BoutReal hyper_z;           ///< Hyper-diffusion
 
   bool diagnose;                   ///< Output additional diagnostics?
