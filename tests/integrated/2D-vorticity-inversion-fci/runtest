@@ -19,12 +19,12 @@ def gridname(ny):
 # List of NY values to use
 nylist = [16, 32]
 
-nout = 20
-timestep = 1e7 / nout
+nout = 0
+timestep = 1.0
 
 nproc = 1
 
-varnames = ["Nh+"]
+varnames = ["phi"]
 
 results = {}
 for var in varnames:
@@ -46,15 +46,19 @@ for ny in nylist:
 
     # Collect data
     for var in varnames:
-        E = collect("E_" + var, tind=[nout, nout], path="data", info=False)
-        E = E[:, 2:-2, :, :]
-
+        thisphi = collect(var, tind=[nout, nout], path="data", info=False)
+        solution = collect("NVh+", tind=[nout, nout], path="data", info=False)
+        thisphi = thisphi[0, 2:-2, :, :]
+        solution = solution[0, 2:-2, :, :]
+        E = thisphi - solution
         l2 = sqrt(mean(E**2))
         linf = max(abs(E))
         results[var]["l2"].append(l2)
         results[var]["inf"].append(linf)
 
         print(f"Error norm {var}: l-2 {l2:f} l-inf {linf:f}")
+
+    print(f"Error norm {var}: l-2 {l2:f} l-inf {linf:f}")
 
 # Calculate grid spacing
 dy = 1.0 / array(nylist)
