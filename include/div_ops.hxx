@@ -30,6 +30,7 @@
 #include <bout/bout_types.hxx>
 #include <bout/boutexception.hxx>
 #include <bout/coordinates.hxx>
+#include <bout/difops.hxx>
 #include <bout/field.hxx>
 #include <bout/field3d.hxx>
 #include <bout/fv_ops_impl.hxx>
@@ -37,7 +38,6 @@
 #include <bout/region.hxx>
 #include <bout/utils.hxx>
 #include <bout/vector3d.hxx>
-
 #include <cmath>
 
 /*!

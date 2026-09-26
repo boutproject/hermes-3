@@ -177,8 +177,8 @@ def create_blob_grid(nx, ny, nz, filename):
 folder_blob = script_dir / "slab_for_blob"
 
 create_directory(folder_blob)
-create_blob_grid(132, 2, 128, folder_blob / "slab_blob_132_2_128.grid.fci.nc")
-create_blob_grid(260, 2, 256, folder_blob / "slab_blob_260_2_256.grid.fci.nc")
+create_blob_grid(132, 1, 128, folder_blob / "slab_blob_132_1_128.grid.fci.nc")
+create_blob_grid(260, 1, 256, folder_blob / "slab_blob_260_1_256.grid.fci.nc")
 
 
 print("Finished creating all the grids")
