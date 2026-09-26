@@ -109,6 +109,21 @@ void MC(Stencil1D& n) {
   n.R = n.c + 0.5 * slope;
 }
 
+void VanAlbada(Stencil1D& n) {
+
+  const BoutReal dl = n.c - n.m;
+  const BoutReal dr = n.p - n.c;
+  const BoutReal denom = dl * dl + dr * dr;
+  const BoutReal eps = 1e-12 * denom + 1e-30;
+  const BoutReal ab = dl * dr;
+  const BoutReal ab_pos = 0.5 * (ab + sqrt(ab * ab + eps * eps));
+  const BoutReal slope = (ab_pos * (dl + dr)) / (denom + eps);
+  n.L = n.c - 0.5 * slope;
+  n.R = n.c + 0.5 * slope;
+  //n.L = 0.5 * (n.c + n.m);
+  // n.R = 0.5 * (n.c + n.p);
+}
+
 /* ***USED***
  *  Div (n * b x Grad(f)/B)
  *
@@ -171,7 +186,7 @@ Field3D Div_n_bxGrad_f_B_XPPM(const Field3D& n, const Field3D& f, bool bndry_flu
       sx.p = n[xp];
       sx.mm = BoutNaN;
       sx.pp = BoutNaN;
-      MC(sx);
+      VanAlbada(sx);
 
       Stencil1D sz;
       sz.c = n[i];
@@ -179,7 +194,7 @@ Field3D Div_n_bxGrad_f_B_XPPM(const Field3D& n, const Field3D& f, bool bndry_flu
       sz.p = n[zp];
       sz.mm = BoutNaN;
       sz.pp = BoutNaN;
-      MC(sz);
+      VanAlbada(sz);
 
       if (vR > 0.0) {
         BoutReal flux = vR * sx.R * cellarea_R[i];
