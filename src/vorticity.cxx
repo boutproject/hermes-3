@@ -705,9 +705,7 @@ void Vorticity::transform_impl(GuardedOptions& state) {
         Field3D DivJdia_species =
             2.0 * bracket(logB, P, BRACKET_ARAKAWA) * bracket_factor;
         DivJdia += DivJdia_species;
-        if (diamagnetic_polarisation) {
-          add(species["energy_source"], P * DivJdia_species);
-        }
+
         subtract(species["energy_source"],
                  P * 2.0 * bracket(logB, phi, BRACKET_ARAKAWA) * bracket_factor);
       }
@@ -895,7 +893,7 @@ void Vorticity::finally(const Options& state) {
     const BoutReal A = get<BoutReal>(species["AA"]);
 
     // Note: Using NV rather than N*V so that the cell boundary flux is correct
-    const Field3D jpar = (Z / A) * NV;
+    const Field3DParallel jpar = (Z / A) * NV;
     ddt(Vort) += Div_par(jpar);
 
     if (state["fields"].isSet("Apar_flutter")) {
