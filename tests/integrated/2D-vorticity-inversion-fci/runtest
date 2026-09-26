@@ -17,10 +17,10 @@ def gridname(ny):
 
 
 # List of NY values to use
-nylist = [16, 32]
+nylist = [32, 64]
 
-nout = 0
-timestep = 1.0
+nout = 1
+timestep = 1e-10
 
 nproc = 1
 

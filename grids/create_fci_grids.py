@@ -75,7 +75,7 @@ def create_grid(folder, nx, ny, nz, BC=False, inp_Ly=None):
         return 0
 
     rshift = 2.0
-    magnetic_field = ThisField(By=1.0, xcentre=rshift, Byprime=-0.1)
+    magnetic_field = ThisField(By=1.0, xcentre=rshift, Byprime=0.0)
     Lx = 1.0
 
     if BC:
