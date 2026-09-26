@@ -1,5 +1,5 @@
-nout = 100
-timestep = 50
+nout = 50
+timestep = 100
 
 [mesh]
 
@@ -11,7 +11,7 @@ type = fci
 
 [solver]
 mxstep = 10000
-
+atol = 1e-9
 [hermes]
 # Two species, electrons and ions
 components = e, h+, vorticity, sheath_closure
