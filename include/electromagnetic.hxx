@@ -29,29 +29,32 @@
 /// By default outputs Apar every timestep. When `diagnose = true` in
 /// also saves alpha_em and Ajpar.
 ///
-struct Electromagnetic : public Component {
+struct Electromagnetic : public NamedComponent<Electromagnetic> {
   /// Options
   /// - units
   /// - <name>
   ///   - diagnose   Saves Ajpar and alpha_em time-dependent values
   ///
-  Electromagnetic(std::string name, Options &options, Solver *solver);
+  Electromagnetic(std::string name, Options& options, Solver* solver);
 
   // Save and restore Apar from restart files
   void restartVars(Options& state) override;
 
-  void outputVars(Options &state) override;
+  void outputVars(Options& state) override;
+
+  static constexpr auto type = "electromagnetic";
+
 private:
-  Field3D Apar; // Electromagnetic potential A_||
-  Field3D Ajpar; // Total parallel current density
+  Field3D Apar;     // Electromagnetic potential A_||
+  Field3D Ajpar;    // Total parallel current density
   Field3D alpha_em; // Coefficient
   BoutReal beta_em; // Normalisation coefficient mu_0 e T n / B^2
 
   std::unique_ptr<Laplacian> aparSolver; // Laplacian solver in X-Z
 
-  bool const_gradient; // Set neumann boundaries by extrapolation
+  bool const_gradient;              // Set neumann boundaries by extrapolation
   BoutReal apar_boundary_timescale; // Relaxation timescale
-  BoutReal last_time;  // The last time the boundaries were updated
+  BoutReal last_time;               // The last time the boundaries were updated
 
   bool magnetic_flutter; ///< Set the magnetic flutter term?
   Field3D Apar_flutter;
@@ -78,7 +81,7 @@ private:
 };
 
 namespace {
-RegisterComponent<Electromagnetic> registercomponentelectromagnetic("electromagnetic");
+RegisterComponent<Electromagnetic> registercomponentelectromagnetic;
 }
 
 #endif // ELECTROMAGNETIC_H

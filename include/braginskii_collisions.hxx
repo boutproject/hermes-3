@@ -18,7 +18,7 @@
 ///            result in double counting. Similarly for
 ///            electron_neutral collisions and ionization reactions.
 ///
-struct BraginskiiCollisions : public Component {
+struct BraginskiiCollisions : public NamedComponent<BraginskiiCollisions> {
   ///
   /// @param alloptions Settings, which should include:
   ///    - units
@@ -45,6 +45,8 @@ struct BraginskiiCollisions : public Component {
 
   /// Add extra fields for output, or set attributes e.g docstrings
   void outputVars(Options& state) override;
+
+  static constexpr auto type = "braginskii_collisions";
 
 private:
   BoutReal Tnorm;    // Temperature normalisation [eV]
@@ -73,8 +75,7 @@ private:
 };
 
 namespace {
-RegisterComponent<BraginskiiCollisions>
-    registercomponentbraginskiicollisions("braginskii_collisions");
+RegisterComponent<BraginskiiCollisions> registercomponentbraginskiicollisions;
 }
 
 #endif // COLLISIONS_H

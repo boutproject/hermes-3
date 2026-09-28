@@ -1,0 +1,39 @@
+nout = 50
+timestep = 0.1
+
+
+[mesh]
+
+extrapolate_y = false
+
+[mesh:paralleltransform]
+type = fci
+
+
+[solver]
+mxstep = 10000
+rtol = 1e-8
+atol = 1e-12
+mms = true  # Run with MMS sources and output diagnostics
+mms_initialise = true
+[hermes]
+components = h+
+
+
+Nnorm = 1e18
+Bnorm = 1
+Tnorm = 5
+
+[h+]  # Ions
+type = fixed_density, fixed_velocity, evolve_pressure
+charge = 1.0
+AA = 1.0
+
+
+velocity = 2188.56455992991*sin(y)/(0.1*sin(2.0*y) + 1)
+density = 1.0e+17*sin(2.0*y) + 1.0e+18
+
+[Ph+]
+solution = 0.1*cos(3.0*y) + 1
+
+source = 0.00022846024702877*(0.1*cos(y)/(0.1*sin(2.0*y) + 1) - 0.02*sin(y)*cos(2.0*y)/(0.1*sin(2.0*y) + 1)^2)*(0.0666666666666667*cos(3.0*y) + 0.666666666666667) + 2.2846024702877e-5*(0.1*cos(3.0*y) + 1)*cos(y)/(0.1*sin(2.0*y) + 1) - 6.85380741086311e-6*sin(y)*sin(3.0*y)/(0.1*sin(2.0*y) + 1) - 4.56920494057541e-6*(0.1*cos(3.0*y) + 1)*sin(y)*cos(2.0*y)/(0.1*sin(2.0*y) + 1)^2

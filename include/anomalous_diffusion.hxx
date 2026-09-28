@@ -2,6 +2,7 @@
 #ifndef ANOMALOUS_DIFFUSION_H
 #define ANOMALOUS_DIFFUSION_H
 
+#include "../include/div_ops.hxx"
 #include "component.hxx"
 
 /// Add anomalous diffusion of density, momentum and energy
@@ -13,7 +14,7 @@
 ///
 /// in units of m^2/s
 ///
-struct AnomalousDiffusion : public Component {
+struct AnomalousDiffusion : public NamedComponent<AnomalousDiffusion> {
   /// # Inputs
   ///
   /// - <name>
@@ -22,20 +23,24 @@ struct AnomalousDiffusion : public Component {
   ///   - anomalous_nu   Overrides nu_<name>
   ///   - anomalous_sheath_flux  Allow anomalous flux into sheath?
   //                             Default false.
-  AnomalousDiffusion(std::string name, Options &alloptions, Solver *);
+  AnomalousDiffusion(std::string name, Options& alloptions, Solver*);
 
-  void outputVars(Options &state) override;
+  void outputVars(Options& state) override;
+
+  static constexpr auto type = "anomalous_diffusion";
 
 private:
   std::string name; ///< Species name
 
-  bool diagnose; ///< Outputting diagnostics?
+  bool diagnose;                           ///< Outputting diagnostics?
   bool include_D, include_chi, include_nu; ///< Which terms should be included?
-  Field2D anomalous_D; ///< Anomalous density diffusion coefficient
-  Field2D anomalous_chi; ///< Anomalous thermal diffusion coefficient
-  Field2D anomalous_nu; ///< Anomalous momentum diffusion coefficient
+  Coordinates::FieldMetric anomalous_D;    ///< Anomalous density diffusion coefficient
+  Coordinates::FieldMetric anomalous_chi;  ///< Anomalous thermal diffusion coefficient
+  Coordinates::FieldMetric anomalous_nu;   ///< Anomalous momentum diffusion coefficient
 
   bool anomalous_sheath_flux; ///< Allow anomalous diffusion into sheath?
+
+  std::shared_ptr<FCI::dagp_fv> dagp_op; ///< Perp. diffusion operator for Fci
 
   /// Inputs
   /// - species
@@ -56,10 +61,8 @@ private:
   void transform_impl(GuardedOptions& state) override;
 };
 
-
-
 namespace {
-RegisterComponent<AnomalousDiffusion> registercomponentanomalousdiffusion("anomalous_diffusion");
+RegisterComponent<AnomalousDiffusion> registercomponentanomalousdiffusion;
 }
 
 #endif // ANOMALOUS_DIFFUSION_H

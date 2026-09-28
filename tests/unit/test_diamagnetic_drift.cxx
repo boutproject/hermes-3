@@ -1,13 +1,18 @@
 
 #include "gtest/gtest.h"
 
+#include <bout/bout_types.hxx>
 #include <bout/boutexception.hxx>
+#include <bout/coordinates.hxx>
 
 #include "fake_mesh.hxx"
 #include "fake_mesh_fixture.hxx"
 #include "test_extras.hxx" // FakeMesh
 
 #include "../../include/diamagnetic_drift.hxx"
+#include "../../include/guarded_options.hxx"
+
+#include <memory>
 
 /// Global mesh
 namespace bout {
@@ -33,14 +38,14 @@ Options diamagneticOptions() {
 }
 
 void setCurvature(BoutReal bx = 1.0, BoutReal by = 0.0, BoutReal bz = 0.0) {
-  mesh->getCoordinates()->Bxy = 1.0;
+  mesh->getCoordinates()->setBxy(1.0);
   static_cast<FakeMesh*>(mesh)->setGridDataSource(
       new FakeGridDataSource{{{"bxcvx", bx}, {"bxcvy", by}, {"bxcvz", bz}}});
 }
 
 BoutReal volumeIntegral(const Field3D& field) {
   const auto* coords = mesh->getCoordinates();
-  const Field2D cell_volume = coords->dx * coords->dy * coords->dz * coords->J;
+  const Field2D cell_volume = coords->dx() * coords->dy() * coords->dz() * coords->J();
 
   BoutReal result = 0.0;
   for (int jx = mesh->xstart; jx <= mesh->xend; ++jx) {
@@ -72,10 +77,10 @@ std::shared_ptr<Coordinates> makeUnitCoordinates(Mesh* target_mesh) {
       Field2D{0.0, target_mesh}, Field2D{0.0, target_mesh}, Field2D{0.0, target_mesh},
       Field2D{0.0, target_mesh}, Field2D{0.0, target_mesh});
 
-  coords->G1 = coords->G2 = coords->G3 = 0.1;
-  coords->non_uniform = true;
-  coords->d1_dx = coords->d1_dy = 0.2;
-  coords->d1_dz = 0.0;
+  coords->setNon_uniform(true);
+  coords->setD1_dx(0.2);
+  coords->setD1_dy(0.2);
+  coords->setD1_dz(0.0);
 #if BOUT_USE_METRIC_3D
   coords->Bxy.splitParallelSlices();
   coords->Bxy.yup() = coords->Bxy.ydown() = coords->Bxy;
@@ -171,10 +176,11 @@ TEST_F(DiamagneticDriftTest, CoreAverageAveragesInnermostCoreRing) {
   setCurvature();
 
   auto* coords = mesh->getCoordinates();
-  coords->J = 1.0;
-  coords->J(mesh->xstart, mesh->ystart) = 1.0;
-  coords->J(mesh->xstart, mesh->ystart + 1) = 2.0;
-  coords->J(mesh->xstart, mesh->yend) = 3.0;
+  Coordinates::FieldMetric J{1.0};
+  J(mesh->xstart, mesh->ystart) = 1.0;
+  J(mesh->xstart, mesh->ystart + 1) = 2.0;
+  J(mesh->xstart, mesh->yend) = 3.0;
+  coords->setJ(J);
 
   Options options = diamagneticOptions();
   DiamagneticDrift component("diamagnetic_drift", options, nullptr);

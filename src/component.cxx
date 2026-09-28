@@ -101,3 +101,26 @@ bool isSetFinalNoBoundary(const GuardedOptions& option,
 #endif
   return set;
 }
+
+auto fmt::formatter<Component>::format(const Component& component,
+                                       format_context& ctx) const
+    -> format_context::iterator {
+  const std::string tn = component.typeName();
+  const std::string on = component.objectName();
+
+  std::string result;
+
+  if (not hide_name) {
+    result += on;
+  }
+  if (show_type or ((tn != on or hide_name) and not hide_type)) {
+    if (not hide_name) {
+      result += " (";
+    }
+    result += tn;
+    if (not hide_name) {
+      result += ")";
+    }
+  }
+  return underlying.format(result, ctx);
+}

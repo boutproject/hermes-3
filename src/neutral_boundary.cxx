@@ -7,11 +7,10 @@ using bout::globals::mesh;
 
 NeutralBoundary::NeutralBoundary(std::string name, Options& alloptions,
                                  [[maybe_unused]] Solver* solver)
-    : Component({writeBoundary("species:{name}:{outputs}"),
-                 writeBoundaryIfSet("species:{name}:{conditional_outputs}"),
-                 readWrite("species:{name}:energy_source"),
-                 readOnly("species:{name}:AA")}),
-      name(name) {
+    : NamedComponent(name, {writeBoundary("species:{name}:{outputs}"),
+                            writeBoundaryIfSet("species:{name}:{conditional_outputs}"),
+                            readWrite("species:{name}:energy_source"),
+                            readOnly("species:{name}:AA")}) {
 
   auto& options = alloptions[name];
   const Options& units = alloptions["units"];
@@ -64,7 +63,7 @@ NeutralBoundary::NeutralBoundary(std::string name, Options& alloptions,
 }
 
 void NeutralBoundary::transform_impl(GuardedOptions& state) {
-  auto species = state["species"][name];
+  auto species = state["species"][objectName()];
   const BoutReal AA = get<BoutReal>(species["AA"]);
 
   Field3D Nn = toFieldAligned(GET_NOBOUNDARY(Field3D, species["density"]));
@@ -136,17 +135,17 @@ void NeutralBoundary::transform_impl(GuardedOptions& state) {
                            * v_th; // Thermal reflected energy
 
         // Cross-sectional area in XZ plane:
-        BoutReal da = (coord->J[i] + coord->J[im])
-                      / (sqrt(coord->g_22[i]) + sqrt(coord->g_22[im])) * 0.5
-                      * (coord->dx[i] + coord->dx[im]) * 0.5
-                      * (coord->dz[i] + coord->dz[im]); // [m^2]
+        BoutReal da = (coord->J()[i] + coord->J()[im])
+                      / (sqrt(coord->g_22()[i]) + sqrt(coord->g_22()[im])) * 0.5
+                      * (coord->dx()[i] + coord->dx()[im]) * 0.5
+                      * (coord->dz()[i] + coord->dz()[im]); // [m^2]
 
         // Multiply by area to get energy flow (power)
         BoutReal flow = q * da; // [W]
 
         // Divide by cell volume to get source [W/m^3]
         BoutReal cooling_source =
-            flow / (coord->dx[i] * coord->dy[i] * coord->dz[i] * coord->J[i]);
+            flow / (coord->dx()[i] * coord->dy()[i] * coord->dz()[i] * coord->J()[i]);
 
         // Subtract from cell next to boundary
         energy_source[i] -= cooling_source;
@@ -198,17 +197,17 @@ void NeutralBoundary::transform_impl(GuardedOptions& state) {
                            * v_th; // Thermal reflected energy
 
         // Cross-sectional area in XZ plane:
-        BoutReal da = (coord->J[i] + coord->J[ip])
-                      / (sqrt(coord->g_22[i]) + sqrt(coord->g_22[ip])) * 0.5
-                      * (coord->dx[i] + coord->dx[ip]) * 0.5
-                      * (coord->dz[i] + coord->dz[ip]); // [m^2]
+        BoutReal da = (coord->J()[i] + coord->J()[ip])
+                      / (sqrt(coord->g_22()[i]) + sqrt(coord->g_22()[ip])) * 0.5
+                      * (coord->dx()[i] + coord->dx()[ip]) * 0.5
+                      * (coord->dz()[i] + coord->dz()[ip]); // [m^2]
 
         // Multiply by area to get energy flow (power)
         BoutReal flow = q * da; // [W]
 
         // Divide by cell volume to get source [W/m^3]
         BoutReal cooling_source =
-            flow / (coord->dx[i] * coord->dy[i] * coord->dz[i] * coord->J[i]);
+            flow / (coord->dx()[i] * coord->dy()[i] * coord->dz()[i] * coord->J()[i]);
 
         // Subtract from cell next to boundary
         energy_source[i] -= cooling_source;
@@ -249,12 +248,12 @@ void NeutralBoundary::transform_impl(GuardedOptions& state) {
           // Expanded form of the calculation for clarity
 
           // Converts dy to poloidal length: dl = dy / sqrt(g22) = dy * h_theta
-          BoutReal dpol = 0.5 * (coord->dy[i] + coord->dy[ig]) * 1
-                          / (0.5 * (sqrt(coord->g22[i]) + sqrt(coord->g22[ig])));
+          BoutReal dpol = 0.5 * (coord->dy()[i] + coord->dy()[ig]) * 1
+                          / (0.5 * (sqrt(coord->g22()[i]) + sqrt(coord->g22()[ig])));
 
           // Converts dz to toroidal length:  = dz*sqrt(g_33) = dz * R = 2piR
-          BoutReal dtor = 0.5 * (coord->dz[i] + coord->dz[ig]) * 0.5
-                          * (sqrt(coord->g_33[i]) + sqrt(coord->g_33[ig]));
+          BoutReal dtor = 0.5 * (coord->dz()[i] + coord->dz()[ig]) * 0.5
+                          * (sqrt(coord->g_33()[i]) + sqrt(coord->g_33()[ig]));
 
           BoutReal da = dpol * dtor; // [m^2]
 
@@ -262,9 +261,9 @@ void NeutralBoundary::transform_impl(GuardedOptions& state) {
           BoutReal flow = q * da; // [W]
 
           // Divide by cell volume to get source [W/m^3]
-          BoutReal cooling_source =
-              flow
-              / (coord->J[i] * coord->dx[i] * coord->dy[i] * coord->dz[i]); // [W m^-3]
+          BoutReal cooling_source = flow
+                                    / (coord->J()[i] * coord->dx()[i] * coord->dy()[i]
+                                       * coord->dz()[i]); // [W m^-3]
 
           // Subtract from cell next to boundary
           energy_source[i] -= cooling_source;
@@ -308,12 +307,12 @@ void NeutralBoundary::transform_impl(GuardedOptions& state) {
           // Expanded form of the calculation for clarity
 
           // Converts dy to poloidal length: dl = dy / sqrt(g22) = dy * h_theta
-          BoutReal dpol = 0.5 * (coord->dy[i] + coord->dy[ig]) * 1
-                          / (0.5 * (sqrt(coord->g22[i]) + sqrt(coord->g22[ig])));
+          BoutReal dpol = 0.5 * (coord->dy()[i] + coord->dy()[ig]) * 1
+                          / (0.5 * (sqrt(coord->g22()[i]) + sqrt(coord->g22()[ig])));
 
           // Converts dz to toroidal length:  = dz*sqrt(g_33) = dz * R = 2piR
-          BoutReal dtor = 0.5 * (coord->dz[i] + coord->dz[ig]) * 0.5
-                          * (sqrt(coord->g_33[i]) + sqrt(coord->g_33[ig]));
+          BoutReal dtor = 0.5 * (coord->dz()[i] + coord->dz()[ig]) * 0.5
+                          * (sqrt(coord->g_33()[i]) + sqrt(coord->g_33()[ig]));
 
           BoutReal da = dpol * dtor; // [m^2]
 
@@ -321,9 +320,9 @@ void NeutralBoundary::transform_impl(GuardedOptions& state) {
           BoutReal flow = q * da; // [W]
 
           // Divide by cell volume to get source [W/m^3]
-          BoutReal cooling_source =
-              flow
-              / (coord->J[i] * coord->dx[i] * coord->dy[i] * coord->dz[i]); // [W m^-3]
+          BoutReal cooling_source = flow
+                                    / (coord->J()[i] * coord->dx()[i] * coord->dy()[i]
+                                       * coord->dz()[i]); // [W m^-3]
 
           // Subtract from cell next to boundary
           energy_source[i] -= cooling_source;
@@ -356,6 +355,7 @@ void NeutralBoundary::outputVars(Options& state) {
   auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
   auto Tnorm = get<BoutReal>(state["Tnorm"]);
   BoutReal Pnorm = SI::qe * Tnorm * Nnorm; // Pressure normalisation
+  const std::string& name = objectName();
 
   if (diagnose) {
 

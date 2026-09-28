@@ -64,8 +64,8 @@ Vector3D Grad_perp_XZ(const Field3D& f) {
   result.y = 0.0;
   result.z = emptyFrom(f);
 
-  auto dx = metric->dx;
-  auto dz = metric->dz;
+  auto dx = metric->dx();
+  auto dz = metric->dz();
 
   BOUT_FOR(i, f.getRegion("RGN_NOBNDRY")) {
     auto xp = i.xp();
@@ -91,7 +91,7 @@ Vector3D Grad_perp_XZ(const Field3D& f) {
 } // namespace
 
 Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver)
-    : Component({readWrite("fields:vorticity"), readWrite("fields:phi")}) {
+    : NamedComponent(name, {readWrite("fields:vorticity"), readWrite("fields:phi")}) {
 
   solver->add(Vort, "Vort");
 
@@ -190,11 +190,11 @@ Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver)
     // Create an XY solver for n=0 component
     laplacexy = LaplaceXY::create(mesh);
     // Set coefficients for Boussinesq solve
-    laplacexy->setCoefs(average_atomic_mass / SQ(coord->Bxy), 0.0);
+    laplacexy->setCoefs(average_atomic_mass / SQ(DC(coord->Bxy())), 0.0);
   }
   phiSolver = Laplacian::create(&options["laplacian"]);
   // Set coefficients for Boussinesq solve
-  phiSolver->setCoefC(average_atomic_mass / SQ(coord->Bxy));
+  phiSolver->setCoefC(average_atomic_mass / SQ(coord->Bxy()));
 
   if (phi_boundary_relax) {
     // Set the last update time to -1, so it will reset
@@ -249,9 +249,9 @@ Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver)
   Curlb_B.y *= SQ(Lnorm);
   Curlb_B.z *= SQ(Lnorm);
 
-  Curlb_B *= 2. / coord->Bxy;
+  Curlb_B *= 2. / coord->Bxy();
 
-  Bsq = SQ(coord->Bxy);
+  Bsq = SQ(coord->Bxy());
 
   diagnose =
       options["diagnose"].doc("Output additional diagnostics?").withDefault<bool>(false);
@@ -820,7 +820,8 @@ void Vorticity::finally(const Options& state) {
 
       mesh->communicate(vEdotGradPi, DelpPhi_2B2);
 
-      ddt(Vort) -= FV::Div_a_Grad_perp(0.5 * average_atomic_mass / Bsq, vEdotGradPi);
+      ddt(Vort) -=
+          FV::Div_a_Grad_perp(Field3D{0.5 * average_atomic_mass / Bsq}, vEdotGradPi);
       ddt(Vort) -=
           Div_n_bxGrad_f_B_XPPM(DelpPhi_2B2, phi + Pi_hat, bndry_flux, poloidal_flows);
     }
@@ -861,7 +862,8 @@ void Vorticity::finally(const Options& state) {
       // Div_par(jpar) = B * Grad_par(jpar / B)
       // Using the approximation for small delta-B/B
       // b dot Grad(jpar) = Grad_par(jpar) + [jpar, Apar]
-      ddt(Vort) += coord->Bxy * bracket(jpar / coord->Bxy, Apar_flutter, BRACKET_ARAKAWA);
+      ddt(Vort) +=
+          coord->Bxy() * bracket(jpar / coord->Bxy(), Apar_flutter, BRACKET_ARAKAWA);
     }
   }
 
@@ -881,7 +883,7 @@ void Vorticity::finally(const Options& state) {
   if (hyper_z > 0) {
     // Form of hyper-viscosity to suppress zig-zags in Z
     const auto* coord = Vort.getCoordinates();
-    ddt(Vort) -= hyper_z * SQ(SQ(coord->dz)) * D4DZ4(Vort);
+    ddt(Vort) -= hyper_z * SQ(SQ(coord->dz())) * D4DZ4(Vort);
   }
 
   if (phi_sheath_dissipation) {

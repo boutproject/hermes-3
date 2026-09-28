@@ -20,14 +20,14 @@
 ///
 /// where v_th = sqrt(eT/m) is the thermal speed
 ///
-struct NeutralBoundary : public Component {
+struct NeutralBoundary : public NamedComponent<NeutralBoundary> {
   NeutralBoundary(std::string name, Options& options, Solver*);
 
   void outputVars(Options& state) override;
 
-private:
-  std::string name; ///< Short name of species e.g "d"
+  static constexpr auto type = "neutral_boundary";
 
+private:
   BoutReal Tnorm; // Temperature normalisation [eV]
 
   BoutReal target_energy_refl_factor, sol_energy_refl_factor,
@@ -59,7 +59,7 @@ private:
 };
 
 namespace {
-RegisterComponent<NeutralBoundary> registercomponentneutralboundary("neutral_boundary");
+RegisterComponent<NeutralBoundary> registercomponentneutralboundary;
 }
 
 #endif // NEUTRAL_BOUNDARY_H

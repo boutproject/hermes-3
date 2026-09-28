@@ -23,7 +23,7 @@ spack:
   develop:
     boutpp:
       path: ./external/BOUT-dev
-      spec: boutpp@develop
+      spec: boutpp@develop build_type=RelWithDebInfo
     hermes-3:
       path: .
-      spec: hermes-3@develop
+      spec: hermes-3@develop build_type=RelWithDebInfo

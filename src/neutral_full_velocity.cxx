@@ -10,11 +10,13 @@
 
 #include <algorithm>
 
+#if not BOUT_USE_METRIC_3D
+
 using bout::globals::mesh;
 
 NeutralFullVelocity::NeutralFullVelocity(const std::string& name, Options& alloptions,
                                          Solver* solver)
-    : Component({readWrite("species:{name}:{outputs}")}), name(name) {
+    : NamedComponent(name, {readWrite("species:{name}:{outputs}")}) {
 
   // This is used in both transform and finally functions
   coord = mesh->getCoordinates();
@@ -345,10 +347,10 @@ void NeutralFullVelocity::transform_impl(GuardedOptions& state) {
   // Vn2D is covariant and b = e_y / (JB) to write:
   //
   // V_{||n} = b dot V_n = Vn2D.y / (JB)
-  Vnpar = Vn2D.y / (coord->J * coord->Bxy);
+  Vnpar = Vn2D.y / (coord->J() * coord->Bxy());
 
   // Set values in the state
-  auto localstate = state["species"][name];
+  auto localstate = state["species"][objectName()];
   set(localstate["density"], Nn2D);
   set(localstate["AA"], AA); // Atomic mass
   set(localstate["pressure"], Pn2D);
@@ -363,6 +365,7 @@ void NeutralFullVelocity::transform_impl(GuardedOptions& state) {
 ///       is not taken from `state`. These are calculated in
 ///       `transform()` that must be called before `finally()`.
 void NeutralFullVelocity::finally(const Options& state) {
+  const std::string& name = objectName();
   auto& localstate = state["species"][name];
 
   ///////////////////////////////////////////////////////
@@ -593,19 +596,20 @@ void NeutralFullVelocity::finally(const Options& state) {
   if (localstate.isSet("momentum_source")) {
     Snv = DC(get<Field3D>(localstate["momentum_source"]));
     Field2D Fpar_mN = Snv / (AA * Nn2D_floor);
-    ddt(Vn2D).y += Fpar_mN * (coord->J * coord->Bxy); // Parallel flow
+    ddt(Vn2D).y += Fpar_mN * (coord->J() * coord->Bxy()); // Parallel flow
 
     if (toroidal_flow) {
-      ddt(Vn2D).z += Fpar_mN * coord->g_23 / (coord->J * coord->Bxy); // Toroidal flow
+      ddt(Vn2D).z +=
+          Fpar_mN * coord->g_23() / (coord->J() * coord->Bxy()); // Toroidal flow
     }
 
     // NOTE: Should we add the contribution of Sn here?
     // Sn is introduced in the momentum equation
     // because we solve for Vn instead of AA*Nn*Vn
     // It is propably something like that:
-    // ddt(Vn2D).y += Vn2D.y * Sn / Nn2D_floor * (coord->J * coord->Bxy); // Parallel flow
+    // ddt(Vn2D).y += Vn2D.y * Sn / Nn2D_floor * (coord->J() * coord->Bxy()); // Parallel flow
     // if (toroidal_flow) {
-    //   ddt(Vn2D).z += Vn2D.z * Sn / Nn2D_floor * coord->g_23 / (coord->J * coord->Bxy);
+    //   ddt(Vn2D).z += Vn2D.z * Sn / Nn2D_floor * coord->g_23() / (coord->J() * coord->Bxy());
     //   // Toroidal flow
     // }
 
@@ -619,7 +623,7 @@ void NeutralFullVelocity::finally(const Options& state) {
     // Radial flow
     ddt(Vn2D).x -= Vn2D.x * collision_freq;
     // Binormal flow
-    ddt(Vn2D).z -= (Vn2D.z - (coord->g_23 / coord->g_22) * Vn2D.y) * collision_freq;
+    ddt(Vn2D).z -= (Vn2D.z - (coord->g_23() / coord->g_22()) * Vn2D.y) * collision_freq;
   }
 
   //////////////////////////////////////////////////////
@@ -743,6 +747,7 @@ void NeutralFullVelocity::outputVars(Options& state) {
   auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
   auto Cs0 = get<BoutReal>(state["Cs0"]);
   const BoutReal Pnorm = SI::qe * Tnorm * Nnorm;
+  const std::string& name = objectName();
 
   state[std::string("N") + name].setAttributes({{"time_dimension", "t"},
                                                 {"units", "m^-3"},
@@ -855,3 +860,5 @@ void NeutralFullVelocity::outputVars(Options& state) {
                     {"source", "neutral_full_velocity"}});
   }
 }
+
+#endif

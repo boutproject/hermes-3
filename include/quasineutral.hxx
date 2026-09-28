@@ -13,7 +13,7 @@
 ///
 /// Saves the density to the output (dump) files as N<name>
 ///
-struct Quasineutral : public Component {
+struct Quasineutral : public NamedComponent<Quasineutral> {
   /// Inputs
   /// ------
   ///
@@ -30,6 +30,8 @@ struct Quasineutral : public Component {
   void finally(const Options& state) override;
 
   void outputVars(Options& state) override;
+
+  static constexpr auto type = "quasineutral";
 
 private:
   std::string name; ///< Name of this species
@@ -55,8 +57,7 @@ private:
 };
 
 namespace {
-RegisterComponent<Quasineutral>
-    registercomponentquasineutral("quasineutral");
+RegisterComponent<Quasineutral> registercomponentquasineutral;
 }
 
 #endif // QUASINEUTRAL

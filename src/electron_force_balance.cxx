@@ -1,5 +1,7 @@
 
 #include <bout/difops.hxx>
+#include <bout/field3d.hxx>
+#include <bout/mesh.hxx>
 
 #include "../include/electron_force_balance.hxx"
 
@@ -21,7 +23,7 @@ void ElectronForceBalance::transform_impl(GuardedOptions& state) {
   ASSERT1(get<BoutReal>(electrons["charge"]) == -1.0);
 
   // Force balance, E = (-∇p + F) / n
-  Field3D force_density = - Grad_par(Pe);
+  Field3D force_density = -Grad_par(Pe);
 
   if (IS_SET(electrons["momentum_source"])) {
     // Balance other forces from e.g. collisions
@@ -47,8 +49,7 @@ void ElectronForceBalance::transform_impl(GuardedOptions& state) {
     const Field3D N = GET_NOBOUNDARY(Field3D, species["density"]);
     const BoutReal charge = get<BoutReal>(species["charge"]);
 
-    add(species["momentum_source"],
-        charge * N * Epar);
+    add(species["momentum_source"], charge * N * Epar);
   }
 }
 

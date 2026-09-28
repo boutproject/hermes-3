@@ -22,18 +22,19 @@ BoutReal ionisation_rate(BoutReal T) {
 } // namespace
 
 Ionisation::Ionisation(std::string name, Options& alloptions, Solver*)
-    : Component(
-        {readOnly("species:h:density"), readOnly("species:h:temperature"),
-         readOnly("species:h:velocity"), readOnly("species:h:AA"),
-         readOnly("species:e:density"), readOnly("species:e:temperature"),
-         readOnly("species:h+:AA"), readWrite("species:h:density_source"),
-         readWrite("species:h+:density_source"), readWrite("species:h:momentum_source"),
-         readWrite("species:h+:momentum_source"), readWrite("species:h:energy_source"),
-         readWrite("species:h+:energy_source"), readWrite("species:e:energy_source")}) {
+    : NamedComponent(
+          name,
+          {readOnly("species:h:density"), readOnly("species:h:temperature"),
+           readOnly("species:h:velocity"), readOnly("species:h:AA"),
+           readOnly("species:e:density"), readOnly("species:e:temperature"),
+           readOnly("species:h+:AA"), readWrite("species:h:density_source"),
+           readWrite("species:h+:density_source"), readWrite("species:h:momentum_source"),
+           readWrite("species:h+:momentum_source"), readWrite("species:h:energy_source"),
+           readWrite("species:h+:energy_source"), readWrite("species:e:energy_source")}) {
 
   // Get options for this component
   auto& options = alloptions[name];
-  
+
   Eionize = options["Eionize"].doc("Ionisation energy cost").withDefault(30.);
 
   // Get the units
@@ -53,7 +54,7 @@ void Ionisation::transform_impl(GuardedOptions& state) {
   Field3D Tn = get<Field3D>(hydrogen["temperature"]);
   Field3D Vn = get<Field3D>(hydrogen["velocity"]);
   auto AA = get<BoutReal>(hydrogen["AA"]);
-  
+
   GuardedOptions electron = state["species"]["e"];
   Field3D Ne = get<Field3D>(electron["density"]);
   Field3D Te = get<Field3D>(electron["temperature"]);
@@ -68,28 +69,21 @@ void Ionisation::transform_impl(GuardedOptions& state) {
       Ne.getRegion("RGN_NOBNDRY"))(Ne, Nn, Te);
 
   // Particles move from hydrogen to ion
-  subtract(hydrogen["density_source"],
-           reaction_rate);
+  subtract(hydrogen["density_source"], reaction_rate);
 
-  add(ion["density_source"],
-      reaction_rate);
+  add(ion["density_source"], reaction_rate);
 
   // Move momentum from hydrogen to ion
   Field3D momentum_exchange = reaction_rate * AA * Vn;
-  
-  subtract(hydrogen["momentum_source"],
-           momentum_exchange);
-  add(ion["momentum_source"],
-      momentum_exchange);
+
+  subtract(hydrogen["momentum_source"], momentum_exchange);
+  add(ion["momentum_source"], momentum_exchange);
 
   // Move energy from hydrogen to ion
   Field3D energy_exchange = reaction_rate * (3. / 2) * Tn;
-  subtract(hydrogen["energy_source"],
-           energy_exchange);
-  add(ion["energy_source"],
-      energy_exchange);
+  subtract(hydrogen["energy_source"], energy_exchange);
+  add(ion["energy_source"], energy_exchange);
 
   // Radiate energy from electrons
-  subtract(electron["energy_source"],
-           Eionize * reaction_rate);
+  subtract(electron["energy_source"], Eionize * reaction_rate);
 }

@@ -22,8 +22,8 @@ using bout::globals::mesh;
 
 DiamagneticDrift::DiamagneticDrift(std::string name, Options& alloptions,
                                    [[maybe_unused]] Solver* solver)
-    : Component({readIfSet("species:{all_species}:{input}"),
-                 readWrite("species:{all_species}:{output}")}) {
+    : NamedComponent(name, {readIfSet("species:{all_species}:{input}"),
+                            readWrite("species:{all_species}:{output}")}) {
 
   // Get options for this component
   auto& options = alloptions[name];
@@ -44,7 +44,7 @@ DiamagneticDrift::DiamagneticDrift(std::string name, Options& alloptions,
 
   if (average_core) {
     const auto* coords = mesh->getCoordinates();
-    this->cell_volume = coords->dx * coords->dy * coords->dz * coords->J;
+    this->cell_volume = coords->dx() * coords->dy() * coords->dz() * coords->J();
     BoutReal local_core_volume = 0.0;
     for (int jy = mesh->ystart; jy <= mesh->yend; ++jy) {
       local_core_volume += this->cell_volume(mesh->xstart, jy);
@@ -82,15 +82,19 @@ DiamagneticDrift::DiamagneticDrift(std::string name, Options& alloptions,
   Curlb_B.y *= SQ(Lnorm);
   Curlb_B.z *= SQ(Lnorm);
 
-  Curlb_B *= 2. / mesh->getCoordinates()->Bxy;
+  Curlb_B *= 2. / mesh->getCoordinates()->Bxy();
 
   // Set drift to zero through sheath boundaries.
   // Flux through those cell faces should be set by sheath.
   for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
-    Curlb_B.y(r.ind, mesh->ystart - 1) = -Curlb_B.y(r.ind, mesh->ystart);
+    for (int k = 0; k < Curlb_B.y.getNz(); ++k) {
+      Curlb_B.y(r.ind, mesh->ystart - 1, k) = -Curlb_B.y(r.ind, mesh->ystart, k);
+    }
   }
   for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
-    Curlb_B.y(r.ind, mesh->yend + 1) = -Curlb_B.y(r.ind, mesh->yend);
+    for (int k = 0; k < Curlb_B.y.getNz(); ++k) {
+      Curlb_B.y(r.ind, mesh->yend + 1, k) = -Curlb_B.y(r.ind, mesh->yend, k);
+    }
   }
 
   // FIXME: density, pressure, and momentum will not be read even if

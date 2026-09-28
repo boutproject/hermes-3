@@ -13,6 +13,7 @@ Hermes-3 documentation
    installation
    inputs
    domain_grid
+   fieldline_geometry
    execution
    postprocessing
    examples
@@ -25,7 +26,7 @@ Hermes-3 documentation
    developer
 
 
-.. Dummy reference to the top-level breathe rst to suppress sphinx warning 
+.. Dummy reference to the top-level breathe rst to suppress sphinx warning
 
 .. toctree::
    :hidden:

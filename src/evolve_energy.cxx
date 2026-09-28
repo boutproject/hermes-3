@@ -30,8 +30,8 @@
 using bout::globals::mesh;
 
 EvolveEnergy::EvolveEnergy(std::string name, Options& alloptions, Solver* solver)
-    : Component(
-          {readOnly("species:{name}:{inputs}"), readWrite("species:{name}:{outputs}")}),
+    : NamedComponent(name, {readOnly("species:{name}:{inputs}"),
+                            readWrite("species:{name}:{outputs}")}),
       name(name) {
 
   auto& options = alloptions[name];
@@ -280,7 +280,7 @@ void EvolveEnergy::finally(const Options& state) {
 
   if (hyper_z > 0.) {
     auto* coord = N.getCoordinates();
-    ddt(E) -= hyper_z * SQ(SQ(coord->dz)) * D4DZ4(E);
+    ddt(E) -= hyper_z * SQ(SQ(coord->dz())) * D4DZ4(E);
   }
 
   //////////////////////

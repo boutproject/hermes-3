@@ -1,0 +1,32 @@
+name: Close stale PRs
+on:
+  schedule:
+    - cron: '30 1 */3 * *'   # run every 3 days at 01:30 UTC
+  workflow_dispatch:        # allow manual runs
+
+permissions:
+  pull-requests: write
+
+jobs:
+  stale:
+    # Skip scheduled runs on forks; still allow manual dispatch anywhere.
+    if: github.repository == 'boutproject/hermes-3' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/stale@v9
+        with:
+          days-before-stale: 90
+          days-before-close: 28
+          stale-pr-label: stale
+          stale-pr-message: >
+            This PR has had no activity for 90 days and is marked stale.
+            It will be closed in 28 days unless there is new activity.
+            Remove the `stale` label or comment to keep it open.
+          exempt-pr-labels: 'keep,pinned,security'
+          # Never mark issues as stale (-1 disables issue processing).
+          days-before-issue-stale: -1
+          # Effectively unlimited: large enough to process the whole backlog in one
+          # run (actions/stale has no true "unlimited" value, so we set a high cap).
+          operations-per-run: 1000
+          # Live: acts on stale PRs. Set to true to return to dry-run logging.
+          debug-only: false

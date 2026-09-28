@@ -4,16 +4,13 @@
 # Run the test, check it completed successfully
 #
 
-from boututils.run_wrapper import shell, shell_safe, launch_safe
-from boutdata.collect import collect
+from boututils.run_wrapper import launch_safe
 from boutdata.data import BoutData
-from sys import stdout, exit
+from sys import exit
 import numpy as np
 
-shell("ln -s ../../../hermes-3 hermes-3")
-
 # Run the case
-s, out = launch_safe("./hermes-3", nproc=1, mthread=1, pipe=True)
+s, out = launch_safe("../../../hermes-3", nproc=1, mthread=1, pipe=True)
 with open("run.log", "w") as f:
     f.write(out)
 

@@ -10,7 +10,7 @@
 
 /// Calculates the friction force applied to each species due to collisions.
 ///
-struct BraginskiiFriction : public Component {
+struct BraginskiiFriction : public NamedComponent<BraginskiiFriction> {
   ///
   /// @param alloptions Settings, which has switches for additional terms:
   ///
@@ -21,6 +21,8 @@ struct BraginskiiFriction : public Component {
 
   /// Add extra fields for output, or set attributes e.g docstrings
   void outputVars(Options& state) override;
+
+  static constexpr auto type = "braginskii_friction";
 
 private:
   /// Include frictional heating term?
@@ -55,8 +57,7 @@ private:
 };
 
 namespace {
-RegisterComponent<BraginskiiFriction>
-    registercomponentbraginskiifriction("braginskii_friction");
+RegisterComponent<BraginskiiFriction> registercomponentbraginskiifriction;
 }
 
 #endif // BRAGINSKII_FRICTION_H

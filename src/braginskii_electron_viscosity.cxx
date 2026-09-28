@@ -20,9 +20,10 @@
 
 BraginskiiElectronViscosity::BraginskiiElectronViscosity(const std::string& name,
                                                          Options& alloptions, Solver*)
-    : Component({readIfSet("species:e:pressure"), readIfSet("species:e:velocity"),
-                 readOnly("species:e:collision_frequency"),
-                 readWrite("species:e:momentum_source")}) {
+    : NamedComponent(name,
+                     {readIfSet("species:e:pressure"), readIfSet("species:e:velocity"),
+                      readOnly("species:e:collision_frequency"),
+                      readWrite("species:e:momentum_source")}) {
   auto& options = alloptions[name];
 
   eta_limit_alpha = options["eta_limit_alpha"]
@@ -49,7 +50,7 @@ void BraginskiiElectronViscosity::transform_impl(GuardedOptions& state) {
   const Field3D V = get<Field3D>(species["velocity"]);
 
   Coordinates* coord = P.getCoordinates();
-  const Field3D Bxy = coord->Bxy;
+  const Field3D Bxy = coord->Bxy();
   const Field3D sqrtB = sqrt(Bxy);
 
   // Parallel electron viscosity

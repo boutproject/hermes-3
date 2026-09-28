@@ -2,6 +2,8 @@
 #ifndef DIAMAGNETIC_DRIFT_H
 #define DIAMAGNETIC_DRIFT_H
 
+#include <bout/vectormetric.hxx>
+
 #include "component.hxx"
 #include "guarded_options.hxx"
 
@@ -13,9 +15,10 @@
 #include <string>
 
 /// Calculate diamagnetic flows
-
-struct DiamagneticDrift : public Component {
+struct DiamagneticDrift : public NamedComponent<DiamagneticDrift> {
   DiamagneticDrift(std::string name, Options& options, [[maybe_unused]] Solver* solver);
+
+  static constexpr auto type = "diamagnetic_drift";
 
   // The following functions are public for unit testing
 
@@ -43,7 +46,7 @@ struct DiamagneticDrift : public Component {
   void coreAverage(Field3D& f);
 
 private:
-  Vector2D Curlb_B;
+  VectorMetric Curlb_B;
   bool bndry_flux;      /// Allow boundary fluxes?
   bool divergence_form; ///< Use divergence form?
 
@@ -63,7 +66,7 @@ private:
 };
 
 namespace {
-RegisterComponent<DiamagneticDrift> registercomponentdiamagnetic("diamagnetic_drift");
+RegisterComponent<DiamagneticDrift> registercomponentdiamagnetic;
 }
 
 #endif // DIAMAGNETIC_DRIFT_H

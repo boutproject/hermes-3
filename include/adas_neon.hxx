@@ -23,26 +23,34 @@ constexpr std::array<BoutReal, 10> neon_ionisation_energy{
 ///
 /// @tparam level  The ionisation level: 0 is neutral, 10 is fully stripped.
 template <int level>
-constexpr std::initializer_list<char> neon_species_name{'n', 'e', '+', '0' + level};
+constexpr char neon_species_name[6]{'n', 'e', '+', '0' + level, '\0'};
 
 template <>
-constexpr std::initializer_list<char> neon_species_name<10>{'n', 'e', '+', '1', '0'};
+constexpr char neon_species_name<10>[6]{'n', 'e', '+', '1', '0', '\0'};
 
 template <>
-constexpr std::initializer_list<char> neon_species_name<1>{'n', 'e', '+'};
+constexpr char neon_species_name<1>[6]{'n', 'e', '+', '\0'};
 
 template <>
-constexpr std::initializer_list<char> neon_species_name<0>{'n', 'e'};
+constexpr char neon_species_name<0>[6]{'n', 'e', '\0'};
+
+template <int level>
+struct neon_species {
+  static constexpr auto value = neon_species_name<level>;
+};
 
 /// ADAS effective ionisation (ADF11)
 ///
 /// @tparam level  The ionisation level of the ion on the left of the reaction
 template <std::size_t level>
 struct ADASNeonIonisation : public OpenADAS {
-  ADASNeonIonisation(std::string, Options& alloptions, Solver*)
-      : OpenADAS(alloptions["units"], "scd96_ne.json", "plt96_ne.json",
+  ADASNeonIonisation(std::string name, Options& alloptions, Solver*)
+      : OpenADAS(std::move(name), alloptions["units"], "scd96_ne.json", "plt96_ne.json",
                  neon_species_name<level>, neon_species_name<level + 1>, level,
                  -neon_ionisation_energy[level]) {}
+  static constexpr auto type = izn_component_name_v<neon_species, level>;
+
+  std::string typeName() const final { return std::string(type); }
 
 private:
   void transform_impl(GuardedOptions& state) override {
@@ -62,10 +70,13 @@ private:
 template <std::size_t level>
 struct ADASNeonRecombination : public OpenADAS {
   /// @param alloptions  The top-level options. Only uses the ["units"] subsection.
-  ADASNeonRecombination(std::string, Options& alloptions, Solver*)
-      : OpenADAS(alloptions["units"], "acd96_ne.json", "prb96_ne.json",
+  ADASNeonRecombination(std::string name, Options& alloptions, Solver*)
+      : OpenADAS(std::move(name), alloptions["units"], "acd96_ne.json", "prb96_ne.json",
                  neon_species_name<level + 1>, neon_species_name<level>, level,
                  neon_ionisation_energy[level]) {}
+  static constexpr auto type = rec_component_name_v<neon_species, level>;
+
+  std::string typeName() const final { return std::string(type); }
 
 private:
   void transform_impl(GuardedOptions& state) override {
@@ -82,82 +93,84 @@ private:
 template <std::size_t level, char Hisotope>
 struct ADASNeonCX : public OpenADASChargeExchange {
   /// @param alloptions  The top-level options. Only uses the ["units"] subsection.
-  ADASNeonCX(std::string, Options& alloptions, Solver*)
-      : OpenADASChargeExchange(alloptions["units"], "ccd89_ne.json",
+  ADASNeonCX(std::string name, Options& alloptions, Solver*)
+      : OpenADASChargeExchange(std::move(name), alloptions["units"], "ccd89_ne.json",
                                neon_species_name<level + 1>, {Hisotope},
                                neon_species_name<level>, {Hisotope, '+'}, level) {}
+  static constexpr auto type = cx_component_name_v<neon_species, level, Hisotope>;
+
+  std::string typeName() const final { return std::string(type); }
 
 private:
   void transform_impl(GuardedOptions& state) override {
     GuardedOptions species = state["species"];
-    calculate_rates(
-        species["e"],                          // Electrons
-        species[neon_species_name<level + 1>], // From this ionisation state
-        species[{Hisotope}],                   //    and this neutral hydrogen atom
-        species[neon_species_name<level>],     // To this state
-        species[{Hisotope, '+'}]               //    and this hydrogen ion
+    calculate_rates(species["e"],                          // Electrons
+                    species[neon_species_name<level + 1>], // From this ionisation state
+                    species[{Hisotope}], //    and this neutral hydrogen atom
+                    species[neon_species_name<level>], // To this state
+                    species[{Hisotope, '+'}]           //    and this hydrogen ion
     );
   }
 };
 
 namespace {
 // Ionisation by electron-impact
-RegisterComponent<ADASNeonIonisation<0>> register_ionisation_ne0("ne + e -> ne+ + 2e");
-RegisterComponent<ADASNeonIonisation<1>> register_ionisation_ne1("ne+ + e -> ne+2 + 2e");
-RegisterComponent<ADASNeonIonisation<2>> register_ionisation_ne2("ne+2 + e -> ne+3 + 2e");
-RegisterComponent<ADASNeonIonisation<3>> register_ionisation_ne3("ne+3 + e -> ne+4 + 2e");
-RegisterComponent<ADASNeonIonisation<4>> register_ionisation_ne4("ne+4 + e -> ne+5 + 2e");
-RegisterComponent<ADASNeonIonisation<5>> register_ionisation_ne5("ne+5 + e -> ne+6 + 2e");
-RegisterComponent<ADASNeonIonisation<6>> register_ionisation_ne6("ne+6 + e -> ne+7 + 2e");
-RegisterComponent<ADASNeonIonisation<7>> register_ionisation_ne7("ne+7 + e -> ne+8 + 2e");
-RegisterComponent<ADASNeonIonisation<8>> register_ionisation_ne8("ne+8 + e -> ne+9 + 2e");
-RegisterComponent<ADASNeonIonisation<9>> register_ionisation_ne9("ne+9 + e -> ne+10 + 2e");
+RegisterComponent<ADASNeonIonisation<0>> register_ionisation_ne0;
+RegisterComponent<ADASNeonIonisation<1>> register_ionisation_ne1;
+RegisterComponent<ADASNeonIonisation<2>> register_ionisation_ne2;
+RegisterComponent<ADASNeonIonisation<3>> register_ionisation_ne3;
+RegisterComponent<ADASNeonIonisation<4>> register_ionisation_ne4;
+RegisterComponent<ADASNeonIonisation<5>> register_ionisation_ne5;
+RegisterComponent<ADASNeonIonisation<6>> register_ionisation_ne6;
+RegisterComponent<ADASNeonIonisation<7>> register_ionisation_ne7;
+RegisterComponent<ADASNeonIonisation<8>> register_ionisation_ne8;
+RegisterComponent<ADASNeonIonisation<9>> register_ionisation_ne9;
 
 // Recombination
-RegisterComponent<ADASNeonRecombination<0>> register_recombination_ne0("ne+ + e -> ne");
-RegisterComponent<ADASNeonRecombination<1>> register_recombination_ne1("ne+2 + e -> ne+");
-RegisterComponent<ADASNeonRecombination<2>> register_recombination_ne2("ne+3 + e -> ne+2");
-RegisterComponent<ADASNeonRecombination<3>> register_recombination_ne3("ne+4 + e -> ne+3");
-RegisterComponent<ADASNeonRecombination<4>> register_recombination_ne4("ne+5 + e -> ne+4");
-RegisterComponent<ADASNeonRecombination<5>> register_recombination_ne5("ne+6 + e -> ne+5");
-RegisterComponent<ADASNeonRecombination<6>> register_recombination_ne6("ne+7 + e -> ne+6");
-RegisterComponent<ADASNeonRecombination<7>> register_recombination_ne7("ne+8 + e -> ne+7");
-RegisterComponent<ADASNeonRecombination<8>> register_recombination_ne8("ne+9 + e -> ne+8");
-RegisterComponent<ADASNeonRecombination<9>> register_recombination_ne9("ne+10 + e -> ne+9");
+RegisterComponent<ADASNeonRecombination<0>> register_recombination_ne0;
+RegisterComponent<ADASNeonRecombination<1>> register_recombination_ne1;
+RegisterComponent<ADASNeonRecombination<2>> register_recombination_ne2;
+RegisterComponent<ADASNeonRecombination<3>> register_recombination_ne3;
+RegisterComponent<ADASNeonRecombination<4>> register_recombination_ne4;
+RegisterComponent<ADASNeonRecombination<5>> register_recombination_ne5;
+RegisterComponent<ADASNeonRecombination<6>> register_recombination_ne6;
+RegisterComponent<ADASNeonRecombination<7>> register_recombination_ne7;
+RegisterComponent<ADASNeonRecombination<8>> register_recombination_ne8;
+RegisterComponent<ADASNeonRecombination<9>> register_recombination_ne9;
 
 // Charge exchange
-RegisterComponent<ADASNeonCX<0, 'h'>> register_cx_ne0h("ne+ + h -> ne + h+");
-RegisterComponent<ADASNeonCX<1, 'h'>> register_cx_ne1h("ne+2 + h -> ne+ + h+");
-RegisterComponent<ADASNeonCX<2, 'h'>> register_cx_ne2h("ne+3 + h -> ne+2 + h+");
-RegisterComponent<ADASNeonCX<3, 'h'>> register_cx_ne3h("ne+4 + h -> ne+3 + h+");
-RegisterComponent<ADASNeonCX<4, 'h'>> register_cx_ne4h("ne+5 + h -> ne+4 + h+");
-RegisterComponent<ADASNeonCX<5, 'h'>> register_cx_ne5h("ne+6 + h -> ne+5 + h+");
-RegisterComponent<ADASNeonCX<6, 'h'>> register_cx_ne6h("ne+7 + h -> ne+6 + h+");
-RegisterComponent<ADASNeonCX<7, 'h'>> register_cx_ne7h("ne+8 + h -> ne+7 + h+");
-RegisterComponent<ADASNeonCX<8, 'h'>> register_cx_ne8h("ne+9 + h -> ne+8 + h+");
-RegisterComponent<ADASNeonCX<9, 'h'>> register_cx_ne9h("ne+10 + h -> ne+9 + h+");
+RegisterComponent<ADASNeonCX<0, 'h'>> register_cx_ne0h;
+RegisterComponent<ADASNeonCX<1, 'h'>> register_cx_ne1h;
+RegisterComponent<ADASNeonCX<2, 'h'>> register_cx_ne2h;
+RegisterComponent<ADASNeonCX<3, 'h'>> register_cx_ne3h;
+RegisterComponent<ADASNeonCX<4, 'h'>> register_cx_ne4h;
+RegisterComponent<ADASNeonCX<5, 'h'>> register_cx_ne5h;
+RegisterComponent<ADASNeonCX<6, 'h'>> register_cx_ne6h;
+RegisterComponent<ADASNeonCX<7, 'h'>> register_cx_ne7h;
+RegisterComponent<ADASNeonCX<8, 'h'>> register_cx_ne8h;
+RegisterComponent<ADASNeonCX<9, 'h'>> register_cx_ne9h;
 
-RegisterComponent<ADASNeonCX<0, 'd'>> register_cx_ne0d("ne+ + d -> ne + d+");
-RegisterComponent<ADASNeonCX<1, 'd'>> register_cx_ne1d("ne+2 + d -> ne+ + d+");
-RegisterComponent<ADASNeonCX<2, 'd'>> register_cx_ne2d("ne+3 + d -> ne+2 + d+");
-RegisterComponent<ADASNeonCX<3, 'd'>> register_cx_ne3d("ne+4 + d -> ne+3 + d+");
-RegisterComponent<ADASNeonCX<4, 'd'>> register_cx_ne4d("ne+5 + d -> ne+4 + d+");
-RegisterComponent<ADASNeonCX<5, 'd'>> register_cx_ne5d("ne+6 + d -> ne+5 + d+");
-RegisterComponent<ADASNeonCX<6, 'd'>> register_cx_ne6d("ne+7 + d -> ne+6 + d+");
-RegisterComponent<ADASNeonCX<7, 'd'>> register_cx_ne7d("ne+8 + d -> ne+7 + d+");
-RegisterComponent<ADASNeonCX<8, 'd'>> register_cx_ne8d("ne+9 + d -> ne+8 + d+");
-RegisterComponent<ADASNeonCX<9, 'd'>> register_cx_ne9d("ne+10 + d -> ne+9 + d+");
+RegisterComponent<ADASNeonCX<0, 'd'>> register_cx_ne0d;
+RegisterComponent<ADASNeonCX<1, 'd'>> register_cx_ne1d;
+RegisterComponent<ADASNeonCX<2, 'd'>> register_cx_ne2d;
+RegisterComponent<ADASNeonCX<3, 'd'>> register_cx_ne3d;
+RegisterComponent<ADASNeonCX<4, 'd'>> register_cx_ne4d;
+RegisterComponent<ADASNeonCX<5, 'd'>> register_cx_ne5d;
+RegisterComponent<ADASNeonCX<6, 'd'>> register_cx_ne6d;
+RegisterComponent<ADASNeonCX<7, 'd'>> register_cx_ne7d;
+RegisterComponent<ADASNeonCX<8, 'd'>> register_cx_ne8d;
+RegisterComponent<ADASNeonCX<9, 'd'>> register_cx_ne9d;
 
-RegisterComponent<ADASNeonCX<0, 't'>> register_cx_ne0t("ne+ + t -> ne + t+");
-RegisterComponent<ADASNeonCX<1, 't'>> register_cx_ne1t("ne+2 + t -> ne+ + t+");
-RegisterComponent<ADASNeonCX<2, 't'>> register_cx_ne2t("ne+3 + t -> ne+2 + t+");
-RegisterComponent<ADASNeonCX<3, 't'>> register_cx_ne3t("ne+4 + t -> ne+3 + t+");
-RegisterComponent<ADASNeonCX<4, 't'>> register_cx_ne4t("ne+5 + t -> ne+4 + t+");
-RegisterComponent<ADASNeonCX<5, 't'>> register_cx_ne5t("ne+6 + t -> ne+5 + t+");
-RegisterComponent<ADASNeonCX<6, 't'>> register_cx_ne6t("ne+7 + t -> ne+6 + t+");
-RegisterComponent<ADASNeonCX<7, 't'>> register_cx_ne7t("ne+8 + t -> ne+7 + t+");
-RegisterComponent<ADASNeonCX<8, 't'>> register_cx_ne8t("ne+9 + t -> ne+8 + t+");
-RegisterComponent<ADASNeonCX<9, 't'>> register_cx_ne9t("ne+10 + t -> ne+9 + t+");
+RegisterComponent<ADASNeonCX<0, 't'>> register_cx_ne0t;
+RegisterComponent<ADASNeonCX<1, 't'>> register_cx_ne1t;
+RegisterComponent<ADASNeonCX<2, 't'>> register_cx_ne2t;
+RegisterComponent<ADASNeonCX<3, 't'>> register_cx_ne3t;
+RegisterComponent<ADASNeonCX<4, 't'>> register_cx_ne4t;
+RegisterComponent<ADASNeonCX<5, 't'>> register_cx_ne5t;
+RegisterComponent<ADASNeonCX<6, 't'>> register_cx_ne6t;
+RegisterComponent<ADASNeonCX<7, 't'>> register_cx_ne7t;
+RegisterComponent<ADASNeonCX<8, 't'>> register_cx_ne8t;
+RegisterComponent<ADASNeonCX<9, 't'>> register_cx_ne9t;
 } // namespace
 
 #endif // ADAS_NEON_H

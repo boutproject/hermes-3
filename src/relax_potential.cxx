@@ -56,7 +56,16 @@ BoutReal limitFree(BoutReal fm, BoutReal fc) {
 } // namespace
 
 RelaxPotential::RelaxPotential(std::string name, Options& alloptions, Solver* solver)
-    : Component({readWrite("fields:vorticity"), readWrite("fields:phi")}) {
+    : NamedComponent(
+          name,
+          {
+              readWrite("fields:vorticity"),
+              readWrite("fields:phi"),
+              // FIXME: These are only read if (has AA and pressure) or (diamagnetic and has pressure)
+              readIfSet("species:{charged}:charge"),
+              readIfSet("species:{charged}:AA"),
+              readIfSet("species:{charged}:pressure", Regions::Interior),
+          }) {
 
   solver->add(Vort, "Vort"); // Vorticity evolving
   solver->add(phi1, "phi1"); // Evolving scaled potential ϕ_1 = λ_2 ϕ
@@ -185,10 +194,7 @@ RelaxPotential::RelaxPotential(std::string name, Options& alloptions, Solver* so
   }
 
   if (diamagnetic) {
-    // FIXME: These will only be read if BOTH charge and pressure are set
-    setPermissions(readIfSet("species:{charged}:pressure", Regions::Interior));
-    setPermissions(readIfSet("species:{all_species}:charge"));
-    // FIXME: The weay transform_impl is currently written,
+    // FIXME: The way transform_impl is currently written,
     // energy_source is set for neutral species with an explicit
     // charge declared as 0 if diamagnetic_polarisation == true. I
     // suspect that's a mistake though.
@@ -198,7 +204,7 @@ RelaxPotential::RelaxPotential(std::string name, Options& alloptions, Solver* so
     // Read curvature vector
     try {
       // May be 2D, reading as 3D
-      Vector2D curv2d;
+      VectorMetric curv2d;
       curv2d.covariant = false;
       mesh->get(curv2d, "bxcv");
       Curlb_B = curv2d;
@@ -224,12 +230,26 @@ RelaxPotential::RelaxPotential(std::string name, Options& alloptions, Solver* so
   Curlb_B.y *= SQ(Lnorm);
   Curlb_B.z *= SQ(Lnorm);
 
-  Curlb_B *= 2. / coord->Bxy;
+  Curlb_B *= 2. / coord->Bxy();
 
-  Bsq = SQ(coord->Bxy);
+  Bsq = SQ(coord->Bxy());
 
   diagnose =
       options["diagnose"].doc("Output additional diagnostics?").withDefault<bool>(false);
+
+  if (phi_boundary_relax) {
+    setPermissions(readOnly("time"));
+  } else {
+    setPermissions(readIfSet("species:e:temperature", Regions::Interior));
+  }
+  if (vort_dissipation or phi_dissipation) {
+    setPermissions(readOnly("sound_speed"));
+  }
+  if (collisional_friction) {
+    setPermissions(readOnly("species:{positive_ions}:density", Regions::Interior));
+    setPermissions(readIfSet("species:{positive_ions}:collision_frequency"));
+    setPermissions(readWrite("fields:DivJcol"));
+  }
 }
 
 void RelaxPotential::transform_impl(GuardedOptions& state) {
@@ -678,7 +698,8 @@ void RelaxPotential::finally(const Options& state) {
 
       mesh->communicate(vEdotGradPi, DelpPhi_2B2);
 
-      ddt(Vort) -= FV::Div_a_Grad_perp(0.5 * average_atomic_mass / Bsq, vEdotGradPi);
+      ddt(Vort) -=
+          FV::Div_a_Grad_perp(Field3D{0.5 * average_atomic_mass / Bsq}, vEdotGradPi);
       ddt(Vort) -=
           Div_n_bxGrad_f_B_XPPM(DelpPhi_2B2, phi + Pi_hat, bndry_flux, poloidal_flows);
     }
@@ -719,7 +740,8 @@ void RelaxPotential::finally(const Options& state) {
       // Div_par(jpar) = B * Grad_par(jpar / B)
       // Using the approximation for small delta-B/B
       // b dot Grad(jpar) = Grad_par(jpar) + [jpar, Apar]
-      ddt(Vort) += coord->Bxy * bracket(jpar / coord->Bxy, Apar_flutter, BRACKET_ARAKAWA);
+      ddt(Vort) +=
+          coord->Bxy() * bracket(jpar / coord->Bxy(), Apar_flutter, BRACKET_ARAKAWA);
     }
   }
 
@@ -745,7 +767,7 @@ void RelaxPotential::finally(const Options& state) {
   if (hyper_z > 0) {
     // Form of hyper-viscosity to suppress zig-zags in Z
     auto* coord = Vort.getCoordinates();
-    ddt(Vort) -= hyper_z * SQ(SQ(coord->dz)) * D4DZ4(Vort);
+    ddt(Vort) -= hyper_z * SQ(SQ(coord->dz())) * D4DZ4(Vort);
   }
 
   if (phi_sheath_dissipation) {
@@ -790,7 +812,8 @@ void RelaxPotential::finally(const Options& state) {
   // Solve diffusion equation for potential
 
   if (boussinesq) {
-    ddt(phi1) = lambda_1 * (FV::Div_a_Grad_perp(average_atomic_mass / Bsq, phi) - Vort);
+    ddt(phi1) =
+        lambda_1 * (FV::Div_a_Grad_perp(Field3D{average_atomic_mass / Bsq}, phi) - Vort);
 
     if (diamagnetic_polarisation) {
       for (const auto& kv : allspecies.getChildren()) {
@@ -809,7 +832,7 @@ void RelaxPotential::finally(const Options& state) {
         }
         const BoutReal A = get<BoutReal>(species["AA"]);
         const Field3D P = get<Field3D>(species["pressure"]);
-        ddt(phi1) += lambda_1 * FV::Div_a_Grad_perp(A / Bsq, P);
+        ddt(phi1) += lambda_1 * FV::Div_a_Grad_perp(Field3D{A / Bsq}, P);
       }
     }
   } else {
@@ -836,7 +859,7 @@ void RelaxPotential::finally(const Options& state) {
       if (diamagnetic_polarisation and species.isSet("pressure")) {
         // Calculate the diamagnetic flow contribution
         const Field3D Pi = get<Field3D>(species["pressure"]);
-        phi_vort += FV::Div_a_Grad_perp(Ai / Bsq / Zi, Pi);
+        phi_vort += FV::Div_a_Grad_perp(Field3D{Ai / Bsq / Zi}, Pi);
       }
     }
 
