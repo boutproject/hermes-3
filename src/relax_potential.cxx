@@ -898,13 +898,13 @@ Field3D RelaxPotential::vorticity(const Field3D& phi, GuardedOptions& allspecies
     }
 
     const BoutReal Ai = get<BoutReal>(species["AA"]);
-    const Field3D Ni = get<Field3D>(species["density"]);
+    const Field3D Ni = GET_NOBOUNDARY(Field3D, species["density"]);
 
     phi_vort += FV::Div_a_Grad_perp((Ai / Bsq) * Ni, phi);
 
     if (diamagnetic_polarisation and species.isSet("pressure")) {
       // Calculate the diamagnetic flow contribution
-      const Field3D Pi = get<Field3D>(species["pressure"]);
+      const Field3D Pi = GET_NOBOUNDARY(Field3D, species["pressure"]);
       phi_vort += FV::Div_a_Grad_perp(Coordinates::FieldMetric{Ai / Bsq / Zi}, Pi);
     }
   }
