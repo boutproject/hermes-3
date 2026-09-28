@@ -186,7 +186,7 @@ Field3D Div_n_bxGrad_f_B_XPPM(const Field3D& n, const Field3D& f, bool bndry_flu
       sx.p = n[xp];
       sx.mm = BoutNaN;
       sx.pp = BoutNaN;
-      VanAlbada(sx);
+      MC(sx);
 
       Stencil1D sz;
       sz.c = n[i];
@@ -194,7 +194,7 @@ Field3D Div_n_bxGrad_f_B_XPPM(const Field3D& n, const Field3D& f, bool bndry_flu
       sz.p = n[zp];
       sz.mm = BoutNaN;
       sz.pp = BoutNaN;
-      VanAlbada(sz);
+      MC(sz);
 
       if (vR > 0.0) {
         BoutReal flux = vR * sx.R * cellarea_R[i];
