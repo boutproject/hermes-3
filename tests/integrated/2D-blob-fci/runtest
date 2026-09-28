@@ -1,0 +1,36 @@
+#!/usr/bin/env python3
+
+# Python script to run and analyse MMS test
+
+import sys
+
+from boututils.run_wrapper import launch_safe, shell
+
+nout = 1
+timestep = 1e0 / nout
+
+nproc = 1
+
+
+args = f"nout={nout} timestep={timestep}"
+
+print("Running with " + args)
+
+# Delete old data
+shell("rm data/BOUT.dmp.*.nc")
+
+# Command to run
+cmd = "../../../hermes-3 " + args
+# Launch using MPI
+_, out = launch_safe(cmd, nproc=nproc, pipe=True)
+
+
+success = True
+
+
+if success:
+    print(" => Test passed")
+    sys.exit(0)
+else:
+    print(" => Test failed")
+    sys.exit(1)
