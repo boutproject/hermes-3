@@ -845,7 +845,6 @@ parallel momentum, are then calculated from the limited diffusion coefficient:
    \eta_{n} =& \frac{2}{5} m_n \kappa_{n} \\
    \end{aligned}
 
-
 .. doxygenstruct:: NeutralMixed
    :members:
 
@@ -1040,23 +1039,27 @@ equations. Calculates the diamagnetic drift velocity as
 where the curvature vector :math:`\nabla\times\left(\frac{\mathbf{b}}{B}\right)`
 is read from the `bxcv` mesh input variable.
 
-Two forms are available, which are implemented differently for density, momentum, and pressure equations. In the density equation, form 0 uses the diamagnetic velocity perpendicular to b and the gradient of P;
-at the boundaries this velocity is perpendicular to the boundary. Form 1 uses the magnetic gyro-center drifts, which are mostly vertical;
-at the boundaries this form produces a flow through the boundary.
-Forms 0 and 1 are analytically equivalent and should give the same result away from boundaries,
-but form 0 doesn't produce flows through boundaries. This is an approach that UEDGE uses to avoid unphysical boundary flows.
+Two forms are available for the diamagnetic contribution to the density,
+momentum, and pressure equations. The gradient form applies
+:math:`\mathbf{C}\cdot\nabla(f T / q)` directly, while the divergence form
+uses :math:`\nabla\cdot(f \mathbf{v}_{dia})`. These are analytically
+equivalent away from boundaries, differing by the divergence of a curl.
 
+At boundaries the distinction matters: the divergence form can correspond to
+a flux through the boundary, while the gradient form can be used to avoid
+those unphysical boundary fluxes.
 
-However, Form 1 is nice because the flow velocity depends on the temperature, not the pressure gradient.
-This usually makes it better behaved numerically. To make the most of both, the `diamagnetic_drift` component allows the forms to be mixed
-using the ``diamag_form`` setting. For example, the :code:`tcv-x21` example blends it such that form 0 is at the boundary:
-
+In Hermes-3 these are selected with the boolean option ``divergence_form``:
 
 .. code-block:: ini
 
    [diamagnetic_drift]
-   diamag_form = x * (1 - x)  # 0 = gradient; 1 = divergence
+   divergence_form = true   # Use Div(f v_dia)
+   bndry_flux = false       # Do not allow boundary fluxes in divergence form
 
+If ``divergence_form = false`` then the gradient form is used. This avoids
+constructing :math:`\mathbf{v}_{dia}` explicitly and applies
+:math:`\mathbf{C}\cdot\nabla(f T / q)` directly.
 
 A table of the two forms used in Hermes-3, and the corresponding terms in `Simakov & Catto <https://doi.org/10.1063/1.1623492>`_ is shown below, where :math:`\mathbf{C}=\nabla\times\left(\frac{\mathbf{b}}{B}\right)` is the curvature vector. Instead of the diamagnetic velocity, the whole terms associated are shown. The difference among the forms is the divergence of a curl, which vanishes. The diamagnetic velocity :math:`\mathbf{v}_{dia}` is defined above. Notice that Simakov & Catto used Gaussian units, but Hermes-3 uses SI units.
 
@@ -1065,8 +1068,8 @@ A table of the two forms used in Hermes-3, and the corresponding terms in `Simak
    :widths: 10 20 20 35
 
    * -
-     - Form 0
-     - Form 1
+     - Gradient form
+     - Divergence form
      - Simakov & Catto
    * - Density
      - :math:`\mathbf{C} \cdot \nabla\left(\dfrac{p}{q}\right)`
@@ -1081,7 +1084,9 @@ A table of the two forms used in Hermes-3, and the corresponding terms in `Simak
      - :math:`\dfrac{5}{2}\nabla\cdot (p \mathbf{v}_{dia})`
      - Eq. (56): :math:`\nabla\cdot\left(\dfrac{5}{2 m \Omega} \mathbf{b} \times \nabla(p T)\right)`
 
-\* Eq.(64) in Simakov & Catto is derived for ion parallel momentum, but it is also applicable to electrons since it comes from the gyro-viscosity and the mass factors of :math:`m_i` or :math:`m_e` cancel out.
+\* Eq.(64) in Simakov & Catto is derived for ion parallel momentum,
+but it is also applicable to electrons since it comes from the gyro-viscosity
+and the mass factors of :math:`m_i` or :math:`m_e` cancel out.
 
 
 .. doxygenstruct:: DiamagneticDrift
