@@ -1,3 +1,5 @@
+#include <bout/derivs.hxx>
+#include <bout/difops.hxx>
 #include <bout/fv_ops.hxx>
 #include <bout/vecops.hxx>
 
@@ -19,6 +21,8 @@ DiamagneticDrift::DiamagneticDrift(std::string name, Options& alloptions,
   diamag_form = options["diamag_form"]
                     .doc("Form of diamagnetic drift: 0 = gradient; 1 = divergence")
                     .withDefault(Field2D(1.0));
+
+  const auto* coord = mesh->getCoordinates();
 
   // Read curvature vector
   Curlb_B.covariant = false; // Contravariant
@@ -47,18 +51,28 @@ DiamagneticDrift::DiamagneticDrift(std::string name, Options& alloptions,
   Curlb_B.y *= SQ(Lnorm);
   Curlb_B.z *= SQ(Lnorm);
 
-  Curlb_B *= 2. / mesh->getCoordinates()->Bxy();
+  Curlb_B *= 2. / coord->Bxy();
+
+  logB = log(coord->Bxy());
+
+  if (mesh->isFci()) {
+    bracket_factor = sqrt(coord->g_22()) / (coord->J() * coord->Bxy());
+  } else {
+    bracket_factor = 1.0;
+  }
 
   // Set drift to zero through sheath boundaries.
   // Flux through those cell faces should be set by sheath.
-  for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
-    for (int k = 0; k < Curlb_B.y.getNz(); ++k) {
-      Curlb_B.y(r.ind, mesh->ystart - 1, k) = -Curlb_B.y(r.ind, mesh->ystart, k);
+  if (!mesh->isFci()) {
+    for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
+      for (int k = 0; k < Curlb_B.y.getNz(); ++k) {
+        Curlb_B.y(r.ind, mesh->ystart - 1, k) = -Curlb_B.y(r.ind, mesh->ystart, k);
+      }
     }
-  }
-  for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
-    for (int k = 0; k < Curlb_B.y.getNz(); ++k) {
-      Curlb_B.y(r.ind, mesh->yend + 1, k) = -Curlb_B.y(r.ind, mesh->yend, k);
+    for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
+      for (int k = 0; k < Curlb_B.y.getNz(); ++k) {
+        Curlb_B.y(r.ind, mesh->yend + 1, k) = -Curlb_B.y(r.ind, mesh->yend, k);
+      }
     }
   }
 
@@ -96,31 +110,52 @@ void DiamagneticDrift::transform_impl(GuardedOptions& state) {
 
     if (IS_SET(species["density"])) {
       auto N = GET_VALUE(Field3D, species["density"]);
+      if (mesh->isFci()) {
 
-      // Divergence form: Div(n v_D)
-      Field3D div_form = FV::Div_f_v(N, vD, bndry_flux);
-      // Gradient form: Curlb_B dot Grad(N T / q)
-      Field3D grad_form = Curlb_B * Grad(N * T / q);
+        subtract(species["density_source"],
+                 2 * bracket(logB, T * N / q, BRACKET_ARAKAWA) * bracket_factor);
 
-      subtract(species["density_source"],
-               diamag_form * div_form + (1. - diamag_form) * grad_form);
+      } else {
+        // Divergence form: Div(n v_D)
+        Field3D div_form = FV::Div_f_v(N, vD, bndry_flux);
+        // Gradient form: Curlb_B dot Grad(N T / q)
+        Field3D grad_form = Curlb_B * Grad(N * T / q);
+
+        subtract(species["density_source"],
+                 diamag_form * div_form + (1. - diamag_form) * grad_form);
+      }
     }
 
     if (IS_SET(species["pressure"])) {
       auto P = get<Field3D>(species["pressure"]);
+      if (mesh->isFci()) {
 
-      Field3D div_form = FV::Div_f_v(P, vD, bndry_flux);
-      Field3D grad_form = Curlb_B * Grad(P * T / q);
-      subtract(species["energy_source"],
-               (5. / 2) * (diamag_form * div_form + (1. - diamag_form) * grad_form));
+        subtract(species["energy_source"], (5. / 2) * 2
+                                               * bracket(logB, T * P / q, BRACKET_ARAKAWA)
+                                               * bracket_factor);
+
+      } else {
+        Field3D div_form = FV::Div_f_v(P, vD, bndry_flux);
+        Field3D grad_form = Curlb_B * Grad(P * T / q);
+        subtract(species["energy_source"],
+                 (5. / 2) * (diamag_form * div_form + (1. - diamag_form) * grad_form));
+      }
     }
 
     if (IS_SET(species["momentum"])) {
       auto NV = get<Field3D>(species["momentum"]);
-      Field3D div_form = FV::Div_f_v(NV, vD, bndry_flux);
-      Field3D grad_form = Curlb_B * Grad(NV * T / q);
-      subtract(species["momentum_source"],
-               diamag_form * div_form + (1. - diamag_form) * grad_form);
+      if (mesh->isFci()) {
+
+        subtract(species["momentum_source"],
+                 2 * bracket(logB, T * NV / q, BRACKET_ARAKAWA) * bracket_factor);
+
+      } else {
+
+        Field3D div_form = FV::Div_f_v(NV, vD, bndry_flux);
+        Field3D grad_form = Curlb_B * Grad(NV * T / q);
+        subtract(species["momentum_source"],
+                 diamag_form * div_form + (1. - diamag_form) * grad_form);
+      }
     }
   }
 }
