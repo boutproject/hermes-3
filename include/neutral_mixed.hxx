@@ -45,7 +45,7 @@ private:
   std::string
       diffusion_collisions_mode; ///< Collision selection, either afn or multispecies
   Field3DParallel nu;            ///< Collisionality to use for diffusion
-  Field3DParallel Dnn;           ///< Diffusion coefficient
+  Field3D Dnn;                   ///< Diffusion coefficient
   Field3D Dnn_unlimited, Dmax;   ///< Unlimited and max Dnn
   Field3DParallel DnnNn, DnnPn, DnnTn, DnnNVn; ///< Used for operators
   BoutReal flux_limit;                         ///< Diffusive flux limit
@@ -71,7 +71,7 @@ private:
   bool evolve_momentum;    ///< Evolve parallel momentum?
   bool normalise_sources;  ///< Normalise input sources?
 
-  Field3D kappa_n, eta_n; ///< Neutral conduction and viscosity
+  Field3DParallel kappa_n, eta_n; ///< Neutral conduction and viscosity
 
   bool nonorthogonal_operators;   ///< Use nonorthogonal operators for radial transport?
   bool precondition{true};        ///< Enable preconditioner?
