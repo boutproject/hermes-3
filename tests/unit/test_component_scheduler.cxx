@@ -124,7 +124,7 @@ INSTANTIATE_TEST_SUITE_P(
             {{"components", "a"},
              {"a", {{"type", "orderchecker"}, {"permissions", toString(Permissions())}}}},
             {"a"}),
-        // Single component with only read permissions
+        // Single component with only write permissions
         Parameter({{"components", "a"},
                    {"a",
                     {{"type", "orderchecker"},

@@ -20,7 +20,7 @@ Note that the solver timestep is adaptive and not user-settable.
 
 This is followed by ``[mesh]``, ``[solver]`` and ``[hermes]`` headers, where the ``[hermes]``
 section defines the list of components used. The component order doesn't
-matters, as they will be sorted to ensure state variables are set
+matter, as they will be sorted to ensure state variables are set
 before they are used.
 
 .. code-block:: ini

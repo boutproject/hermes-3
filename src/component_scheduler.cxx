@@ -191,7 +191,7 @@ getVariableHierarchy(const std::vector<std::unique_ptr<Component>>& components) 
   std::set_intersection(unconditional_names.begin(), unconditional_names.end(),
                         unconditional_sections.begin(), unconditional_sections.end(),
                         std::inserter(sections_present, sections_present.begin()));
-  /// Assemble the set of all variable names which are definitly
+  /// Assemble the set of all variable names which are definitely
   /// read/written by components (i.e., not including sections)
   std::set<std::string> non_sections;
   std::set_difference(unconditional_names.begin(), unconditional_names.end(),

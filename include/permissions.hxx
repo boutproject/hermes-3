@@ -325,7 +325,7 @@ inline Permissions::VarRights writeBoundaryIfSet(std::string varname) {
 /// permissions on the boundaries and read permissions for the
 /// interior.
 ///
-/// FIXME: Currently these permissiosn are not expressed properly, due
+/// FIXME: Currently these permissions are not expressed properly, due
 /// to limitations in how the permission system. The boundary will
 /// have write permission regardless of whether or not the interior is
 /// set.
