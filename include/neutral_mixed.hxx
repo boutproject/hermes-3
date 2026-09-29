@@ -56,7 +56,7 @@ private:
   BoutReal neutral_lmax;             ///< Used for collisionality floor
 
   bool sheath_ydown, sheath_yup;
-
+  bool isMMS; ///< Used to turn of certain Boundary conditions for correct convergence
   BoutReal density_floor; ///< Minimum Nn used when dividing NVn by Nn to get Vn.
   BoutReal temperature_floor;
   BoutReal pressure_floor; ///< Minimum Pn used when dividing Pn by Nn to get Tn.

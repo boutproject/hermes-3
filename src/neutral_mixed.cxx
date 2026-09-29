@@ -95,6 +95,8 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
                      .doc("Enable preconditioning in neutral model?")
                      .withDefault<bool>(false);
 
+  isMMS = options["isMMS"].doc("Is this MMS?").withDefault<bool>(false);
+
   lax_flux =
       options["lax_flux"].doc("Enable stabilising lax flux?").withDefault<bool>(true);
 
@@ -195,21 +197,25 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
   mesh->get(density_source, std::string("N") + name + "_src");
   // Allow the user to override the source
   density_source =
-      alloptions[std::string("N") + name]["source"]
-          .doc("Source term in ddt(N" + name + std::string("). Units [m^-3/s]"))
-          .withDefault(density_source)
-      / density_norm;
+      isMMS
+          ? Field3D{0.0}
+          : alloptions[std::string("N") + name]["source"]
+                    .doc("Source term in ddt(N" + name + std::string("). Units [m^-3/s]"))
+                    .withDefault(density_source)
+                / density_norm;
 
   // Try to read the pressure source from the mesh
   // Units of Pascals per second
   pressure_source = 0.0;
   mesh->get(pressure_source, std::string("P") + name + "_src");
   // Allow the user to override the source
-  pressure_source = alloptions[std::string("P") + name]["source"]
-                        .doc(std::string("Source term in ddt(P") + name
-                             + std::string("). Units [N/m^2/s]"))
-                        .withDefault(pressure_source)
-                    / pressure_norm;
+  pressure_source = isMMS ? Field3D{0.0}
+                          : alloptions[std::string("P") + name]["source"]
+                                    .doc(std::string("Source term in ddt(P") + name
+                                         + std::string("). Units [N/m^2/s]"))
+                                    .withDefault(pressure_source)
+                                / pressure_norm;
+
   // Try to read the momentum source from the mesh
   momentum_source = 0.0;
   mesh->get(momentum_source, fmt::format("NV{}_src", name));
@@ -275,10 +281,14 @@ void NeutralMixed::transform_impl(GuardedOptions& state) {
   // Nnlim Used where division by neutral density is needed
   Nnlim = softFloor(Nn, density_floor);
   Tn = Pn / Nnlim;
-  Tn.applyBoundary();
 
   Vn = NVn / (AA * Nnlim);
-  Vn.applyBoundary("neumann");
+
+  // Applying these BCs destroys MMS tests
+  if (!isMMS) {
+    Tn.applyBoundary();
+    Vn.applyBoundary("neumann");
+  }
 
   /////////////////////////////////////////////////////
   // Parallel boundary conditions
@@ -385,7 +395,12 @@ void NeutralMixed::finally(const Options& state) {
   // Pnlim used where positivity of Pn is required
   Pnlim = softFloor(Pn, pressure_floor);
   logPnlim = log(Pnlim);
-  logPnlim.applyBoundary();
+
+  // Applying these BCs destroys MMS tests
+  if (!isMMS) {
+    logPnlim.applyBoundary();
+  }
+
   ///////////////////////////////////////////////////////
   // Calculate cross-field diffusion from collision frequency
   //
@@ -524,19 +539,27 @@ void NeutralMixed::finally(const Options& state) {
   }
 
   mesh->communicate(Dnn);
+
   if (!Nn.isFci()) {
     Dnn.clearParallelSlices();
   }
-  Dnn.applyBoundary();
+
+  // Applying these BCs destroys MMS tests
+  if (!isMMS) {
+    Dnn.applyBoundary();
+  }
 
   // Neutral diffusion parameters have the same boundary condition as Dnn
   DnnNn = Dnn * Nnlim;
   DnnPn = Dnn * Pnlim;
   DnnNVn = Dnn * NVn;
 
-  DnnPn.applyBoundary();
-  DnnNn.applyBoundary();
-  DnnNVn.applyBoundary();
+  // Applying these BCs destroys MMS tests
+  if (!isMMS) {
+    DnnPn.applyBoundary();
+    DnnNn.applyBoundary();
+    DnnNVn.applyBoundary();
+  }
 
   if (Nn.isFci()) {
 
