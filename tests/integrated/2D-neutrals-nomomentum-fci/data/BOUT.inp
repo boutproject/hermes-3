@@ -35,7 +35,7 @@ neutral_lmax = 0.02
 flux_limit = -1.0
 
 evolve_momentum = false
-
+isMMS = true
 
 [Nh]
 
