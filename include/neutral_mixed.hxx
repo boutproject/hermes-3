@@ -46,7 +46,7 @@ private:
       diffusion_collisions_mode; ///< Collision selection, either afn or multispecies
   Field3DParallel nu;            ///< Collisionality to use for diffusion
   Field3DParallel Dnn;           ///< Diffusion coefficient
-  Field3DParallel Dnn_unlimited, Dmax;         ///< Unlimited and max Dnn
+  Field3D Dnn_unlimited, Dmax;   ///< Unlimited and max Dnn
   Field3DParallel DnnNn, DnnPn, DnnTn, DnnNVn; ///< Used for operators
   BoutReal flux_limit;                         ///< Diffusive flux limit
   BoutReal flux_limiter_sharpness;   ///< Sharpness of the diffusive flux limiter

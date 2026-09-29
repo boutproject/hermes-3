@@ -607,7 +607,12 @@ void NeutralMixed::finally(const Options& state) {
     ddt(Nn) +=
         Div_a_Grad_perp_nonorthog(DnnNn, logPnlim, pf_adv_perp_xlow, pf_adv_perp_ylow);
   } else {
-    ddt(Nn) += Div_a_Grad_perp_flows(DnnNn, logPnlim, pf_adv_perp_xlow, pf_adv_perp_ylow);
+    if (Nn.isFci()) {
+      ddt(Nn) += (*dagp_op)(DnnNn, logPnlim, pf_adv_perp_xlow, pf_adv_perp_ylow, false);
+    } else {
+      ddt(Nn) +=
+          Div_a_Grad_perp_flows(DnnNn, logPnlim, pf_adv_perp_xlow, pf_adv_perp_ylow);
+    }
   }
 
   Sn = density_source; // Save for possible output
@@ -631,9 +636,14 @@ void NeutralMixed::finally(const Options& state) {
         (5. / 3)
         * Div_a_Grad_perp_nonorthog(DnnPn, logPnlim, ef_adv_perp_xlow, ef_adv_perp_ylow);
   } else {
-    ddt(Pn) +=
-        (5. / 3)
-        * Div_a_Grad_perp_flows(DnnPn, logPnlim, ef_adv_perp_xlow, ef_adv_perp_ylow);
+    if (Nn.isFci()) {
+      ddt(Pn) += (5.0 / 3.0)
+                 * (*dagp_op)(DnnPn, logPnlim, ef_adv_perp_xlow, ef_adv_perp_ylow, false);
+    } else {
+      ddt(Pn) +=
+          (5. / 3)
+          * Div_a_Grad_perp_flows(DnnPn, logPnlim, ef_adv_perp_xlow, ef_adv_perp_ylow);
+    }
   }
 
   // The factor here is 5/2 as we're advecting internal energy and pressure.
@@ -654,9 +664,14 @@ void NeutralMixed::finally(const Options& state) {
           (2. / 3)
           * Div_a_Grad_perp_nonorthog(kappa_n, Tn, ef_cond_perp_xlow, ef_cond_perp_ylow);
     } else {
-      ddt(Pn) +=
-          (2. / 3)
-          * Div_a_Grad_perp_flows(kappa_n, Tn, ef_cond_perp_xlow, ef_cond_perp_ylow);
+      if (Pn.isFci()) {
+        ddt(Pn) += (2.0 / 3.0)
+                   * (*dagp_op)(kappa_n, Tn, ef_cond_perp_xlow, ef_cond_perp_ylow, false);
+      } else {
+        ddt(Pn) +=
+            (2. / 3)
+            * Div_a_Grad_perp_flows(kappa_n, Tn, ef_cond_perp_xlow, ef_cond_perp_ylow);
+      }
     }
 
     // The factor here is likely 3/2 as this is pure energy flow, but needs checking.
@@ -688,8 +703,13 @@ void NeutralMixed::finally(const Options& state) {
       ddt(NVn) +=
           Div_a_Grad_perp_nonorthog(DnnNVn, logPnlim, mf_adv_perp_xlow, mf_adv_perp_ylow);
     } else {
-      ddt(NVn) +=
-          Div_a_Grad_perp_flows(DnnNVn, logPnlim, mf_adv_perp_xlow, mf_adv_perp_ylow);
+      if (Nn.isFci()) {
+        ddt(NVn) +=
+            (*dagp_op)(DnnNVn, logPnlim, mf_adv_perp_xlow, mf_adv_perp_ylow, false);
+      } else {
+        ddt(NVn) +=
+            Div_a_Grad_perp_flows(DnnNVn, logPnlim, mf_adv_perp_xlow, mf_adv_perp_ylow);
+      }
     }
 
     if (neutral_viscosity) {
@@ -711,8 +731,13 @@ void NeutralMixed::finally(const Options& state) {
         viscosity_source +=
             Div_a_Grad_perp_nonorthog(eta_n, Vn, mf_visc_perp_xlow, mf_visc_perp_ylow);
       } else {
-        viscosity_source +=
-            Div_a_Grad_perp_flows(eta_n, Vn, mf_visc_perp_xlow, mf_visc_perp_ylow);
+        if (Nn.isFci()) {
+          viscosity_source +=
+              (*dagp_op)(eta_n, Vn, mf_visc_perp_xlow, mf_visc_perp_ylow, false);
+        } else {
+          viscosity_source +=
+              Div_a_Grad_perp_flows(eta_n, Vn, mf_visc_perp_xlow, mf_visc_perp_ylow);
+        }
       }
 
       ddt(NVn) += viscosity_source;
