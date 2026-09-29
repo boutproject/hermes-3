@@ -250,6 +250,11 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
   DnnPn.setBoundary(std::string("Dnn") + name);
   DnnNVn.setBoundary(std::string("Dnn") + name);
 
+  // Only create the operator when Fci, otherwise other operators are used
+  if (Nn.isFci()) {
+    dagp_op = FCI::getDagp_fv(mesh, meters);
+  }
+
   substitutePermissions("name", {name});
   substitutePermissions(
       "outputs", {"AA", "density", "pressure", "temperature", "momentum", "velocity"});
@@ -258,10 +263,11 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
 void NeutralMixed::transform_impl(GuardedOptions& state) {
 
   mesh->communicate(Nn, Pn, NVn);
-
-  Nn.clearParallelSlices();
-  Pn.clearParallelSlices();
-  NVn.clearParallelSlices();
+  if (!Nn.isFci()) {
+    Nn.clearParallelSlices();
+    Pn.clearParallelSlices();
+    NVn.clearParallelSlices();
+  }
 
   Nn = floor(Nn, 0.0);
   Pn = floor(Pn, 0.0);
@@ -278,55 +284,66 @@ void NeutralMixed::transform_impl(GuardedOptions& state) {
   // Parallel boundary conditions
   TRACE("Neutral boundary conditions");
 
-  if (sheath_ydown) {
-    for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
-      for (int jz = 0; jz < mesh->LocalNz; jz++) {
-        // Free boundary (constant gradient) density
-        const BoutReal nnwall = std::max(
-            0.5 * (3. * Nn(r.ind, mesh->ystart, jz) - Nn(r.ind, mesh->ystart + 1, jz)),
-            0.0);
+  // FCI cant use the RangeIterator
+  if (Nn.isFci()) {
+    if (sheath_ydown || sheath_yup) {
+      Tn.applyParallelBoundary("parallel_neumann_o1");
+      Pn.applyParallelBoundary("parallel_neumann_o1");
+      Vn.applyParallelBoundary("parallel_dirichlet_o2");
+      NVn.applyParallelBoundary("parallel_dirichlet_o2");
+    }
+  } else {
+    if (sheath_ydown) {
+      for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
+        for (int jz = 0; jz < mesh->LocalNz; jz++) {
+          // Free boundary (constant gradient) density
+          const BoutReal nnwall = std::max(
+              0.5 * (3. * Nn(r.ind, mesh->ystart, jz) - Nn(r.ind, mesh->ystart + 1, jz)),
+              0.0);
 
-        const BoutReal tnwall = Tn(r.ind, mesh->ystart, jz);
+          const BoutReal tnwall = Tn(r.ind, mesh->ystart, jz);
 
-        Nn(r.ind, mesh->ystart - 1, jz) = 2 * nnwall - Nn(r.ind, mesh->ystart, jz);
+          Nn(r.ind, mesh->ystart - 1, jz) = 2 * nnwall - Nn(r.ind, mesh->ystart, jz);
 
-        // Zero gradient temperature, heat flux added later
-        Tn(r.ind, mesh->ystart - 1, jz) = tnwall;
+          // Zero gradient temperature, heat flux added later
+          Tn(r.ind, mesh->ystart - 1, jz) = tnwall;
 
-        // Set pressure consistent at the boundary
-        // Pn(r.ind, mesh->ystart - 1, jz) =
-        //     2. * nnwall * tnwall - Pn(r.ind, mesh->ystart, jz);
+          // Set pressure consistent at the boundary
+          // Pn(r.ind, mesh->ystart - 1, jz) =
+          //     2. * nnwall * tnwall - Pn(r.ind, mesh->ystart, jz);
 
-        // Zero-gradient pressure
-        Pn(r.ind, mesh->ystart - 1, jz) = Pn(r.ind, mesh->ystart, jz);
+          // Zero-gradient pressure
+          Pn(r.ind, mesh->ystart - 1, jz) = Pn(r.ind, mesh->ystart, jz);
 
-        // No flow into wall
-        Vn(r.ind, mesh->ystart - 1, jz) = -Vn(r.ind, mesh->ystart, jz);
-        NVn(r.ind, mesh->ystart - 1, jz) = -NVn(r.ind, mesh->ystart, jz);
+          // No flow into wall
+          Vn(r.ind, mesh->ystart - 1, jz) = -Vn(r.ind, mesh->ystart, jz);
+          NVn(r.ind, mesh->ystart - 1, jz) = -NVn(r.ind, mesh->ystart, jz);
+        }
       }
     }
-  }
 
-  if (sheath_yup) {
-    for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
-      for (int jz = 0; jz < mesh->LocalNz; jz++) {
-        // Free boundary (constant gradient) density
-        const BoutReal nnwall = std::max(
-            0.5 * (3. * Nn(r.ind, mesh->yend, jz) - Nn(r.ind, mesh->yend - 1, jz)), 0.0);
+    if (sheath_yup) {
+      for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
+        for (int jz = 0; jz < mesh->LocalNz; jz++) {
+          // Free boundary (constant gradient) density
+          const BoutReal nnwall = std::max(
+              0.5 * (3. * Nn(r.ind, mesh->yend, jz) - Nn(r.ind, mesh->yend - 1, jz)),
+              0.0);
 
-        const BoutReal tnwall = Tn(r.ind, mesh->yend, jz);
+          const BoutReal tnwall = Tn(r.ind, mesh->yend, jz);
 
-        Nn(r.ind, mesh->yend + 1, jz) = 2 * nnwall - Nn(r.ind, mesh->yend, jz);
+          Nn(r.ind, mesh->yend + 1, jz) = 2 * nnwall - Nn(r.ind, mesh->yend, jz);
 
-        // Zero gradient temperature, heat flux added later
-        Tn(r.ind, mesh->yend + 1, jz) = tnwall;
+          // Zero gradient temperature, heat flux added later
+          Tn(r.ind, mesh->yend + 1, jz) = tnwall;
 
-        // Zero-gradient pressure
-        Pn(r.ind, mesh->yend + 1, jz) = Pn(r.ind, mesh->yend, jz);
+          // Zero-gradient pressure
+          Pn(r.ind, mesh->yend + 1, jz) = Pn(r.ind, mesh->yend, jz);
 
-        // No flow into wall
-        Vn(r.ind, mesh->yend + 1, jz) = -Vn(r.ind, mesh->yend, jz);
-        NVn(r.ind, mesh->yend + 1, jz) = -NVn(r.ind, mesh->yend, jz);
+          // No flow into wall
+          Vn(r.ind, mesh->yend + 1, jz) = -Vn(r.ind, mesh->yend, jz);
+          NVn(r.ind, mesh->yend + 1, jz) = -NVn(r.ind, mesh->yend, jz);
+        }
       }
     }
   }
@@ -364,7 +381,7 @@ void NeutralMixed::finally(const Options& state) {
   // Nnlim Used where division by neutral density is needed
   Nnlim = softFloor(Nn, density_floor);
   // Tnlim used where positivity of Tn is required
-  const Field3D Tnlim = softFloor(Tn, temperature_floor);
+  const Field3DParallel Tnlim = softFloor(Tn, temperature_floor);
   // Pnlim used where positivity of Pn is required
   Pnlim = softFloor(Pn, pressure_floor);
   logPnlim = log(Pnlim);
@@ -507,7 +524,9 @@ void NeutralMixed::finally(const Options& state) {
   }
 
   mesh->communicate(Dnn);
-  Dnn.clearParallelSlices();
+  if (!Nn.isFci()) {
+    Dnn.clearParallelSlices();
+  }
   Dnn.applyBoundary();
 
   // Neutral diffusion parameters have the same boundary condition as Dnn
@@ -519,24 +538,36 @@ void NeutralMixed::finally(const Options& state) {
   DnnNn.applyBoundary();
   DnnNVn.applyBoundary();
 
-  if (sheath_ydown) {
-    for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
-      for (int jz = 0; jz < mesh->LocalNz; jz++) {
-        Dnn(r.ind, mesh->ystart - 1, jz) = -Dnn(r.ind, mesh->ystart, jz);
-        DnnNn(r.ind, mesh->ystart - 1, jz) = -DnnNn(r.ind, mesh->ystart, jz);
-        DnnPn(r.ind, mesh->ystart - 1, jz) = -DnnPn(r.ind, mesh->ystart, jz);
-        DnnNVn(r.ind, mesh->ystart - 1, jz) = -DnnNVn(r.ind, mesh->ystart, jz);
+  if (Nn.isFci()) {
+
+    if (sheath_ydown || sheath_yup) {
+      Dnn.applyParallelBoundary("parallel_dirichlet_o2");
+      DnnNn.applyParallelBoundary("parallel_dirichlet_o2");
+      DnnPn.applyParallelBoundary("parallel_dirichlet_o2");
+      DnnNVn.applyParallelBoundary("parallel_dirichlet_o2");
+    }
+
+  } else {
+
+    if (sheath_ydown) {
+      for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
+        for (int jz = 0; jz < mesh->LocalNz; jz++) {
+          Dnn(r.ind, mesh->ystart - 1, jz) = -Dnn(r.ind, mesh->ystart, jz);
+          DnnNn(r.ind, mesh->ystart - 1, jz) = -DnnNn(r.ind, mesh->ystart, jz);
+          DnnPn(r.ind, mesh->ystart - 1, jz) = -DnnPn(r.ind, mesh->ystart, jz);
+          DnnNVn(r.ind, mesh->ystart - 1, jz) = -DnnNVn(r.ind, mesh->ystart, jz);
+        }
       }
     }
-  }
 
-  if (sheath_yup) {
-    for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
-      for (int jz = 0; jz < mesh->LocalNz; jz++) {
-        Dnn(r.ind, mesh->yend + 1, jz) = -Dnn(r.ind, mesh->yend, jz);
-        DnnNn(r.ind, mesh->yend + 1, jz) = -DnnNn(r.ind, mesh->yend, jz);
-        DnnPn(r.ind, mesh->yend + 1, jz) = -DnnPn(r.ind, mesh->yend, jz);
-        DnnNVn(r.ind, mesh->yend + 1, jz) = -DnnNVn(r.ind, mesh->yend, jz);
+    if (sheath_yup) {
+      for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
+        for (int jz = 0; jz < mesh->LocalNz; jz++) {
+          Dnn(r.ind, mesh->yend + 1, jz) = -Dnn(r.ind, mesh->yend, jz);
+          DnnNn(r.ind, mesh->yend + 1, jz) = -DnnNn(r.ind, mesh->yend, jz);
+          DnnPn(r.ind, mesh->yend + 1, jz) = -DnnPn(r.ind, mesh->yend, jz);
+          DnnNVn(r.ind, mesh->yend + 1, jz) = -DnnNVn(r.ind, mesh->yend, jz);
+        }
       }
     }
   }
