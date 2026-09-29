@@ -17,7 +17,7 @@ def gridname(ny):
 
 
 # List of NY values to use
-nylist = [32, 64]
+nylist = [16, 32]
 
 nout = 20
 timestep = 1e4 / nout
