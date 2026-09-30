@@ -400,6 +400,8 @@ if(HERMES_TESTS)
   hermes_add_integrated_test(2D-neutrals-nomomentum-fci REQUIRES
                              BOUT_ENABLE_METRIC_3D)
 
+  hermes_add_integrated_test(1D-neutrals-fci REQUIRES BOUT_ENABLE_METRIC_3D)
+
   # Unit tests
   option(HERMES_UNIT_TESTS "Build the unit tests" ON)
   if(HERMES_UNIT_TESTS)
