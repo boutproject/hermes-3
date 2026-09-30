@@ -31,7 +31,6 @@ BraginskiiElectronViscosity::BraginskiiElectronViscosity(const std::string& name
                         .withDefault(-1.0);
 
   diagnose = options["diagnose"].doc("Output diagnostics?").withDefault<bool>(false);
-
 }
 
 void BraginskiiElectronViscosity::transform_impl(GuardedOptions& state) {
@@ -56,7 +55,7 @@ void BraginskiiElectronViscosity::transform_impl(GuardedOptions& state) {
   if (!sqrtB.isAllocated()) {
     sqrtB = sqrt(Bxy);
   }
-  
+
   // Parallel electron viscosity
   Field3D eta = (4. / 3) * 0.73 * P * tau;
 
@@ -82,7 +81,7 @@ void BraginskiiElectronViscosity::transform_impl(GuardedOptions& state) {
     eta.getMesh()->communicate(eta);
     eta.applyParallelBoundary("parallel_neumann_o2");
   }
-  
+
   // Save term for output diagnostic
   viscosity =
       sqrtB
