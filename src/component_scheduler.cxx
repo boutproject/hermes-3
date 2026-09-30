@@ -159,65 +159,173 @@ std::set<std::string> getParents(const std::string& name) {
 /// the set of all variables contained in that section and its
 /// sub-sections. Otherwise the path corresponds to a variable and
 /// just maps to itself. Only paths which are explicitly given a
-/// permission by at least one component will be present.
+/// permission by at least one component will be present. Paths with
+/// only `readIfSet` permission will only map to anything if there is
+/// a component that has write permission for it or one of its
+/// parents.
+///
+/// The algorithm for this is:
+///
+///  - Construct a set of all names that have the following permissions. These names may refer
+///    either to variable names or section names; at this stage we don't know which.
+///    - readIfSet permission (readifset_names)
+///    - read, write, or writeFinal permission (readwrite_names)
+///    - write or writeFinal permission (write_names)
+///
+///  - Assemble sets consisting of the names of the parent sections
+///    for the contents of readifset_names (readifset_sections) and
+///    readwrite_names (readwrite_sections)
+///
+///  - Use the above to build the following further sets:
+///    - All variable/section names with permissions
+///        all_names = readifset_names ∪ readwrite_names
+///    - The parent sections of the contents of all_names
+///        all_sections = readifset_sections ∪ readwrite_sections
+///    - Section names explicitly given readIfSet permissions
+///        readifset_sections_present = readifset_names ∩ all_sections
+///    - Variable names explicitly given readIfSet permissions
+///        readifset_non_sections = readifset_names \ readifset_sections_present
+///    - Section names explicitly given read permissions or higher
+///        readwrite_sections_present = readwrite_names ∩ all_sections
+///    - Variable names explicitly given read permissions or higher
+///        readwrite_non_sections = readwrite_names \ readwrite_sections_present
+///    - Section names explicitly given write permissions or higher
+///        write_sections_present = write_names ∩ all_sections
+///    - Variable names explicitly given write permissions or higher
+///         write_non_sections = write_names \ write_sections_present
+///
+///  - Build up the map between names and variables using the following rules:
+///    - The contents of readifset_non_sections map to themselves if that variable
+///      name or one of its parents has been given write permission elsewhere
+///    - The contents of readifset_sections_present map to any children variables
+///      given write permission elsewhere
+///    - The contents of readwrite_non_sections map to themselves
+///    - The contents of readwrite_sections_present map to any children variables
+///      given read or write permission elsewhere.
+///    - Additionally, the contents of write_sections_present will map to any child
+///      variables which have readIfSet permissions.
 std::map<std::string, std::set<std::string>>
 getVariableHierarchy(const std::vector<std::unique_ptr<Component>>& components) {
-  // Build up a set of all variable names which are read only if they
-  // are set by another component
-  std::set<std::string> conditional_names;
+  std::set<std::string> readifset_names;
+  std::set<std::string> readifset_sections;
+  std::set<std::string> readwrite_names;
+  std::set<std::string> readwrite_sections;
+  std::set<std::string> write_names;
   for (const auto& component : components) {
     const Permissions& permissions = component->getPermissions();
+    // Build up a set of all variable names which are read only if they
+    // are set by another component
     for (const auto& [varname, _] :
          permissions.getVariablesWithPermission(PermissionTypes::ReadIfSet)) {
-      conditional_names.insert(varname);
+      readifset_names.insert(varname);
+      readifset_sections.merge(getParents(varname));
     }
-  }
-
-  // Build up a set of all section/variable names which are definitely
-  // read/written by components, and the sections which they imply
-  // exist
-  std::set<std::string> unconditional_names;
-  std::set<std::string> unconditional_sections;
-  for (const auto& component : components) {
-    const Permissions& permissions = component->getPermissions();
+    // Build up a set of all section/variable names which are definitely
+    // read/written by components, and the sections which they imply
+    // exist
     for (const auto& [varname, _] :
          permissions.getVariablesWithMinimumPermission(PermissionTypes::Read)) {
-      unconditional_names.insert(varname);
-      unconditional_sections.merge(getParents(varname));
+      readwrite_names.insert(varname);
+      readwrite_sections.merge(getParents(varname));
+    }
+    // Build up a set of all section/variable names which are
+    // written by components, and the sections which they imply
+    // exist
+    for (const auto& [varname, _] :
+         permissions.getVariablesWithMinimumPermission(PermissionTypes::Write)) {
+      write_names.insert(varname);
     }
   }
 
-  /// Assemble the set of all section names which are referred to
-  /// explicitly in the component permissions.
-  std::set<std::string> sections_present;
-  std::set_intersection(unconditional_names.begin(), unconditional_names.end(),
-                        unconditional_sections.begin(), unconditional_sections.end(),
-                        std::inserter(sections_present, sections_present.begin()));
+  /// Assemble the list of all section/variable names which are explicitly given permissions
+  std::set<std::string> all_names;
+  std::set_union(readifset_names.begin(), readifset_names.end(), readwrite_names.begin(),
+                 readwrite_names.end(), std::inserter(all_names, all_names.begin()));
+  /// Assemble the set of all sections which the names in all_names imply exist
+  std::set<std::string> all_sections;
+  std::set_union(readifset_sections.begin(), readifset_sections.end(),
+                 readwrite_sections.begin(), readwrite_sections.end(),
+                 std::inserter(all_sections, all_sections.begin()));
+
+  /// Assemble the set of all section names which are explicitly given readIfSet permissions.
+  std::set<std::string> readifset_sections_present;
+  std::set_intersection(
+      readifset_names.begin(), readifset_names.end(), all_sections.begin(),
+      all_sections.end(),
+      std::inserter(readifset_sections_present, readifset_sections_present.begin()));
+  /// Assemble the set of all variable names which are given readIfSet
+  /// permission and which are not sections
+  std::set<std::string> readifset_non_sections;
+  std::set_difference(
+      readifset_names.begin(), readifset_names.end(), readifset_sections_present.begin(),
+      readifset_sections_present.end(),
+      std::inserter(readifset_non_sections, readifset_non_sections.begin()));
+
+  /// Assemble the set of all section names which are explicitely
+  /// given read permission or higher.
+  std::set<std::string> readwrite_sections_present;
+  std::set_intersection(
+      readwrite_names.begin(), readwrite_names.end(), all_sections.begin(),
+      all_sections.end(),
+      std::inserter(readwrite_sections_present, readwrite_sections_present.begin()));
   /// Assemble the set of all variable names which are definitely
-  /// read/written by components (i.e., not including sections)
-  std::set<std::string> non_sections;
-  std::set_difference(unconditional_names.begin(), unconditional_names.end(),
-                      sections_present.begin(), sections_present.end(),
-                      std::inserter(non_sections, non_sections.begin()));
+  /// read/written by components and which are not sections
+  std::set<std::string> readwrite_non_sections;
+  std::set_difference(
+      readwrite_names.begin(), readwrite_names.end(), readwrite_sections_present.begin(),
+      readwrite_sections_present.end(),
+      std::inserter(readwrite_non_sections, readwrite_non_sections.begin()));
+
+  /// Assemble the set of all section names which are explicitely
+  /// given write permission or higher.
+  std::set<std::string> write_sections_present;
+  std::set_intersection(
+      write_names.begin(), write_names.end(), all_sections.begin(), all_sections.end(),
+      std::inserter(write_sections_present, write_sections_present.begin()));
+  /// Assemble the set of all variable names which are given write
+  /// permission or higher and which are not sections
+  std::set<std::string> write_non_sections;
+  std::set_difference(write_names.begin(), write_names.end(),
+                      write_sections_present.begin(), write_sections_present.end(),
+                      std::inserter(write_non_sections, write_non_sections.begin()));
 
   std::map<std::string, std::set<std::string>> result;
 
-  // ReadIfSet variables will only actually be used if they are
-  // reference elsewhere. We create them with empty sets, which will
-  // get filled if they are present.
-  for (const auto& name : conditional_names) {
-    result.insert({name, {}});
+  // ReadIfSet variables will be used if they or a parent section have
+  // write permission somewhere. Only map them to themselves if that
+  // is the case. Ensure that parent sections with write permission
+  // will also map to the readIfSet variable.
+  for (const auto& name : readifset_non_sections) {
+    auto& val = result[name];
+    if (write_non_sections.contains(name)) {
+      val.insert(name);
+    }
+    for (const auto& parent : getParents(name)) {
+      if (write_sections_present.contains(parent)) {
+        val.insert(name);
+        result[parent].insert(name);
+      }
+    }
   }
-
+  // ReadIfSet sections map to any children variables that have write permission
+  for (const auto& section : readifset_sections_present) {
+    auto& children = result[section];
+    const std::string sec_suffixed = section + ':';
+    for (const auto& name : write_non_sections) {
+      if (name.rfind(sec_suffixed, 0) == 0) {
+        children.insert(name);
+      }
+    }
+  }
   // Non-sections map to themselves
-  for (const auto& name : non_sections) {
+  for (const auto& name : readwrite_non_sections) {
     result[name] = {name};
   }
   // Sections map to those variables which they contain
-  for (const auto& section : sections_present) {
+  for (const auto& section : readwrite_sections_present) {
     auto& children = result[section];
     const std::string sec_suffixed = section + ':';
-    for (const auto& name : non_sections) {
+    for (const auto& name : readwrite_non_sections) {
       if (name.rfind(sec_suffixed, 0) == 0) {
         children.insert(name);
       }

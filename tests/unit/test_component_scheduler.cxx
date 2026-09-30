@@ -317,6 +317,32 @@ INSTANTIATE_TEST_SUITE_P(
                     {{"type", "orderchecker"},
                      {"permissions", toString(Permissions({writeFinal("1:1_1"),
                                                            readIfSet("1:1_2")}))}}}},
+                  {"b", "a"}),
+        // One component reads a section if it has been set, while
+        // another component writes a variable within that section.
+        Parameter({{"components", "a,b"},
+                   {"a",
+                    {{"type", "orderchecker"},
+                     {"permissions", toString(Permissions({
+                                         readIfSet("1:1_1"),
+                                     }))}}},
+                   {"b",
+                    {{"type", "orderchecker"},
+                     {"permissions",
+                      toString(Permissions({readWrite("1:1_1:1_1_1")}))}}}},
+                  {"b", "a"}),
+        // One component reads a variable if it has been set, while
+        // another component writes to the section containing that
+        // variable.
+        Parameter({{"components", "a,b"},
+                   {"a",
+                    {{"type", "orderchecker"},
+                     {"permissions", toString(Permissions({
+                                         readIfSet("1:1_1:1_1_1"),
+                                     }))}}},
+                   {"b",
+                    {{"type", "orderchecker"},
+                     {"permissions", toString(Permissions({readWrite("1:1_1")}))}}}},
                   {"b", "a"})));
 
 class InvalidComponentOrderTest : public testing::TestWithParam<Options> {
