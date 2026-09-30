@@ -131,7 +131,8 @@ void topological_sort(const std::vector<std::set<size_t>>& dependencies, size_t 
   sorted.push_back(item);
 }
 
-/// Get all the parent sections of a variable "path". Sections are
+/// Get all the parent sections of a variable "path" (i.e., in the
+/// hierarchy of `Options` objects in the state). Sections are
 /// separated by colons in the path. This is different from just
 /// splitting on ':' because it returns the hierarchy of
 /// fully-qualified parent sections. E.g.
@@ -166,7 +167,7 @@ getVariableHierarchy(const std::vector<std::unique_ptr<Component>>& components) 
   for (const auto& component : components) {
     const Permissions& permissions = component->getPermissions();
     for (const auto& [varname, _] :
-         permissions.getVariablesWithPermission(PermissionTypes::ReadIfSet, true)) {
+         permissions.getVariablesWithPermission(PermissionTypes::ReadIfSet)) {
       conditional_names.insert(varname);
     }
   }
@@ -179,7 +180,7 @@ getVariableHierarchy(const std::vector<std::unique_ptr<Component>>& components) 
   for (const auto& component : components) {
     const Permissions& permissions = component->getPermissions();
     for (const auto& [varname, _] :
-         permissions.getVariablesWithPermission(PermissionTypes::Read, false)) {
+         permissions.getVariablesWithMinimumPermission(PermissionTypes::Read)) {
       unconditional_names.insert(varname);
       unconditional_sections.merge(getParents(varname));
     }

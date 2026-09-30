@@ -198,10 +198,22 @@ public:
   std::pair<PermissionTypes, std::string>
   getHighestPermission(const std::string& variable, Regions region = Regions::All) const;
 
+  /// Get a set of variables and regions for which there the specified
+  /// level of permission is the highest permission.
+  ///
+  ///     Permissions example({"test", {Regions::Nowhere, Regions::All,
+  ///                                   Regions::Nowhere, Permissions:Nowhere}});
+  ///     // Print variables which can only be read (not written)
+  ///     for (const auto [varname, region] :
+  ///     example.getVariablesWithPermission(PermissionTypes::Read)))
+  ///         std::cout << "Variable name: " << varname << ", Region ID: " << region <<
+  ///         "\n";
+  std::map<std::string, Regions>
+  getVariablesWithPermission(PermissionTypes permission) const;
+
   /// Get a set of variables and regions for which there is the
-  /// specified level of permission to access. If ``highestOnly`` is
-  /// true then it will only include variables/regions for which this
-  /// is the highest permission.
+  /// specified level of permission to access. This includes any
+  /// variables with higher permission.
   ///
   ///     Permissions example({"test", {Regions::Nowhere, Regions::All,
   ///                                   Regions::All, Permissions:Nowhere}});
@@ -210,16 +222,8 @@ public:
   ///     example.getVariablesWithPermission(PermissionTypes::Read), false))
   ///         std::cout << "Variable name: " << varname << ", Region ID: " << region <<
   ///         "\n";
-  ///     // Print variables which can only be read (not written)
-  ///     for (const auto [varname, region] :
-  ///     example.getVariablesWithPermission(PermissionTypes::Read), true))
-  ///         std::cout << "Variable name: " << varname << ", Region ID: " << region <<
-  ///         "\n";
-  ///
-  /// The above code would write a line of output from the first
-  /// for-loop, but not the second.
   std::map<std::string, Regions>
-  getVariablesWithPermission(PermissionTypes permission, bool highestOnly = true) const;
+  getVariablesWithMinimumPermission(PermissionTypes permission) const;
 
   /// Return a string version of the region names
   static std::string regionNames(const Regions regions);

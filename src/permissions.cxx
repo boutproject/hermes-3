@@ -162,28 +162,42 @@ Permissions::getHighestPermission(const std::string& variable, Regions region) c
 }
 
 std::map<std::string, Regions>
-Permissions::getVariablesWithPermission(PermissionTypes permission,
-                                        bool highestOnly) const {
+Permissions::getVariablesWithPermission(PermissionTypes permission) const {
   if (permission == PermissionTypes::None) {
     throw BoutException("Can not return information on variables with no permission.");
   }
+  // If permission is the highest possible (or above) then the result
+  // is the same as for getVariableWithMinimumPermission then no
+  // variables will have that permission.
+  if (static_cast<size_t>(permission) >= static_cast<size_t>(PermissionTypes::END) - 1) {
+    return getVariablesWithMinimumPermission(permission);
+  }
   std::map<std::string, Regions> result;
-  if (highestOnly
-      and static_cast<size_t>(permission)
-              < static_cast<size_t>(PermissionTypes::END) - 1) {
-    for (const auto& [varname, rights] : variable_permissions) {
-      auto perm_in_regions = rights[static_cast<size_t>(permission)]
-                             & ~rights[static_cast<size_t>(permission) + 1];
-      if (perm_in_regions != Regions::Nowhere) {
-        result.emplace(varname, perm_in_regions);
-      }
+  for (const auto& [varname, rights] : variable_permissions) {
+    auto perm_in_regions = rights[static_cast<size_t>(permission)]
+                           & ~rights[static_cast<size_t>(permission) + 1];
+    if (perm_in_regions != Regions::Nowhere) {
+      result.emplace(varname, perm_in_regions);
     }
-  } else {
-    for (const auto& [varname, rights] : variable_permissions) {
-      auto regions = rights[static_cast<size_t>(permission)];
-      if (regions != Regions::Nowhere) {
-        result.emplace(varname, regions);
-      }
+  }
+  return result;
+}
+
+std::map<std::string, Regions>
+Permissions::getVariablesWithMinimumPermission(PermissionTypes permission) const {
+  if (permission == PermissionTypes::None) {
+    throw BoutException("Can not return information on variables with no permission.");
+  }
+  // If permission is higher than the maximum one in PermissionTypes
+  // then no variables will have that permission.
+  if (static_cast<size_t>(permission) > static_cast<size_t>(PermissionTypes::END) - 1) {
+    return {};
+  }
+  std::map<std::string, Regions> result;
+  for (const auto& [varname, rights] : variable_permissions) {
+    auto regions = rights[static_cast<size_t>(permission)];
+    if (regions != Regions::Nowhere) {
+      result.emplace(varname, regions);
     }
   }
   return result;
