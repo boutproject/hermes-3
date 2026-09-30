@@ -10,6 +10,21 @@
 
 #include <algorithm> // std::any_of
 
+struct ComponentTest : public FakeMeshFixture {
+  ComponentTest() : FakeMeshFixture() {
+    static_cast<FakeMesh*>(bout::globals::mesh)
+        ->setGridDataSource(new FakeGridDataSource{
+            {{"Rxy", FieldFactory::get()->create2D("1 + x", Options::getRoot(),
+                                                   bout::globals::mesh)},
+             {"Zxy", FieldFactory::get()->create2D("y", Options::getRoot(),
+                                                   bout::globals::mesh)},
+             {"hthe", 1.0},
+             {"Bpxy", 1.0},
+             {"Bxy", 1.0},
+             {"external_apar", 1.0}}});
+  }
+};
+
 namespace {
 struct TestComponent : public NamedComponent<TestComponent> {
   TestComponent(const std::string name, Options&, Solver*)
@@ -26,7 +41,7 @@ private:
 RegisterComponent<TestComponent> registertestcomponent;
 } // namespace
 
-TEST(ComponentTest, InAvailableList) {
+TEST_F(ComponentTest, InAvailableList) {
   // Check that the test component is in the list of available components
   auto available = ComponentFactory::getInstance().listAvailable();
 
@@ -34,7 +49,7 @@ TEST(ComponentTest, InAvailableList) {
                           [](const std::string& str) { return str == "testcomponent"; }));
 }
 
-TEST(ComponentTest, CanCreate) {
+TEST_F(ComponentTest, CanCreate) {
   Options options;
   auto component = Component::create("testcomponent", "species", options, nullptr);
 
@@ -46,13 +61,13 @@ TEST(ComponentTest, CanCreate) {
   ASSERT_TRUE(options["answer"] == 42);
 }
 
-TEST(ComponentTest, ObjectName) {
+TEST_F(ComponentTest, ObjectName) {
   Options options;
   auto component = Component::create("testcomponent", "some_name", options, nullptr);
   ASSERT_EQ(component->objectName(), "some_name");
 }
 
-TEST(ComponentTest, GetThrowsNoValue) {
+TEST_F(ComponentTest, GetThrowsNoValue) {
   Options option;
 
   // No value throws
@@ -63,7 +78,14 @@ TEST(ComponentTest, GetThrowsNoValue) {
   ASSERT_TRUE(option == 42);
 }
 
-TEST(ComponentTest, GetThrowsIncompatibleValue) {
+#if CHECKLEVEL >= 1
+TEST_F(ComponentTest, SetNaN) {
+  Options option;
+  EXPECT_THROW(set(option, Field3D{BoutNaN, bout::globals::mesh}), BoutException);
+}
+#endif
+
+TEST_F(ComponentTest, GetThrowsIncompatibleValue) {
   Options option;
 
   option = "hello";
@@ -71,7 +93,7 @@ TEST(ComponentTest, GetThrowsIncompatibleValue) {
   ASSERT_THROW(get<int>(option), BoutException);
 }
 
-TEST(ComponentTest, SetInteger) {
+TEST_F(ComponentTest, SetInteger) {
   Options option;
 
   set<int>(option, 3);
@@ -80,7 +102,7 @@ TEST(ComponentTest, SetInteger) {
 }
 
 #if CHECKLEVEL >= 1
-TEST(ComponentTest, SetAfterGetThrows) {
+TEST_F(ComponentTest, SetAfterGetThrows) {
   Options option;
 
   option = 42;
@@ -92,7 +114,7 @@ TEST(ComponentTest, SetAfterGetThrows) {
 }
 #endif
 
-TEST(ComponentTest, SetAfterGetNonFinal) {
+TEST_F(ComponentTest, SetAfterGetNonFinal) {
   Options option;
 
   option = 42;
@@ -105,7 +127,7 @@ TEST(ComponentTest, SetAfterGetNonFinal) {
 }
 
 #if CHECKLEVEL >= 1
-TEST(ComponentTest, SetBoundaryAfterGetThrows) {
+TEST_F(ComponentTest, SetBoundaryAfterGetThrows) {
   Options option;
 
   option = 42;
@@ -119,7 +141,7 @@ TEST(ComponentTest, SetBoundaryAfterGetThrows) {
 
 // Check an exception is thrown if you try to set the interior after
 // reading the entire field
-TEST(ComponentTest, SetNoBoundaryAfterGetThrows) {
+TEST_F(ComponentTest, SetNoBoundaryAfterGetThrows) {
   Options option;
 
   option = 42;
@@ -132,7 +154,7 @@ TEST(ComponentTest, SetNoBoundaryAfterGetThrows) {
 }
 #endif
 
-TEST(ComponentTest, SetBoundaryAfterGetNoBoundary) {
+TEST_F(ComponentTest, SetBoundaryAfterGetNoBoundary) {
   Options option;
 
   option = 42;
@@ -145,7 +167,7 @@ TEST(ComponentTest, SetBoundaryAfterGetNoBoundary) {
 }
 
 // Check still allowed to set interior even after having read the boundary
-TEST(ComponentTest, SetNoBoundaryAfterGetBoundary) {
+TEST_F(ComponentTest, SetNoBoundaryAfterGetBoundary) {
   Options option;
 
   option = 42;
@@ -157,7 +179,7 @@ TEST(ComponentTest, SetNoBoundaryAfterGetBoundary) {
   ASSERT_EQ(getNonFinal<int>(option), 3);
 }
 
-TEST(ComponentTest, IsSetFinalStaysFalse) {
+TEST_F(ComponentTest, IsSetFinalStaysFalse) {
   Options option;
 
   ASSERT_EQ(isSetFinal(option["test"]), false);
@@ -167,7 +189,7 @@ TEST(ComponentTest, IsSetFinalStaysFalse) {
 
 // Confirm that checking whether the interior has been set does not
 // mark the interior as set.
-TEST(ComponentTest, IsSetFinalNoBoundaryStaysFalse) {
+TEST_F(ComponentTest, IsSetFinalNoBoundaryStaysFalse) {
   Options option;
 
   ASSERT_EQ(isSetFinalNoBoundary(option["test"]), false);
@@ -177,7 +199,7 @@ TEST(ComponentTest, IsSetFinalNoBoundaryStaysFalse) {
 
 // Confirm that checking whether the boundary has been set does not
 // mark the boundary as set.
-TEST(ComponentTest, IsSetFinalBoundaryStaysFalse) {
+TEST_F(ComponentTest, IsSetFinalBoundaryStaysFalse) {
   Options option;
 
   ASSERT_EQ(isSetFinalBoundary(option["test"]), false);
@@ -186,7 +208,7 @@ TEST(ComponentTest, IsSetFinalBoundaryStaysFalse) {
 }
 
 // Confirm you can read a value after having confirmed it's been set.
-TEST(ComponentTest, GetAfterIsSetFinal) {
+TEST_F(ComponentTest, GetAfterIsSetFinal) {
   Options option;
   option["test"] = 1;
 
@@ -197,7 +219,7 @@ TEST(ComponentTest, GetAfterIsSetFinal) {
 
 // Confirm you can read an interior value after having confirmed the
 // interior has been been set.
-TEST(ComponentTest, GetAfterIsSetFinalNoBoundary) {
+TEST_F(ComponentTest, GetAfterIsSetFinalNoBoundary) {
   Options option;
   option["test"] = 1;
 
@@ -208,7 +230,7 @@ TEST(ComponentTest, GetAfterIsSetFinalNoBoundary) {
 
 // Confirm you can read a boundary value after having confirmed the
 // boundary has been been set.
-TEST(ComponentTest, GetAfterIsSetFinalBoundary) {
+TEST_F(ComponentTest, GetAfterIsSetFinalBoundary) {
   Options option;
   option["test"] = 1;
 
@@ -220,7 +242,7 @@ TEST(ComponentTest, GetAfterIsSetFinalBoundary) {
 #if CHECKLEVEL >= 1
 // Confirm you can not set the value on any part of the domain after
 // checking whether it has been set.
-TEST(ComponentTest, SetAfterIsSetFinal) {
+TEST_F(ComponentTest, SetAfterIsSetFinal) {
   Options option;
 
   ASSERT_EQ(isSetFinal(option["test"]), false);
@@ -232,7 +254,7 @@ TEST(ComponentTest, SetAfterIsSetFinal) {
 
 // Confirm you can not set the value in the interior after checking
 // whether it has been set there, but you can still set the boundary.
-TEST(ComponentTest, SetAfterIsSetFinalNoBoundary) {
+TEST_F(ComponentTest, SetAfterIsSetFinalNoBoundary) {
   Options option;
 
   ASSERT_EQ(isSetFinalNoBoundary(option["test"]), false);
@@ -246,7 +268,7 @@ TEST(ComponentTest, SetAfterIsSetFinalNoBoundary) {
 
 // Confirm you can not set the value in the boundary after checking
 // whether it has been set there, but you can still set the interior.
-TEST(ComponentTest, SetAfterIsSetFinalBoundary) {
+TEST_F(ComponentTest, SetAfterIsSetFinalBoundary) {
   Options option;
 
   ASSERT_EQ(isSetFinalBoundary(option["test"]), false);
@@ -259,7 +281,7 @@ TEST(ComponentTest, SetAfterIsSetFinalBoundary) {
 }
 #endif
 
-TEST(ComponentTest, Formatting) {
+TEST_F(ComponentTest, Formatting) {
   Options options;
   auto component_samename =
       Component::create("testcomponent", "testcomponent", options, nullptr);
@@ -283,7 +305,6 @@ TEST(ComponentTest, Formatting) {
                fmt::format_error);
 }
 
-using ComponentCreationTest = FakeMeshFixture;
 /// Global mesh
 namespace bout {
 namespace globals {
@@ -291,7 +312,7 @@ extern Mesh* mesh;
 } // namespace globals
 } // namespace bout
 
-struct ConcreteComponentTests : public FakeMeshFixture,
+struct ConcreteComponentTests : public ComponentTest,
                                 public testing::WithParamInterface<std::string> {
   static const Options base_options;
   static const Options required_params;
@@ -302,18 +323,8 @@ struct ConcreteComponentTests : public FakeMeshFixture,
   FakeSolver solver;
 
   ConcreteComponentTests()
-      : FakeMeshFixture(), typname(GetParam()), options(base_options.copy()) {
+      : ComponentTest(), typname(GetParam()), options(base_options.copy()) {
     Options::root()["mesh:paralleltransform:type"] = "identity";
-    static_cast<FakeMesh*>(bout::globals::mesh)
-        ->setGridDataSource(new FakeGridDataSource{
-            {{"Rxy", FieldFactory::get()->create2D("1 + x", Options::getRoot(),
-                                                   bout::globals::mesh)},
-             {"Zxy", FieldFactory::get()->create2D("y", Options::getRoot(),
-                                                   bout::globals::mesh)},
-             {"hthe", 1.0},
-             {"Bpxy", 1.0},
-             {"Bxy", 1.0},
-             {"external_apar", 1.0}}});
     if (required_params.isSection(typname)) {
       options[objname] = required_params[typname].copy();
     }
@@ -368,11 +379,6 @@ TEST_P(ConcreteComponentTests, CheckComponentTypeName) {
   auto component =
       ComponentFactory::getInstance().create(typname, objname, options, &solver);
   EXPECT_EQ(component->typeName(), typname);
-}
-
-TEST_P(ConcreteComponentTests, SetNaN) {
-  Options option;
-  EXPECT_THROW(set(option, Field3D{BoutNaN, bout::globals::mesh}), BoutException);
 }
 
 INSTANTIATE_TEST_SUITE_P(
