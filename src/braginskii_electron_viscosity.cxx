@@ -18,8 +18,6 @@
 #include "../include/braginskii_electron_viscosity.hxx"
 #include "../include/component.hxx"
 
-using bout::globals::mesh;
-
 BraginskiiElectronViscosity::BraginskiiElectronViscosity(const std::string& name,
                                                          Options& alloptions, Solver*)
     : NamedComponent(name,
@@ -34,9 +32,6 @@ BraginskiiElectronViscosity::BraginskiiElectronViscosity(const std::string& name
 
   diagnose = options["diagnose"].doc("Output diagnostics?").withDefault<bool>(false);
 
-  auto coord = mesh->getCoordinates();
-  Bxy = coord->Bxy();
-  sqrtB = sqrt(Bxy);
 }
 
 void BraginskiiElectronViscosity::transform_impl(GuardedOptions& state) {
@@ -55,6 +50,13 @@ void BraginskiiElectronViscosity::transform_impl(GuardedOptions& state) {
   const Field3D P = get<Field3D>(species["pressure"]);
   const Field3D V = get<Field3D>(species["velocity"]);
 
+  Coordinates* coord = P.getCoordinates();
+  Bxy = coord->Bxy();
+  // If not allocated calculated, otherwise skip as already done
+  if (!sqrtB.isAllocated()) {
+    sqrtB = sqrt(Bxy);
+  }
+  
   // Parallel electron viscosity
   Field3D eta = (4. / 3) * 0.73 * P * tau;
 
@@ -66,12 +68,21 @@ void BraginskiiElectronViscosity::transform_impl(GuardedOptions& state) {
     const Field3D q_fl = eta_limit_alpha * P; // Flux limit
 
     eta = eta / (1. + abs(q_cl / q_fl));
+
+    // Communicate due to flux limiter. Fci communicates later so skip if Fci
+    if (!P.isFci()) {
+      eta.getMesh()->communicate(eta);
+      eta.applyBoundary("neumann");
+    }
   }
 
-  eta.applyBoundary("neumann");
-  mesh->communicate(eta);
-  eta.applyParallelBoundary("parallel_neumann_o2");
-
+  // Fci needs communication for the parallel slices
+  if (P.isFci()) {
+    eta.applyBoundary("neumann");
+    eta.getMesh()->communicate(eta);
+    eta.applyParallelBoundary("parallel_neumann_o2");
+  }
+  
   // Save term for output diagnostic
   viscosity =
       sqrtB
