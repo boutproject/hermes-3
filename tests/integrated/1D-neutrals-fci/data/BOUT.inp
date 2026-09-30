@@ -38,6 +38,7 @@ evolve_momentum = true
 neutral_conduction = true
 neutral_viscosity = true
 isMMS = true
+lax_flux = false
 
 [Nh]
 solution = 0.02*sin(y + 0.3123) + 0.1
