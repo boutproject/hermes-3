@@ -702,7 +702,9 @@ steps are provided below.
    they refer (section names refer to all variables contained within
    the section). This is used so that, when a permission is set for
    a whole section, we can work out what are the actual variables
-   to which the permission applies.
+   to which the permission applies. Note that names for sections or
+   variables with readIfSet permissions will only be mapped if they
+   are, in fact, set somewhere.
 2. Identify the components which have permission to do final writes
    and non- final writes on each variable.
 3. Construct a map between variable names and which components last
@@ -725,6 +727,55 @@ steps are provided below.
 5. Use this dependency information to perform a topological sort on
    the components.
 
+Below are graphs illustrating how this algorithm applied to the
+:ref:`sec-Blob2d` example.
+
+
+.. _fig-toposort-comp-var-deps:
+.. figure:: figs/toposort-component-variable-deps.svg
+   :alt: A directed acyclic graph illustrating which variables are
+         read and written by which components. species:e:charge,
+         species:e:AA, and species:e:density are written by (e)
+         evolve_density. species:e:density source is written by both
+         sheath_closure and (e) evolve_density. (e) isothermal reads
+         species:e:density. species:e:pressure and
+         species:e:temperature are written by (e)
+         isothermal. vorticity reads species:e:pressure,
+         species:e:temperature, species:e:charge, and
+         species:e:AA. field:DivJdia, fields:vorticity, and fields:phi
+         are written by vorticity. species:e:energy_source is written
+         by vorticity and sheath_closure. sheath_closure reads
+         fields:phi, species:e:temperature, and
+         species:e:density. fields:DivJextra is written by
+         sheath_closure.
+
+   A directed acyclic graph showing which variables are written
+   and read by each component in the Blob2d example,
+
+.. _fig-toposort-comp-deps:
+.. figure:: figs/toposort-component-deps.svg
+   :alt: A directed acyclic graph illustrating the following
+         dependencies between components: sheath_closure depends on
+         vorticity, (e) isothermal, and (e) evolve_density; vorticity
+         depends on (e) isothermal and (e) evolve_density; (e)
+         isothermal depends on (e) evolve_density.
+
+   A directed acyclic graph showing the dependency between
+   components used in the Blob2d example. It is produced from
+   :numref:`fig-toposort-comp-var-deps` by making any
+   component which reads a variable depend on any component
+   which writes that variable.
+
+.. _fig-toposort-final:
+.. figure:: figs/toposort-final-sorted.svg
+   :alt: The components in their final run order: (e)
+         evolve_density, (e) isothermal, vorticity, and finally
+         sheath_closure.
+
+   The order in which the components from the Blob2d example
+   must be run. This is obtained by applying a topological
+   sorting algorithm to the directed acyclic graph in
+   :numref:`fig-toposort-comp-deps`.
 
 .. _sec-permissions:
 
