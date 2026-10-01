@@ -50,8 +50,12 @@ void BraginskiiElectronViscosity::transform_impl(GuardedOptions& state) {
   const Field3D V = get<Field3D>(species["velocity"]);
 
   Coordinates* coord = P.getCoordinates();
-  Bxy = coord->Bxy();
+
   // If not allocated calculated, otherwise skip as already done
+  if (!Bxy.isAllocated()) {
+    Bxy = coord->Bxy();
+  }
+
   if (!sqrtB.isAllocated()) {
     sqrtB = sqrt(Bxy);
   }
@@ -67,16 +71,10 @@ void BraginskiiElectronViscosity::transform_impl(GuardedOptions& state) {
     const Field3D q_fl = eta_limit_alpha * P; // Flux limit
 
     eta = eta / (1. + abs(q_cl / q_fl));
-
-    // Communicate due to flux limiter. Fci communicates later so skip if Fci
-    if (!P.isFci()) {
-      eta.getMesh()->communicate(eta);
-      eta.applyBoundary("neumann");
-    }
   }
 
   // Fci needs communication for the parallel slices
-  if (P.isFci()) {
+  if (P.isFci() || eta_limit_alpha > 0.0) {
     eta.applyBoundary("neumann");
     eta.getMesh()->communicate(eta);
     eta.applyParallelBoundary("parallel_neumann_o2");
