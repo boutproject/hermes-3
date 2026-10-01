@@ -3,8 +3,14 @@
 #define ELECTROMAGNETIC_H
 
 #include "component.hxx"
+#include "guarded_options.hxx"
 
+#include "bout/bout_types.hxx"
+#include "bout/field3d.hxx"
 #include "bout/invert_laplace.hxx"
+
+#include <memory>
+#include <string>
 
 /// Electromagnetic potential A||
 ///

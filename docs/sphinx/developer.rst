@@ -265,14 +265,14 @@ This is important as it uses a single dictionary-like ``state`` class to hold al
 the variables in one place, which could allow some components to overwrite others.
 
 In ``component.hxx`` there is the function ``get``, which once called sets the
-"final" and "final-domain" attributes:
+"final-bounds" and "final-domain" attributes:
 
 .. code-block:: ini
 
    T get(const Options& option, const std::string& location = "") {
    #if CHECKLEVEL >= 1
    // Mark option as final, both inside the domain and the boundary
-   const_cast<Options&>(option).attributes["final"] = location;
+   const_cast<Options&>(option).attributes["final-bounds"] = location;
    const_cast<Options&>(option).attributes["final-domain"] = location;
    #endif
    return getNonFinal<T>(option);
@@ -286,9 +286,9 @@ already been "gotten", they can't be set again:
    Options& set(Options& option, T value) {
    // Check that the value has not already been used
    #if CHECKLEVEL >= 1
-   if (option.hasAttribute("final")) {
+   if (option.hasAttribute("final-bounds")) {
       throw BoutException("Setting value of {} but it has already been used in {}.",
-                           option.name(), option.attributes["final"].as<std::string>());
+                           option.name(), option.attributes["final-bounds"].as<std::string>());
    }
    if (option.hasAttribute("final-domain")) {
       throw BoutException("Setting value of {} but it has already been used in {}.",
@@ -301,8 +301,10 @@ already been "gotten", they can't be set again:
    }
    #endif
 
-There is a special use case which allows you to use this "locking" scheme for only
-the domain cells, leaving the guard cells to be settable using ``getNoBoundary``:
+There are special use cases which allows you to use this "locking"
+scheme for only some cells: ``getNoBoundary`` locks the domain cells
+while leaving the boundary cells settable. ``getBoundary`` locks the
+boundary cells while leaving the domain cells settable.
 
 .. code-block:: ini
 
@@ -314,16 +316,17 @@ the domain cells, leaving the guard cells to be settable using ``getNoBoundary``
    return getNonFinal<T>(option);
    }
 
-And there is a corresponding ``setBoundary`` that can be used for BC operations:
+And there are corresponding ``setBoundary`` and ``setNoBoundary``
+functions that can be used for BC and domain operations:
 
 .. code-block:: ini
 
    Options& setBoundary(Options& option, T value) {
    // Check that the value has not already been used
    #if CHECKLEVEL >= 1
-   if (option.hasAttribute("final")) {
+   if (option.hasAttribute("final-bounds")) {
       throw BoutException("Setting boundary of {} but it has already been used in {}.",
-                           option.name(), option.attributes["final"].as<std::string>());
+                           option.name(), option.attributes["final-bounds"].as<std::string>());
    }
    #endif
    option.force(std::move(value));
@@ -333,9 +336,10 @@ And there is a corresponding ``setBoundary`` that can be used for BC operations:
 All of these functions are overloaded to accept both `Options` and
 `GuardedOptions` objects.
 
-These functions take a second argument which tells you where they were set, which is easier for debugging.
-They are wrapped into additional functions, ``GET_VALUE`` and ``GET_NOBOUNDARY`` which automatically
-include this argument.
+These functions take a second argument which tells you where they were
+set, which is easier for debugging.  They are wrapped into additional
+functions, ``GET_VALUE``, ``GET_BOUNDARY``, and ``GET_NOBOUNDARY``
+which automatically include this argument.
 
 Please review `component.hxx <https://github.com/boutproject/hermes-3/blob/master/include/component.hxx#L163>`__
 for more details.
@@ -586,7 +590,6 @@ The `name` is a string labelling the instance. The `alloptions` tree contains at
 * ``alloptions[name]`` options for this instance
 * ``alloptions['units']``
 
-
 Component Permissions
 `````````````````````
 
@@ -628,9 +631,14 @@ and then in `Hermes::rhs` the components are run by a call::
   scheduler->transform(state);
 
 The call to `ComponentScheduler::create` treats the "components"
-option as a comma-separated list of names. The order of the components
-is the order that they are run in. For each name in the list, the
-scheduler looks up the options under the section of that name.
+option as a comma-separated list of names. For each name in the list,
+the scheduler looks up the options under the section of that name. The
+``ComponentScheduler`` will use permission information stored by each
+component in `Component::state_variable_access` to work out the order
+to execute components. It will ensure that all writes to a variable
+have occurred before the first time it is read. If there is a variable
+needed by some component which is never set or if there is a circular
+dependency then it will throw an exception.
 
 .. code-block:: ini
 
@@ -647,8 +655,9 @@ scheduler looks up the options under the section of that name.
 
 This would create two `Component` objects, of type `component1` and
 `component2`. Each time `Hermes::rhs` is run, the `transform`
-functions of `component1` and then `component2` will be called,
-followed by their `finally` functions.
+functions of `component1` and `component2` will be called, with the
+order depending on what state variables each reads and writes. This is
+followed by a call to their `finally` functions.
 
 It is often useful to group components together, for example to
 define the governing equations for different species. A `type` setting
@@ -670,12 +679,103 @@ of components
    # options to control component3
 
 This will create three components, which will be run in the order
-`component1`, `component2`, `component3`: First all the components
-in `group1`, and then `component3`.
+determined by the topological sorting algorithm. First all the
+components in `group1`, and then `component3` are flattened into a
+single list. The access permissions of each component, i.e. which
+quantities each component reads or writes, are used to put the
+components in order. This means that grouped components may not run
+together: The scheduler may run `component1` then `component3` then
+`component2` if the inputs and outputs of the components require this.
 
 .. doxygenclass:: ComponentScheduler
    :members:
 
+Component sorting algorithm
+```````````````````````````
+
+The algorithm for sorting components is slightly complicated. Normally
+users and developers will not need to be concerned with it but, in the
+event that it is ever necessary to modify or debug the algorithm, the
+steps are provided below.
+
+1. Construct a map between names and the variable(s) to which
+   they refer (section names refer to all variables contained within
+   the section). This is used so that, when a permission is set for
+   a whole section, we can work out what are the actual variables
+   to which the permission applies. Note that names for sections or
+   variables with readIfSet permissions will only be mapped if they
+   are, in fact, set somewhere.
+2. Identify the components which have permission to do final writes
+   and non- final writes on each variable.
+3. Construct a map between variable names and which components last
+   write to them.
+
+   - For variables where a component has final write permission,
+     it is that component.
+   - Otherwise, it is all components which have non-final write
+     permission for the variable.
+
+4. Establish the dependencies between components.
+
+   - Components which have final-write permission for a variable
+     depend on any components that have non-final write permission for
+     that variable.
+   - Components that have read permission for a variable will depend
+     on whichever component(s) last write to that variable, as
+     determined in the previous step.
+
+5. Use this dependency information to perform a topological sort on
+   the components.
+
+Below are graphs illustrating how this algorithm applied to the
+:ref:`sec-Blob2d` example.
+
+
+.. _fig-toposort-comp-var-deps:
+.. figure:: figs/toposort-component-variable-deps.svg
+   :alt: A directed acyclic graph illustrating which variables are
+         read and written by which components. species:e:charge,
+         species:e:AA, and species:e:density are written by (e)
+         evolve_density. species:e:density source is written by both
+         sheath_closure and (e) evolve_density. (e) isothermal reads
+         species:e:density. species:e:pressure and
+         species:e:temperature are written by (e)
+         isothermal. vorticity reads species:e:pressure,
+         species:e:temperature, species:e:charge, and
+         species:e:AA. field:DivJdia, fields:vorticity, and fields:phi
+         are written by vorticity. species:e:energy_source is written
+         by vorticity and sheath_closure. sheath_closure reads
+         fields:phi, species:e:temperature, and
+         species:e:density. fields:DivJextra is written by
+         sheath_closure.
+
+   A directed acyclic graph showing which variables are written
+   and read by each component in the Blob2d example,
+
+.. _fig-toposort-comp-deps:
+.. figure:: figs/toposort-component-deps.svg
+   :alt: A directed acyclic graph illustrating the following
+         dependencies between components: sheath_closure depends on
+         vorticity, (e) isothermal, and (e) evolve_density; vorticity
+         depends on (e) isothermal and (e) evolve_density; (e)
+         isothermal depends on (e) evolve_density.
+
+   A directed acyclic graph showing the dependency between
+   components used in the Blob2d example. It is produced from
+   :numref:`fig-toposort-comp-var-deps` by making any
+   component which reads a variable depend on any component
+   which writes that variable.
+
+.. _fig-toposort-final:
+.. figure:: figs/toposort-final-sorted.svg
+   :alt: The components in their final run order: (e)
+         evolve_density, (e) isothermal, vorticity, and finally
+         sheath_closure.
+
+   The order in which the components from the Blob2d example
+   must be run. This is obtained by applying a topological
+   sorting algorithm to the directed acyclic graph in
+   :numref:`fig-toposort-comp-deps`.
 
 .. _sec-permissions:
 

@@ -59,7 +59,7 @@ constexpr decltype(ComponentFactory::default_type) ComponentFactory::default_typ
 bool isSetFinal(const Options& option, [[maybe_unused]] const std::string& location) {
 #if CHECKLEVEL >= 1
   // Mark option as final, both inside the domain and the boundary
-  const_cast<Options&>(option).attributes["final"] = location;
+  const_cast<Options&>(option).attributes["final-bounds"] = location;
   const_cast<Options&>(option).attributes["final-domain"] = location;
 #endif
   return option.isSet();
@@ -69,10 +69,17 @@ bool isSetFinal(const GuardedOptions& option,
                 [[maybe_unused]] const std::string& location) {
   const bool set = option.isSet();
 #if CHECKLEVEL >= 1
-  const PermissionTypes perm = option.getHighestPermission();
-  if (perm >= PermissionTypes::Read or (perm == PermissionTypes::ReadIfSet and set)) {
-    const Options& opt = option.get();
-    const_cast<Options&>(opt).attributes["final"] = location;
+  const PermissionTypes perm_bounds = option.getHighestPermission(Regions::Boundaries);
+  const PermissionTypes perm_int = option.getHighestPermission(Regions::Interior);
+  if (perm_bounds >= PermissionTypes::Read
+      or (perm_bounds == PermissionTypes::ReadIfSet and set)) {
+    const Options& opt = option.get(Regions::Boundaries);
+    const_cast<Options&>(opt).attributes["final-bounds"] = location;
+    const_cast<Options&>(opt).attributes["final-domain"] = location;
+  } else if (perm_int >= PermissionTypes::Read
+             or (perm_int == PermissionTypes::ReadIfSet and set)) {
+    const Options& opt = option.get(Regions::Interior);
+    const_cast<Options&>(opt).attributes["final-bounds"] = location;
     const_cast<Options&>(opt).attributes["final-domain"] = location;
   }
 #endif
@@ -96,6 +103,29 @@ bool isSetFinalNoBoundary(const GuardedOptions& option,
   if (perm >= PermissionTypes::Read or (perm == PermissionTypes::ReadIfSet and set)) {
     // Mark option as final inside the domain, but not in the boundary
     const_cast<Options&>(option.get(Regions::Interior)).attributes["final-domain"] =
+        location;
+  }
+#endif
+  return set;
+}
+
+bool isSetFinalBoundary(const Options& option,
+                        [[maybe_unused]] const std::string& location) {
+#if CHECKLEVEL >= 1
+  // Mark option as final in the boundaries, but not the interior
+  const_cast<Options&>(option).attributes["final-bounds"] = location;
+#endif
+  return option.isSet();
+}
+
+bool isSetFinalBoundary(const GuardedOptions& option,
+                        [[maybe_unused]] const std::string& location) {
+  const bool set = option.isSet();
+#if CHECKLEVEL >= 1
+  const PermissionTypes perm = option.getHighestPermission(Regions::Boundaries);
+  if (perm >= PermissionTypes::Read or (perm == PermissionTypes::ReadIfSet and set)) {
+    // Mark option as final in the boundaries, but not the interior
+    const_cast<Options&>(option.get(Regions::Boundaries)).attributes["final-bounds"] =
         location;
   }
 #endif

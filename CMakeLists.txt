@@ -388,6 +388,7 @@ if(HERMES_TESTS)
   hermes_add_integrated_test(2D-energy CONFLICTS BOUT_ENABLE_METRIC_3D)
   hermes_add_integrated_test(2D-recycling CONFLICTS BOUT_ENABLE_METRIC_3D)
   hermes_add_integrated_test(examples CONFLICTS BOUT_ENABLE_METRIC_3D)
+  hermes_add_integrated_test(component-order CONFLICTS BOUT_ENABLE_METRIC_3D)
 
   hermes_add_integrated_test(1D-density-fci REQUIRES BOUT_ENABLE_METRIC_3D)
   hermes_add_integrated_test(1D-momentum-fci REQUIRES BOUT_ENABLE_METRIC_3D)
