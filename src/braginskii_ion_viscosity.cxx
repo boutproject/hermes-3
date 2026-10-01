@@ -47,6 +47,8 @@ BraginskiiIonViscosity::BraginskiiIonViscosity(const std::string& name,
           }) {
   auto& options = alloptions[name];
 
+  auto coord = mesh->getCoordinates();
+
   eta_limit_alpha = options["eta_limit_alpha"]
                         .doc("Viscosity flux limiter coefficient. <0 = turned off")
                         .withDefault(-1.0);
@@ -87,6 +89,11 @@ BraginskiiIonViscosity::BraginskiiIonViscosity(const std::string& name,
                                 "frequency modification to viscosity")
                            .withDefault(2.0);
 
+  viscous_heating = options["viscous_heating"]
+                        .doc("Include viscous heating? Can be turned off to make start "
+                             "of simulations (possibly) less violent.")
+                        .withDefault<bool>(true);
+
   density_floor = options["density_floor"].doc("Minimum density floor").withDefault(1e-7);
 
   if (perpendicular) {
@@ -114,8 +121,6 @@ BraginskiiIonViscosity::BraginskiiIonViscosity(const std::string& name,
     const BoutReal Bnorm = units["Tesla"];
     const BoutReal Lnorm = units["meters"];
 
-    auto coord = mesh->getCoordinates();
-
     Curlb_B.x /= Bnorm;
     Curlb_B.y *= SQ(Lnorm);
     Curlb_B.z *= SQ(Lnorm);
@@ -139,16 +144,15 @@ BraginskiiIonViscosity::BraginskiiIonViscosity(const std::string& name,
     setPermissions(readOnly("fields:phi"));
   }
   substitutePermissions("coll_type", coll_types);
+
+  Bxy = coord->Bxy();
+  sqrtB = sqrt(Bxy);
+  Grad_par_logB = Grad_par(log(Bxy));
 }
 
 void BraginskiiIonViscosity::transform_impl(GuardedOptions& state) {
 
   GuardedOptions allspecies = state["species"];
-
-  auto coord = mesh->getCoordinates();
-  const auto Bxy = coord->Bxy();
-  const auto sqrtB = sqrt(Bxy);
-  const auto Grad_par_logB = Grad_par(log(Bxy));
 
   // Loop through all species
   for (auto& kv : allspecies.getChildren()) {
@@ -269,7 +273,7 @@ void BraginskiiIonViscosity::transform_impl(GuardedOptions& state) {
     Field3D Pi_cipar = zeroFrom(P);
     if (parallel and isSetFinal(species["velocity"], "ion_viscosity")) {
 
-      const Field3D V = get<Field3D>(species["velocity"]);
+      const Field3DParallel V = get<Field3D>(species["velocity"]);
 
       if (eta_limit_alpha > 0.) {
         // SOLPS-style flux limiter
@@ -280,15 +284,23 @@ void BraginskiiIonViscosity::transform_impl(GuardedOptions& state) {
 
         eta = eta / (1. + abs(q_cl / q_fl));
       }
-      eta.getMesh()->communicate(eta);
+
       eta.applyBoundary("neumann");
+      mesh->communicate(eta);
+      eta.applyParallelBoundary("parallel_neumann_o2");
 
       // This term is the parallel flow part of
       // -(2/3) B^(3/2) Grad_par(Pi_ci / B^(3/2))
-      const Field3D div_Pi_cipar = sqrtB * FV::Div_par_K_Grad_par(eta / Bxy, sqrtB * V);
+
+      const Field3D div_Pi_cipar = sqrtB
+                                   * FV::Div_par_K_Grad_par(Field3DParallel{eta / Bxy},
+                                                            Field3DParallel{sqrtB * V});
 
       add(species["momentum_source"], div_Pi_cipar);
-      subtract(species["energy_source"], V * div_Pi_cipar); // Internal energy
+
+      if (viscous_heating) {
+        subtract(species["energy_source"], V * div_Pi_cipar); // Internal energy
+      }
 
       // Parallel ion stress tensor component
       Pi_cipar = -0.96 * P * tau * bounce_factor * (2. * Grad_par(V) + V * Grad_par_logB);
@@ -347,7 +359,10 @@ void BraginskiiIonViscosity::transform_impl(GuardedOptions& state) {
       // const Field3D div_Pi_ciperp = - (2. / 3) * B32 * Grad_par(Pi_ciperp / B32);
 
       add(species["momentum_source"], div_Pi_ciperp);
-      subtract(species["energy_source"], V * div_Pi_ciperp);
+
+      if (viscous_heating) {
+        subtract(species["energy_source"], V * div_Pi_ciperp);
+      }
     }
 
     // Total scalar ion viscous pressure

@@ -50,8 +50,15 @@ void BraginskiiElectronViscosity::transform_impl(GuardedOptions& state) {
   const Field3D V = get<Field3D>(species["velocity"]);
 
   Coordinates* coord = P.getCoordinates();
-  const Field3D Bxy = coord->Bxy();
-  const Field3D sqrtB = sqrt(Bxy);
+
+  // If not allocated calculated, otherwise skip as already done
+  if (!Bxy.isAllocated()) {
+    Bxy = coord->Bxy();
+  }
+
+  if (!sqrtB.isAllocated()) {
+    sqrtB = sqrt(Bxy);
+  }
 
   // Parallel electron viscosity
   Field3D eta = (4. / 3) * 0.73 * P * tau;
@@ -64,13 +71,19 @@ void BraginskiiElectronViscosity::transform_impl(GuardedOptions& state) {
     const Field3D q_fl = eta_limit_alpha * P; // Flux limit
 
     eta = eta / (1. + abs(q_cl / q_fl));
+  }
 
-    eta.getMesh()->communicate(eta);
+  // Fci needs communication for the parallel slices
+  if (P.isFci() || eta_limit_alpha > 0.0) {
     eta.applyBoundary("neumann");
+    eta.getMesh()->communicate(eta);
+    eta.applyParallelBoundary("parallel_neumann_o2");
   }
 
   // Save term for output diagnostic
-  viscosity = sqrtB * FV::Div_par_K_Grad_par(eta / Bxy, sqrtB * V);
+  viscosity =
+      sqrtB
+      * FV::Div_par_K_Grad_par(Field3DParallel{eta / Bxy}, Field3DParallel{sqrtB * V});
   add(species["momentum_source"], viscosity);
 }
 
