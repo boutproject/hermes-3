@@ -69,9 +69,16 @@ bool isSetFinal(const GuardedOptions& option,
                 [[maybe_unused]] const std::string& location) {
   const bool set = option.isSet();
 #if CHECKLEVEL >= 1
-  const PermissionTypes perm = option.getHighestPermission();
-  if (perm >= PermissionTypes::Read or (perm == PermissionTypes::ReadIfSet and set)) {
-    const Options& opt = option.get();
+  const PermissionTypes perm_bounds = option.getHighestPermission(Regions::Boundaries);
+  const PermissionTypes perm_int = option.getHighestPermission(Regions::Interior);
+  if (perm_bounds >= PermissionTypes::Read
+      or (perm_bounds == PermissionTypes::ReadIfSet and set)) {
+    const Options& opt = option.get(Regions::Boundaries);
+    const_cast<Options&>(opt).attributes["final-bounds"] = location;
+    const_cast<Options&>(opt).attributes["final-domain"] = location;
+  } else if (perm_int >= PermissionTypes::Read
+             or (perm_int == PermissionTypes::ReadIfSet and set)) {
+    const Options& opt = option.get(Regions::Interior);
     const_cast<Options&>(opt).attributes["final-bounds"] = location;
     const_cast<Options&>(opt).attributes["final-domain"] = location;
   }
