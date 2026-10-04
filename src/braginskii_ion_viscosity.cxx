@@ -40,6 +40,7 @@ BraginskiiIonViscosity::BraginskiiIonViscosity(const std::string& name,
               readIfSet("species:{non_electrons}:density"),
               readIfSet("species:{non_electrons}:velocity"),
               readIfSet("species:{non_electrons}:charge"),
+              readIfSet("species:{non_electrons}:AA"),
               readIfSet("species:{non_electrons}:collision_frequencies:{coll_type}"),
               readWrite("species:{non_electrons}:momentum_source"),
               readWrite("species:{non_electrons}:energy_source"),
@@ -232,7 +233,7 @@ void BraginskiiIonViscosity::transform_impl(GuardedOptions& state) {
       nu += GET_VALUE(Field3D, species["collision_frequencies"][collision_name]);
     }
 
-    const Field3D tau = 1. / nu;
+    const Field3D tau = 1. / softFloor(nu, 1e-10);
     const Field3D P = get<Field3D>(species["pressure"]);
     const Field3D T = get<Field3D>(species["temperature"]);
     const Field3D N = get<Field3D>(species["density"]);
@@ -283,6 +284,37 @@ void BraginskiiIonViscosity::transform_impl(GuardedOptions& state) {
       eta.getMesh()->communicate(eta);
       eta.applyBoundary("neumann");
 
+      // Note: We need parallel boundary conditions on eta
+      if (eta.hasParallelSlices()) {
+        Field3D& eta_ydown = eta.ydown();
+        Field3D& eta_yup = eta.yup();
+        for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
+          for (int jz = 0; jz < mesh->LocalNz; jz++) {
+            eta_ydown(r.ind, mesh->ystart - 1, jz) = eta(r.ind, mesh->ystart, jz);
+          }
+        }
+        for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
+          for (int jz = 0; jz < mesh->LocalNz; jz++) {
+            eta_yup(r.ind, mesh->yend + 1, jz) = eta(r.ind, mesh->yend, jz);
+          }
+        }
+      } else {
+        Field3D eta_fa = toFieldAligned(eta);
+        for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
+          for (int jz = 0; jz < mesh->LocalNz; jz++) {
+            eta_fa(r.ind, mesh->ystart - 1, jz) =
+                eta_fa(r.ind, mesh->ystart, jz); // Neumann BC
+          }
+        }
+        for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
+          for (int jz = 0; jz < mesh->LocalNz; jz++) {
+            eta_fa(r.ind, mesh->yend + 1, jz) =
+                eta_fa(r.ind, mesh->yend, jz); // Neumann BC
+          }
+        }
+        eta = fromFieldAligned(eta_fa);
+      }
+
       // This term is the parallel flow part of
       // -(2/3) B^(3/2) Grad_par(Pi_ci / B^(3/2))
       const Field3D div_Pi_cipar = sqrtB * FV::Div_par_K_Grad_par(eta / Bxy, sqrtB * V);
@@ -299,7 +331,7 @@ void BraginskiiIonViscosity::transform_impl(GuardedOptions& state) {
         const Field3D Pi_ciperp = 0.0;
         const Field3D DivJ = 0.0;
         diagnostics[species_name] =
-            Diagnostics{Pi_ciperp, Pi_cipar, DivJ, bounce_factor, nu_star};
+            Diagnostics{Pi_ciperp, Pi_cipar, DivJ, bounce_factor, nu_star, eta};
       }
     }
 
@@ -378,7 +410,7 @@ void BraginskiiIonViscosity::transform_impl(GuardedOptions& state) {
 
     if (diagnose) {
       diagnostics[species_name] =
-          Diagnostics{Pi_ciperp, Pi_cipar, DivJ, bounce_factor, nu_star};
+          Diagnostics{Pi_ciperp, Pi_cipar, DivJ, bounce_factor, nu_star, eta};
     }
   }
 }
@@ -442,6 +474,15 @@ void BraginskiiIonViscosity::outputVars(Options& state) {
                       {"long_name", std::string("nu star") + species_name},
                       {"species", species_name},
                       {"source", "ion_viscosity"}});
+
+      set_with_attrs(
+          state[std::string("eta_") + species_name], d.eta,
+          {{"time_dimension", "t"},
+           {"units", "Pa s"},
+           {"conversion", Pnorm / Omega_ci},
+           {"long_name", std::string("Ion viscosity coefficient") + species_name},
+           {"species", species_name},
+           {"source", "ion_viscosity"}});
     }
   }
 }
