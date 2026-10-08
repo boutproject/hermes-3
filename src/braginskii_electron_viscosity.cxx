@@ -45,8 +45,8 @@ void BraginskiiElectronViscosity::transform_impl(GuardedOptions& state) {
     throw BoutException("No electron velocity => Can't calculate electron viscosity");
   }
 
-  const Field3D tau = 1. / get<Field3D>(species["collision_frequency"]);
-  const Field3D P = get<Field3D>(species["pressure"]);
+  const Field3D tau = 1. / floor(get<Field3D>(species["collision_frequency"]), 1e-15);
+  const Field3D P = floor(get<Field3D>(species["pressure"]), 0.0);
   const Field3D V = get<Field3D>(species["velocity"]);
 
   Coordinates* coord = P.getCoordinates();
@@ -60,14 +60,16 @@ void BraginskiiElectronViscosity::transform_impl(GuardedOptions& state) {
     // SOLPS-style flux limiter
     // Values of alpha ~ 0.5 typically
 
-    const Field3D q_cl = eta * Grad_par(V);   // Collisional value
+    const Field3D gradV = Grad_par(V);
+    const BoutReal gradV_floor = 1e-8;
+    const Field3D q_cl = eta * sqrt(SQ(gradV) + SQ(gradV_floor)); // Collisional value
+
     const Field3D q_fl = eta_limit_alpha * P; // Flux limit
 
-    eta = eta / (1. + abs(q_cl / q_fl));
-
-    eta.getMesh()->communicate(eta);
-    eta.applyBoundary("neumann");
+    eta = eta / (1. + softFloor(q_cl, 1e-15) / softFloor(q_fl, 1e-15));
   }
+  eta.getMesh()->communicate(eta);
+  eta.applyBoundary("neumann");
 
   // Save term for output diagnostic
   viscosity = sqrtB * FV::Div_par_K_Grad_par(eta / Bxy, sqrtB * V);
