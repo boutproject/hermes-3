@@ -9,7 +9,6 @@
 #include <bout/bout_types.hxx>
 #include <bout/field3d.hxx>
 #include <bout/options.hxx>
-#include <bout/petsc_operators.hxx>
 
 #include "component.hxx"
 
@@ -59,11 +58,6 @@ private:
       all_flow_ylow_conduction; ///< Conduction energy flow diagnostics
   /// Save more diagnostics?
   std::map<std::string, bool> all_diagnose;
-
-  bool use_petsc_operator; ///< Use Petsc operators for parallel heat conduction?
-
-  PetscOperators::Parallel
-      petsc_parallel; ///< Petsc parallel operator object used for conduction
 
   /// Calculate conduction of energy for each species where this has been turned on.
   ///

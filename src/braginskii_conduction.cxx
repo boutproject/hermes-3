@@ -115,21 +115,6 @@ BraginskiiConduction::BraginskiiConduction(const std::string& name, Options& all
   substitutePermissions("sp", species);
 
   conduction_method = alloptions["conduction_method"].withDefault(conduction_method);
-
-  use_petsc_operator =
-      alloptions["use_petsc_operator"]
-          .doc("Use Petsc for parallel heat conduction. Grids need the weights.")
-          .withDefault<bool>(false);
-
-  if (use_petsc_operator) {
-
-    if (!mesh->isFci()) {
-      throw BoutException("Used Petsc operator for Braginskii conduction without Fci!");
-    }
-
-    PetscOperators ops(mesh);
-    petsc_parallel = ops.getParallel();
-  }
 }
 
 void BraginskiiConduction::transform_impl(GuardedOptions& state) {
@@ -321,14 +306,11 @@ void BraginskiiConduction::transform_impl(GuardedOptions& state) {
     set(species["kappa_par"], kappa_par);
 
     // Petsc can be used to calculate the divergence of the heat flux
-    if (use_petsc_operator) {
-      add(species["energy_source"], petsc_parallel.Div_par_K_Grad_par(kappa_par, T));
-    } else {
-      add(species["energy_source"],
-          Div_par_K_Grad_par_mod(kappa_par, T, flow_ylow_conduction, false,
-                                 conduction_method));
-      add(species["energy_flow_ylow"], flow_ylow_conduction);
-    }
+    add(species["energy_source"],
+        Div_par_K_Grad_par_mod(kappa_par, T, flow_ylow_conduction, false,
+                               conduction_method));
+    add(species["energy_flow_ylow"], flow_ylow_conduction);
+
     if (state.isSection("fields") and state["fields"].isSet("Apar_flutter")) {
       // Magnetic flutter term. The operator splits into 4 pieces:
       // Div(k b b.Grad(T)) = Div(k b0 b0.Grad(T)) + Div(k d0 db.Grad(T))

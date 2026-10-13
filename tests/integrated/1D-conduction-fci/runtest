@@ -30,12 +30,11 @@ results = {}
 for var in varnames:
     results[var] = {"l2": [], "inf": []}
 
-petsc_options = ["True", "False"]
+petsc_options = ["Original", "PetscOperator"]
 
 for petsc in petsc_options:
     for ny in nylist:
-        args = f"mesh:file={gridname(ny)} nout={nout} timestep={timestep} use_petsc_operator={petsc}"
-        print("Petsc option: " + petsc)
+        args = f"mesh:file={gridname(ny)} nout={nout} timestep={timestep} conduction_method={petsc}"
         print("Running with " + args)
 
         # Delete old data
