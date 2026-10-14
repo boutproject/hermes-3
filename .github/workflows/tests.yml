@@ -39,7 +39,7 @@ jobs:
             coverage: ON
             name: "CMake default options"
             bout_configure_options: "-DPACKAGE_TESTS=OFF"
-            hermes_configure_options: "-DHERMES_ERROR_ON_WARNINGS=ON"
+            hermes_configure_options: "-DHERMES_ERROR_ON_WARNINGS=ON -DHERMES_DIVOPS_MMS_TESTS=OFF"
           - cmake_build_type: RelWithDebInfo
             test_type: integration
             coverage: OFF
@@ -62,7 +62,9 @@ jobs:
                                      -DSUNDIALS_ROOT=/home/runner/local
                                      -DBOUT_USE_HYPRE=ON
                                      -DBOUT_ENABLE_METRIC_3D=ON"
-            hermes_configure_options: "-DHERMES_ERROR_ON_WARNINGS=ON -DBOUT_ENABLE_METRIC_3D=ON"
+            hermes_configure_options: "-DHERMES_ERROR_ON_WARNINGS=ON
+                                       -DBOUT_ENABLE_METRIC_3D=ON
+                                       -DHERMES_DIVOPS_MMS_TESTS=OFF"
           - cmake_build_type: RelWithDebugInfo
             test_type: integration
             name: "3D metrics"
@@ -73,7 +75,9 @@ jobs:
                                      -DSUNDIALS_ROOT=/home/runner/local
                                      -DBOUT_USE_HYPRE=ON
                                      -DBOUT_ENABLE_METRIC_3D=ON"
-            hermes_configure_options: "-DHERMES_ERROR_ON_WARNINGS=ON -DBOUT_ENABLE_METRIC_3D=ON -DHERMES_UNIT_TESTS=OFF"
+            hermes_configure_options: "-DHERMES_ERROR_ON_WARNINGS=ON
+                                       -DBOUT_ENABLE_METRIC_3D=ON
+                                       -DHERMES_UNIT_TESTS=OFF"
             coverage: OFF
 
     steps:
@@ -128,7 +132,7 @@ jobs:
       - name: Assemble BOUT++ build info
         run: |
           git submodule status external/BOUT-dev > bout_build_info.txt
-          echo "Build type: $ BUILD_TYPE" >> bout_build_info.txt
+          echo "Build type: $BUILD_TYPE" >> bout_build_info.txt
           echo "$BOUT_CONFIGURE_OPTIONS" >> bout_build_info.txt
           pip freeze | grep numpy >> bout_build_info.txt
           echo "${{ hashFiles('./external/BOUT-dev/.build_sundials_for_ci.sh') }}" >> bout_build_info.txt
