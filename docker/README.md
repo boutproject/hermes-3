@@ -388,7 +388,7 @@ build_hermes` runs `/bin/image build_hermes`, and so on.
 
 ## Continuous Integration and Delivery
 
-All published images are built and pushed to the GitHub Container Registry (`ghcr.io/boutproject/...`) by GitHub Actions. There are three images and four workflows.
+All published images are built and pushed to the GitHub Container Registry (`ghcr.io/boutproject/...`) by GitHub Actions. There are three images and five workflows.
 
 ### The three images and how they relate
 
@@ -404,16 +404,19 @@ The `hermes-3-jupyter` image is the exception: its steps are only `apt`/`pip` in
 
 All workflows also use a GitHub Actions layer cache (`cache-from`/`cache-to: type=gha`, scoped per arch) so unchanged Docker layers are reused between runs.
 
-### The four workflows and their triggers
+### The five workflows and their triggers
+
+Pushing a stable version tag (`vX.Y.Z`, for example `git tag v1.5.2 && git push origin v1.5.2`) is how a release is made. The docs version (`docs/sphinx/conf.py`) and the package version (`pyproject.toml`, via setuptools-scm) are both read from that tag. `create_release.yml` turns the tag into the GitHub release notes. The image workflows listen for the tag push, not for that release: a release created with the default `GITHUB_TOKEN` does not trigger other workflows.
 
 | Workflow | Builds | Triggers |
 | --- | --- | --- |
-| `build_builder_image.yml` | `hermes-3-builder` (→ `latest`/`edge`/date tags), then chains into building `hermes-3` on top | monthly schedule (1st of the month), `release`, `workflow_dispatch` |
-| `build_docker_image.yml` | `hermes-3` only, `FROM` the `latest` builder (→ `latest`/`edge`/semver tags) | push to `master`, `release`, `workflow_dispatch` |
-| `build_jupyter_image.yml` | `hermes-3-jupyter` | push to `master`, `release`, `workflow_dispatch` |
+| `create_release.yml` | the GitHub release notes for the tag (no image) | push of a `vX.Y.Z` tag |
+| `build_builder_image.yml` | `hermes-3-builder` (→ `latest`/`edge`/date tags), then chains into building `hermes-3` on top (this publishes the semver tags) | push of a `vX.Y.Z` tag, monthly schedule (1st of the month), `workflow_dispatch` |
+| `build_docker_image.yml` | `hermes-3` only, `FROM` the `latest` builder (→ `latest`/`edge`/sha tags) | push to `master`, `workflow_dispatch` |
+| `build_jupyter_image.yml` | `hermes-3-jupyter` | push to `master`, push of a `vX.Y.Z` tag, `workflow_dispatch` |
 | `test_docker_build.yml` | builder and/or `hermes-3` under the `experimental_docker_build` tag (validation only) | pull requests touching `docker/**` or that workflow, `workflow_dispatch` |
 
-The split reflects build cost: the expensive builder is only refreshed on a schedule/release, while the cheaper `hermes-3` runtime image is rebuilt on every push to `master` (picking up source changes) `FROM` the most recent `latest` builder.
+The split reflects build cost: the expensive builder is only refreshed on a monthly schedule or when a `vX.Y.Z` tag is pushed, while the cheaper `hermes-3` runtime image is rebuilt on every push to `master` (picking up source changes) `FROM` the most recent `latest` builder. A version tag does not also run `build_docker_image.yml`. The builder workflow already builds and tags `hermes-3` on that push (including the semver tags), and the two workflows publish the same `ghcr.io/boutproject/hermes-3` tags, so running both would race.
 
 ### The `experimental_docker_build` tag
 
