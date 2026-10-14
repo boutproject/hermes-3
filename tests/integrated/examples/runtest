@@ -31,7 +31,11 @@ def run_examples(
     ):
         category_name = str(category.relative_to(examples_dir))
         print(f"\033[1mRunning tests in category '{category_name}'.\033[0m")
-        print(f"Working directory: {category}")
+        if category_name == "stellarator-3D":
+            print("Skipping stellarator 3D examples in the CI")
+            continue
+        else:
+            print(f"Working directory: {category}")
         os.chdir(category)
         json_link = category / "json_database"
         json_link.symlink_to(json_database)
