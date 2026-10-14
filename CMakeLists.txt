@@ -303,9 +303,16 @@ if(HERMES_TESTS)
          ${CMAKE_CURRENT_BINARY_DIR}/grids SYMBOLIC)
   endif()
 
-  # Integrated tests
+  # Integrated tests:
+  #
+  # * TEST_EXECUTABLE: name of the test executable, default: `runtest`
+  #
+  # * REQUIRES: list of variables that must be true to enable test (note: use
+  #   `CONFLICTS` to negate the variable, rather than `NOT VARIABLE`)
+  #
+  # * CONFLICTS: list of variables that must be false to enable test
   function(hermes_add_integrated_test TESTNAME)
-    set(oneValueArgs DOWNLOAD DOWNLOAD_NAME)
+    set(oneValueArgs DOWNLOAD DOWNLOAD_NAME TEST_EXECUTABLE)
     set(multiValueArgs REQUIRES CONFLICTS)
     cmake_parse_arguments(HERMES_TEST_OPTIONS "${options}" "${oneValueArgs}"
                           "${multiValueArgs}" ${ARGN})
@@ -328,13 +335,21 @@ if(HERMES_TESTS)
       endif()
     endforeach()
 
+    if(NOT HERMES_TEST_OPTIONS_TEST_EXECUTABLE)
+      set(HERMES_TEST_OPTIONS_TEST_EXECUTABLE runtest)
+    endif()
+
     if(HERMES_COPY_TESTS_TO_BUILD)
       set(INT_TEST_SRC ${CMAKE_CURRENT_SOURCE_DIR}/tests/integrated/${TESTNAME})
       set(INT_TEST_DEST
           ${CMAKE_CURRENT_BINARY_DIR}/tests/integrated/${TESTNAME})
+
       # Make copies of the test exec and input file in the build directory and
       # keep them up to date
-      configure_file(${INT_TEST_SRC}/runtest ${INT_TEST_DEST}/runtest COPYONLY)
+      configure_file(
+        ${INT_TEST_SRC}/${HERMES_TEST_OPTIONS_TEST_EXECUTABLE}
+        ${INT_TEST_DEST}/${HERMES_TEST_OPTIONS_TEST_EXECUTABLE} COPYONLY)
+
       if(EXISTS ${INT_TEST_SRC}/data/BOUT.inp)
         configure_file(${INT_TEST_SRC}/data/BOUT.inp
                        ${INT_TEST_DEST}/data/BOUT.inp COPYONLY)
@@ -345,10 +360,11 @@ if(HERMES_TESTS)
       set(INT_TEST_DEST
           ${CMAKE_CURRENT_SOURCE_DIR}/tests/integrated/${TESTNAME})
     endif()
+
     add_test(
       NAME ${TESTNAME}
       WORKING_DIRECTORY ${INT_TEST_DEST}
-      COMMAND runtest)
+      COMMAND ${HERMES_TEST_OPTIONS_TEST_EXECUTABLE})
     set_tests_properties(${TESTNAME} PROPERTIES LABELS integration)
 
     if(HERMES_TEST_OPTIONS_DOWNLOAD)
@@ -377,6 +393,11 @@ if(HERMES_TESTS)
   hermes_add_integrated_test(1D-fluid CONFLICTS BOUT_ENABLE_METRIC_3D)
   hermes_add_integrated_test(1D-recycling CONFLICTS BOUT_ENABLE_METRIC_3D)
   hermes_add_integrated_test(1D-recycling-dthe CONFLICTS BOUT_ENABLE_METRIC_3D)
+  hermes_add_integrated_test(1D-sheath-insulating CONFLICTS
+                             BOUT_ENABLE_METRIC_3D)
+  hermes_add_integrated_test(1D-sheath-simple CONFLICTS BOUT_ENABLE_METRIC_3D
+                             TEST_EXECUTABLE test_sheath.py)
+  hermes_add_integrated_test(1D-sheath CONFLICTS BOUT_ENABLE_METRIC_3D)
   hermes_add_integrated_test(diffusion CONFLICTS BOUT_ENABLE_METRIC_3D)
   hermes_add_integrated_test(evolve_density CONFLICTS BOUT_ENABLE_METRIC_3D)
   hermes_add_integrated_test(neutral_mixed CONFLICTS BOUT_ENABLE_METRIC_3D)
