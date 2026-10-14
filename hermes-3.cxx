@@ -56,6 +56,7 @@
 #include "include/ionisation.hxx"
 #include "include/isothermal.hxx"
 #include "include/izn_rec_reaction.hxx"
+#include "include/low_n_sources.hxx"
 #include "include/neutral_boundary.hxx"
 #include "include/neutral_full_velocity.hxx"
 #include "include/neutral_mixed.hxx"
