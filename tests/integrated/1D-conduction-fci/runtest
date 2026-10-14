@@ -30,7 +30,7 @@ results = {}
 for var in varnames:
     results[var] = {"l2": [], "inf": []}
 
-petsc_options = ["Original", "PetscOperator"]
+petsc_options = ["original", "petscoperator"]
 
 for petsc in petsc_options:
     for ny in nylist:
