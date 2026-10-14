@@ -1,10 +1,15 @@
 [build-system]
-requires = ["scikit-build-core", "boutdata", "jinja2"]
+requires = ["scikit-build-core>=1.0.3", "setuptools-scm>=8", "boutdata", "jinja2"]
 build-backend = "scikit_build_core.build"
 
 [project]
 name = "hermes-3"
-version = "1.5.1"
+# Taken from the nearest v* tag by setuptools-scm. On v1.5.1 this is 1.5.1.
+# A later commit is 1.5.2.devN+g<hash>.
+dynamic = ["version"]
+
+[[tool.dynamic-metadata]]
+provider = "scikit_build_core.metadata.setuptools_scm"
 
 [dependency-groups]
 dev = [
@@ -22,6 +27,11 @@ dev = [
      "scikit-build-core~=1.0.3",
      "asv~=0.6.6",
 ]
+
+[tool.uv]
+# Dev-tool sync must not build Hermes-3. The package version is still
+# computed when a wheel or sdist is built.
+package = false
 
 [tool.uv.workspace]
 
@@ -46,3 +56,6 @@ BUILD_SHARED_LIBS = false
 BOUT_ENABLE_PYTHON = "OFF"
 HERMES_TESTS = false
 BOUT_BUILD_EXAMPLES = false
+
+# Required so setuptools-scm reads this file. Defaults match our v* tags.
+[tool.setuptools_scm]

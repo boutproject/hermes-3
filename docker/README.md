@@ -406,7 +406,7 @@ All workflows also use a GitHub Actions layer cache (`cache-from`/`cache-to: typ
 
 ### The five workflows and their triggers
 
-Pushing a stable version tag (`vX.Y.Z`, for example `git tag v1.5.2 && git push origin v1.5.2`) is how a release is made. The docs version is read from that tag at build time (`docs/sphinx/conf.py`). `create_release.yml` turns the tag into the GitHub release notes. The image workflows listen for the tag push, not for that release: a release created with the default `GITHUB_TOKEN` does not trigger other workflows.
+Pushing a stable version tag (`vX.Y.Z`, for example `git tag v1.5.2 && git push origin v1.5.2`) is how a release is made. The docs version (`docs/sphinx/conf.py`) and the package version (`pyproject.toml`, via setuptools-scm) are both read from that tag. `create_release.yml` turns the tag into the GitHub release notes. The image workflows listen for the tag push, not for that release: a release created with the default `GITHUB_TOKEN` does not trigger other workflows.
 
 | Workflow | Builds | Triggers |
 | --- | --- | --- |
