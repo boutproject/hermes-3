@@ -30,44 +30,46 @@ results = {}
 for var in varnames:
     results[var] = {"l2": [], "inf": []}
 
-for ny in nylist:
-    args = f"mesh:file={gridname(ny)} nout={nout} timestep={timestep}"
+petsc_options = ["original", "petscoperator"]
 
-    print("Running with " + args)
+for petsc in petsc_options:
+    for ny in nylist:
+        args = f"mesh:file={gridname(ny)} nout={nout} timestep={timestep} conduction_method={petsc}"
+        print("Running with " + args)
 
-    # Delete old data
-    shell("rm data/BOUT.dmp.*.nc")
+        # Delete old data
+        shell("rm data/BOUT.dmp.*.nc")
 
-    # Command to run
-    cmd = "../../../hermes-3 " + args
-    # Launch using MPI
-    _, out = launch_safe(cmd, nproc=nproc, pipe=True)
-    Path(f"run.log.{ny}").write_text(out)
+        # Command to run
+        cmd = "../../../hermes-3 " + args
+        # Launch using MPI
+        _, out = launch_safe(cmd, nproc=nproc, pipe=True)
+        Path(f"run.log.{ny}").write_text(out)
 
-    # Collect data
+        # Collect data
+        for var in varnames:
+            E = collect("E_" + var, tind=[nout, nout], path="data", info=False)
+            E = E[:, 2:-2, :, :]
+
+            l2 = sqrt(mean(E**2))
+            linf = max(abs(E))
+            results[var]["l2"].append(l2)
+            results[var]["inf"].append(linf)
+
+            print(f"Error norm {var}: l-2 {l2:f} l-inf {linf:f}")
+
+        # Calculate grid spacing
+    dy = 1.0 / array(nylist)
+
+    success = True
+
     for var in varnames:
-        E = collect("E_" + var, tind=[nout, nout], path="data", info=False)
-        E = E[:, 2:-2, :, :]
+        l2 = results[var]["l2"]
+        order = log(l2[-1] / l2[-2]) / log(dy[-1] / dy[-2])
+        print(f"Convergence order {var} = {order:f}")
 
-        l2 = sqrt(mean(E**2))
-        linf = max(abs(E))
-        results[var]["l2"].append(l2)
-        results[var]["inf"].append(linf)
-
-        print(f"Error norm {var}: l-2 {l2:f} l-inf {linf:f}")
-
-# Calculate grid spacing
-dy = 1.0 / array(nylist)
-
-success = True
-
-for var in varnames:
-    l2 = results[var]["l2"]
-    order = log(l2[-1] / l2[-2]) / log(dy[-1] / dy[-2])
-    print(f"Convergence order {var} = {order:f}")
-
-    if order < 1.8:
-        success = False
+        if order < 1.8:
+            success = False
 
 
 if success:

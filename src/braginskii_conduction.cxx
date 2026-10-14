@@ -304,6 +304,8 @@ void BraginskiiConduction::transform_impl(GuardedOptions& state) {
     // Note: Flux through boundary turned off, because sheath heat flux
     // is calculated and removed separately
     set(species["kappa_par"], kappa_par);
+
+    // Petsc can be used to calculate the divergence of the heat flux
     add(species["energy_source"],
         Div_par_K_Grad_par_mod(kappa_par, T, flow_ylow_conduction, false,
                                conduction_method));
