@@ -411,6 +411,7 @@ if(HERMES_TESTS)
 
   option(HERMES_UNIT_TESTS "Build the unit tests" ON)
   option(HERMES_DIVOPS_MMS_TESTS "Build the differential operator MMS tests" ON)
+
   if(HERMES_UNIT_TESTS OR HERMES_DIVOPS_MMS_TESTS)
     if(NOT PACKAGE_TESTS)
       # Not running BOUT++ tests Since BOUT++ includes googletest, adding it
