@@ -1,10 +1,15 @@
 name: Build hermes-3-builder and hermes-3 Docker images
 
-# Configures this workflow to run when a release is released, or when manually triggered.
+# Runs when a stable version tag (vX.Y.Z) is pushed, on a monthly schedule,
+# or when manually triggered. Pushing that tag is the release: create_release.yml
+# turns it into the GitHub release notes, and this workflow publishes the
+# versioned image tags. The release is created with the default GITHUB_TOKEN,
+# which does not trigger other workflows, so this job listens for the tag push.
 on:
   workflow_dispatch:  # Allows manual triggering
-  release:
-    types: [released]
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
   schedule:
     # Run monthly, at 1:23AM UTC on the 1st
     - cron: '23 1 1 * *'
@@ -13,7 +18,7 @@ permissions:
   contents: read
   packages: write
 
-# Serialize runs so overlapping push/schedule/dispatch builds don't race on
+# Serialize runs so overlapping tag/schedule/dispatch builds don't race on
 # the shared image tags. Don't cancel an in-progress build (it may already be
 # pushing binaries to the OCI cache).
 concurrency:
@@ -32,8 +37,9 @@ jobs:
   # each by digest only. The merge job below assembles them into a single
   # multi-arch manifest.
   build-builder-image:
-    # Scheduled/release runs only on the canonical repo; forks may still manually
-    # dispatch to validate the build, but must not publish (see 'publish_image').
+    # Scheduled runs and version-tag pushes only on the canonical repo; forks may
+    # still manually dispatch to validate the build, but must not publish
+    # (see 'publish_image').
     if: github.repository == 'boutproject/hermes-3' || github.event_name == 'workflow_dispatch'
 
     strategy:

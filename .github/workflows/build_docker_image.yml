@@ -3,10 +3,11 @@ name: Build hermes-3 Docker image
 # Runs on every push to master, so the runtime image tracks source changes
 # (built FROM the most recent `latest` builder), and on manual dispatch.
 #
-# Not triggered by a release. build_builder_image.yml already rebuilds the
-# builder and then builds and tags hermes-3 — including the semver tags — on
-# release. Both workflows publish the same ghcr.io/boutproject/hermes-3 tags,
-# so running them together races: whichever merge job finishes last wins.
+# Not triggered by a version tag. build_builder_image.yml already rebuilds the
+# builder and then builds and tags hermes-3 — including the semver tags — when
+# a vX.Y.Z tag is pushed. Both workflows publish the same
+# ghcr.io/boutproject/hermes-3 tags, so running them together races: whichever
+# merge job finishes last wins.
 on:
   push:
     branches:
