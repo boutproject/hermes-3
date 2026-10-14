@@ -9,6 +9,7 @@
 #include <bout/bout_types.hxx>
 #include <bout/field3d.hxx>
 #include <bout/options.hxx>
+#include <bout/yboundary_regions.hxx>
 
 #include <string>
 
@@ -73,6 +74,9 @@ private:
   hermes::SheathLimitMode pressure_boundary_mode;
   /// BC for temperature
   hermes::SheathLimitMode temperature_boundary_mode;
+
+  /// Iterator over Y boundaries
+  bout::boundary::YBoundary ybndry;
 
   ///
   /// # Inputs
