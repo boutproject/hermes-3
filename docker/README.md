@@ -408,12 +408,12 @@ All workflows also use a GitHub Actions layer cache (`cache-from`/`cache-to: typ
 
 | Workflow | Builds | Triggers |
 | --- | --- | --- |
-| `build_builder_image.yml` | `hermes-3-builder` (→ `latest`/`edge`/date tags), then chains into building `hermes-3` on top | monthly schedule (1st of the month), `release`, `workflow_dispatch` |
-| `build_docker_image.yml` | `hermes-3` only, `FROM` the `latest` builder (→ `latest`/`edge`/semver tags) | push to `master`, `release`, `workflow_dispatch` |
+| `build_builder_image.yml` | `hermes-3-builder` (→ `latest`/`edge`/date tags), then chains into building `hermes-3` on top (this publishes the semver tags on release) | monthly schedule (1st of the month), `release`, `workflow_dispatch` |
+| `build_docker_image.yml` | `hermes-3` only, `FROM` the `latest` builder (→ `latest`/`edge`/sha tags) | push to `master`, `workflow_dispatch` |
 | `build_jupyter_image.yml` | `hermes-3-jupyter` | push to `master`, `release`, `workflow_dispatch` |
 | `test_docker_build.yml` | builder and/or `hermes-3` under the `experimental_docker_build` tag (validation only) | pull requests touching `docker/**` or that workflow, `workflow_dispatch` |
 
-The split reflects build cost: the expensive builder is only refreshed on a schedule/release, while the cheaper `hermes-3` runtime image is rebuilt on every push to `master` (picking up source changes) `FROM` the most recent `latest` builder.
+The split reflects build cost: the expensive builder is only refreshed on a schedule or a release, while the cheaper `hermes-3` runtime image is rebuilt on every push to `master` (picking up source changes) `FROM` the most recent `latest` builder. A release does not also run `build_docker_image.yml`. The builder workflow already builds and tags `hermes-3` on that event (including the semver tags), and the two workflows publish the same `ghcr.io/boutproject/hermes-3` tags, so running both would race.
 
 ### The `experimental_docker_build` tag
 

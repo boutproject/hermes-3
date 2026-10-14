@@ -1,14 +1,16 @@
 name: Build hermes-3 Docker image
 
-# Configures this workflow to run every time a change is pushed to the master branch,
-# when a release is released (so versioned image tags are published), or when
-# manually triggered.
+# Runs on every push to master, so the runtime image tracks source changes
+# (built FROM the most recent `latest` builder), and on manual dispatch.
+#
+# Not triggered by a release. build_builder_image.yml already rebuilds the
+# builder and then builds and tags hermes-3 — including the semver tags — on
+# release. Both workflows publish the same ghcr.io/boutproject/hermes-3 tags,
+# so running them together races: whichever merge job finishes last wins.
 on:
   push:
     branches:
       - 'master'
-  release:
-    types: [released]
 
   workflow_dispatch:  # Allows manual triggering
 
@@ -16,7 +18,7 @@ permissions:
   contents: read
   packages: write
 
-# Serialize runs so overlapping push/release/dispatch builds don't race on the
+# Serialize runs so overlapping push/dispatch builds don't race on the
 # shared image tags.
 concurrency:
   group: build-docker-image
