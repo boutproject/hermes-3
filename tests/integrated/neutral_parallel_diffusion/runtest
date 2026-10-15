@@ -4,10 +4,11 @@
 # Run the test, check it completed successfully
 #
 
-from boututils.run_wrapper import launch_safe
-from boutdata.data import BoutData
 from sys import exit
+
 import numpy as np
+from boutdata.data import BoutData
+from boututils.run_wrapper import launch_safe
 
 # Run the case
 s, out = launch_safe("../../../hermes-3", nproc=1, mthread=1, pipe=True)
@@ -21,22 +22,22 @@ outputs = BoutData("data")["outputs"]
 # for the neutral species
 
 # Deuterium atoms
-assert "Dd_Dpar" in outputs.keys()
-assert "Sd_Dpar" in outputs.keys()
-assert "Ed_Dpar" in outputs.keys()
-assert "Fd_Dpar" in outputs.keys()
+assert "Dd_Dpar" in outputs
+assert "Sd_Dpar" in outputs
+assert "Ed_Dpar" in outputs
+assert "Fd_Dpar" in outputs
 
 # Helium atoms
-assert "Dhe_Dpar" in outputs.keys()
-assert "She_Dpar" in outputs.keys()
-assert "Ehe_Dpar" in outputs.keys()
-assert "Fhe_Dpar" in outputs.keys()
+assert "Dhe_Dpar" in outputs
+assert "She_Dpar" in outputs
+assert "Ehe_Dpar" in outputs
+assert "Fhe_Dpar" in outputs
 
 # No diffusion for charged species
-assert "Dd+_Dpar" not in outputs.keys()
-assert "Sd+_Dpar" not in outputs.keys()
-assert "Ed+_Dpar" not in outputs.keys()
-assert "Fd+_Dpar" not in outputs.keys()
+assert "Dd+_Dpar" not in outputs
+assert "Sd+_Dpar" not in outputs
+assert "Ed+_Dpar" not in outputs
+assert "Fd+_Dpar" not in outputs
 
 # Check that the sources and sinks are not zero,
 # but they sum to zero over the domain

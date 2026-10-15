@@ -75,8 +75,8 @@ def Div_a_Grad_perp_upwind(bd, a, f):
         # of flux and cell volume.
         flux *= dy.isel(x=x) * dz.isel(x=x)
 
-        F_R[dict(x=x)] = flux
-        F_L[dict(x=xp)] = flux
+        F_R[{"x": x}] = flux
+        F_L[{"x": xp}] = flux
 
     return F_L, F_R
 
@@ -102,7 +102,6 @@ def sheath_boundary_simple(
 
     J = bd["J"]
     dx = bd["dx"]
-    dy = bd["dy"]
     dz = bd["dz"]
     g_22 = bd["g_22"]
 
@@ -212,8 +211,8 @@ total_F_R = F_R.isel(x=-3, zeta=0, theta=theta_slice).sum("theta")
 
 Pin = float(total_F_L[-1])
 Poutx = float(total_F_R[-1])
-print("Power in through X inner Pin = {} W".format(Pin))
-print("Power out through X outer Pout,x {} W".format(Poutx))
+print(f"Power in through X inner Pin = {Pin} W")
+print(f"Power out through X outer Pout,x {Poutx} W")
 
 # Sheath
 
@@ -227,15 +226,15 @@ if "sheath_boundary_simple" in bd.options:
 
     Poutd = float(total_sheath_down.isel(t=-1))
     Poutu = float(total_sheath_up.isel(t=-1))
-    print("Power out through lower sheath: Pout,d = {} W".format(Poutd))
-    print("Power out through upper sheath: Pout,u = {} W".format(Poutu))
+    print(f"Power out through lower sheath: Pout,d = {Poutd} W")
+    print(f"Power out through upper sheath: Pout,u = {Poutu} W")
 else:
     Poutd = 0.0
     Poutu = 0.0
 
 print("------------")
 Pnet = Pin - Poutx - Poutd - Poutu
-print("Net input power Pnet = Pin - Pout,x - Pout,d - Pout,u = {} W".format(Pnet))
+print(f"Net input power Pnet = Pin - Pout,x - Pout,d - Pout,u = {Pnet} W")
 
 # Energy content
 
@@ -250,8 +249,8 @@ energy_content = 1.5 * (Pe * cell_volume).isel(x=slice(2, -2), theta=theta_slice
 )  # In Joules
 dWdt = energy_content.differentiate("t")
 
-print("Volume of domain: {} m^3".format(domain_volume))
-print("Rate of change of energy content dW/dt = {} W".format(float(dWdt[-1])))
+print(f"Volume of domain: {domain_volume} m^3")
+print(f"Rate of change of energy content dW/dt = {float(dWdt[-1])} W")
 
 print("------------")
-print("Power imbalance Pnet - dW/dt = {} W".format(Pnet - float(dWdt[-1])))
+print(f"Power imbalance Pnet - dW/dt = {Pnet - float(dWdt[-1])} W")

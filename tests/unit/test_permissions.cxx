@@ -11,6 +11,12 @@
 auto make_access = std::make_pair<bool, std::string>;
 auto make_permission = std::make_pair<PermissionTypes, std::string>;
 
+// Check whether a particular variable can be accessed with the
+// specified permission and, if so, where it gets permission
+// from. I.e., was it specified for this particular variable or was it
+// inherited from the permission for an entire section of variables?
+// This can be further complicated if there are different permissions
+// for different regions.
 TEST(PermissionsTests, TestCanAccess) {
   const Permissions example({
       readIfSet("species:he:charge"),
@@ -106,6 +112,12 @@ TEST(PermissionsTests, TestCanAccess) {
             no_access);
 }
 
+// Check that the highest permission applying to a certain variable is
+// correctly determined. This can be complicated, due to some
+// permissions applying to entire sections of variables, but
+// potentially overridden for specific variables within that
+// section. Furthermore, the permission returned must the the highest
+// one whcih applies to all the specified regions of the variable.
 TEST(PermissionsTests, TestGetHighestPermission) {
   const Permissions example({
       {"species:he:charge",
@@ -126,6 +138,8 @@ TEST(PermissionsTests, TestGetHighestPermission) {
        {Regions::Nowhere, Regions::Nowhere, Regions::Interior, Regions::Nowhere}},
       {"species:d:collision_frequencies",
        {Regions::Nowhere, Regions::Nowhere, Regions::Boundaries, Regions::Nowhere}},
+      writeBoundary("fields:phi"),
+      writeBoundaryIfSet("species:he+:temperature"),
   });
 
   auto no_permission = make_permission(PermissionTypes::None, "");
@@ -148,6 +162,10 @@ TEST(PermissionsTests, TestGetHighestPermission) {
   EXPECT_EQ(example.getHighestPermission("species:d:collision_frequencies:d_d_coll"),
             make_permission(PermissionTypes::None, "species:d:collision_frequencies"));
   EXPECT_EQ(example.getHighestPermission("unset"), no_permission);
+  EXPECT_EQ(example.getHighestPermission("fields:phi"),
+            make_permission(PermissionTypes::Read, "fields:phi"));
+  EXPECT_EQ(example.getHighestPermission("species:he+:temperature"),
+            make_permission(PermissionTypes::ReadIfSet, "species:he+:temperature"));
 
   // Get the highest permission on the boundaries
   EXPECT_EQ(example.getHighestPermission("species:he:charge", Regions::Boundaries),
@@ -169,6 +187,10 @@ TEST(PermissionsTests, TestGetHighestPermission) {
                                          Regions::Boundaries),
             make_permission(PermissionTypes::Write, "species:d:collision_frequencies"));
   EXPECT_EQ(example.getHighestPermission("unset", Regions::Boundaries), no_permission);
+  EXPECT_EQ(example.getHighestPermission("fields:phi", Regions::Boundaries),
+            make_permission(PermissionTypes::Write, "fields:phi"));
+  EXPECT_EQ(example.getHighestPermission("species:he+:temperature", Regions::Boundaries),
+            make_permission(PermissionTypes::Write, "species:he+:temperature"));
 
   // Get the highest permission on the interior
   EXPECT_EQ(example.getHighestPermission("species:he:charge", Regions::Interior),
@@ -190,6 +212,10 @@ TEST(PermissionsTests, TestGetHighestPermission) {
                                          Regions::Interior),
             make_permission(PermissionTypes::None, "species:d:collision_frequencies"));
   EXPECT_EQ(example.getHighestPermission("unset", Regions::Interior), no_permission);
+  EXPECT_EQ(example.getHighestPermission("fields:phi", Regions::Interior),
+            make_permission(PermissionTypes::Read, "fields:phi"));
+  EXPECT_EQ(example.getHighestPermission("species:he+:temperature", Regions::Interior),
+            make_permission(PermissionTypes::ReadIfSet, "species:he+:temperature"));
 
   // Check the permission for the "Nowhere" region is always "None"
   EXPECT_EQ(example.getHighestPermission("species:he:charge", Regions::Nowhere),
@@ -211,6 +237,9 @@ TEST(PermissionsTests, TestGetHighestPermission) {
                                          Regions::Nowhere),
             no_permission);
   EXPECT_EQ(example.getHighestPermission("unset", Regions::Nowhere), no_permission);
+  EXPECT_EQ(example.getHighestPermission("fields:phi", Regions::Nowhere), no_permission);
+  EXPECT_EQ(example.getHighestPermission("species:he+:temperature", Regions::Nowhere),
+            no_permission);
 
   // Check permissions for a species that might be mistaken for one of
   // the sections we've given permissions for
@@ -220,6 +249,8 @@ TEST(PermissionsTests, TestGetHighestPermission) {
             no_permission);
 }
 
+// Check that getHighestPermission returns the expected results as the
+// setAccess method is used to change permissions.
 TEST(PermissionsTests, TestSetAccess) {
   Permissions example({
       {"species:he:density",
@@ -261,6 +292,10 @@ TEST(PermissionsTests, TestSetAccess) {
             make_permission(PermissionTypes::Final, "unset"));
 }
 
+// Check the getVariablesWithPermission method returns the set of all
+// variables/regions for which we have the desired level of permission
+// to access. The specified permission level must be the highest
+// permission for that variable.
 TEST(PermissionsTests, TestGetVariablesWithPermissions) {
   const Permissions example(
       {{"species:he:density",
@@ -281,34 +316,66 @@ TEST(PermissionsTests, TestGetVariablesWithPermissions) {
   EXPECT_EQ(read_only["species:he:pressure"], Regions::Boundaries);
   EXPECT_EQ(read_only["species:he:velocity"], Regions::Boundaries);
 
-  auto readable = example.getVariablesWithPermission(PermissionTypes::Read, false);
-  EXPECT_EQ(readable.size(), 4);
-  EXPECT_EQ(readable["species:he:density"], Regions::All);
-  EXPECT_EQ(readable["species:he:pressure"], Regions::All);
-  EXPECT_EQ(readable["species:he:collision_frequency"], Regions::All);
-  EXPECT_EQ(readable["species:he:velocity"], Regions::Boundaries);
-
-  auto write_nonfinal = example.getVariablesWithPermission(PermissionTypes::Write, true);
+  auto write_nonfinal = example.getVariablesWithPermission(PermissionTypes::Write);
   EXPECT_EQ(write_nonfinal.size(), 1);
   EXPECT_EQ(write_nonfinal["species:he:pressure"], Regions::Interior);
-
-  auto writable = example.getVariablesWithPermission(PermissionTypes::Write, false);
-  EXPECT_EQ(writable.size(), 3);
-  EXPECT_EQ(writable["species:he:density"], Regions::Boundaries);
-  EXPECT_EQ(writable["species:he:pressure"], Regions::Interior);
-  EXPECT_EQ(writable["species:he:collision_frequency"], Regions::All);
 
   auto final_write = example.getVariablesWithPermission(PermissionTypes::Final);
   EXPECT_EQ(final_write.size(), 2);
   EXPECT_EQ(final_write["species:he:density"], Regions::Boundaries);
   EXPECT_EQ(final_write["species:he:collision_frequency"], Regions::All);
 
-  EXPECT_THROW(example.getVariablesWithPermission(PermissionTypes::None, true),
-               BoutException);
-  EXPECT_THROW(example.getVariablesWithPermission(PermissionTypes::None, false),
-               BoutException);
+  auto invalid_permission = example.getVariablesWithPermission(
+      static_cast<PermissionTypes>(static_cast<size_t>(PermissionTypes::END) + 10));
+  EXPECT_EQ(invalid_permission.size(), 0);
+
+  EXPECT_THROW(example.getVariablesWithPermission(PermissionTypes::None), BoutException);
 }
 
+// Check the getVariablesWithMinimumPermission method returns the set of all
+// variables/regions for which we have the desired level of permission
+// to access. It will also return any variables with higher permissions.
+TEST(PermissionsTests, TestGetVariablesWithMinimumPermissions) {
+  const Permissions example(
+      {{"species:he:density",
+        {Regions::Nowhere, Regions::All, Regions::Nowhere, Regions::Boundaries}},
+       // Read and write permissions for pressure in the interior region
+       {"species:he:pressure",
+        {Regions::Nowhere, Regions::Boundaries, Regions::Interior, Regions::Nowhere}},
+       // Set the final value for collision frequency
+       {"species:he:collision_frequency",
+        {Regions::Nowhere, Regions::Interior, Regions::Nowhere, Regions::All}},
+       // Only allow reading of boundary velocity
+       {"species:he:velocity",
+        {Regions::Nowhere, Regions::Boundaries, Regions::Nowhere, Regions::Nowhere}}});
+
+  auto readable = example.getVariablesWithMinimumPermission(PermissionTypes::Read);
+  EXPECT_EQ(readable.size(), 4);
+  EXPECT_EQ(readable["species:he:density"], Regions::All);
+  EXPECT_EQ(readable["species:he:pressure"], Regions::All);
+  EXPECT_EQ(readable["species:he:collision_frequency"], Regions::All);
+  EXPECT_EQ(readable["species:he:velocity"], Regions::Boundaries);
+
+  auto writable = example.getVariablesWithMinimumPermission(PermissionTypes::Write);
+  EXPECT_EQ(writable.size(), 3);
+  EXPECT_EQ(writable["species:he:density"], Regions::Boundaries);
+  EXPECT_EQ(writable["species:he:pressure"], Regions::Interior);
+  EXPECT_EQ(writable["species:he:collision_frequency"], Regions::All);
+
+  auto final_write = example.getVariablesWithMinimumPermission(PermissionTypes::Final);
+  EXPECT_EQ(final_write.size(), 2);
+  EXPECT_EQ(final_write["species:he:density"], Regions::Boundaries);
+  EXPECT_EQ(final_write["species:he:collision_frequency"], Regions::All);
+
+  auto invalid_permission = example.getVariablesWithMinimumPermission(
+      static_cast<PermissionTypes>(static_cast<size_t>(PermissionTypes::END) + 10));
+  EXPECT_EQ(invalid_permission.size(), 0);
+
+  EXPECT_THROW(example.getVariablesWithPermission(PermissionTypes::None), BoutException);
+}
+
+// Check that placeholders in variable names in a permissions object
+// will be correctly replaced by the substitute method.
 TEST(PermissionsTests, TestSubstitute) {
   Permissions example(
       {{"species:{s1}:collision_frequencies:{s1}_{s2}_coll",
@@ -321,7 +388,7 @@ TEST(PermissionsTests, TestSubstitute) {
   example.substitute("s1", {"e", "d+"});
   example.substitute("s2", {"e", "d+"});
 
-  auto readable = example.getVariablesWithPermission(PermissionTypes::Read, false);
+  auto readable = example.getVariablesWithMinimumPermission(PermissionTypes::Read);
   EXPECT_EQ(readable.size(), 5);
   EXPECT_EQ(readable["{var}"], Regions::Interior);
   EXPECT_EQ(readable["species:e:collision_frequencies:e_e_coll"], Regions::All);
@@ -341,6 +408,9 @@ TEST(PermissionsTests, TestSubstitute) {
             make_permission(PermissionTypes::ReadIfSet, "d"));
 }
 
+// Confirm the checkNoRemainingSubstitutions method throws an
+// excpetion if there are any placeholders remaining in any
+// variable names in the permission object.
 TEST(PermissionsTests, TestRemainingSubstitutions) {
   const Permissions p1 = {readOnly("species:h+:density"), readWrite("fields:phi")};
   const Permissions p2 = {readOnly("species:{all_species}:density"),
@@ -354,11 +424,13 @@ TEST(PermissionsTests, TestRemainingSubstitutions) {
   p4.checkNoRemainingSubstitutions();
 }
 
+// Test permissions objects can be converted to strings and then back
+// into identical permissions.
 TEST(PermissionsTests, TestIO) {
   const Permissions empty({});
   const Permissions single({readOnly("test")});
   const Permissions multiple(
-      {readIfSet("a", Regions::Interior), writeBoundary("b"), readWrite("c:d")});
+      {readIfSet("a", Regions::Interior), writeBoundaryFinal("b"), readWrite("c:d")});
   Permissions new_perm;
 
   std::stringstream ss1;
@@ -367,12 +439,12 @@ TEST(PermissionsTests, TestIO) {
 
   ss1 << empty;
   ss1 >> new_perm;
-  EXPECT_EQ(new_perm.getVariablesWithPermission(PermissionTypes::ReadIfSet, false).size(),
+  EXPECT_EQ(new_perm.getVariablesWithMinimumPermission(PermissionTypes::ReadIfSet).size(),
             0);
 
   ss2 << single;
   ss2 >> new_perm;
-  EXPECT_EQ(new_perm.getVariablesWithPermission(PermissionTypes::ReadIfSet, false).size(),
+  EXPECT_EQ(new_perm.getVariablesWithMinimumPermission(PermissionTypes::ReadIfSet).size(),
             1);
   std::map<std::string, Regions> read_only =
       new_perm.getVariablesWithPermission(PermissionTypes::Read);
@@ -381,7 +453,7 @@ TEST(PermissionsTests, TestIO) {
 
   ss3 << multiple;
   ss3 >> new_perm;
-  EXPECT_EQ(new_perm.getVariablesWithPermission(PermissionTypes::ReadIfSet, false).size(),
+  EXPECT_EQ(new_perm.getVariablesWithMinimumPermission(PermissionTypes::ReadIfSet).size(),
             3);
   std::map<std::string, Regions> read_if_set =
       new_perm.getVariablesWithPermission(PermissionTypes::ReadIfSet);

@@ -1,10 +1,9 @@
 # Compare radial density profiles
 
-from boutdata import collect
-import numpy as np
+
 import matplotlib.pyplot as plt
-import pickle
-import os
+import numpy as np
+from boutdata import collect
 
 datasets = [
     ("D 64x64", "annulus-isothermal-d/", "b--"),

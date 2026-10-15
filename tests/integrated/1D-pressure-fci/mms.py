@@ -1,16 +1,17 @@
+from math import pi
+
 from boutdata.mms import (
-    Metric,
-    sin,
-    cos,
     Div_par,
     Grad_par,
-    exprToStr,
+    Metric,
+    cos,
     diff,
-    y,
-    t,
+    exprToStr,
+    sin,
     sqrt,
+    t,
+    y,
 )
-from math import pi
 
 # Length of the y domain
 Ly = 2.0 * pi

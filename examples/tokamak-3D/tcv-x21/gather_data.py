@@ -1,7 +1,8 @@
+import pickle
+
 import numpy as np
 from boutdata import collect
 from boututils.datafile import DataFile
-import pickle
 
 qe = 1.602e-19
 AA_me = 1.0 / 1836  # Electron mass divided by proton mass
@@ -140,9 +141,9 @@ def combine_data(dataset1, dataset2):
     Combine two datasets together. Returns a new dataset.
     """
     result = {}
-    for name in dataset1.keys():
+    for name in dataset1:
         result[name] = {}
-        for location in dataset1[name].keys():
+        for location in dataset1[name]:
             data1 = dataset1[name][location]
             data2 = dataset2[name][location]
 

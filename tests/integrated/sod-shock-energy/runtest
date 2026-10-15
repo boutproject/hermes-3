@@ -7,11 +7,13 @@
 #   https://www.mathworks.com/matlabcentral/fileexchange/46311-sod-shock-tube-problem-solver
 #
 
-from math import sqrt
-import numpy as np
-from boututils.run_wrapper import shell, launch_safe
-from boutdata.collect import collect
 import sys
+from math import sqrt
+from pathlib import Path
+
+import numpy as np
+from boutdata.collect import collect
+from boututils.run_wrapper import launch_safe, shell
 
 resolutions = [
     (100, "ob", 0.05),
@@ -20,6 +22,13 @@ resolutions = [
 ]
 
 plotting = False
+
+if plotting:
+    import matplotlib.pyplot as plt
+    from mpl_toolkits.axes_grid1.inset_locator import (
+        InsetPosition,
+        mark_inset,
+    )
 
 # Semi-analytic Sod shock problem
 # 5 regions:
@@ -73,50 +82,39 @@ cs2 = cs1 - ((gamma - 1) / 2) * u3
 pos23 = x0 + (u3 - cs2) * time
 
 if plotting:
-    try:
-        import matplotlib.pyplot as plt
-        from mpl_toolkits.axes_grid1.inset_locator import (
-            InsetPosition,
-            mark_inset,
-        )
+    # Create x_exact and rho_exact for plotting
 
-        # Create x_exact and rho_exact for plotting
+    # Region 1
+    x_exact = [0, pos12]
+    rho_exact = [rho1, rho1]
 
-        # Region 1
-        x_exact = [0, pos12]
-        rho_exact = [rho1, rho1]
+    # Region 2
+    x2 = np.linspace(pos12, pos23, endpoint=True)
+    c = G * ((x0 - x2) / time) + (1 - G) * cs1
+    rho_exact2 = rho1 * (c / cs1) ** (2 / (gamma - 1))
 
-        # Region 2
-        x2 = np.linspace(pos12, pos23, endpoint=True)
-        c = G * ((x0 - x2) / time) + (1 - G) * cs1
-        rho_exact2 = rho1 * (c / cs1) ** (2 / (gamma - 1))
+    x_exact += list(x2)
+    rho_exact += list(rho_exact2)
 
-        x_exact += list(x2)
-        rho_exact += list(rho_exact2)
+    # Regions 3, 4, 5
 
-        # Regions 3, 4, 5
+    x_exact += [pos23, pos34, pos34, pos45, pos45, 1]
+    rho_exact += [rho3, rho3, rho4, rho4, rho5, rho5]
 
-        x_exact += [pos23, pos34, pos34, pos45, pos45, 1]
-        rho_exact += [rho3, rho3, rho4, rho4, rho5, rho5]
+    fig, ax1 = plt.subplots()
+    ax1.plot(x_exact, rho_exact, "k")
 
-        fig, ax1 = plt.subplots()
-        ax1.plot(x_exact, rho_exact, "k")
+    ax2 = plt.axes([0, 0, 1, 1])
+    ax2.plot(x_exact, rho_exact, "k")
+    ax2.set_xlim(0.82, 0.9)
+    ax2.set_ylim(0.11, 0.25)
 
-        ax2 = plt.axes([0, 0, 1, 1])
-        ax2.plot(x_exact, rho_exact, "k")
-        ax2.set_xlim(0.82, 0.9)
-        ax2.set_ylim(0.11, 0.25)
-
-        # Manually set the position and relative size of the inset axes within ax1
-        ip = InsetPosition(ax1, [0.01, 0.03, 0.4, 0.4])
-        ax2.set_axes_locator(ip)
-        # Mark the region corresponding to the inset axes on ax1 and draw lines
-        # in grey linking the two axes.
-        mark_inset(ax1, ax2, loc1=2, loc2=4, fc="none", ec="0.5")
-    except:
-        raise
-        print("WARNING: Could not import Matplotlib")
-        plotting = False
+    # Manually set the position and relative size of the inset axes within ax1
+    ip = InsetPosition(ax1, [0.01, 0.03, 0.4, 0.4])
+    ax2.set_axes_locator(ip)
+    # Mark the region corresponding to the inset axes on ax1 and draw lines
+    # in grey linking the two axes.
+    mark_inset(ax1, ax2, loc1=2, loc2=4, fc="none", ec="0.5")
 
 # Perform simulations at required resolutions
 
@@ -129,9 +127,7 @@ for ny, sym, tol in resolutions:
     s, out = launch_safe(f"../../../hermes-3 mesh:ny={ny}", nproc=1, pipe=True)
 
     # Save output to log file
-    f = open(f"run.log.{ny}", "w")
-    f.write(out)
-    f.close()
+    Path(f"run.log.{ny}").write_text(out)
 
     n = collect("Ni", path="data", tind=-1, info=False).squeeze()
 
