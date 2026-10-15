@@ -82,13 +82,22 @@ auto cellAverage(Function func, const RegionType& region) {
       auto ym = i.ym();
       auto Ji = J[i];
 
-      // Integrate in Y using Simpson's rule
-      // Using limiter to calculate cell edge values
-      result[i] = 4. / 6 * func((args[i])...)
-                  + (Ji + J[ym]) / (12. * Ji)
-                        * func(cellLeft<CellEdges>(args[i], args[ym], args[yp])...)
-                  + (Ji + J[yp]) / (12. * Ji)
-                        * func(cellRight<CellEdges>(args[i], args[ym], args[yp])...);
+      if (result.isFci()) {
+        // Using the CellAverage in Fci can have unphysical effects in Fci
+        // Averaging over Y is a toroidal average, and especially for neutrals this is troublesome
+        // The flute mode approximation assumes small difference in the parallel direction for the plasma
+        result[i] = func((args[i])...);
+
+      } else {
+        // Not Fci
+        // Integrate in Y using Simpson's rule
+        // Using limiter to calculate cell edge values
+        result[i] = 4. / 6 * func((args[i])...)
+                    + (Ji + J[ym]) / (12. * Ji)
+                          * func(cellLeft<CellEdges>(args[i], args[ym], args[yp])...)
+                    + (Ji + J[yp]) / (12. * Ji)
+                          * func(cellRight<CellEdges>(args[i], args[ym], args[yp])...);
+      }
     }
     return result;
   };
