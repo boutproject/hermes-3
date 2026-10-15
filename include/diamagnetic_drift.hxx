@@ -17,6 +17,8 @@ private:
   VectorMetric Curlb_B;
   bool bndry_flux;
   Coordinates::FieldMetric diamag_form;
+  Field3D bracket_factor; ///< Multiplication factor for the bracket-operator used for Fci
+  Field3D logB;           ///< Log of the magnetic field
 
   /// For every species, if it has:
   ///  - temperature
