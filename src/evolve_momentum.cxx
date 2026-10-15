@@ -131,8 +131,9 @@ void EvolveMomentum::transform(Options &state) {
 
   // Not using density boundary condition
   auto N = getNoBoundary<Field3D>(species["density"]);
-  Field3D Nlim = copy(N);
+  Field3D Nlim;
   if (immBndry) {
+    Nlim = immBndry->DeepCopyField(N);
     //IB_TODO: Just floor, dont SetBoundary since V and NV will below?
     immBndry->FloorField(Nlim, density_floor);
   } else {
@@ -150,11 +151,12 @@ void EvolveMomentum::transform(Options &state) {
 
   if (immBndry) {
     //IB_TODO: Complicated / operator logic.
-    V = NV;
-    BOUT_FOR(i, NV.getRegion("RGN_NO_IMM_BNDRY")) {
+    V = immBndry->DeepCopyField(NV);
+    BOUT_FOR(i, V.getRegion("RGN_NO_IMM_BNDRY")) {
       V[i] /= (AA * Nlim[i]);
-      V.yup()[i.yp()]   /= (AA * Nlim.yup()[i.yp()]);
-      V.ydown()[i.ym()] /= (AA * Nlim.ydown()[i.ym()]);
+      //Note, dont need yup/ydown because communicate below.
+      //V.yup()[i.yp()]   /= (AA * Nlim.yup()[i.yp()]);
+      //V.ydown()[i.ym()] /= (AA * Nlim.ydown()[i.ym()]);
     }
     V.name = Vname;
     immBndry->SetBoundary(V);
@@ -166,16 +168,17 @@ void EvolveMomentum::transform(Options &state) {
   V.applyParallelBoundary();
   set(species["velocity"], V);
 
-  NV_solver = NV; // Save the momentum as calculated by the solver
   if (immBndry) {
+    NV_solver = immBndry->DeepCopyField(NV);
     NV_solver.name = NV.name;
     //IB_TODO: Complex * operator logic...
-    BOUT_FOR(i, V.getRegion("RGN_NO_IMM_BNDRY")) {
+    BOUT_FOR(i, NV.getRegion("RGN_NO_IMM_BNDRY")) {
       NV[i] = AA * N[i] * V[i]; //Dont need yup/ydown, done below!
     }
     //IB_TODO: Dont need to SetBoundary(NV) if N and V set at some point?
     immBndry->SetBoundary(NV);
   } else {
+    NV_solver = NV; // Save the momentum as calculated by the solver
     NV = AA * N * V; // Re-calculate consistent with V and N
   }
 
@@ -206,9 +209,10 @@ void EvolveMomentum::finally(const Options &state) {
 
   // Get the species density
   Field3D N = get<Field3D>(species["density"]);
+  Field3D Nlim;
   // Apply a floor to the density
-  Field3D Nlim = copy(N);
   if (immBndry) {
+    Nlim = immBndry->DeepCopyField(N);
     //IB_TODO: Just floor, dont need to SetBoundary again because only used for parallel dynamics so ghosts dont matter?
     immBndry->FloorField(Nlim, density_floor);
   } else {
@@ -222,7 +226,7 @@ void EvolveMomentum::finally(const Options &state) {
   } else {
     Field3D T = get<Field3D>(species["temperature"]);
     if (immBndry) {
-      fastest_wave = copy(T);
+      fastest_wave = immBndry->DeppCopyField(T);
       //IB_TODO: Complex / operator logic...
       BOUT_FOR(i, T.getRegion("RGN_ALL")) {
         if (!immBndry->IsInside(i)) {fastest_wave[i] = 0.0;}

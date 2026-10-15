@@ -57,6 +57,9 @@ private:
   std::shared_ptr<FCI::dagp_fv> dagp;
 
   Field3D density_source {0.0}; ///< Output diagnostic
+  Field3D energy_sourceD {0.0}; ///< Output diagnostic
+  Field3D energy_sourceT {0.0}; ///< Output diagnostic
+  Field3D energy_source  {0.0}; ///< Output diagnostic
 };
 
 namespace {

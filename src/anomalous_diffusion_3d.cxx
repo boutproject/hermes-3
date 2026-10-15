@@ -1,6 +1,7 @@
 #include "../include/anomalous_diffusion_3d.hxx"
 
 #include "../include/div_ops.hxx"
+#include <bout/constants.hxx>
 #include <bout/fv_ops.hxx>
 #include <bout/output_bout_types.hxx>
 #include <bout/immersed_boundary.hxx>
@@ -150,8 +151,8 @@ void AnomalousDiffusion3D::transform(Options& state) {
       add(species["momentum_flow_xlow"], flow_xlow);
       add(species["momentum_flow_zlow"], flow_zlow);
 
-      add(species["energy_source"],
-          (*dagp)((3. / 2) * T * anomalous_D, N, flow_xlow, flow_zlow, upwind));
+      energy_sourceD = (*dagp)((3. / 2) * T * anomalous_D, N, flow_xlow, flow_zlow, upwind);
+      add(species["energy_source"], energy_source);
       add(species["energy_flow_xlow"], flow_xlow);
       add(species["energy_flow_zlow"], flow_zlow);
     }
@@ -163,8 +164,8 @@ void AnomalousDiffusion3D::transform(Options& state) {
       add(species["energy_source"],
           Div_a_Grad_perp_curv(anomalous_chi * N, T));
     } else {
-      add(species["energy_source"],
-          (*dagp)(anomalous_chi * N, T, flow_xlow, flow_zlow, upwind));
+      energy_sourceT = (*dagp)(anomalous_chi * N, T, flow_xlow, flow_zlow, upwind);
+      add(species["energy_source"], energy_sourceT);
       add(species["energy_flow_xlow"], flow_xlow);
       add(species["energy_flow_zlow"], flow_zlow);
     }
@@ -194,7 +195,10 @@ void AnomalousDiffusion3D::outputVars(Options& state) {
   // Normalisations
   auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
   auto Nnorm = get<BoutReal>(state["Nnorm"]);
+  auto Tnorm = get<BoutReal>(state["Tnorm"]);
   auto rho_s0 = get<BoutReal>(state["rho_s0"]);
+
+  BoutReal Pnorm = SI::qe * Tnorm * Nnorm; // Pressure normalisation
 
   if (diagnose) {
       AUTO_TRACE();
@@ -206,6 +210,31 @@ void AnomalousDiffusion3D::outputVars(Options& state) {
                       {"standard_name", "anomalous diffusion density source"},
                       {"long_name", std::string("Anomalous density diffusion of ") + name},
                       {"source", "anomalous_diffusion_3d"}});
+
+    set_with_attrs(state[std::string("P") + name + std::string("_anomD")], (2./3.)*(energy_sourceD),
+                      {{"time_dimension", "t"},
+                      {"units", "Pa s^-1"},
+                      {"conversion", Pnorm * Omega_ci},
+                      {"standard_name", "anomalous diffusion energy source"},
+                      {"long_name", std::string("Anomalous energy diffusion of ") + name},
+                      {"source", "anomalous_diffusion_3d"}});
+
+    set_with_attrs(state[std::string("P") + name + std::string("_anomT")], (2./3.)*(energy_sourceT),
+                      {{"time_dimension", "t"},
+                      {"units", "Pa s^-1"},
+                      {"conversion", Pnorm * Omega_ci},
+                      {"standard_name", "anomalous diffusion energy source"},
+                      {"long_name", std::string("Anomalous energy diffusion of ") + name},
+                      {"source", "anomalous_diffusion_3d"}});
+
+    set_with_attrs(state[std::string("P") + name + std::string("_anom")], (2./3.)*(energy_sourceD + energy_sourceT),
+                      {{"time_dimension", "t"},
+                      {"units", "Pa s^-1"},
+                      {"conversion", Pnorm * Omega_ci},
+                      {"standard_name", "anomalous diffusion energy source"},
+                      {"long_name", std::string("Anomalous energy diffusion of ") + name},
+                      {"source", "anomalous_diffusion_3d"}});
+
 
       // Save diffusion coefficients
       set_with_attrs(state[std::string("anomalous_D_") + name], anomalous_D,

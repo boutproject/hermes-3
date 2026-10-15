@@ -64,10 +64,10 @@ void ZeroCurrent::transform(Options &state) {
   Field3D N = getNoBoundary<Field3D>(species["density"]);
 
   if (immBndry) {
-    Field3D Nfloor = copy(N);
+    Field3D Nfloor = immBndry->DeepCopyField(N);
     //IB_TODO: Just floor, dont need to SetBoundary because velocity will below and loop ignores ghost cells here.
     immBndry->FloorField(Nfloor, 1e-5);
-    velocity = current;
+    velocity = immBndry->DeepCopyField(current);
     BOUT_FOR(i, velocity.getRegion("RGN_NO_IMM_BNDRY")) {
       velocity[i] /= (-charge * Nfloor[i]); //Do up/down planes too since no communicate called after.
       velocity.yup()[i.yp()]   /= (-charge * Nfloor.yup()[i.yp()]);

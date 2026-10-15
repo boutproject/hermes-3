@@ -230,8 +230,8 @@ void EvolveDensity::transform(Options& state) {
   auto& species = state["species"][name];
 
   if (immBndry) {
-    immBndry->FloorField(N);
-    //immBndry->SetBoundary(N); //IB_TODO: Reset after flooring?
+    immBndry->FloorField(N, density_floor); //IB_TODO: Flooring to non-zero to match evolve_pressure, but can lead to issues with atomics/neutrals apparently.
+    immBndry->SetBoundary(N); //IB_TODO: Reset after flooring?
     set(species["density"], N);
   } else {
     set(species["density"], floor(N, 0.0));

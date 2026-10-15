@@ -299,14 +299,14 @@ void EvolvePressure::transform(Options& state) {
   Field3D Pfloor;
   if (immBndry) {
     //IB_TODO: Complicated flooring and / operator logic...
-    Pfloor = copy(P);
-    Field3D Nfloor = copy(N);
-    immBndry->FloorField(Pfloor);
+    Pfloor = immBndry->DeepCopyField(P);
+    Field3D Nfloor = immBndry->DeepCopyField(N);
+    immBndry->FloorField(Pfloor); //IB_TODO: Is it ok to floor P to 0? Needs to be consistent with T and N floor choices...Same in finally...
     immBndry->FloorField(Nfloor, density_floor);
     const auto old_name = T.name;
-    T = copy(Pfloor);
+    T = immBndry->DeepCopyField(Pfloor);
     BOUT_FOR(i, T.getRegion("RGN_NO_IMM_BNDRY")) {
-      T[i] /= Nfloor[i]; //Only need to do central plane here, communicate below fills yup/ydown.
+      T[i] /= Nfloor[i]; //Note, dont need up/down because of communicate below.
     }
     Pfloor = N * T;
     Pfloor.name = P.name;
@@ -339,10 +339,11 @@ void EvolvePressure::finally(const Options& state) {
     P.clearParallelSlices();
   }
   P.setBoundaryTo(get<Field3D>(species["pressure"]));
-  Field3D Pfloor = P;
+  Field3D Pfloor;
   if (immBndry) {
-    immBndry->FloorField(Pfloor);
-    //immBndry->SetBoundary(Pfloor); //IB_TODO: Reset after flooring?
+    Pfloor = immBndry->DeepCopyField(P);
+    immBndry->FloorField(Pfloor);  //IB_TODO: Is it ok to floor P to 0? Needs to be consistent with T and N floor choices...
+    immBndry->SetBoundary(Pfloor); //IB_TODO: Reset after flooring?
   } else {
     Pfloor = floor(P, 0.0); // Restricted to never go below zero
   }
@@ -460,6 +461,17 @@ void EvolvePressure::finally(const Options& state) {
 
     const BoutReal AA = get<BoutReal>(species["AA"]); // Atomic mass
 
+    //IB_TODO: Manual limiter for Tmax = 500eV for IB testing.
+    if (immBndry) {
+      Field3D Plimit = immBndry->DeepCopyField(Pfloor);
+      Field3D Tlimit = immBndry->DeepCopyField(T);
+
+      const BoutReal Tnorm = get<BoutReal>(Options::root()["units"]["eV"]);
+      const BoutReal Tmax = 500.0 / Tnorm;
+
+      immBndry->CeilFieldAndScale(Tlimit, Plimit, Tmax);
+    }
+
     // Parallel heat conduction
     // Braginskii expression for parallel conduction
     // kappa ~ n * v_th^2 * tau
@@ -523,7 +535,8 @@ void EvolvePressure::finally(const Options& state) {
 
     // Note: Flux through boundary turned off, because sheath heat flux
     // is calculated and removed separately
-    ddt(P) += (2. / 3) * Div_par_K_Grad_par_mod(kappa_par, T, flow_ylow_conduction, false);
+    heat_flow = (2. / 3) * Div_par_K_Grad_par_mod(kappa_par, T, flow_ylow_conduction, false);
+    ddt(P) += heat_flow;
     if (flow_ylow_conduction.isAllocated()) {
       if (flow_ylow.isAllocated()) {
         flow_ylow += flow_ylow_conduction;
@@ -692,6 +705,14 @@ void EvolvePressure::outputVars(Options& state) {
                     {"units", "Pa s^-1"},
                     {"conversion", Pnorm * Omega_ci},
                     {"long_name", std::string("Rate of change of ") + name + " pressure"},
+                    {"species", name},
+                    {"source", "evolve_pressure"}});
+                    
+    set_with_attrs(state[std::string("Pcond") + name + std::string(")")], heat_flow,
+                   {{"time_dimension", "t"},
+                    {"units", "Pa s^-1"},
+                    {"conversion", Pnorm * Omega_ci},
+                    {"long_name", std::string("Parallel heat flow of ") + name + " pressure"},
                     {"species", name},
                     {"source", "evolve_pressure"}});
   }
