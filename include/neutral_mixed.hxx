@@ -3,10 +3,10 @@
 #ifndef NEUTRAL_MIXED_H
 #define NEUTRAL_MIXED_H
 
+#include "../include/div_ops.hxx"
+#include <bout/invert_laplace.hxx>
 #include <memory>
 #include <string>
-
-#include <bout/invert_laplace.hxx>
 
 #include "component.hxx"
 
@@ -34,29 +34,29 @@ struct NeutralMixed : public NamedComponent<NeutralMixed> {
 private:
   std::string name; ///< Species name
 
-  Field3D Nn, Pn, NVn;            // Density, pressure and parallel momentum
-  Field3D Vn;                     ///< Neutral parallel velocity
-  Field3D Tn;                     ///< Neutral temperature
-  Field3D Nnlim, Pnlim, logPnlim; // Limited in regions of low density
+  Field3DParallel Nn, Pn, NVn;            // Density, pressure and parallel momentum
+  Field3DParallel Vn;                     ///< Neutral parallel velocity
+  Field3DParallel Tn;                     ///< Neutral temperature
+  Field3DParallel Nnlim, Pnlim, logPnlim; // Limited in regions of low density
 
   BoutReal AA; ///< Atomic mass (proton = 1)
 
   std::vector<std::string> collision_names; ///< Collisions used for collisionality
   std::string
       diffusion_collisions_mode; ///< Collision selection, either afn or multispecies
-  Field3D nu;                    ///< Collisionality to use for diffusion
+  Field3DParallel nu;            ///< Collisionality to use for diffusion
   Field3D Dnn;                   ///< Diffusion coefficient
   Field3D Dnn_unlimited, Dmax;   ///< Unlimited and max Dnn
-  Field3D DnnNn, DnnPn, DnnTn, DnnNVn; ///< Used for operators
-  BoutReal flux_limit;                 ///< Diffusive flux limit
-  BoutReal flux_limiter_sharpness;     ///< Sharpness of the diffusive flux limiter
-  BoutReal limiter_gradient_floor;     ///< Floor for gradient in Dmax denominator
-  BoutReal limiter_gradient_ceiling;   ///< Ceiling for gradient in Dmax denominator
-  BoutReal diffusion_limit;            ///< Maximum diffusion coefficient
-  BoutReal neutral_lmax;               ///< Used for collisionality floor
+  Field3DParallel DnnNn, DnnPn, DnnTn, DnnNVn; ///< Used for operators
+  BoutReal flux_limit;                         ///< Diffusive flux limit
+  BoutReal flux_limiter_sharpness;   ///< Sharpness of the diffusive flux limiter
+  BoutReal limiter_gradient_floor;   ///< Floor for gradient in Dmax denominator
+  BoutReal limiter_gradient_ceiling; ///< Ceiling for gradient in Dmax denominator
+  BoutReal diffusion_limit;          ///< Maximum diffusion coefficient
+  BoutReal neutral_lmax;             ///< Used for collisionality floor
 
   bool sheath_ydown, sheath_yup;
-
+  bool isMMS; ///< Used to turn of certain Boundary conditions for correct convergence
   BoutReal density_floor; ///< Minimum Nn used when dividing NVn by Nn to get Vn.
   BoutReal temperature_floor;
   BoutReal pressure_floor; ///< Minimum Pn used when dividing Pn by Nn to get Tn.
@@ -71,7 +71,7 @@ private:
   bool evolve_momentum;    ///< Evolve parallel momentum?
   bool normalise_sources;  ///< Normalise input sources?
 
-  Field3D kappa_n, eta_n; ///< Neutral conduction and viscosity
+  Field3DParallel kappa_n, eta_n; ///< Neutral conduction and viscosity
 
   bool nonorthogonal_operators;   ///< Use nonorthogonal operators for radial transport?
   bool precondition{true};        ///< Enable preconditioner?
@@ -87,6 +87,8 @@ private:
   bool diagnose;   ///< Save additional diagnostics?
 
   bout::ConductionMethod conduction_method{bout::ConductionMethod::Original};
+
+  std::shared_ptr<FCI::dagp_fv> dagp_op; ///< Perp. diffusion operator for Fci
 
   // Flow diagnostics
   Field3D pf_adv_perp_xlow, pf_adv_perp_ylow, pf_adv_par_ylow;
