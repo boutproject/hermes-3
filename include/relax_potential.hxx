@@ -125,6 +125,7 @@ private:
   bool boussinesq;               ///< Use the Boussinesq approximation?
   BoutReal average_atomic_mass;  //< Weighted average atomic mass, for polarisaion current
                                  // (Boussinesq approximation)
+  BoutReal permittivity;         ///< Vacuum permittivity
   bool poloidal_flows;           ///< Include poloidal ExB flow?
   bool bndry_flux;               ///< Allow flows through radial boundaries?
 

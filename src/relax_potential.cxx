@@ -120,6 +120,10 @@ RelaxPotential::RelaxPotential(std::string name, Options& alloptions, Solver* so
   const BoutReal Tnorm = units["eV"];
   const BoutReal Nnorm = units["inv_meters_cubed"];
 
+  // Vacuum permittivity
+  this->permittivity = SI::e0 / (SQ(SI::qe) * Nnorm / SI::Mp / SQ(Omega_ci));
+  output.write("  Normalised permittivity: {}\n", this->permittivity);
+
   exb_advection = options["exb_advection"]
                       .doc("Include nonlinear ExB advection?")
                       .withDefault<bool>(true);
@@ -885,7 +889,8 @@ Field3D RelaxPotential::vorticity(const Field3D& phi, GuardedOptions& allspecies
   // Non-Boussinesq. Calculate mass density by summing over species
 
   // Calculate vorticity from potential phi
-  Field3D phi_vort = 0.0;
+  // Start with vacuum permittivity
+  Field3D phi_vort = FV::Div_a_Grad_perp(this->permittivity, phi);
   for (const auto& kv : allspecies.getChildren()) {
     const GuardedOptions& species = kv.second;
 
