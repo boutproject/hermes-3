@@ -265,6 +265,19 @@ RelaxPotential::RelaxPotential(std::string name, Options& alloptions, Solver* so
       output_warn.write("No curvature vector in input grid");
       Curlb_B = 0.0;
     }
+
+    if (Options::root()["mesh"]["paralleltransform"]["type"].as<std::string>()
+        == "shifted") {
+      Field2D I;
+      mesh->get(I, "sinty");
+      Curlb_B.z += I * Curlb_B.x;
+    }
+
+    Curlb_B.x /= Bnorm;
+    Curlb_B.y *= SQ(Lnorm);
+    Curlb_B.z *= SQ(Lnorm);
+
+    Curlb_B *= 2. / coord->Bxy();
   }
 
   if (collisional_friction) {
@@ -277,19 +290,6 @@ RelaxPotential::RelaxPotential(std::string name, Options& alloptions, Solver* so
     // Non-Boussinesq so need fluid mass density
     setPermissions(readOnly("species:{charged}:density", Regions::Interior));
   }
-
-  if (Options::root()["mesh"]["paralleltransform"]["type"].as<std::string>()
-      == "shifted") {
-    Field2D I;
-    mesh->get(I, "sinty");
-    Curlb_B.z += I * Curlb_B.x;
-  }
-
-  Curlb_B.x /= Bnorm;
-  Curlb_B.y *= SQ(Lnorm);
-  Curlb_B.z *= SQ(Lnorm);
-
-  Curlb_B *= 2. / coord->Bxy();
 
   Bsq = SQ(coord->Bxy());
 
