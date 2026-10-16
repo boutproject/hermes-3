@@ -2,10 +2,17 @@
 #ifndef RELAX_POTENTIAL_H
 #define RELAX_POTENTIAL_H
 
+#include "../include/guarded_options.hxx"
+
+#include <bout/bout_types.hxx>
 #include <bout/coordinates.hxx>
+#include <bout/options.hxx>
+#include <bout/vector2d.hxx>
 #include <bout/vectormetric.hxx>
 
 #include "component.hxx"
+
+#include <string>
 
 /// Evolve vorticity and potential in time.
 ///
@@ -17,6 +24,8 @@ struct RelaxPotential : public NamedComponent<RelaxPotential> {
   /// Options
   ///
   /// - <name>
+  ///   - boussinesq: bool, default true
+  ///     Use the Boussinesq approximation?
   ///   - average_atomic_mass: float, default 2.0
   ///     Weighted average ion atomic mass for polarisation current
   ///   - bndry_flux: bool, default true
@@ -31,6 +40,16 @@ struct RelaxPotential : public NamedComponent<RelaxPotential> {
   ///     Include ion diamagnetic drift in polarisation current?
   ///   - exb_advection: bool, default true
   ///     Include ExB advection (nonlinear term)?
+  ///   - exb_advection_simplified: bool, default true
+  ///     Use the simplified ExB advection form?
+  ///   - evolve_vorticity: bool, default true
+  ///     Evolve vorticity, rather than deriving it from phi?
+  ///   - hyper_z: float, default -1.0
+  ///     Hyper-viscosity in Z. Negative values disable it.
+  ///   - lambda_1: float, default 3e8 [SI]
+  ///     Relaxation rate for the phi1 evolution equation
+  ///   - lambda_2: float, default 1.0
+  ///     Scaling between phi1 and phi, with phi1 = lambda_2 * phi
   ///   - phi_boundary_relax: bool, default false
   ///     Relax radial phi boundaries towards zero-gradient?
   ///   - phi_boundary_timescale: float, 1e-4
@@ -39,6 +58,8 @@ struct RelaxPotential : public NamedComponent<RelaxPotential> {
   ///     Average phi core boundary in Y? (if phi_boundary_relax)
   ///   - phi_dissipation: bool, default true
   ///     Parallel dissipation of potential (Recommended)
+  ///   - phi_sheath_dissipation: bool, default false
+  ///     Add dissipation when phi < 0 at the sheath?
   ///   - poloidal_flows: bool, default true
   ///     Include poloidal ExB flow?
   ///   - sheath_boundary: bool, default false
@@ -64,28 +85,47 @@ struct RelaxPotential : public NamedComponent<RelaxPotential> {
 
   void outputVars(Options& state) override;
 
-  // // Save and restore potential phi
-  // void restartVars(Options& state) override {
+  // The following are public functions for unit testing
 
-  //   // NOTE: This is a hack because we know that the loaded restart file
-  //   //       is passed into restartVars in PhysicsModel::postInit
-  //   // The restart value should be used in init() rather than here
-  //   static bool first = true;
-  //   if (first and state.isSet("phi")) {
-  //     first = false;
-  //     phi = state["phi"].as<Field3D>();
-  //   }
+  /// Diamagnetic term in vorticity, weighted by mass/charge
+  Field3D calculatePihat(GuardedOptions allspecies);
 
-  //   // Save the potential
-  //   set_with_attrs(state["phi"], phi,
-  //                  {{"long_name", "plasma potential"},
-  //                   {"source", "vorticity"}});
-  // }
+  /// Apply the configured radial boundary condition to phi
+  void applyPhiBoundary(Field3D& phi, GuardedOptions state);
+
+  /// Calculates Div(Jdia) and sets energy_source for all
+  /// charged species with pressure.
+  /// The parallel boundary of phi is set using extrapolation
+  Field3D calculateDivJdia(Field3D& phi, GuardedOptions allspecies);
+
+  /// Calculates the collisional friction current divergence.
+  Field3D calculateDivJcol(const Field3D& phi, const Field3D& pi_hat,
+                           GuardedOptions allspecies);
+
+  /// Calculate the ExB advection contribution to ddt(Vort).
+  Field3D calculateExBAdvectionSource(const Field3D& vort, const Field3D& phi,
+                                      const Field3D& pi_hat);
+
+  /// Calculate the current-divergence source terms added in finally().
+  Field3D calculateParallelCurrentSource(const Options& state);
+
+  /// Calculate viscosity and dissipation contributions added in finally().
+  Field3D calculateDissipationSource(const Options& state, const Field3D& vort,
+                                     const Field3D& phi);
+
+  /// Calculate ddt(phi1) from the chosen evolution mode.
+  Field3D calculatePhi1Source(const Field3D& vort, const Field3D& vort_rhs,
+                              const Field3D& vort_from_phi) const;
+
+  /// Calculate vorticity from potential and species
+  Field3D vorticity(const Field3D& phi, GuardedOptions& allspecies);
 
   static constexpr auto type = "relax_potential";
 
 private:
-  Field3D Vort; // Evolving vorticity
+  bool evolve_vorticity; ///< Evolve vorticity?
+  Field3D Vort;          // Evolving vorticity
+  Field3D Vort_from_phi; ///< Vort calculated from phi
 
   Field3D phi1; // Scaled electrostatic potential, evolving in time ϕ_1 = λ_2 ϕ
   Field3D phi;  // Electrostatic potential
@@ -99,6 +139,7 @@ private:
   bool boussinesq;               ///< Use the Boussinesq approximation?
   BoutReal average_atomic_mass;  //< Weighted average atomic mass, for polarisaion current
                                  // (Boussinesq approximation)
+  BoutReal permittivity;         ///< Vacuum permittivity
   bool poloidal_flows;           ///< Include poloidal ExB flow?
   bool bndry_flux;               ///< Allow flows through radial boundaries?
 
@@ -128,6 +169,7 @@ private:
 
   // Diagnostic outputs
   Field3D DivJdia, DivJcol; // Divergence of diamagnetic and collisional current
+  Field3D Vort_rhs;         // Rate of change of vorticity, even if not evolved
 
   bool diagnose; ///< Output additional diagnostics?
 
