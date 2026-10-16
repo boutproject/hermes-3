@@ -85,7 +85,6 @@ auto cellAverage(Function func, const RegionType& region) {
       if (result.isFci()) {
         // Using the CellAverage in Fci can have unphysical effects in Fci
         // Averaging over Y is a toroidal average, and especially for neutrals this is troublesome
-        // The flute mode approximation assumes small difference in the parallel direction for the plasma
         result[i] = func((args[i])...);
 
       } else {
