@@ -1360,8 +1360,9 @@ electrostatic potential
    \phi_1 = \lambda_2 \phi
 
 The physical potential :math:`\phi` is reconstructed from :math:`\phi_1`,
-and a vorticity consistent with that potential is calculated using the same
-operator as in the ``vorticity`` component:
+its radial boundary condition is applied, and then a vorticity consistent with
+that boundary-conditioned potential is calculated using the same operator as in
+the ``vorticity`` component:
 
 .. math::
 
@@ -1442,8 +1443,9 @@ Important optional inputs are:
   ``collision_frequency`` as required by the enabled terms
 
 The main outputs are ``fields:phi`` and ``fields:vorticity``. When
-``diagnose = true`` the component also writes ``ddt(Vort)``, ``ddt(phi)``, and,
-if enabled, ``DivJdia`` and ``DivJcol``.
+``diagnose = true`` the component also writes the physical potential derivative
+``ddt(phi) = ddt(phi_1) / \lambda_2``, together with ``ddt(Vort)``, and, if
+enabled, ``DivJdia`` and ``DivJcol``.
 
 .. doxygenstruct:: RelaxPotential
    :members:

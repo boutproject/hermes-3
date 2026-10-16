@@ -24,6 +24,8 @@ struct RelaxPotential : public NamedComponent<RelaxPotential> {
   /// Options
   ///
   /// - <name>
+  ///   - boussinesq: bool, default true
+  ///     Use the Boussinesq approximation?
   ///   - average_atomic_mass: float, default 2.0
   ///     Weighted average ion atomic mass for polarisation current
   ///   - bndry_flux: bool, default true
@@ -38,6 +40,16 @@ struct RelaxPotential : public NamedComponent<RelaxPotential> {
   ///     Include ion diamagnetic drift in polarisation current?
   ///   - exb_advection: bool, default true
   ///     Include ExB advection (nonlinear term)?
+  ///   - exb_advection_simplified: bool, default true
+  ///     Use the simplified ExB advection form?
+  ///   - evolve_vorticity: bool, default true
+  ///     Evolve vorticity, rather than deriving it from phi?
+  ///   - hyper_z: float, default -1.0
+  ///     Hyper-viscosity in Z. Negative values disable it.
+  ///   - lambda_1: float, default 3e8 [SI]
+  ///     Relaxation rate for the phi1 evolution equation
+  ///   - lambda_2: float, default 1.0
+  ///     Scaling between phi1 and phi, with phi1 = lambda_2 * phi
   ///   - phi_boundary_relax: bool, default false
   ///     Relax radial phi boundaries towards zero-gradient?
   ///   - phi_boundary_timescale: float, 1e-4
@@ -46,6 +58,8 @@ struct RelaxPotential : public NamedComponent<RelaxPotential> {
   ///     Average phi core boundary in Y? (if phi_boundary_relax)
   ///   - phi_dissipation: bool, default true
   ///     Parallel dissipation of potential (Recommended)
+  ///   - phi_sheath_dissipation: bool, default false
+  ///     Add dissipation when phi < 0 at the sheath?
   ///   - poloidal_flows: bool, default true
   ///     Include poloidal ExB flow?
   ///   - sheath_boundary: bool, default false
@@ -155,6 +169,7 @@ private:
 
   // Diagnostic outputs
   Field3D DivJdia, DivJcol; // Divergence of diamagnetic and collisional current
+  Field3D Vort_rhs;         // Rate of change of vorticity, even if not evolved
 
   bool diagnose; ///< Output additional diagnostics?
 

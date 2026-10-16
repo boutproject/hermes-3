@@ -14,6 +14,12 @@
 struct EvolveMomentum : public NamedComponent<EvolveMomentum> {
   EvolveMomentum(std::string name, Options& options, Solver* solver);
 
+  /// Options
+  ///
+  /// - <name>
+  ///   - scale_momentum_ddt: float, default -1.0
+  ///     Multiply `ddt(NV)` by this factor when positive
+
   /// Calculate ddt(NV).
   ///
   /// Inputs

@@ -48,7 +48,7 @@ TEST_F(RelaxPotentialTest, CreateComponent) {
   FakeSolver solver;
   Options options = baseOptions();
 
-  const RelaxPotential component("test", options, &solver);
+  RelaxPotential component("test", options, &solver);
 
   const Options state = solver.getState();
 
@@ -153,7 +153,8 @@ TEST_F(RelaxPotentialTest, ApplyPhiBoundarySheath) {
   RelaxPotential component("test", options, &solver);
 
   Field3D phi{1.0};
-  Options state{{"species", {{"e", {{"AA", 1.0}, {"temperature", 2.0}}}}}};
+  Options state{
+      {"species", {{"e", {{"AA", 1.0}, {"charge", -1.0}, {"temperature", 2.0}}}}}};
   Permissions permissions{{readOnly("species")}};
   const GuardedOptions guarded_state{&state, &permissions};
 
@@ -253,7 +254,7 @@ TEST_F(RelaxPotentialTest, CalculatePhi1SourceEvolveVorticityUsesVortDifference)
   FakeSolver solver;
   Options options = baseOptions();
 
-  const RelaxPotential component("test", options, &solver);
+  RelaxPotential component("test", options, &solver);
 
   const Field3D source1 = component.calculatePhi1Source(2.0, 9.0, 5.0);
   const Field3D source2 = component.calculatePhi1Source(2.0, 0.0, 5.0);

@@ -105,7 +105,9 @@ RelaxPotential::RelaxPotential(std::string name, Options& alloptions, Solver* so
 
   auto& options = alloptions[name];
 
-  evolve_vorticity = options["evolve_vorticity"].doc("").withDefault<bool>(true);
+  evolve_vorticity = options["evolve_vorticity"]
+                         .doc("Evolve vorticity in time?")
+                         .withDefault<bool>(true);
 
   if (evolve_vorticity) {
     solver->add(Vort, "Vort"); // Vorticity evolving
@@ -758,40 +760,42 @@ void RelaxPotential::transform_impl(GuardedOptions& state) {
   // Set the boundary of phi1.
   phi1.applyBoundary("neumann");
 
-  // Scale potential
   phi = phi1 / lambda_2;
+  Pi_hat = calculatePihat(allspecies);
+  applyPhiBoundary(phi, state);
 
-  // Calculate vorticity from phi.
   this->Vort_from_phi = vorticity(phi, allspecies);
   if (!evolve_vorticity) {
-    // Not evolving vorticity so calculate from phi
     Vort = this->Vort_from_phi;
   }
 
-  // Set the boundary of Vort. Needed only if dissipation terms are included.
   Vort.applyBoundary("neumann");
   applyParallelNeumannBoundary(Vort);
-
-  Pi_hat = calculatePihat(allspecies);
-  applyPhiBoundary(phi, state);
 
   // Ensure that potential is set in the communication guard cells
   mesh->communicate(phi, phi1, Vort); // Should we communicate phi1?
 
   // Vorticity equation
 
-  ddt(Vort) = 0.0;
+  Vort_rhs = zeroFrom(Vort);
+  if (evolve_vorticity) {
+    ddt(Vort) = zeroFrom(Vort);
+  }
 
   if (diamagnetic) {
     DivJdia = calculateDivJdia(phi, allspecies);
-    ddt(Vort) += DivJdia;
+    Vort_rhs += DivJdia;
     set(fields["DivJdia"], DivJdia);
   }
 
   if (collisional_friction) {
     DivJcol = calculateDivJcol(phi, Pi_hat, allspecies);
-    ddt(Vort) += DivJcol;
+    Vort_rhs += DivJcol;
     set(fields["DivJcol"], DivJcol);
+  }
+
+  if (evolve_vorticity) {
+    ddt(Vort) = Vort_rhs;
   }
 
   set(fields["vorticity"], Vort);
@@ -801,10 +805,13 @@ void RelaxPotential::transform_impl(GuardedOptions& state) {
 void RelaxPotential::finally(const Options& state) {
   phi = get<Field3D>(state["fields"]["phi"]);
 
-  ddt(Vort) += calculateExBAdvectionSource(Vort, phi, Pi_hat);
-  ddt(Vort) += calculateParallelCurrentSource(state);
-  ddt(Vort) += calculateDissipationSource(state, Vort, phi);
-  ddt(phi1) = calculatePhi1Source(Vort, ddt(Vort), Vort_from_phi);
+  Vort_rhs += calculateExBAdvectionSource(Vort, phi, Pi_hat);
+  Vort_rhs += calculateParallelCurrentSource(state);
+  Vort_rhs += calculateDissipationSource(state, Vort, phi);
+  if (evolve_vorticity) {
+    ddt(Vort) = Vort_rhs;
+  }
+  ddt(phi1) = calculatePhi1Source(Vort, Vort_rhs, Vort_from_phi);
 }
 
 void RelaxPotential::outputVars(Options& state) {
@@ -813,11 +820,12 @@ void RelaxPotential::outputVars(Options& state) {
   auto Tnorm = get<BoutReal>(state["Tnorm"]);
   auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
 
-  state["Vort"].setAttributes({{"time_dimension", "t"},
-                               {"units", "C m^-3"},
-                               {"conversion", SI::qe * Nnorm},
-                               {"long_name", "vorticity"},
-                               {"source", "relax_potential"}});
+  set_with_attrs(state["Vort"], Vort,
+                 {{"time_dimension", "t"},
+                  {"units", "C m^-3"},
+                  {"conversion", SI::qe * Nnorm},
+                  {"long_name", "vorticity"},
+                  {"source", "relax_potential"}});
 
   set_with_attrs(state["phi"], phi,
                  {{"time_dimension", "t"},
@@ -828,13 +836,13 @@ void RelaxPotential::outputVars(Options& state) {
                   {"source", "relax_potential"}});
 
   if (diagnose) {
-    set_with_attrs(state["ddt(Vort)"], ddt(Vort),
+    set_with_attrs(state["ddt(Vort)"], Vort_rhs,
                    {{"time_dimension", "t"},
                     {"units", "A m^-3"},
                     {"conversion", SI::qe * Nnorm * Omega_ci},
                     {"long_name", "Rate of change of vorticity"},
                     {"source", "relax_potential"}});
-    set_with_attrs(state["ddt(phi)"], ddt(phi1),
+    set_with_attrs(state["ddt(phi)"], ddt(phi1) / lambda_2,
                    {{"time_dimension", "t"},
                     {"units", "V/s"},
                     {"conversion", Tnorm * Omega_ci},
@@ -881,7 +889,7 @@ Field3D RelaxPotential::vorticity(const Field3D& phi, GuardedOptions& allspecies
         }
         const BoutReal A = get<BoutReal>(species["AA"]);
         const Field3D P = GET_NOBOUNDARY(Field3D, species["pressure"]);
-        phi_vort += FV::Div_a_Grad_perp(Coordinates::FieldMetric{A / Bsq}, P);
+        phi_vort += FV::Div_a_Grad_perp(Coordinates::FieldMetric{A / Bsq / Z}, P);
       }
     }
     return phi_vort;
