@@ -35,13 +35,17 @@ private:
   Field3D tau;
 
   void transform_impl(GuardedOptions& state) override;
-
-public:
-  const Field3D neumann(Field3D f);
 };
 
 namespace {
 RegisterComponent<Penalisation> registercomponentpenalisation;
+}
+
+namespace penalisation {
+
+const Field3D neumann(const Field3D& f, const Field3D& ddt_f, const Field3D& pen,
+                      const BoutReal pen_time, const BoutReal f_floor);
+
 }
 
 #endif // Penalisation
