@@ -7,6 +7,9 @@
 
 #include "../../include/neutral_mixed.hxx"
 
+#include <utility>
+#include <vector>
+
 /// Global mesh
 namespace bout {
 namespace globals {
@@ -691,6 +694,91 @@ TEST_F(NeutralMixedTest, DmaxRegularisationLimits) {
     // Ceiling the gradient increases Dmax
     EXPECT_GT(Dmax_ceilinged[i], Dmax_unregularised[i]);
   }
+}
+// Test limiter gradient lagging
+/////////////////////////////////////////////////////////////////////////////////
+//   LagTestNeutrals::Dmax(time, slope) simulates one RHS call at a solver time
+//   and returns Dmax for a given Pn gradient.
+//
+//   Between each call, the only physical quantity that changes is the Pn slope,
+//   i.e. the lagged quantity in Dmax. This means if lagging is enabled, Dmax
+//   shouldn't change in successive calls if the time doesn't change.
+//
+//   To test, we simulate three calls with lagging on:
+//   - Initial call at t=1 with slope A
+//   - Change the slope to B but do not advance time
+//   - Advance time to t=2
+//   And one call with lagging off:
+//   - Fresh call at t=2 with slope B
+//
+//   The first check confirms that slopes A and B give different Dmax at the first call
+//   The second check compares the first two lagged calls. Since time was not advanced,
+//     Dmax should remain unchanged at A even though the slope has changed to B.
+//   The third check confirms that with lagging enabled, Dmax updates from A to B correctly
+//     after time has advanced.
+
+namespace {
+// Struct to simulate RHS calls for limiter testing
+struct LagTestNeutrals {
+  explicit LagTestNeutrals(bool lag)
+      : options{
+            {"units",
+             {{"eV", 1.0}, {"inv_meters_cubed", 1.0}, {"seconds", 1.0}, {"meters", 1.0}}},
+            {"d",
+             {{"type", "neutral_mixed"},
+              {"diagnose", true},
+              {"AA", 2.0},
+              {"lag_limiter_gradient", lag},
+              // Keep the regularisation out of the way
+              {"limiter_gradient_floor", 1e-10},
+              {"limiter_gradient_ceiling", 1e10}}}},
+        component("d", options, &solver) {}
+
+  Field3D Dmax(BoutReal time, BoutReal slope) {
+    Field3D Pn = makeField<Field3D>(
+        [&](Ind3D& i) { return 1.0 + slope * i.x() + 0.5 * i.y(); }, mesh);
+    Options state{{"time", time},
+                  {"species",
+                   {{"d",
+                     {{"density", 1.0},
+                      {"pressure", Pn},
+                      {"temperature", 1.0},
+                      {"momentum", 1.0},
+                      {"velocity", 1.0}}}}}};
+    component.finally(state);
+
+    Options out{
+        {"Nnorm", 1.0}, {"Tnorm", 1.0}, {"Omega_ci", 1.0}, {"Cs0", 1.0}, {"rho_s0", 1.0}};
+    component.outputVars(out);
+    // Deep copy: the component reuses the field's data on the next call
+    return copy(out["Dnnd_max"].as<Field3D>());
+  }
+
+  FakeSolver solver;
+  Options options;
+  NeutralMixed component;
+};
+} // namespace
+
+TEST_F(NeutralMixedTest, LagLimiterGradient) {
+  constexpr BoutReal slope_A = 1.0;
+  constexpr BoutReal slope_B = 3.0;
+
+  // Create simulated RHS calls
+  LagTestNeutrals lagged(true);
+  const Field3D A_lag_at_t1 = lagged.Dmax(1.0, slope_A);
+  const Field3D B_lag_at_t1 = lagged.Dmax(1.0, slope_B);
+  const Field3D B_lag_at_t2 = lagged.Dmax(2.0, slope_B);
+
+  LagTestNeutrals unlagged(false);
+  const Field3D B_unlagged_at_t2 = unlagged.Dmax(2.0, slope_B);
+
+  // Baseline: The different slopes A and B result in different Dmax
+  ASSERT_FALSE(IsFieldEqual(A_lag_at_t1, B_unlagged_at_t2, "RGN_NOBNDRY"));
+  // With lagging on, changing slope without advancing time doesn't change Dmax
+  EXPECT_TRUE(IsFieldEqual(B_lag_at_t1, A_lag_at_t1, "RGN_NOBNDRY"));
+  // With lagging on, advancing time updates Dmax to the current slope
+  EXPECT_TRUE(IsFieldEqual(B_lag_at_t2, B_unlagged_at_t2, "RGN_NOBNDRY"));
 }
 
 /////////////////////////////////////////////////////////////////////////////////

@@ -137,13 +137,13 @@ Tolerances
    In SNES, ``atol``, ``rtol`` and ``stol`` are the absolute, relative and step nonlinear solver tolerances, respectively.
    This is in contrast to CVODE which has no ``stol`` and where ``atol`` and ``rtol`` are tolerances for time integration accuracy
    with the nonlinear tolerances being derived from them.
-   ``stol`` allows a Newton step to succeed if the system has changed by only a very small amount during the step. 
+   ``stol`` allows a Newton step to succeed if the system has changed by only a very small amount during the step.
    It should be used with caution, as an ``stol`` that is too loose can lead to the solver prematurely declaring convergence,
    leading to an unstable solution.
 
 Jacobian lagging
-   One of the largest drivers of performance is the lagging of the Jacobian, which is a linearisation of the nonlinear system 
-   of equations calculated by finite differences. This is expensive and can cost ~70% of the total computational time within 
+   One of the largest drivers of performance is the lagging of the Jacobian, which is a linearisation of the nonlinear system
+   of equations calculated by finite differences. This is expensive and can cost ~70% of the total computational time within
    a typical timestep.
    When `lag_jacobian = 0`, the Jacobian is updated at every nonlinear iteration, and higher numbers
    indicate the number of nonlinear iterations for which the Jacobian is reused before being recalculated.
