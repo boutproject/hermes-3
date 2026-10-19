@@ -222,6 +222,17 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
                                "performant but less physically accurate.")
                           .withDefault<bool>(true);
 
+  lag_limiter_gradient =
+      options["lag_limiter_gradient"]
+          .doc("Freeze the regularised gradients in the flux limiter denominators "
+               "inside the solve, updating only at new timestep. "
+               "Can improve performance by reducing nonlinearity. "
+               "False by default. ")
+          .withDefault<bool>(false);
+
+  limiter_cache_time = 0.0;
+  limiter_cache_valid = false;
+
   // Prevent viscosity and conduction specific options when limiters are combined
   if (combined_limiters) {
     for (const auto& key :
@@ -407,6 +418,10 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
   DnnNn.setBoundary(std::string("Dnn") + name);
   DnnPn.setBoundary(std::string("Dnn") + name);
   DnnNVn.setBoundary(std::string("Dnn") + name);
+
+  if (lag_limiter_gradient) {
+    setPermissions(readOnly("time"));
+  }
 
   substitutePermissions("name", {name});
   substitutePermissions(
@@ -627,6 +642,19 @@ void NeutralMixed::finally(const Options& state) {
 
   // Assemble flux limits
   /////////////////////////////////////////////////
+  // Limiter lagging: update the regularised gradients in the limiter
+  // denominators only when the solver time advances.
+  bool update_limiter_gradient = true;
+  if (lag_limiter_gradient && state.isSet("time")) {
+    const BoutReal solve_time = get<BoutReal>(state["time"]);
+    const bool first_call = !limiter_cache_valid;
+    const bool new_time = solve_time != limiter_cache_time;
+
+    update_limiter_gradient = first_call || new_time;
+    limiter_cache_time = solve_time;
+    limiter_cache_valid = true;
+  }
+
   Dnn = copy(Dnn_unlimited);
   kappa_n_perp = copy(kappa_n_unlimited);
   kappa_n_par = copy(kappa_n_unlimited);
@@ -652,9 +680,11 @@ void NeutralMixed::finally(const Options& state) {
   // Particle flux is (1/4)*vbar*Nn [Stangeby, under eq. 2.24, p.67];
   // the Nn factor enters at the operator through DnnNn.
   if (flux_limit_adv >= 0.0) {
-    Dmax = flux_limit_adv * (1. / 4) * vn_bar
-           / regularise_gradient(Grad_perp(logPnlim), limiter_gradient_floor,
-                                 limiter_gradient_ceiling);
+    if (update_limiter_gradient) {
+      grad_reg_adv = regularise_gradient(Grad_perp(logPnlim), limiter_gradient_floor,
+                                         limiter_gradient_ceiling);
+    }
+    Dmax = flux_limit_adv * (1. / 4) * vn_bar / grad_reg_adv;
   }
   blend_explicit_limit_with_fraction_limit(Dmax, diffusion_limit, flux_limit_adv);
 
@@ -665,20 +695,24 @@ void NeutralMixed::finally(const Options& state) {
     // denominator being grad(Tn)/Tn rather than grad(Tn).
     // perpendicular
     if (flux_limit_cond_perp >= 0.0) {
+      if (update_limiter_gradient) {
+        grad_reg_cond_perp = regularise_gradient(
+            Grad_perp(Tn) / Tnlim, limiter_gradient_floor, limiter_gradient_ceiling);
+      }
       kappa_n_max_perp =
-          flux_limit_cond_perp * (1. / 2) * vn_bar * Nnlim
-          / regularise_gradient(Grad_perp(Tn) / Tnlim, limiter_gradient_floor,
-                                limiter_gradient_ceiling);
+          flux_limit_cond_perp * (1. / 2) * vn_bar * Nnlim / grad_reg_cond_perp;
     }
     blend_explicit_limit_with_fraction_limit(kappa_n_max_perp, conduction_limit,
                                              flux_limit_cond_perp);
 
     // parallel
     if (flux_limit_cond_par >= 0.0) {
+      if (update_limiter_gradient) {
+        grad_reg_cond_par = regularise_gradient(
+            Grad_par(Tn) / Tnlim, limiter_gradient_floor_par, limiter_gradient_ceiling);
+      }
       kappa_n_max_par =
-          flux_limit_cond_par * (1. / 2) * vn_bar * Nnlim
-          / regularise_gradient(Grad_par(Tn) / Tnlim, limiter_gradient_floor_par,
-                                limiter_gradient_ceiling);
+          flux_limit_cond_par * (1. / 2) * vn_bar * Nnlim / grad_reg_cond_par;
     }
     blend_explicit_limit_with_fraction_limit(kappa_n_max_par, conduction_limit,
                                              flux_limit_cond_par);
@@ -692,20 +726,22 @@ void NeutralMixed::finally(const Options& state) {
 
     // perpendicular
     if (flux_limit_visc_perp >= 0.0) {
-      eta_n_max_perp =
-          flux_limit_visc_perp * Pnlim / vn_bar
-          / regularise_gradient(Grad_perp(Vn) / vn_bar, limiter_gradient_floor,
-                                limiter_gradient_ceiling);
+      if (update_limiter_gradient) {
+        grad_reg_visc_perp = regularise_gradient(
+            Grad_perp(Vn) / vn_bar, limiter_gradient_floor, limiter_gradient_ceiling);
+      }
+      eta_n_max_perp = flux_limit_visc_perp * Pnlim / vn_bar / grad_reg_visc_perp;
     }
     blend_explicit_limit_with_fraction_limit(eta_n_max_perp, viscosity_limit,
                                              flux_limit_visc_perp);
 
     // parallel
     if (flux_limit_visc_par >= 0.0) {
-      eta_n_max_par =
-          flux_limit_visc_par * Pnlim / vn_bar
-          / regularise_gradient(Grad_par(Vn) / vn_bar, limiter_gradient_floor_par,
-                                limiter_gradient_ceiling);
+      if (update_limiter_gradient) {
+        grad_reg_visc_par = regularise_gradient(
+            Grad_par(Vn) / vn_bar, limiter_gradient_floor_par, limiter_gradient_ceiling);
+      }
+      eta_n_max_par = flux_limit_visc_par * Pnlim / vn_bar / grad_reg_visc_par;
     }
     blend_explicit_limit_with_fraction_limit(eta_n_max_par, viscosity_limit,
                                              flux_limit_visc_par);
