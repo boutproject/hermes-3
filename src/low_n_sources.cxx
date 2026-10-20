@@ -135,10 +135,13 @@ LowNSources::LowNSources(std::string name, Options& options)
   this->low_n_floor_fac = options[name]["low_n_floor_fac"]
                               .doc("Multiplier applied to the low-density floor")
                               .withDefault<BoutReal>(10.0);
-  /// Timescale over which low density sources act
+  /// Timescale over which low density sources act (input value is in normalised units;
+  /// default is 1e-5 s converted to normalised units)
+  const BoutReal seconds_norm = get<BoutReal>(options["units"]["seconds"]);
   this->low_n_timescale = options[name]["low_n_timescale"]
-                              .doc("Timescale over which low density sources act")
-                              .withDefault<BoutReal>(1e-5);
+                              .doc("Timescale over which low density sources act "
+                                   "[normalised]")
+                              .withDefault<BoutReal>(1e-5 / seconds_norm);
   /// Rate calculation strategy
   this->strategy =
       options[name]["strategy"]
