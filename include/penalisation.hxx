@@ -26,7 +26,8 @@ struct Penalisation : public NamedComponent<Penalisation> {
   ///     - AA       Atomic mass
   ///
 
-  Penalisation(const std::string& name, Options& alloptions, Solver* UNUSED(solver));
+  Penalisation(const std::string& name, Options& UNUSED(alloptions),
+               Solver* UNUSED(solver));
 
   static constexpr auto type = "penalisation";
 
