@@ -39,8 +39,6 @@ namespace penalisation {
 const Field3D neumann(const Field3D& f, const Field3D& ddt_f, const Field3D& pen,
                       const BoutReal pen_time, const BoutReal f_floor) {
 
-  const auto coord = f.getMesh()->getCoordinates();
-
   Field3D result{0.0};
 
   BOUT_FOR(i, f.getRegion("RGN_NOBNDRY")) {
