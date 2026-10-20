@@ -71,6 +71,7 @@ EvolveMomentum::EvolveMomentum(std::string name, Options& alloptions, Solver* so
   use_div_par_fvv = options["use_div_par_fvv"]
                         .doc("Use Div_par_fvv instead of Div_par\nOnly for MMS tests")
                         .withDefault<bool>(use_div_par_fvv);
+
   if ((not use_div_par_fvv) and (not alloptions["solver"]["mms"].as<bool>())) {
     throw BoutException("use_div_par_fvv is only for MMS tests");
   }
@@ -82,7 +83,6 @@ EvolveMomentum::EvolveMomentum(std::string name, Options& alloptions, Solver* so
 
   // Set to zero so set for output
   momentum_source = 0.0;
-  NV_err = 0.0;
 
   substitutePermissions("name", {name});
   substitutePermissions("outputs", {"velocity", "momentum"});
@@ -99,9 +99,7 @@ void EvolveMomentum::transform_impl(GuardedOptions& state) {
 
   // Not using density boundary condition
   Field3DParallel N = getNoBoundary<Field3D>(species["density"]);
-
   const Field3DParallel Nlim = softFloor(N, density_floor);
-
   const BoutReal AA = get<BoutReal>(species["AA"]); // Atomic mass
 
   V = Field3DParallel(NV / (AA * Nlim));
@@ -115,12 +113,10 @@ void EvolveMomentum::transform_impl(GuardedOptions& state) {
   NV_solver = NV;                   // Save the momentum as calculated by the solver
   NV = Field3DParallel(AA * N * V); // Re-calculate consistent with V and N
   // Note: Now NV and NV_solver will differ when N < density_floor
-  NV_err = NV - NV_solver; // This is used in the finally() function
 
   if (NV.isFci()) {
     ASSERT2(NV.hasParallelSlices());
   }
-
   set(species["momentum"], NV);
 }
 
@@ -149,6 +145,8 @@ void EvolveMomentum::finally(const Options& state) {
 
   // Parallel flow
   V = get<Field3D>(species["velocity"]);
+  Field3D NVint = AA * Nlim * V; // Evolving momentum with Nlim rather than N
+  NVint.setBoundaryTo(NV);
 
   if (state.isSection("fields") and state["fields"].isSet("phi")
       and species.isSet("charge")) {
@@ -160,7 +158,7 @@ void EvolveMomentum::finally(const Options& state) {
 
       const Field3D phi = get<Field3D>(state["fields"]["phi"]);
 
-      ddt(NV) = -Div_n_bxGrad_f_B_XPPM(NV, phi, bndry_flux, poloidal_flows,
+      ddt(NV) = -Div_n_bxGrad_f_B_XPPM(NVint, phi, bndry_flux, poloidal_flows,
                                        true); // ExB drift
 
       // Parallel electric field
@@ -226,7 +224,7 @@ void EvolveMomentum::finally(const Options& state) {
   if (state.isSection("fields") and state["fields"].isSet("Apar_flutter")) {
     // Magnetic flutter term
     const Field3D Apar_flutter = get<Field3D>(state["fields"]["Apar_flutter"]);
-    ddt(NV) -= Div_n_g_bxGrad_f_B_XZ(NV, V, -Apar_flutter);
+    ddt(NV) -= Div_n_g_bxGrad_f_B_XZ(NVint, V, -Apar_flutter);
 
     if (species.isSet("pressure")) {
       const Field3D P = get<Field3D>(species["pressure"]);
@@ -262,12 +260,6 @@ void EvolveMomentum::finally(const Options& state) {
     momentum_source = get<Field3D>(species["momentum_source"]);
     ddt(NV) += momentum_source;
   }
-
-  // If N < density_floor then NV and NV_solver may differ
-  // -> Add term to force NV_solver towards NV
-  // Note: This correction is calculated in transform()
-  //       because NV may be modified by electromagnetic terms
-  ddt(NV) += NV_err;
 
   // Scale time derivatives
   if (state.isSet("scale_timederivs")) {
