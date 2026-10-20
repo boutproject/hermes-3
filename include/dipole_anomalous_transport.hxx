@@ -1,0 +1,97 @@
+#pragma once
+#ifndef DIPOLE_ANOMALOUS_DIFFUSION_H
+#define DIPOLE_ANOMALOUS_DIFFUSION_H
+
+#include "component.hxx"
+
+/// Add anomalous diffusion of density, momentum and energy
+///
+/// # Mesh inputs
+///
+/// D_<name>, chi_<name>, nu_<name>
+/// e.g `D_e`, `chi_e`, `nu_e`
+///
+/// in units of m^2/s
+///
+struct DipoleAnomalousDiffusion : public NamedComponent<DipoleAnomalousDiffusion> {
+  /// # Inputs
+  ///
+  /// - <name>
+  ///   - anomalous_D    This overrides D_<name> mesh input
+  ///   - anomalous_chi  This overrides chi_<name>
+  ///   - anomalous_nu   Overrides nu_<name>
+  ///   - anomalous_sheath_flux  Allow anomalous flux into sheath?
+  //                             Default false.
+  DipoleAnomalousDiffusion(std::string name, Options &alloptions, Solver *);
+
+  static constexpr auto type = "dipole_anomalous_diffusion";
+
+  void outputVars(Options &state) override;
+
+private:
+  std::string name; ///< Species name
+
+  bool diagnose; ///< Outputting diagnostics?
+  bool include_D, include_chi, include_nu; ///< Which terms should be included?
+  Field2D dipole_anomalous_D; ///< Anomalous density diffusion coefficient
+  Field2D dipole_anomalous_chi; ///< Anomalous thermal diffusion coefficient
+  Field2D dipole_quasilinear_chi; ///< Quasilinear thermal diffusion coefficient
+  Field2D dipole_quasilinear_D, dipole_quasilinear_v,
+      dipole_eq_D; ///< Quasilinear particle diffusion coefficient
+  Field2D dipole_quasilinear_D_p;
+  BoutReal factor_B; ///< Factor multiplying B in anomalous diffusion coefficient
+  Field2D U2D, B2D, R2D;
+  Field2D loghtheta;
+  bool zero_gradient;
+  Field2D Kn;
+  
+  Field2D transport_on;
+  BoutReal dipole_gamma; // Sheath heat transmission coefficient
+  BoutReal density_floor; // Minimum mass density if boussinesq=false
+  BoutReal mu0_normalized; // Normalisation for mu0, used in anomalous pressure diffusion coefficient
+  BoutReal transport_off_factor; ///< Factor to turn off transport based on sign of dn/dphi
+  bool transport_switch; ///< Switch to turn on/off transport based on sign of dn/dphi zero_inner_gradient_U; ///< Compute local U?
+  bool zero_outer_gradient_U; ///< Compute local U?
+  bool dipole_upwind;       ///< Use upwind gradients for anomalous fluxes?
+  bool entropy_conserving;
+  bool dipole_anomalous;
+  Field3D flow_xlow, flow_ylow, ef_dipole_quasilinear_xlow,
+      ef_dipole_quasilinear_ylow,pf_dipole_anomalous_xlow,
+      pf_dipole_anomalous_ylow; // Flows through cell faces
+  bool   dipole_div_form;
+  bool dipole_naive; ///< Use naive diffusion instead of quasilinear diffusion?     
+  // Field2D anomalous_nu; ///< Anomalous momentum diffusion coefficient
+
+  // bool dipole_anomalous_sheath_flux; ///< Allow anomalous diffusion into sheath?
+
+  /// Inputs
+  /// - species
+  ///   - <name>
+  ///     - AA
+  ///     - density
+  ///     - temperature  (optional)
+  ///     - velocity     (optional)
+  ///
+  /// Sets in the state
+  ///
+  /// - species
+  ///   - <name>
+  ///     - density_source
+  ///     - momentum_source
+  ///     - energy_source
+  ///
+  void transform_impl(GuardedOptions& state) override;
+};
+bool model_U;
+const void compute_U2D(Field2D& U, bool local_U, bool zero_outer_gradient_U);
+const Field2D isnegative_grad_perp(const Field2D& P);
+const Field2D isnegative_dnBthetadpsi(const Field2D& N2D, const Field2D& B2D, 
+                                      const Field2D& htheta2D,
+                                       BoutReal transport_off_factor);
+const Field2D compute_Kn(const Field2D& N2D, const Field2D& B2D, const Field2D& htheta2D);
+const Field2D set_quasilinear_transport_on(const Field2D& Kn, BoutReal transport_off_factor);
+    namespace {
+  RegisterComponent<DipoleAnomalousDiffusion> registercomponentdipoleanomalousdiffusion;
+}
+
+#endif // DIPOLE_ANOMALOUS_DIFFUSION_H

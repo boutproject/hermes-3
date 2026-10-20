@@ -40,6 +40,7 @@
 #include "include/cx_reaction.hxx"
 #include "include/detachment_controller.hxx"
 #include "include/diamagnetic_drift.hxx"
+#include "include/dipole_anomalous_transport.hxx"
 #include "include/electromagnetic.hxx"
 #include "include/electron_force_balance.hxx"
 #include "include/evolve_density.hxx"
