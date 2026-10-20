@@ -1,0 +1,31 @@
+name: Create Release
+
+# A stable version tag pushed by a person is the release. This job turns that
+# tag into the GitHub release notes. Image builds listen for the same tag push
+# (build_builder_image.yml, build_jupyter_image.yml), not for the release
+# created here: a release created with the default GITHUB_TOKEN does not
+# trigger other workflows.
+#
+# The workflow file has to already be on the commit being tagged, so this
+# lands on master before the next tag.
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    # Tag pushes on a fork must not open a release.
+    if: github.repository == 'boutproject/hermes-3'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create ${{ github.ref_name }} \
+            --title "Release ${{ github.ref_name }}" \
+            --generate-notes
