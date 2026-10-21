@@ -336,8 +336,9 @@ void EvolveDensity::finally(const Options& state) {
   }
 
   if (state["fields"].isSet("penalisation_wall")) {
-    ddt(N) = penalisation::neumann(N, ddt(N), state["fields"]["penalisation_wall"],
-                                   penalisation_time, density_floor);
+    ddt(N) = penalisation::neumann(N, ddt(N),
+                                   get<Field3D>(state["fields"]["penalisation_wall"]),
+                                   penalisation_time, 1e-1);
   }
 
 #if CHECKLEVEL >= 1

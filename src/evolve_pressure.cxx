@@ -414,8 +414,9 @@ void EvolvePressure::finally(const Options& state) {
   }
 
   if (state["fields"].isSet("penalisation_wall")) {
-    ddt(P) = penalisation::neumann(P, ddt(P), state["fields"]["penalisation_wall"],
-                                   penalisation_time, pressure_floor);
+    ddt(P) = penalisation::neumann(P, ddt(P),
+                                   get<Field3D>(state["fields"]["penalisation_wall"]),
+                                   penalisation_time, 1e-5);
   }
 
 #if CHECKLEVEL >= 1

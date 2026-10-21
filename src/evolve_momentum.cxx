@@ -276,7 +276,8 @@ void EvolveMomentum::finally(const Options& state) {
   ddt(NV) += NV_err;
 
   if (state["fields"].isSet("penalisation_wall")) {
-    ddt(NV) = penalisation::neumann(NV, ddt(NV), state["fields"]["penalisation_wall"],
+    ddt(NV) = penalisation::neumann(NV, ddt(NV),
+                                    get<Field3D>(state["fields"]["penalisation_wall"]),
                                     penalisation_time, 0.0);
   }
 
