@@ -83,7 +83,7 @@ jobs:
     steps:
       - name: Job information
         run: |
-          echo Build: ${{ matrix.config.name }}, ${{ matrix.config.os }}
+          echo Build: ${{ matrix.build_type.name }}, ${{ matrix.config.os }}
           echo BOUT++ configure options: ${{ matrix.build_type.bout_configure_options }}
           echo Hermes-3 configure options: ${{ matrix.build_type.hermes_configure_options }}
           echo Build type: ${{ matrix.build_type.cmake_build_type }}
@@ -144,7 +144,7 @@ jobs:
         uses: actions/cache@v6
         with:
           path: /home/runner/local_bout
-          key: bout-${{ matrix.config.os }}-${{ hashFiles('bout_build_info.txt', 'ci/build_bout_for_ci.sh') }}
+          key: bout-${{ env.ImageOS }}-${{ hashFiles('bout_build_info.txt', 'ci/build_bout_for_ci.sh') }}
 
       - name: Build BOUT++
         run: ./ci/build_bout_for_ci.sh
