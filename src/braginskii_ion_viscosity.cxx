@@ -26,6 +26,7 @@
 #include "../include/braginskii_ion_viscosity.hxx"
 #include "../include/component.hxx"
 #include "../include/div_ops.hxx"
+#include "../include/free_streaming.hxx"
 #include "../include/hermes_utils.hxx"
 
 using bout::globals::mesh;
@@ -52,6 +53,32 @@ BraginskiiIonViscosity::BraginskiiIonViscosity(const std::string& name,
   eta_limit_alpha = options["eta_limit_alpha"]
                         .doc("Viscosity flux limiter coefficient. <0 = turned off")
                         .withDefault(-1.0);
+
+  eta_free_streaming =
+      options["eta_free_streaming"]
+          .doc("Reduce the viscosity by 1 / (1 + lambda_i / (c L_par)) for collisionless "
+               "ions? 1/L_par = 1/L_line (+ |Grad_par Ti|/Ti, see "
+               "eta_free_streaming_gradient)")
+          .withDefault<bool>(false);
+  if (eta_free_streaming) {
+    eta_free_streaming_c = options["eta_free_streaming_c"]
+                               .doc("Coefficient c in 1 / (1 + lambda_i / (c L_par))")
+                               .withDefault(1.0);
+    eta_free_streaming_gradient =
+        options["eta_free_streaming_gradient"]
+            .doc("Add the local gradient length |Grad_par Ti|/Ti to 1/L_par?")
+            .withDefault<bool>(false);
+    const BoutReal rho_s0 = alloptions["units"]["meters"];
+    L_line = options.isSet("eta_free_streaming_length")
+                 ? Field2D{options["eta_free_streaming_length"]
+                               .doc("Field line length L_line [m]. Default: from the grid")
+                               .as<BoutReal>()
+                           / rho_s0}
+                 : fieldLineLength(); // grids with branch cuts: set the length
+    output.write("\tIon viscosity field line length L_line: {:e} - {:e} m\n",
+                 min(L_line, true) * rho_s0, max(L_line, true) * rho_s0);
+    setPermissions(readOnly("species:{non_electrons}:AA"));
+  }
 
   diagnose =
       options["diagnose"].doc("Output additional diagnostics?").withDefault<bool>(false);
@@ -236,13 +263,24 @@ void BraginskiiIonViscosity::transform_impl(GuardedOptions& state) {
       nu += GET_VALUE(Field3D, species["collision_frequencies"][collision_name]);
     }
 
-    const Field3D tau = 1. / nu;
+    // Floor: nu = 0 (e.g. density <= 0 in a trial state) would give tau = inf
+    const Field3D tau = 1. / softFloor(nu, 1e-10);
     const Field3D P = get<Field3D>(species["pressure"]);
     const Field3D T = get<Field3D>(species["temperature"]);
     const Field3D N = get<Field3D>(species["density"]);
 
+    // Free-streaming reduction of every viscous stress: Braginskii assumes
+    // lambda_i << L_par
+    Field3D free_streaming = 1.0;
+    if (eta_free_streaming) {
+      const BoutReal AA = get<BoutReal>(species["AA"]);
+      const Field3D lambda = sqrt(floor(T, 0.0) / AA) * tau; // v_ti * tau_i
+      free_streaming = freeStreamingFactor(T, lambda, L_line, eta_free_streaming_c,
+                                           eta_free_streaming_gradient);
+    }
+
     // Parallel ion viscosity (4/3 * 0.96 coefficient)
-    Field3D eta = 1.28 * P * tau;
+    Field3D eta = 1.28 * P * tau * free_streaming;
 
     const auto tau_av = DC(tau);
 
@@ -280,7 +318,8 @@ void BraginskiiIonViscosity::transform_impl(GuardedOptions& state) {
         // Values of alpha ~ 0.5 typically
 
         const Field3D q_cl = eta * Grad_par(V);   // Collisional value
-        const Field3D q_fl = eta_limit_alpha * P; // Flux limit
+        // Flux limit; floor avoids q_cl / q_fl = 0/0 where P = 0
+        const Field3D q_fl = eta_limit_alpha * floor(P, 1e-6);
 
         eta = eta / (1. + abs(q_cl / q_fl));
       }
@@ -303,7 +342,8 @@ void BraginskiiIonViscosity::transform_impl(GuardedOptions& state) {
       }
 
       // Parallel ion stress tensor component
-      Pi_cipar = -0.96 * P * tau * bounce_factor * (2. * Grad_par(V) + V * Grad_par_logB);
+      Pi_cipar = -0.96 * P * tau * bounce_factor * free_streaming
+                 * (2. * Grad_par(V) + V * Grad_par_logB);
       // Could also be written as:
       // Pi_cipar = -0.96*Pi*tau*2.*Grad_par(sqrt(Bxy)*Vi)/sqrt(Bxy);
 
@@ -329,7 +369,7 @@ void BraginskiiIonViscosity::transform_impl(GuardedOptions& state) {
     // Perpendicular ion stress tensor
     // 0.96 P tau kappa * (V_E + V_di + 1.61 b x Grad(T)/B )
     // Note: Heat flux terms are neglected for now
-    Field3D Pi_ciperp = -0.5 * 0.96 * P * tau * bounce_factor
+    Field3D Pi_ciperp = -0.5 * 0.96 * P * tau * bounce_factor * free_streaming
                         * (Curlb_B * Grad(phi + 1.61 * T) - Curlb_B * Grad(P) / Nlim);
 
     // Limit size of stress tensor components

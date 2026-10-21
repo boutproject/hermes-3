@@ -25,7 +25,8 @@ void Isothermal::transform_impl(GuardedOptions& state) {
 
   GuardedOptions species = state["species"][objectName()];
 
-  set(species["temperature"], T);
+  // Field3D, not BoutReal: components such as reactions read the temperature as a field
+  set(species["temperature"], Field3D{T});
 
   // If density is set, also set pressure
   if (isSetFinalNoBoundary(species["density"])) {

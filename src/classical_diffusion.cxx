@@ -32,7 +32,9 @@ ClassicalDiffusion::ClassicalDiffusion(std::string name, Options& alloptions, So
   // temperature are defined (respectively). Collision frequency is
   // only used if temperature is set. Nothing happens if the charge or
   // density are unset.
-  substitutePermissions("output", {"density_source", "momentum_source", "energy_source"});
+  // cls_*_flow_xlow: radial flows, read by recycling for the wall fluxes
+  substitutePermissions("output", {"density_source", "momentum_source", "energy_source",
+                                   "cls_particle_flow_xlow", "cls_energy_flow_xlow"});
   if (custom_D < 0.) {
     setPermissions(readOnly("species:{all_species}:collision_frequency"));
   }
@@ -95,6 +97,7 @@ void ClassicalDiffusion::transform_impl(GuardedOptions& state) {
     // add(species["density_source"], FV::Div_a_Grad_perp(Dn, N));
     add(species["density_source"],
         Div_a_Grad_perp_nonorthog(Dn, N, cls_pf_perp_xlow, cls_pf_perp_ylow));
+    add(species["cls_particle_flow_xlow"], cls_pf_perp_xlow);
 
     if (IS_SET(species["velocity"])) {
       const auto V = GET_VALUE(Field3D, species["velocity"]);
@@ -111,6 +114,7 @@ void ClassicalDiffusion::transform_impl(GuardedOptions& state) {
       add(species["energy_source"],
           Div_a_Grad_perp_nonorthog(Dn * (3. / 2) * T, N, cls_nef_perp_xlow,
                                     cls_nef_perp_ylow));
+      add(species["cls_energy_flow_xlow"], cls_nef_perp_xlow);
 
       // TODO: Figure out what to do with the below
       if (custom_D < 0) {
@@ -125,6 +129,7 @@ void ClassicalDiffusion::transform_impl(GuardedOptions& state) {
         add(species["energy_source"],
             Div_a_Grad_perp_nonorthog(2. * floor(P, 1e-5) * nu * AA / Bsq, T,
                                       cls_tef_perp_xlow, cls_tef_perp_ylow));
+        add(species["cls_energy_flow_xlow"], cls_tef_perp_xlow);
       }
     }
   }

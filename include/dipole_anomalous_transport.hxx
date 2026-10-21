@@ -41,7 +41,8 @@ private:
   Field2D dipole_anomalous_chi; ///< Anomalous thermal diffusion coefficient
   Field2D dipole_quasilinear_D; ///< Quasilinear particle diffusion coefficient
   Field2D B2D;
-  bool dipole_inner_noflux; ///< No quasilinear flux through the inner boundary?
+  bool dipole_inner_noflux_particle; ///< No quasilinear particle flux at inner x?
+  bool dipole_inner_noflux_heat;     ///< No quasilinear entropy (heat) flux at inner x?
 
   BoutReal dipole_gamma; ///< Adiabatic index
   bool dipole_upwind;    ///< Use upwind gradients for dipole fluxes?

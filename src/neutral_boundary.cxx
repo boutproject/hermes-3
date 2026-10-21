@@ -25,6 +25,10 @@ NeutralBoundary::NeutralBoundary(std::string name, Options& alloptions,
   upper_y = options["neutral_boundary_upper_y"]
                 .doc("Boundary on upper y?")
                 .withDefault<bool>(true);
+  inner_x = options["neutral_boundary_inner_x"]
+                .doc("Boundary on inner x, on closed field lines (e.g. dipole magnet)?")
+                .withDefault<bool>(false);
+
   sol = options["neutral_boundary_sol"].doc("Boundary on SOL?").withDefault<bool>(false);
   pfr = options["neutral_boundary_pfr"].doc("Boundary on PFR?").withDefault<bool>(false);
 
@@ -43,6 +47,11 @@ NeutralBoundary::NeutralBoundary(std::string name, Options& alloptions,
                                     "after wall reflection at PFR")
                                .withDefault<BoutReal>(0.75);
 
+  core_energy_refl_factor = options["core_energy_refl_factor"]
+                               .doc("Fraction of energy retained by neutral particles "
+                                    "after wall reflection at core")
+                               .withDefault<BoutReal>(0.75);
+
   target_fast_refl_fraction =
       options["target_fast_refl_fraction"]
           .doc("Fraction of neutrals that are undergoing fast reflection at the target")
@@ -56,6 +65,11 @@ NeutralBoundary::NeutralBoundary(std::string name, Options& alloptions,
   pfr_fast_refl_fraction =
       options["pfr_fast_refl_fraction"]
           .doc("Fraction of neutrals that are undergoing fast reflection at the pfr")
+          .withDefault<BoutReal>(0.8);
+
+  core_fast_refl_fraction =
+      options["core_fast_refl_fraction"]
+          .doc("Fraction of neutrals that are undergoing fast reflection at the core(fcfs for dipole)")
           .withDefault<BoutReal>(0.8);
 
   substitutePermissions("name", {name});
@@ -87,6 +101,7 @@ void NeutralBoundary::transform_impl(GuardedOptions& state) {
 
   Coordinates* coord = mesh->getCoordinates();
   target_energy_source = 0;
+  core_energy_source = 0;
   wall_energy_source = 0;
 
   // Targets
@@ -213,6 +228,61 @@ void NeutralBoundary::transform_impl(GuardedOptions& state) {
         // Subtract from cell next to boundary
         energy_source[i] -= cooling_source;
         target_energy_source[i] -= cooling_source;
+      }
+    }
+  }
+  if (inner_x and mesh->firstX() and mesh->periodicY(mesh->xstart)) {
+
+    //for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
+    for (int iy = 0; iy < mesh->LocalNy; iy++) {
+        for (int iz = 0; iz < mesh->LocalNz; iz++) {
+
+          auto i = indexAt(Nn, mesh->xstart, iy, iz);      // Final domain cell
+          auto ig = indexAt(Nn, mesh->xstart - 1, iy, iz); // Guard cell
+
+          // Calculate midpoint values at wall
+          const BoutReal nnsheath = 0.5 * (Nn[ig] + Nn[i]);
+          const BoutReal tnsheath = 0.5 * (Tn[ig] + Tn[i]);
+
+          // Thermal speed of static Maxwellian in one direction
+          const BoutReal v_th =
+              0.25 * sqrt(8 * tnsheath / (PI * AA)); // Stangeby p.69 eqns. 2.21, 2.24
+
+          // Approach adapted from D. Power thesis 2023
+          BoutReal T_FC = 3 / Tnorm; // Franck-Condon temp (hardcoded for now)
+
+          // Outgoing neutral heat flux [W/m^2]
+          // This is rearranged from Power for clarity - note definition of v_th.
+          BoutReal q = 2 * nnsheath * tnsheath * v_th // Incident energy
+                       - (core_energy_refl_factor * core_fast_refl_fraction) * 2 * nnsheath
+                             * tnsheath * v_th // Fast reflected energy
+                       - (1 - core_fast_refl_fraction) * T_FC * nnsheath
+                             * v_th; // Thermal reflected energy
+
+          // Multiply by radial cell area to get power
+          // Expanded form of the calculation for clarity
+
+          // Converts dy to poloidal length: dl = dy / sqrt(g22) = dy * h_theta
+          BoutReal dpol = 0.5 * (coord->dy()[i] + coord->dy()[ig]) * 1
+                          / (0.5 * (sqrt(coord->g22()[i]) + sqrt(coord->g22()[ig])));
+
+          // Converts dz to toroidal length:  = dz*sqrt(g_33) = dz * R = 2piR
+          BoutReal dtor = 0.5 * (coord->dz()[i] + coord->dz()[ig]) * 0.5
+                          * (sqrt(coord->g_33()[i]) + sqrt(coord->g_33()[ig]));
+
+          BoutReal da = dpol * dtor; // [m^2]
+
+          // Multiply by area to get energy flow (power)
+          BoutReal flow = q * da; // [W]
+
+          // Divide by cell volume to get source [W/m^3]
+          BoutReal cooling_source =
+              flow
+              / (coord->J()[i] * coord->dx()[i] * coord->dy()[i] * coord->dz()[i]); // [W m^-3]
+
+          // Subtract from cell next to boundary
+          energy_source[i] -= cooling_source;
+          core_energy_source[i] -= cooling_source;
       }
     }
   }
@@ -383,7 +453,18 @@ void NeutralBoundary::outputVars(Options& state) {
          {"units", "W m^-3"},
          {"conversion", Pnorm * Omega_ci},
          {"standard_name", "energy source"},
-         {"long_name", std::string("Wall reflection energy source of ") + name},
+         {"long_name", std::string("Target reflection energy source of ") + name},
+         {"source", "neutral_boundary"}});
+ if (inner_x) {
+  set_with_attrs(
+        state[{std::string("E") + name + std::string("_core_refl")}],
+        core_energy_source,
+        {{"time_dimension", "t"},
+         {"units", "W m^-3"},
+         {"conversion", Pnorm * Omega_ci},
+         {"standard_name", "energy source"},
+         {"long_name", std::string("Core reflection energy source of ") + name},
          {"source", "neutral_boundary"}});
   }
+}
 }

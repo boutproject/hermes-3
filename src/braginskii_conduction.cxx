@@ -108,6 +108,46 @@ BraginskiiConduction::BraginskiiConduction(const std::string& name, Options& all
                    min(all_L_line[name], true) * rho_s0,
                    max(all_L_line[name], true) * rho_s0);
     }
+    const BoutReal density_threshold =
+        options["kappa_density_threshold"]
+            .doc("n_th [m^-3]: kappa -> kappa n / (n + n_th), bounding chi = kappa / "
+                 "(1.5 n) at low density (e.g. start-up); vanishes for n >> n_th. < 0: off")
+            .withDefault(-1.0);
+    if (density_threshold > 0) {
+      const BoutReal rho_s0 = alloptions["units"]["meters"];
+      const Coordinates* coord = mesh->getCoordinates();
+      const Field2D ds{sqrt(coord->g_22()) * coord->dy()}; // Parallel cell length
+      // Needs a grid without branch cuts; otherwise set kappa_density_threshold_length
+      const Field2D ds_ref =
+          options.isSet("kappa_density_threshold_length")
+              ? Field2D{options["kappa_density_threshold_length"]
+                            .doc("Reference cell length ds_ref [m]. Default: mean cell "
+                                 "length along each field line")
+                            .as<BoutReal>()
+                        / rho_s0}
+              : averageY(ds);
+      all_kappa_density_threshold[name] =
+          density_threshold / alloptions["units"]["inv_meters_cubed"].as<BoutReal>()
+          * SQ(ds_ref / ds);
+      output.write("\t{} conduction density threshold: {:e} - {:e} m^-3\n", name,
+                   min(all_kappa_density_threshold[name], true)
+                       * alloptions["units"]["inv_meters_cubed"].as<BoutReal>(),
+                   max(all_kappa_density_threshold[name], true)
+                       * alloptions["units"]["inv_meters_cubed"].as<BoutReal>());
+    }
+
+    const BoutReal cell_timescale =
+        options["kappa_cell_timescale"]
+            .doc("Minimum conduction time [s] across one parallel cell: kappa -> kappa / "
+                 "(1 + kappa / kappa_max), kappa_max = 1.5 n ds^2 / timescale. < 0: off")
+            .withDefault(-1.0);
+    if (cell_timescale > 0) {
+      const Coordinates* coord = mesh->getCoordinates();
+      all_kappa_cell_max_per_n[name] =
+          1.5 * coord->g_22() * SQ(coord->dy())
+          / (cell_timescale / alloptions["units"]["seconds"].as<BoutReal>());
+    }
+
     all_conduction_collisions_mode[name] =
         options["conduction_collisions_mode"]
             .doc("Can be multispecies: all collisions, or "
@@ -305,6 +345,22 @@ void BraginskiiConduction::transform_impl(GuardedOptions& state) {
           freeStreamingFactor(T, lambda, all_L_line[name], all_kappa_free_streaming_c[name],
                               all_kappa_free_streaming_gradient[name]);
       mesh->communicate(kappa_par); // Grad_par leaves the guard cells unset
+    }
+
+    if (all_kappa_density_threshold.count(name) > 0) {
+      // kappa ~ T^5/2 does not depend on n, so the cell conduction rate
+      // chi / ds^2 = kappa / (1.5 n ds^2) is stiffest at low density in short cells.
+      // n / (n + n_th (ds_ref/ds)^2) bounds it by the same value in every cell and
+      // smoothly turns off as the density rises above the cell threshold
+      const Field3D Nfloor = floor(N, 0.0);
+      kappa_par *= Nfloor / (Nfloor + all_kappa_density_threshold[name]);
+    }
+
+    if (all_kappa_cell_max_per_n.count(name) > 0) {
+      // Keep the conduction time across one parallel cell, 1.5 n ds^2 / kappa, above
+      // the timescale (stiffness of the short cells near the magnet). Smooth cap
+      const Field3D kappa_max = softFloor(N, 1e-5) * all_kappa_cell_max_per_n[name];
+      kappa_par /= (1. + kappa_par / kappa_max);
     }
 
     if (kappa_limit_alpha > 0.0) {

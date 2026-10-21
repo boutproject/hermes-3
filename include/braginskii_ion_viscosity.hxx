@@ -35,6 +35,13 @@ struct BraginskiiIonViscosity : public NamedComponent<BraginskiiIonViscosity> {
   /// - <name>
   ///   - eta_limit_alpha: float, default -1
   ///         Flux limiter coefficient. < 0 means off.
+  ///   - eta_free_streaming: bool, default false
+  ///         Reduce the viscosity by 1 / (1 + lambda_i / (c L_par)), lambda_i = v_ti tau_i,
+  ///         1/L_par = 1/L_line (+ |Grad_par Ti|/Ti if eta_free_streaming_gradient)
+  ///   - eta_free_streaming_c: float, default 1
+  ///   - eta_free_streaming_gradient: bool, default false
+  ///   - eta_free_streaming_length: float [m], L_line. Default: field line
+  ///         length from the grid (needs a grid without branch cuts)
   ///   - perpendicular: bool, default false
   ///         Include perpendicular flows?
   ///         Requires curvature vector and phi potential
@@ -48,6 +55,10 @@ struct BraginskiiIonViscosity : public NamedComponent<BraginskiiIonViscosity> {
 
 private:
   BoutReal eta_limit_alpha; ///< Flux limit coefficient
+  bool eta_free_streaming;  ///< Reduce viscosity when lambda_i is not << L_par?
+  BoutReal eta_free_streaming_c; ///< Coefficient c in 1 / (1 + lambda_i / (c L_par))
+  bool eta_free_streaming_gradient; ///< Include |Grad_par Ti|/Ti in 1/L_par?
+  Field2D L_line;                   ///< Field line length
   bool parallel;            ///< Include parallel viscosity (requires parallel velocity)
   bool perpendicular;       ///< Include perpendicular viscosity? (Requires phi)
   std::map<std::string, std::vector<std::string>>

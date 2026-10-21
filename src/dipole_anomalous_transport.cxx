@@ -77,11 +77,20 @@ DipoleAnomalousDiffusion::DipoleAnomalousDiffusion(std::string name, Options& al
                              .withDefault(dipole_anomalous_chi)
                          * anomalous_scaling;
 
-  dipole_inner_noflux =
+  const bool dipole_inner_noflux =
       options["dipole_inner_noflux"]
-          .doc("No quasilinear particle, momentum and energy flux through the inner "
-               "boundary?")
+          .doc("Default for dipole_inner_noflux_particle and dipole_inner_noflux_heat")
           .withDefault<bool>(false);
+  dipole_inner_noflux_particle =
+      options["dipole_inner_noflux_particle"]
+          .doc("No quasilinear particle (and momentum) flux through the inner boundary?")
+          .withDefault<bool>(dipole_inner_noflux);
+  // Energy through the wall is 3/2 [n^(gamma-1) Gamma_s + (gamma-1) T Gamma_n]: with
+  // this, only the energy carried by escaping particles remains
+  dipole_inner_noflux_heat =
+      options["dipole_inner_noflux_heat"]
+          .doc("No quasilinear entropy (heat) flux through the inner boundary?")
+          .withDefault<bool>(dipole_inner_noflux);
 
   const int dipole_quasilinear_model =
       options["dipole_quasilinear_model"]
@@ -183,8 +192,8 @@ void DipoleAnomalousDiffusion::transform_impl(GuardedOptions& state) {
   // -- quasilinear dipole transport, OSTR-Mod.1 section 4.4 --
   Field2D htheta2D = 1 / sqrt(mesh->getCoordinates()->g22());
   mesh->communicate(htheta2D);
-  auto inner_noflux = [&](Field2D& f) {
-    if (dipole_inner_noflux && mesh->firstX()) {
+  auto inner_noflux = [&](Field2D& f, bool noflux) {
+    if (noflux && mesh->firstX()) {
       for (int j = mesh->ystart; j <= mesh->yend; j++) {
         f(mesh->xstart - 2, j) = f(mesh->xstart, j);
         f(mesh->xstart - 1, j) = f(mesh->xstart, j);
@@ -193,7 +202,7 @@ void DipoleAnomalousDiffusion::transform_impl(GuardedOptions& state) {
   };
   Field2D nthetaB = N2D * htheta2D / B2D;
   mesh->communicate(nthetaB);
-  inner_noflux(nthetaB);
+  inner_noflux(nthetaB, dipole_inner_noflux_particle);
   Field2D a_QL = DC(dipole_quasilinear_D) * B2D / htheta2D;
   mesh->communicate(a_QL);
 
@@ -211,7 +220,7 @@ void DipoleAnomalousDiffusion::transform_impl(GuardedOptions& state) {
   // F_s, eq. (53): s = p n^(1-gamma) is conserved by the interchange displacement
   const Field2D Nlim = floor(N2D, 1e-8);
   Field2D sthetaB = P2D * pow(Nlim, 1. - dipole_gamma) * htheta2D / B2D;
-  inner_noflux(sthetaB);
+  inner_noflux(sthetaB, dipole_inner_noflux_heat);
   F_s = div_flows(a_QL, sthetaB, fx, fy);
   // dp/dt = n^(gamma-1) F_s + (gamma-1) T F_n, energy = 3/2 p, eqs. (55), (57)
   add(species["energy_source"],

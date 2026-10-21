@@ -37,6 +37,17 @@ struct BraginskiiConduction : public NamedComponent<BraginskiiConduction> {
   ///                                  Default false
   ///   - kappa_free_streaming_c       c, default 1
   ///   - kappa_free_streaming_gradient  Include |Grad_par T|/T in 1/L_par? Default false
+  ///   - kappa_density_threshold      n_th [m^-3]: kappa -> kappa n / (n + n_cell), with
+  ///                                  n_cell = n_th (ds_ref / ds)^2 for the parallel cell
+  ///                                  length ds. At low density the cell conduction rate
+  ///                                  chi / ds^2 is then bounded by the same value in every
+  ///                                  cell; the limiter vanishes for n >> n_cell.
+  ///                                  Default -1 (off)
+  ///   - kappa_density_threshold_length  ds_ref [m]. Default: mean cell length along
+  ///                                  each field line (needs a grid without branch cuts)
+  ///   - kappa_cell_timescale         Minimum conduction time [s] across one parallel
+  ///                                  cell: kappa -> kappa / (1 + kappa / kappa_max),
+  ///                                  kappa_max = 1.5 n ds^2 / timescale. Default -1 (off)
   ///   - kappa_free_streaming_length  L_line [m]. Default: field line length from the
   ///                                  grid (needs a grid without branch cuts)
   ///   - conduction_collisions_mode   Can be multispecies: all collisions, or braginskii:
@@ -70,6 +81,11 @@ private:
   std::map<std::string, BoutReal> all_kappa_free_streaming_c;
   std::map<std::string, Field2D> all_L_line;
   std::map<std::string, bool> all_kappa_free_streaming_gradient;
+  /// Low-density limiter threshold per cell, n_th (ds_ref / ds)^2 (normalised);
+  /// absent if off
+  std::map<std::string, Field2D> all_kappa_density_threshold;
+  /// kappa_max / n = 1.5 ds^2 / timescale of the cell timescale cap; absent if off
+  std::map<std::string, Field2D> all_kappa_cell_max_per_n;
   std::map<std::string, Field3D>
       all_flow_ylow_conduction; ///< Conduction energy flow diagnostics
   /// Save more diagnostics?

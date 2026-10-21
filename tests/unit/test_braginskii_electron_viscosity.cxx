@@ -91,7 +91,7 @@ TEST_F(BraginskiiElectronViscosityTest, ViscosityCollisionScaling) {
   state2 = state1.copy();
 
   state1["species"]["e"]["collision_frequency"] =
-      linearGradient(1., 0.1, 0.2, -0.1, -0.4, 0., 1.);
+      linearGradient(1., 0.1, 0.2, 0.1, 0.4, 0., 1.); // > 0: nu is floored
   state2["species"]["e"]["collision_frequency"] =
       2 * state1["species"]["e"]["collision_frequency"].as<Field3D>();
 
