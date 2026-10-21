@@ -28,6 +28,13 @@ struct BraginskiiElectronViscosity : public NamedComponent<BraginskiiElectronVis
   ///     Output diagnostic SNVe_viscosity?
   ///   - eta_limit_alpha: float, default -1.0
   ///     Flux limiter coefficient. < 0 means no limiter
+  ///   - eta_free_streaming: bool, default false
+  ///     Reduce eta by 1 / (1 + lambda_e / (c L_par)), lambda_e = v_te tau_e,
+  ///     1/L_par = 1/L_line (+ |Grad_par Te|/Te if eta_free_streaming_gradient)
+  ///   - eta_free_streaming_gradient: bool, default false
+  ///   - eta_free_streaming_c: float, default 1
+  ///   - eta_free_streaming_length: float [m], L_line. Default: field line
+  ///     length from the grid (needs a grid without branch cuts)
   BraginskiiElectronViscosity(const std::string& name, Options& alloptions, Solver*);
 
   void outputVars(Options& state) override;
@@ -36,6 +43,10 @@ struct BraginskiiElectronViscosity : public NamedComponent<BraginskiiElectronVis
 
 private:
   BoutReal eta_limit_alpha; ///< Flux limit coefficient
+  bool eta_free_streaming;  ///< Reduce eta when lambda_e is not << L_par?
+  BoutReal eta_free_streaming_c; ///< Coefficient c in 1 / (1 + lambda_e / (c L_par))
+  bool eta_free_streaming_gradient; ///< Include |Grad_par Te|/Te in 1/L_par?
+  Field2D L_line;           ///< Field line length
   bool diagnose;            ///< Output viscosity diagnostic?
   Field3D viscosity;        ///< The viscosity momentum source
 

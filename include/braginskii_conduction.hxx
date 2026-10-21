@@ -32,6 +32,13 @@ struct BraginskiiConduction : public NamedComponent<BraginskiiConduction> {
   ///   - kappa_coefficient            Heat conduction constant. Default is 3.16 for
   ///                                  electrons, 3.9 otherwise
   ///   - kappa_limit_alpha            Flux limiter, off by default.
+  ///   - kappa_free_streaming         Reduce kappa by 1 / (1 + lambda / (c L_par)),
+  ///                                  lambda = v_th tau, 1/L_par = 1/L_line (+ |Grad_par T|/T).
+  ///                                  Default false
+  ///   - kappa_free_streaming_c       c, default 1
+  ///   - kappa_free_streaming_gradient  Include |Grad_par T|/T in 1/L_par? Default false
+  ///   - kappa_free_streaming_length  L_line [m]. Default: field line length from the
+  ///                                  grid (needs a grid without branch cuts)
   ///   - conduction_collisions_mode   Can be multispecies: all collisions, or braginskii:
   ///                                  self collisions and ie
   ///
@@ -58,6 +65,11 @@ private:
       all_kappa_coefficient; ///< Leading numerical coefficient in parallel heat flux
                              ///< calculation
   std::map<std::string, BoutReal> all_kappa_limit_alpha; ///< Flux limit if >0
+  /// Free-streaming reduction of kappa (species with kappa_free_streaming = true):
+  /// coefficient c and field line length
+  std::map<std::string, BoutReal> all_kappa_free_streaming_c;
+  std::map<std::string, Field2D> all_L_line;
+  std::map<std::string, bool> all_kappa_free_streaming_gradient;
   std::map<std::string, Field3D>
       all_flow_ylow_conduction; ///< Conduction energy flow diagnostics
   /// Save more diagnostics?

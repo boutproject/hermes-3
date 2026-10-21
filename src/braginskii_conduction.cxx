@@ -21,6 +21,7 @@
 #include "../include/braginskii_conduction.hxx"
 #include "../include/component.hxx"
 #include "../include/div_ops.hxx"
+#include "../include/free_streaming.hxx"
 #include "../include/hermes_utils.hxx"
 #include "../include/permissions.hxx"
 
@@ -82,6 +83,31 @@ BraginskiiConduction::BraginskiiConduction(const std::string& name, Options& all
             .doc("Flux limiter factor. < 0 means no limit. Typical is 0.2 "
                  "for electrons, 1 for ions.")
             .withDefault(-1.0);
+
+    if (options["kappa_free_streaming"]
+            .doc("Reduce kappa by 1 / (1 + lambda / (c L_par)) for collisionless "
+                 "species? 1/L_par = 1/L_line (+ |Grad_par T|/T, see kappa_free_streaming_gradient)")
+            .withDefault<bool>(false)) {
+      all_kappa_free_streaming_c[name] =
+          options["kappa_free_streaming_c"]
+              .doc("Coefficient c in 1 / (1 + lambda / (c L_par))")
+              .withDefault(1.0);
+      all_kappa_free_streaming_gradient[name] =
+          options["kappa_free_streaming_gradient"]
+              .doc("Add the local gradient length |Grad_par T|/T to 1/L_par?")
+              .withDefault<bool>(false);
+      const BoutReal rho_s0 = alloptions["units"]["meters"];
+      all_L_line[name] =
+          options.isSet("kappa_free_streaming_length")
+              ? Field2D{options["kappa_free_streaming_length"]
+                            .doc("Field line length L_line [m]. Default: from the grid")
+                            .as<BoutReal>()
+                        / rho_s0}
+              : fieldLineLength(); // grids with branch cuts: set the length
+      output.write("\t{} conduction field line length L_line: {:e} - {:e} m\n", name,
+                   min(all_L_line[name], true) * rho_s0,
+                   max(all_L_line[name], true) * rho_s0);
+    }
     all_conduction_collisions_mode[name] =
         options["conduction_collisions_mode"]
             .doc("Can be multispecies: all collisions, or "
@@ -271,6 +297,15 @@ void BraginskiiConduction::transform_impl(GuardedOptions& state) {
     //
     // Note: Coefficient is slightly different for electrons (3.16) and ions (3.9)
     kappa_par = kappa_coefficient * Pfloor * tau / AA;
+
+    if (all_L_line.count(name) > 0) {
+      // Braginskii kappa assumes lambda << L_par; reduce it smoothly when collisionless
+      const Field3D lambda = sqrt(floor(T, 0.0) / AA) * tau; // v_th * tau
+      kappa_par *=
+          freeStreamingFactor(T, lambda, all_L_line[name], all_kappa_free_streaming_c[name],
+                              all_kappa_free_streaming_gradient[name]);
+      mesh->communicate(kappa_par); // Grad_par leaves the guard cells unset
+    }
 
     if (kappa_limit_alpha > 0.0) {
       /*

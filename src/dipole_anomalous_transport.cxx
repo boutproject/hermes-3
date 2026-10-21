@@ -31,10 +31,14 @@ DipoleAnomalousDiffusion::DipoleAnomalousDiffusion(std::string name, Options& al
   // Converts an input diffusion coefficient to the normalised D used in the
   // operators, depending on the model:
   // 1: D = value/(R^2 B^2), value in [Wb^2 rad^-2 s^-1] (OSTR-Mod.1 eq. 38)
-  // 2: D = value/R^2, 3: D = value B^2/R^2, other: D = value in [m^2/s]
-  const std::string model_doc = "1: D = value/(R^2 B^2) with value in [Wb^2 rad^-2 "
-                                "s^-1] (OSTR-Mod.1 eq. 38), 2: value/R^2, 3: value "
-                                "B^2/R^2, other: D = value in [m^2/s]";
+  // 2: D = value/R^2, value in [m^4 s^-1]
+  // 3: D = value/(R^2 B^4), value in [T^4 m^4 s^-1]
+  // other: D = value in [m^2 s^-1]
+  // R B is taken from g11 = (R Bp)^2, so B = Bp is assumed (no toroidal field)
+  const std::string model_doc =
+      "1: D = value/(R^2 B^2) with value in [Wb^2 rad^-2 s^-1] (OSTR-Mod.1 eq. 38), "
+      "2: D = value/R^2 with value in [m^4 s^-1], 3: D = value/(R^2 B^4) with value "
+      "in [T^4 m^4 s^-1], other: D = value in [m^2 s^-1]";
   auto model_scaling = [&](int model) {
     Field2D scale{zeroFrom(B2D)};
     BOUT_FOR(i, scale.getRegion("RGN_ALL")) {
@@ -91,35 +95,24 @@ DipoleAnomalousDiffusion::DipoleAnomalousDiffusion(std::string name, Options& al
                              .withDefault(dipole_quasilinear_D)
                          * model_scaling(dipole_quasilinear_model);
 
-  // Radial profile of the flux function Dpsi(psi)
-  Field2D Psixy;
-  Psixy.allocate();
-  mesh->get(Psixy, "psixy");
-  BoutReal psi_axis, psi_bndry;
-  mesh->get(psi_axis, "psi_axis");
-  mesh->get(psi_bndry, "psi_bndry");
-  output.write("psi_axis: {:e}, psi_bndry: {:e}\n", psi_axis, psi_bndry);
-
-  BoutReal psi_core =
-      options["psi_core"].doc("Core flux value for normalisation").withDefault(-0.48);
-  BoutReal psi_edge =
-      options["psi_edge"].doc("Edge flux value for normalisation").withDefault(-0.11);
-  BoutReal pow_psi = options["pow_psi"]
-                         .doc("Power of psi to use in diffusion coefficient")
-                         .withDefault(1.0);
-  output.write("psi_core: {:e}, psi_edge: {:e}", psi_core, psi_edge);
-  Psixy = (Psixy - psi_core) / (psi_edge - psi_core);
-  mesh->communicate(Psixy);
-  output.write("psixy: {:e}, {:e}", Psixy(2, 2), Psixy(10, 30));
-  BOUT_FOR(i, dipole_quasilinear_D.getRegion("RGN_ALL")) {
-    dipole_quasilinear_D[i] = dipole_quasilinear_D[i] * pow(abs(Psixy[i]), pow_psi);
-  }
-
   dipole_gamma = options["dipole_gamma"].doc("Adiabatic index").withDefault(5.0 / 3.0);
   dipole_upwind =
       options["dipole_upwind"]
           .doc("Use upwind instead of central Div_a_Grad_perp for dipole fluxes?")
           .withDefault(true);
+
+  // Dipole transport only on closed field lines (periodic in y). On the face between
+  // the last closed and first open cell the operators still see half (central) or
+  // all-or-nothing (upwind) of the core coefficient
+  Field2D closed{zeroFrom(B2D)};
+  for (int x = 0; x < mesh->LocalNx; x++) {
+    for (int y = 0; y < mesh->LocalNy; y++) {
+      closed(x, y) = mesh->periodicY(x) ? 1.0 : 0.0;
+    }
+  }
+  dipole_anomalous_D *= closed;
+  dipole_anomalous_chi *= closed;
+  dipole_quasilinear_D *= closed;
 
   mesh->communicate(dipole_anomalous_D);
   mesh->communicate(dipole_anomalous_chi);

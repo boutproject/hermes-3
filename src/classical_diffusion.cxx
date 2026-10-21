@@ -76,6 +76,8 @@ void ClassicalDiffusion::transform_impl(GuardedOptions& state) {
 
   // Set D to zero in all guard cells
   BOUT_FOR(i, Dn.getRegion("RGN_GUARDS")) { Dn[i] = 0.0; }
+  // Restore processor-boundary guards, so both sides of a face use the same D
+  bout::globals::mesh->communicate(Dn);
 
   for (auto kv : allspecies.getChildren()) {
     GuardedOptions species = allspecies[kv.first]; // Note: Need non-const
