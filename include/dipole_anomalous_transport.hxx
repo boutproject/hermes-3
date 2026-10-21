@@ -25,6 +25,9 @@ struct DipoleAnomalousDiffusion : public NamedComponent<DipoleAnomalousDiffusion
   ///   - dipole_quasilinear_D      Quasilinear diffusion flux function Dpsi
   ///   - dipole_quasilinear_model  Scaling of dipole_quasilinear_D. Default 1:
   ///                               D = Dpsi/(R^2 B^2), Dpsi in [Wb^2 rad^-2 s^-1]
+  ///   - dipole_quasilinear_closure  Scale dipole_quasilinear_D (then D0) by d/gamma,
+  ///                               d = -dln p/dln U, p the total charged pressure,
+  ///                               U = int dl/B. Default false
   ///   - dipole_gamma          Adiabatic index. Default 5/3
   ///   - dipole_upwind         Use upwind operators? Default true
   DipoleAnomalousDiffusion(std::string name, Options &alloptions, Solver *);
@@ -43,6 +46,13 @@ private:
   Field2D B2D;
   bool dipole_inner_noflux_particle; ///< No quasilinear particle flux at inner x?
   bool dipole_inner_noflux_heat;     ///< No quasilinear entropy (heat) flux at inner x?
+  /// Drop the geometric (convective) part of the quasilinear particle / entropy flux
+  /// at the inner x face, so the n and p boundary conditions set the flux there
+  bool dipole_inner_noconvection_particle;
+  bool dipole_inner_noconvection_heat;
+
+  bool dipole_quasilinear_closure; ///< D(psi) = D0 d/gamma?
+  Field2D closure_d;               ///< Interchange drive d = -dln p/dln U
 
   BoutReal dipole_gamma; ///< Adiabatic index
   bool dipole_upwind;    ///< Use upwind gradients for dipole fluxes?
