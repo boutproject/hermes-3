@@ -136,6 +136,7 @@ jobs:
           git submodule status external/BOUT-dev > bout_build_info.txt
           echo "Build type: $BUILD_TYPE" >> bout_build_info.txt
           echo "$BOUT_CONFIGURE_OPTIONS" >> bout_build_info.txt
+          lsb_release -sd >> bout_build_info.txt
           pip freeze | grep numpy >> bout_build_info.txt
           echo "${{ hashFiles('./external/BOUT-dev/.build_sundials_for_ci.sh') }}" >> bout_build_info.txt
           cat bout_build_info.txt
@@ -144,7 +145,7 @@ jobs:
         uses: actions/cache@v6
         with:
           path: /home/runner/local_bout
-          key: bout-${{ env.ImageOS }}-${{ hashFiles('bout_build_info.txt', 'ci/build_bout_for_ci.sh') }}
+          key: bout-${{ matrix.config.os }}-${{ hashFiles('bout_build_info.txt', 'ci/build_bout_for_ci.sh') }}
 
       - name: Build BOUT++
         run: ./ci/build_bout_for_ci.sh
