@@ -22,15 +22,17 @@
 using bout::globals::mesh;
 
 Penalisation::Penalisation(const std::string& name, Options& alloptions, Solver*)
-    : NamedComponent(name, {
-                               readWrite("fields:penalisation_wall"),
-                           }) {
+    : NamedComponent(
+          name, {readWrite("fields:penalisation_wall"), readWrite("penalisation_mode")}) {
 
   mesh->get(penalisation_wall, "penalisation_wall");
+
+  mode = alloptions[name]["mode"].withDefault<int>(1);
 }
 
 void Penalisation::transform_impl(GuardedOptions& state) {
 
+  set(state["penalisation_mode"], mode);
   auto fields = state["fields"];
   set(fields["penalisation_wall"], penalisation_wall);
 }

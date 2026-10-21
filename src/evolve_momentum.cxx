@@ -29,7 +29,8 @@ using bout::globals::mesh;
 EvolveMomentum::EvolveMomentum(std::string name, Options& alloptions, Solver* solver)
     : NamedComponent(name, {readOnly("species:{name}:AA"),
                             readOnly("species:{name}:density", Regions::Interior),
-                            readWrite("species:{name}:{outputs}")}),
+                            readWrite("species:{name}:{outputs}"),
+                            readOnly("penalisation_mode")}),
       name(name) {
 
   // Evolve the momentum in time
@@ -276,9 +277,9 @@ void EvolveMomentum::finally(const Options& state) {
   ddt(NV) += NV_err;
 
   if (state["fields"].isSet("penalisation_wall")) {
-    ddt(NV) = penalisation::neumann(NV, ddt(NV),
-                                    get<Field3D>(state["fields"]["penalisation_wall"]),
-                                    penalisation_time, 0.0);
+    ddt(NV) = penalisation::neumann(
+        NV, ddt(NV), get<Field3D>(state["fields"]["penalisation_wall"]),
+        penalisation_time, 0.0, get<int>(state["penalisation_mode"]));
   }
 
   // Scale time derivatives

@@ -36,7 +36,7 @@ struct Penalisation : public NamedComponent<Penalisation> {
 private:
   Field3D penalisation_wall;
   Field3D tau;
-
+  int mode;
   void transform_impl(GuardedOptions& state) override;
 };
 
