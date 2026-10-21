@@ -29,6 +29,8 @@ struct Penalisation : public NamedComponent<Penalisation> {
   Penalisation(const std::string& name, Options& UNUSED(alloptions),
                Solver* UNUSED(solver));
 
+  void outputVars(Options& state) override;
+
   static constexpr auto type = "penalisation";
 
 private:
@@ -44,8 +46,8 @@ RegisterComponent<Penalisation> registercomponentpenalisation;
 
 namespace penalisation {
 
-const Field3D neumann(const Field3D& f, const Field3D& ddt_f, const Field3D& pen,
-                      const BoutReal pen_time, const BoutReal f_floor);
+Field3D neumann(const Field3D& f, const Field3D& ddt_f, const Field3D& pen,
+                const BoutReal pen_time, const BoutReal f_floor, const int mode = 1);
 
 }
 
