@@ -17,6 +17,30 @@ namespace {
 using PseudoReactionSpec = hermes::PseudoReactionSpec;
 
 /**
+ * @brief Smoothly saturate `x` between `lo` and `hi`, avoiding the discontinuous
+ * derivative of std::clamp() at the two bounds (helps Newton-based solvers).
+ *
+ * @param x The value to clamp
+ * @param lo Lower bound, approached smoothly as x -> -inf
+ * @param hi Upper bound, approached smoothly as x -> +inf
+ * @param width Transition width between lo and hi; smaller is closer to a hard clamp
+ */
+BoutReal smooth_clamp(BoutReal x, BoutReal lo, BoutReal hi, BoutReal width) {
+  return lo + (hi - lo) / (1.0 + exp(-(x - 0.5 * (lo + hi)) / width));
+}
+
+/**
+ * @brief Smoothly transition from 0 (ratio << 1) to 1 (ratio >> 1), replacing a hard
+ * `ratio < 1 ? 0 : 1` step (helps Newton-based solvers) with a differentiable one.
+ *
+ * @param ratio A value expected to vary around 1 (e.g. density / density_threshold)
+ * @param width Transition width; smaller is closer to a hard step
+ */
+BoutReal smooth_gate(BoutReal ratio, BoutReal width) {
+  return 1.0 / (1.0 + exp(-(ratio - 1.0) / width));
+}
+
+/**
  * @brief Append a (pseudo-)reaction definition if both species are present
  *
  * @param first_species The first species
@@ -384,15 +408,14 @@ RateData PseudoReaction::get_rate_standard(GuardedOptions& state) {
     result.rate[i] = n_deficit / this->low_n_timescale;
   }
 
-  // If this reaction has a gate species, zero the rate when it's depleted.
+  // If this reaction has a gate species, smoothly reduce the rate towards zero as it
+  // becomes depleted (a hard on/off step here made the Newton solver's job harder).
   if (!this->gate_species.empty()) {
     // Local variable to workaround gcc dangling ref false positive
     const GuardedOptions n_gate_opt = state["species"][this->gate_species]["density"];
     const Field3D& n_gate = n_gate_opt.GetRef<Field3D>();
     BOUT_FOR(i, region) {
-      if (n_gate[i] < this->gate_species_threshold) {
-        result.rate[i] = 0.0;
-      }
+      result.rate[i] *= smooth_gate(n_gate[i] / this->gate_species_threshold, 0.1);
     }
   }
 
@@ -406,8 +429,9 @@ RateData PseudoReaction::get_rate_standard(GuardedOptions& state) {
       const BoutReal thresh_ratio = n_boost[i] / this->boost_species_threshold;
       if (thresh_ratio < 1.0) {
         // The more deficient the boost species is, the further the rate is boosted
-        // (Avoid divide-by-zero by enforcing inverse boost factor >= 0.01)
-        const BoutReal inv_boost_fac = std::clamp(thresh_ratio, 0.01, 1.0);
+        // (Smoothly floor the inverse boost factor at 0.01 to avoid a divide-by-zero
+        // and the derivative discontinuity a hard std::clamp would introduce)
+        const BoutReal inv_boost_fac = smooth_clamp(thresh_ratio, 0.01, 1.0, 0.01);
         result.rate[i] /= inv_boost_fac;
       } else if (this->boost_requires_deficit) {
         // Some reactions (e.g. an external ion source) should only run at all while

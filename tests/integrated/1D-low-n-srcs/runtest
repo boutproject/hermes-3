@@ -5,14 +5,12 @@
 #
 # Note that the correctness of source values (as opposed to just source activation state) is checked by the unit tests.
 
-from __future__ import division
-from __future__ import print_function
-
-from boututils.run_wrapper import launch_safe
+import pathlib
+import sys
 
 import numpy as np
-import pathlib
 import xhermes
+from boututils.run_wrapper import launch_safe
 
 this_dir = pathlib.Path(__file__).parent
 data_dir = this_dir / "data"
@@ -74,12 +72,12 @@ def compute_trigger_mask(
 def end_test(success, msg="", err_code=1):
     if success:
         print(" => Test passed")
-        exit(0)
+        sys.exit(0)
     else:
         print(" => Test failed")
         if msg:
             print(msg)
-        exit(err_code)
+        sys.exit(err_code)
 
 
 def fail_on_missing_data():
@@ -173,32 +171,64 @@ for atom_sp in ["d", "t"]:
         source_name = f"S{target_sp}_low-n_{src_type}"
         source = ds[source_name].values
 
-        # Check that the source is +ve when the trigger should activate, zero otherwise
-        source_state_correct = np.all(np.where(trigger_mask, source > 0, source == 0))
+        # The smoothed low-n source law is continuous near the activation thresholds.
+        # Check the robust features of that law instead of expecting a sharp on/off switch.
+        floor_to_th_fac = ds.options["low_n_sources"]["low_n_floor_fac"]
+        nth = (
+            ds.options[target_sp].as_dict().get("density_floor", 1e-7) * floor_to_th_fac
+        )
+
+        ntarget = np.asarray(get_density(ds, target_sp, "target").values)
+        source = np.asarray(ds[source_name].values)
+
+        # Strictly active region: target is below threshold and all gating/boosting
+        # conditions are satisfied.
+        active_mask = np.asarray(trigger_mask, dtype=bool).copy()
+        active_mask &= ntarget < nth
+
+        # Clearly inactive region: target is safely above threshold or gate/boost species
+        # are safely away from the activation threshold.
+        inactive_mask = ntarget > 2.0 * nth
+        if gate_sp:
+            ngate = np.asarray(get_density(ds, gate_sp, "gate").values)
+            ngate_th = (
+                ds.options[gate_sp].as_dict().get("density_floor", 1e-7)
+                * floor_to_th_fac
+            )
+            inactive_mask |= ngate < 0.5 * ngate_th
+        if boost_sp:
+            nboost = np.asarray(get_density(ds, boost_sp, "boost").values)
+            boost_th = (
+                ds.options[boost_sp].as_dict().get("density_floor", 1e-7)
+                * floor_to_th_fac
+            )
+            inactive_mask |= nboost > 1.5 * boost_th
+
+        source_state_correct = np.all(np.isfinite(source))
+        source_state_correct &= np.all(source >= 0.0)
+        source_state_correct &= np.all(source[active_mask] > 0.0)
+        source_state_correct &= np.all(source[inactive_mask] <= 1e-12)
         success &= source_state_correct
 
         # Extra debugging info (if enabled) when the source state wasn't as expected.
         if debug and not source_state_correct:
-            print(f"DEBUG: {source_name} source didn't turn on/off where expected.")
+            print(
+                f"DEBUG: {source_name} source didn't match the expected smoothed activation pattern."
+            )
             print(
                 "DEBUG: Checking each time output separately (will exit on first error)"
             )
-            for tidx, trigger_mask_t in enumerate(trigger_mask):
+            for tidx, active_t in enumerate(active_mask):
+                inactive_t = inactive_mask[tidx]
                 source_t = source[tidx]
-                if not np.all(source_t[trigger_mask_t] > 0):
+                if not np.all(source_t[active_t] > 0):
                     print(
-                        f"  ERROR: t = {tidx}: source {source_name} not positive at all expected points"
-                    )
-                    print(
-                        f"  (source size is {source_t.size}, mask size is {trigger_mask_t.size})"
+                        f"  ERROR: t = {tidx}: source {source_name} not positive at all active points"
                     )
                     break
-                if not np.all(source_t[~trigger_mask_t] == 0):
+                if not np.all(source_t[inactive_t] <= 1e-12):
                     print(
-                        f"  ERROR: t = {tidx}: source {source_name} not zero at all expected points"
-                    )
-                    print(
-                        f"  (source size is {source_t.size}, mask size is {trigger_mask_t.size})"
+                        f"  ERROR: t = {tidx}: source {source_name} not effectively zero in clearly inactive points"
                     )
                     break
                 print(f"  DEBUG: t = {tidx} state correct")

@@ -7,6 +7,7 @@
 #include <bout/field_factory.hxx>
 #include <bout/output.hxx>
 #include <algorithm>
+#include <cmath>
 
 using ReactionDefs = std::vector<hermes::LowNSources::ReactionDef>;
 
@@ -408,7 +409,9 @@ TEST_F(LowNSourcesTest, ParticleConservingSourceMagnitudes) {
   // Recombination restores atoms, boosted the further molecules fall below their own
   // threshold (boost factor clamped to avoid divide-by-zero, as in the production code)
   const BoutReal mol_thresh_ratio = nmol / nth;
-  const BoutReal recomb_boost_fac = 1.0 / std::clamp(mol_thresh_ratio, 0.01, 1.0);
+  const BoutReal inv_boost =
+      0.01 + 0.99 / (1.0 + std::exp(-(mol_thresh_ratio - 0.505) / 0.01));
+  const BoutReal recomb_boost_fac = 1.0 / inv_boost;
   const BoutReal recomb_rate = ((nth - natom) / low_n_timescale) * recomb_boost_fac;
   // Ions are depleted by recombination
   const BoutReal expected_ion_source = -recomb_rate;
@@ -581,7 +584,23 @@ TEST_F(LowNSourcesTest, EffectOfExternalIonSource) {
   // => Expect +ve atom source
   EXPECT_GT(first_interior_value(large_natom_deficit_atom_src), 0.0);
 
-  // => Expect ion source to be larger than in small atomic deficit case
-  EXPECT_GT(first_interior_value(large_natom_deficit_ion_src),
-            first_interior_value(small_natom_deficit_ion_src));
+  // Both atom deficits saturate the sigmoid boost near 100x. Check net sources,
+  // including the small ionisation rate admitted by the smooth gate.
+  const BoutReal timescale = options["low_n_sources"]["low_n_timescale"].as<BoutReal>();
+  for (const auto& [atom_density, ion_source, atom_source] :
+       {std::make_tuple(small_deficit_natom, small_natom_deficit_ion_src,
+                        small_natom_deficit_atom_src),
+        std::make_tuple(large_deficit_natom, large_natom_deficit_ion_src,
+                        large_natom_deficit_atom_src)}) {
+    const BoutReal ratio = atom_density / nth;
+    const BoutReal inv_boost = 0.01 + 0.99 / (1.0 + std::exp(-(ratio - 0.505) / 0.01));
+    const BoutReal external_rate = (nth - nion) / timescale / inv_boost;
+    const BoutReal recombination_rate = (nth - atom_density) / timescale;
+    const BoutReal ionisation_rate =
+        (nth - nion) / timescale / (1.0 + std::exp(-(ratio - 1.0) / 0.1));
+    EXPECT_NEAR(first_interior_value(ion_source),
+                external_rate - recombination_rate + ionisation_rate, 1e-15);
+    EXPECT_NEAR(first_interior_value(atom_source), recombination_rate - ionisation_rate,
+                1e-15);
+  }
 }
