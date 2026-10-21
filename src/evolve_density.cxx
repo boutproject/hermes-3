@@ -29,9 +29,7 @@
 using bout::globals::mesh;
 
 EvolveDensity::EvolveDensity(std::string name, Options& alloptions, Solver* solver)
-    : NamedComponent(
-          name, {readWrite("species:{name}:{outputs}"), readOnly("penalisation_mode")}),
-      name(name) {
+    : NamedComponent(name, {readWrite("species:{name}:{outputs}")}), name(name) {
 
   auto& options = alloptions[name];
 
@@ -337,7 +335,7 @@ void EvolveDensity::finally(const Options& state) {
     ddt(logN) = ddt(N) / N;
   }
 
-  if (state["fields"].isSet("penalisation_wall")) {
+  if (state.isSection("fields") and state["fields"].isSet("penalisation_wall")) {
     ddt(N) = penalisation::neumann(
         N, ddt(N), get<Field3D>(state["fields"]["penalisation_wall"]), penalisation_time,
         1e-1, get<int>(state["penalisation_mode"]));

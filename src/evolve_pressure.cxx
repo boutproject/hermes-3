@@ -31,8 +31,7 @@ using bout::globals::mesh;
 
 EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* solver)
     : NamedComponent(name, {readOnly("species:{name}:{inputs}", Regions::Interior),
-                            readWrite("species:{name}:{outputs}"),
-                            readOnly("penalisation_mode")}),
+                            readWrite("species:{name}:{outputs}")}),
       name(name) {
 
   auto& options = alloptions[name];
@@ -414,7 +413,7 @@ void EvolvePressure::finally(const Options& state) {
     ddt(logP) = ddt(P) / P;
   }
 
-  if (state["fields"].isSet("penalisation_wall")) {
+  if (state.isSection("fields") and state["fields"].isSet("penalisation_wall")) {
     ddt(P) = penalisation::neumann(
         P, ddt(P), get<Field3D>(state["fields"]["penalisation_wall"]), penalisation_time,
         1e-5, get<int>(state["penalisation_mode"]));
