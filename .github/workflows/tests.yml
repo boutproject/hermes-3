@@ -65,7 +65,7 @@ jobs:
             hermes_configure_options: "-DHERMES_ERROR_ON_WARNINGS=ON
                                        -DBOUT_ENABLE_METRIC_3D=ON
                                        -DHERMES_DIVOPS_MMS_TESTS=OFF"
-          - cmake_build_type: RelWithDebugInfo
+          - cmake_build_type: RelWithDebInfo
             test_type: integration
             name: "3D metrics"
             bout_configure_options: "-DPACKAGE_TESTS=OFF
@@ -84,7 +84,8 @@ jobs:
       - name: Job information
         run: |
           echo Build: ${{ matrix.config.name }}, ${{ matrix.config.os }}
-          echo Configure options: ${{ matrix.build_type.configure_options }}
+          echo BOUT++ configure options: ${{ matrix.build_type.bout_configure_options }}
+          echo Hermes-3 configure options: ${{ matrix.build_type.hermes_configure_options }}
           echo Build type: ${{ matrix.build_type.cmake_build_type }}
           echo Coverage: ${{ matrix.build_type.coverage }}
           echo Tests to run: ${{ matrix.build_type.test_type }}
