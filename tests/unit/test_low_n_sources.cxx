@@ -4,7 +4,6 @@
 #include "low_n_sources.hxx"
 #include "species_parser.hxx"
 #include "test_extras.hxx"
-#include <bout/field_factory.hxx>
 #include <bout/output.hxx>
 #include <algorithm>
 #include <cmath>
@@ -91,30 +90,23 @@ void set_state(Options& state, BoutReal n_atom, BoutReal n_ion, BoutReal n_molec
   state["units"]["inv_meters_cubed"] = 1.0;
 
   Options& species = state["species"];
-  species[atom_species]["density"] =
-      FieldFactory::get()->create3D(std::to_string(n_atom), &state, mesh);
-  species[atom_species]["temperature"] =
-      FieldFactory::get()->create3D("1.0", &state, mesh);
-  species[atom_species]["velocity"] = FieldFactory::get()->create3D("2.0", &state, mesh);
+  species[atom_species]["density"] = Field3D(n_atom, mesh);
+  species[atom_species]["temperature"] = Field3D(1.0, mesh);
+  species[atom_species]["velocity"] = Field3D(2.0, mesh);
   species[atom_species]["AA"] = 2.0;
 
-  species[ion_species]["density"] =
-      FieldFactory::get()->create3D(std::to_string(n_ion), &state, mesh);
-  species[ion_species]["temperature"] =
-      FieldFactory::get()->create3D("1.0", &state, mesh);
-  species[ion_species]["velocity"] = FieldFactory::get()->create3D("1.0", &state, mesh);
+  species[ion_species]["density"] = Field3D(n_ion, mesh);
+  species[ion_species]["temperature"] = Field3D(1.0, mesh);
+  species[ion_species]["velocity"] = Field3D(1.0, mesh);
   species[ion_species]["AA"] = 2.0;
 
-  species[mol_species]["density"] =
-      FieldFactory::get()->create3D(std::to_string(n_molecule), &state, mesh);
-  species[mol_species]["temperature"] =
-      FieldFactory::get()->create3D("1.0", &state, mesh);
-  species[mol_species]["velocity"] = FieldFactory::get()->create3D("3.0", &state, mesh);
+  species[mol_species]["density"] = Field3D(n_molecule, mesh);
+  species[mol_species]["temperature"] = Field3D(1.0, mesh);
+  species[mol_species]["velocity"] = Field3D(3.0, mesh);
   species[mol_species]["AA"] = 4.0;
 
-  species["e"]["density"] =
-      FieldFactory::get()->create3D(std::to_string(n_electron), &state, mesh);
-  species["e"]["temperature"] = FieldFactory::get()->create3D("1.0", &state, mesh);
+  species["e"]["density"] = Field3D(n_electron, mesh);
+  species["e"]["temperature"] = Field3D(1.0, mesh);
   species["e"]["AA"] = 5.446e-4;
 }
 
