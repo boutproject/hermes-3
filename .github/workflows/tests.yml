@@ -92,6 +92,7 @@ jobs:
 
       - name: Install dependencies
         run: sudo apt update &&
+             sudo apt install -y ca-certificates &&
              sudo apt install -y
                  lcov
                  libfftw3-dev
