@@ -169,11 +169,14 @@ TEST(LowNSourcesConstructionTest, ConstructorBuildsOrderedPairsByElement) {
   // Ions, atom molecules for Deuterium, Tritium, Helium
   // => recombination, ionization, association, external_src for each isotope/element
   std::map<std::string, std::string> species_masses1 = {
-      {"d+", "2.0"}, {"d", "2.0"},   {"d2", "4.0"}, {"t+", "3.0"}, {"t", "3.0"},
-      {"t2", "6.0"}, {"he+", "2.0"}, {"he", "2.0"}, {"he2", "4.0"}};
+      {"d+", "2.0"}, {"d", "2.0"},  {"d2", "4.0"},  {"d2+", "4.0"}, {"t+", "3.0"},
+      {"t", "3.0"},  {"t2", "6.0"}, {"he+", "2.0"}, {"he", "2.0"},  {"he2", "4.0"}};
   ReactionDefs expected_pairs1({{"d+", "d", PseudoReactionType::recombination},
                                 {"d", "d+", PseudoReactionType::ionization},
                                 {"d", "d2", PseudoReactionType::association},
+                                {"d2", "d2+", PseudoReactionType::ionization},
+                                {"d2+", "d2", PseudoReactionType::external_src},
+                                {"d2+", "d2", PseudoReactionType::recombination},
                                 {"d+", "d", PseudoReactionType::external_src},
                                 {"t+", "t", PseudoReactionType::recombination},
                                 {"t", "t+", PseudoReactionType::ionization},

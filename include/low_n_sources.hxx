@@ -41,9 +41,9 @@ public:
   void outputVars(Options& state) final;
 
 private:
-  struct ElementSpeciesGroups {
+  struct BaseSpeciesGroups {
     std::string ion;
-    std::string atom;
+    std::string neutral;
     std::string molecule;
   };
 
@@ -62,14 +62,12 @@ private:
   std::map<std::string, BoutReal> density_thresholds;
 
   /// Species names extracted from the component list
-  std::vector<std::string> atom_species;
-  std::vector<std::string> ion_species;
-  std::vector<std::string> molecule_species;
+  std::vector<std::string> all_species;
 
   /// Species grouped by element
-  std::map<std::string, ElementSpeciesGroups> species_by_element;
+  std::map<std::string, BaseSpeciesGroups> species_by_base;
   /// First-seen order of elements for deterministic reaction ordering
-  std::vector<std::string> element_order;
+  std::vector<std::string> base_species_order;
 
   /// Reaction definitions, populated by populate_reaction_defs() and used to instantiate PseudoReaction objects
   mutable std::vector<ReactionDef> reaction_defs;

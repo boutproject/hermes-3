@@ -161,6 +161,28 @@ TEST_F(SpeciesParserTest, ParseElectron) {
   ASSERT_THROW(SpeciesParser("e+"), BoutException);
 }
 
+/// @brief Check that some properties of molecular species are parsed correctly.
+TEST_F(SpeciesParserTest, ParseMolecules) {
+
+  // A neutral molecule
+  SpeciesParser parser1("d2");
+  EXPECT_EQ(parser1.get_charge(), 0);
+  EXPECT_EQ(parser1.get_base_species(), "d2");
+  EXPECT_EQ(parser1.get_str(), "d2");
+
+  // A molecular ion
+  SpeciesParser parser2("d2+");
+  EXPECT_EQ(parser2.get_charge(), 1);
+  EXPECT_EQ(parser2.get_base_species(), "d2");
+  EXPECT_EQ(parser2.get_str(), "d2+");
+
+  // Another molecular ion
+  SpeciesParser parser3("he3+");
+  EXPECT_EQ(parser3.get_charge(), 1);
+  EXPECT_EQ(parser3.get_base_species(), "he3");
+  EXPECT_EQ(parser3.get_str(), "he3+");
+}
+
 /// @brief Check parsing of various negatively charged species.
 TEST_F(SpeciesParserTest, ParseNegativelyCharged) {
 

@@ -97,13 +97,13 @@ PseudoReactionSpec make_reaction_spec(PseudoReactionType type,
 /// @brief Convenience function to set a unique species or throw an exception if one is already set
 void set_unique_species_or_throw(std::string& existing_species,
                                  const std::string& new_species,
-                                 const std::string& element,
+                                 const std::string& base_species,
                                  const std::string& species_category) {
   if (!existing_species.empty()) {
     throw BoutException(
-        fmt::format("LowNSources supports at most one {} species per element. "
-                    "Element '{}' has '{}' and '{}'.",
-                    species_category, element, existing_species, new_species));
+        fmt::format("LowNSources supports at most one {} species per base species. "
+                    "Base species '{}' has '{}' and '{}'.",
+                    species_category, base_species, existing_species, new_species));
   }
   existing_species = new_species;
 }
@@ -120,7 +120,7 @@ LowNSources::LowNSources(std::string name, Options& options,
 LowNSources::LowNSources(std::string name, Options& options)
     : NamedComponent(name, {readOnly("species:{all_species}:{read_vals}"),
                             readWrite("species:{all_species}:{write_vals}")}),
-      options(options), atom_species{}, ion_species{}, molecule_species{} {
+      options(options), all_species{} {
   substitutePermissions("read_vals", {"AA", "density", "velocity", "temperature"});
   substitutePermissions("write_vals", {"density_source", "momentum_source",
                                        "energy_source", "collision_frequency"});
@@ -156,12 +156,14 @@ LowNSources::LowNSources(std::string name, Options& options)
   std::vector<std::string> species_with_mass;
   for (const auto& component : strsplit(component_names, ',')) {
     const std::string component_name = trim(component, " \t\r()");
+    // Species components must have 'AA' set
     if (component_name.empty() or !options[component_name].isSet("AA")) {
       continue;
     }
     species_with_mass.push_back(component_name);
     SpeciesParser species(component_name);
     append_species_by_type(species, SpeciesParser::get_type(species));
+    this->all_species.push_back(component_name);
   }
 
   // LowNSources can be instantiated directly in unit tests, bypassing scheduler-level
@@ -169,14 +171,11 @@ LowNSources::LowNSources(std::string name, Options& options)
   substitutePermissions("all_species", species_with_mass);
 
   // Set activation thresholds for each species now that species lists are populated
-  for (const auto& species_group :
-       {&this->ion_species, &this->atom_species, &this->molecule_species}) {
-    for (const auto& species_name : *species_group) {
-      const BoutReal density_floor = options[species_name]["density_floor"]
-                                         .doc("Minimum density floor")
-                                         .withDefault<BoutReal>(1e-7);
-      this->density_thresholds[species_name] = this->low_n_floor_fac * density_floor;
-    }
+  for (const auto& species_name : this->all_species) {
+    const BoutReal density_floor = options[species_name]["density_floor"]
+                                       .doc("Minimum density floor")
+                                       .withDefault<BoutReal>(1e-7);
+    this->density_thresholds[species_name] = this->low_n_floor_fac * density_floor;
   }
 
   instantiate_reactions();
@@ -184,26 +183,46 @@ LowNSources::LowNSources(std::string name, Options& options)
 
 void LowNSources::append_species_by_type(const SpeciesParser& species,
                                          SpeciesTypeAlt type) {
-  const std::string& species_name = species.get_str();
-  const std::string element = species.get_element();
+  // The full species string
+  const std::string& species_str = species.get_str();
+  const std::string element_str = species.get_element();
 
-  auto [it, inserted] = this->species_by_element.try_emplace(element);
-  if (inserted) {
-    this->element_order.push_back(element);
+  // First, register the species as an ion/neutral/molecule of a particular element
+  auto [element_group_it, element_group_inserted] =
+      this->species_by_base.try_emplace(element_str);
+  if (element_group_inserted) {
+    this->base_species_order.push_back(element_str);
   }
+  auto& element_group = element_group_it->second;
 
-  auto& groups = it->second;
-  if (type == SpeciesTypeAlt::ion or type == SpeciesTypeAlt::molecular_ion) {
-    set_unique_species_or_throw(groups.ion, species_name, element, "ion");
-    this->ion_species.push_back(species_name);
+  if (type == SpeciesTypeAlt::ion) {
+    set_unique_species_or_throw(element_group.ion, species_str, element_str, "ion");
   } else if (type == SpeciesTypeAlt::neutral) {
-    set_unique_species_or_throw(groups.atom, species_name, element, "atom");
-    this->atom_species.push_back(species_name);
+    set_unique_species_or_throw(element_group.neutral, species_str, element_str,
+                                "neutral");
   } else if (type == SpeciesTypeAlt::molecule) {
-    set_unique_species_or_throw(groups.molecule, species_name, element, "molecule");
-    this->molecule_species.push_back(species_name);
+    set_unique_species_or_throw(element_group.molecule, species_str, element_str,
+                                "molecule");
   }
 
+  // If the species is molecular add a separate group
+  //  (Since molecules and molecular ions may need to exchange particles)
+  if (species.is_molecule()) {
+    // Get the neutral molecule base (which is the same as species_str for neutral molecules, but not for molecular ions)
+    const std::string& mol_str = species.get_base_species();
+    auto [mol_group_it, mol_group_inserted] = this->species_by_base.try_emplace(mol_str);
+    if (mol_group_inserted) {
+      this->base_species_order.push_back(mol_str);
+    }
+    auto& mol_group = this->species_by_base.at(mol_str);
+    if (type == SpeciesTypeAlt::molecular_ion) {
+      // Treat it as an 'ion' of the molecule base
+      set_unique_species_or_throw(mol_group.ion, species_str, mol_str, "ion");
+    } else if (type == SpeciesTypeAlt::molecule) {
+      // Treat it as a 'neutral' of the molecule base
+      set_unique_species_or_throw(mol_group.neutral, species_str, mol_str, "neutral");
+    }
+  }
   this->reaction_defs_populated = false;
 }
 
@@ -222,9 +241,9 @@ void LowNSources::instantiate_reactions() {
   this->reactions.clear();
 
   std::size_t num_reactions = 0;
-  for (const auto& element : this->element_order) {
-    const auto& groups = this->species_by_element.at(element);
-    if (!groups.ion.empty() and !groups.atom.empty()) {
+  for (const auto& element : this->base_species_order) {
+    const auto& groups = this->species_by_base.at(element);
+    if (!groups.ion.empty() and !groups.neutral.empty()) {
       // recombination, ionization, external_src of ions
       num_reactions += 3;
     } else if (!groups.ion.empty()) {
@@ -232,7 +251,7 @@ void LowNSources::instantiate_reactions() {
       num_reactions += 1;
     }
     // association
-    if (!groups.atom.empty() and !groups.molecule.empty()) {
+    if (!groups.neutral.empty() and !groups.molecule.empty()) {
       num_reactions += 1;
     }
   }
@@ -240,8 +259,8 @@ void LowNSources::instantiate_reactions() {
   this->reaction_options_store.reserve(num_reactions);
   this->reactions.reserve(num_reactions);
 
-  for (const auto& element : this->element_order) {
-    const auto& groups = this->species_by_element.at(element);
+  for (const auto& element : this->base_species_order) {
+    const auto& groups = this->species_by_base.at(element);
 
     // Add a pseudo-reaction if both `species1` and `species2` are present.
     // `gate_species`, if given, disables the reaction entirely while it is in deficit;
@@ -299,19 +318,19 @@ void LowNSources::instantiate_reactions() {
         };
 
     // Recombination restores the atom population and is boosted further when molecules are also depleted.
-    add_reaction_if_present(groups.ion, groups.atom, PseudoReactionType::recombination,
+    add_reaction_if_present(groups.ion, groups.neutral, PseudoReactionType::recombination,
                             "", groups.molecule);
     // Ionization restores the ion population, but only when there are enough atoms to do so.
-    add_reaction_if_present(groups.atom, groups.ion, PseudoReactionType::ionization,
-                            groups.atom);
+    add_reaction_if_present(groups.neutral, groups.ion, PseudoReactionType::ionization,
+                            groups.neutral);
     // Association restores the molecule population.
-    add_reaction_if_present(groups.atom, groups.molecule,
+    add_reaction_if_present(groups.neutral, groups.molecule,
                             PseudoReactionType::association);
-    if (!groups.atom.empty()) {
+    if (!groups.neutral.empty()) {
       // When atoms and ions are both present, the external ion source is enabled only when BOTH are depleted.
       // It is boosted by the level of atom depletion.
-      add_reaction_if_present(groups.ion, groups.atom, PseudoReactionType::external_src,
-                              "", groups.atom, true);
+      add_reaction_if_present(groups.ion, groups.neutral,
+                              PseudoReactionType::external_src, "", groups.neutral, true);
     } else {
       // With no atom species, the external ion source only responds to the ion deficit.
       add_reaction_if_present(groups.ion, groups.ion, PseudoReactionType::external_src);
@@ -326,19 +345,21 @@ void LowNSources::populate_reaction_defs() const {
 
   this->reaction_defs.clear();
 
-  for (const auto& element : this->element_order) {
-    const auto& groups = this->species_by_element.at(element);
+  for (const auto& base_species : this->base_species_order) {
+    const auto& groups = this->species_by_base.at(base_species);
 
     // Add reaction definitions.  If a required species isn't present, no definition is generated
-    append_reaction_def_if_present(
-        groups.ion, groups.atom, PseudoReactionType::recombination, this->reaction_defs);
-    append_reaction_def_if_present(groups.atom, groups.ion,
+    append_reaction_def_if_present(groups.ion, groups.neutral,
+                                   PseudoReactionType::recombination,
+                                   this->reaction_defs);
+    append_reaction_def_if_present(groups.neutral, groups.ion,
                                    PseudoReactionType::ionization, this->reaction_defs);
-    append_reaction_def_if_present(groups.atom, groups.molecule,
+    append_reaction_def_if_present(groups.neutral, groups.molecule,
                                    PseudoReactionType::association, this->reaction_defs);
-    if (!groups.atom.empty()) {
-      append_reaction_def_if_present(
-          groups.ion, groups.atom, PseudoReactionType::external_src, this->reaction_defs);
+    if (!groups.neutral.empty()) {
+      append_reaction_def_if_present(groups.ion, groups.neutral,
+                                     PseudoReactionType::external_src,
+                                     this->reaction_defs);
     } else {
       append_reaction_def_if_present(
           groups.ion, groups.ion, PseudoReactionType::external_src, this->reaction_defs);
