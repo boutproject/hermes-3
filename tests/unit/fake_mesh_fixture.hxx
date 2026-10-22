@@ -15,6 +15,7 @@
 #include <bout/griddata.hxx>
 #include <bout/mesh.hxx>
 #include <bout/mpi_wrapper.hxx>
+#include <bout/msg_stack.hxx>
 #include <bout/operatorstencil.hxx>
 #include <bout/output.hxx>
 #include <bout/paralleltransform.hxx>

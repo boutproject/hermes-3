@@ -75,3 +75,30 @@ TEST_F(EvolveMomentumTest, Finally) {
     ASSERT_DOUBLE_EQ(0.5, ddt_NVi[i]);
   }
 }
+
+TEST_F(EvolveMomentumTest, FinallyScalesMomentumTimeDerivative) {
+  FakeSolver solver;
+
+  Options options{{"units", {{"eV", 1.0}, {"inv_meters_cubed", 1.0}, {"seconds", 1.0}}},
+                  {"i", {{"AA", 2.0}, {"charge", 1.0}, {"scale_momentum_ddt", 2.0}}}};
+  EvolveMomentum component("i", options, &solver);
+
+  const Options state = {{"fastest_wave", 0.0},
+                         {"species",
+                          {{"i",
+                            {{"AA", 1.0},
+                             {"density", 1.0},
+                             {"momentum", 0.0},
+                             {"velocity", 0.0},
+                             {"momentum_source", 0.5}}}}}};
+  component.finally(state);
+
+  Options ddt = solver.getTimeDerivs();
+
+  ASSERT_TRUE(ddt.isSet("NVi"));
+  Field3D ddt_NVi = ddt["NVi"].as<Field3D>();
+
+  BOUT_FOR_SERIAL(i, ddt_NVi.getRegion("RGN_NOBNDRY")) {
+    ASSERT_DOUBLE_EQ(1.0, ddt_NVi[i]);
+  }
+}
