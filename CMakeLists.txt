@@ -75,6 +75,7 @@ set(HERMES_SOURCES
     src/cx_reaction.cxx
     src/ionisation.cxx
     src/izn_rec_reaction.cxx
+    src/kmodel.cxx
     src/div_ops.cxx
     src/neutral_mixed.cxx
     src/neutral_full_velocity.cxx
@@ -156,6 +157,7 @@ set(HERMES_SOURCES
     include/solkit_hydrogen_charge_exchange.hxx
     include/integrate.hxx
     include/ionisation.hxx
+    include/kmodel.hxx
     include/izn_rec_reaction.hxx
     include/neutral_boundary.hxx
     include/neutral_mixed.hxx
