@@ -1,5 +1,5 @@
-from boutdata import collect
 import matplotlib.pyplot as plt
+from boutdata import collect
 
 path = "."
 names = ["Te", "Td+"]

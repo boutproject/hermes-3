@@ -9,6 +9,8 @@
 
 #include <bout/vector2d.hxx>
 
+#if not BOUT_USE_METRIC_3D
+
 /// Neutral gas model, evolving three components of velocity as axisymmetric fields
 ///
 /// Evolves neutral density, pressure and velocity as Field2D quantities
@@ -100,5 +102,11 @@ private:
 namespace {
 RegisterComponent<NeutralFullVelocity> registersolverneutralfullvelocity;
 }
-
+#else  // not BOUT_USE_METRIC_3D
+namespace {
+RegisterUnavailableComponent
+    registersolverneutralfullvelocity("neutral_full_velocity",
+                                      "This not (yet) compatible with 3D metrics");
+}
+#endif // not BOUT_USE_METRIC_3D
 #endif // NEUTRAL_FULL_VELOCITY_H

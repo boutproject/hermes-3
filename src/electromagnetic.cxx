@@ -1,8 +1,18 @@
 #include "../include/electromagnetic.hxx"
 
+#include "../include/component.hxx"
+#include "../include/guarded_options.hxx"
+#include "../include/permissions.hxx"
+
+#include <bout/bout_types.hxx>
 #include <bout/constants.hxx>
+#include <bout/field3d.hxx>
 #include <bout/invert_laplace.hxx>
 #include <bout/mesh.hxx>
+#include <bout/options.hxx>
+#include <bout/output.hxx>
+
+#include <string>
 
 // Set the default acceptance tolerances for the Naulin solver.
 // These are used if the maximum iterations is reached.
@@ -14,12 +24,13 @@ BOUT_OVERRIDE_DEFAULT_OPTION("electromagnetic:laplacian:atol_accept", 1e-6);
 BOUT_OVERRIDE_DEFAULT_OPTION("electromagnetic:laplacian:maxits", 1000);
 
 Electromagnetic::Electromagnetic(std::string name, Options& alloptions, Solver* solver)
-    : NamedComponent(name, {readIfSet("species:{all_species}:charge"),
-                            writeFinal("species:{all_species}:momentum"),
-                            writeFinal("species:{all_species}:velocity"),
-                            readOnly("time"), readOnly("species:{all_species}:AA"),
-                            readOnly("species:{all_species}:density", Regions::Interior),
-                            readWrite("fields:Apar")}) {
+    : NamedComponent(name,
+                     {readIfSet("species:{all_species}:charge"),
+                      writeFinal("species:{all_species}:momentum", Regions::Interior),
+                      writeFinal("species:{all_species}:velocity", Regions::Interior),
+                      readOnly("time"), readOnly("species:{all_species}:AA"),
+                      readOnly("species:{all_species}:density", Regions::Interior),
+                      readWrite("fields:Apar")}) {
 
   Options& units = alloptions["units"];
   BoutReal Bnorm = units["Tesla"];
@@ -133,7 +144,7 @@ void Electromagnetic::transform_impl(GuardedOptions& state) {
     // Cannot rely on boundary conditions being set
     const Field3D N = GET_NOBOUNDARY(Field3D, species["density"]);
     // Non-final because we're going to change momentum
-    const Field3D mom = getNonFinal<Field3D>(species["momentum"]);
+    const Field3D mom = getNonFinal<Field3D>(species["momentum"], Regions::Interior);
     const BoutReal A = get<BoutReal>(species["AA"]);
 
     // Coefficient in front of A_||
@@ -166,7 +177,7 @@ void Electromagnetic::transform_impl(GuardedOptions& state) {
         for (int z = mesh->zstart; z <= mesh->zend; z++) {
           rhs(x, y, z) = (weight * (Apar(x + 1, y, z) - Apar(x, y, z))
                           + (1 - weight) * (Apar(x + 2, y, z) - Apar(x + 1, y, z)))
-                         / (sqrt(coords->g_11(x, y)) * coords->dx(x, y));
+                         / (sqrt(coords->g_11(x, y, z)) * coords->dx(x, y, z));
         }
       }
     }
@@ -176,7 +187,7 @@ void Electromagnetic::transform_impl(GuardedOptions& state) {
         for (int z = mesh->zstart; z <= mesh->zend; z++) {
           rhs(x, y, z) = (weight * (Apar(x, y, z) - Apar(x - 1, y, z))
                           + (1 - weight) * (Apar(x - 1, y, z) - Apar(x - 2, y, z)))
-                         / sqrt(coords->g_11(x, y)) / coords->dx(x, y);
+                         / sqrt(coords->g_11(x, y, z)) / coords->dx(x, y, z);
         }
       }
     }
@@ -203,18 +214,18 @@ void Electromagnetic::transform_impl(GuardedOptions& state) {
     const BoutReal A = get<BoutReal>(species["AA"]);
     const Field3D N = GET_NOBOUNDARY(Field3D, species["density"]);
 
-    Field3D nv = getNonFinal<Field3D>(species["momentum"]);
+    Field3D nv = getNonFinal<Field3D>(species["momentum"], Regions::Interior);
     nv -= Z * N * Apar;
     // Note: velocity is momentum / (A * N)
-    Field3D v = getNonFinal<Field3D>(species["velocity"]);
+    Field3D v = getNonFinal<Field3D>(species["velocity"], Regions::Interior);
     v -= (Z / A) * N * Apar / floor(N, 1e-5);
     // Need to update the guard cells
     bout::globals::mesh->communicate(nv, v);
     v.applyBoundary("dirichlet");
     nv.applyBoundary("dirichlet");
 
-    set(species["momentum"], nv);
-    set(species["velocity"], v);
+    setNoBoundary(species["momentum"], nv);
+    setNoBoundary(species["velocity"], v);
   }
 
   if (magnetic_flutter) {
@@ -234,7 +245,7 @@ void Electromagnetic::transform_impl(GuardedOptions& state) {
     Vector3D A;
     A.covariant = true;
     A.x = A.z = 0.0;
-    A.y = Apar_flutter * (coords->J * coords->Bxy);
+    A.y = Apar_flutter * (coords->J() * coords->Bxy());
 
     // Perturbed magnetic field vector
     // Note: Contravariant components (dB_x, dB_y, dB_z)
@@ -242,8 +253,8 @@ void Electromagnetic::transform_impl(GuardedOptions& state) {
 
     // Set components of the perturbed unit vector
     // Note: Options can't (yet) contain vectors
-    set(state["fields"]["deltab_flutter_x"], delta_B.x / coords->Bxy);
-    set(state["fields"]["deltab_flutter_z"], delta_B.z / coords->Bxy);
+    setNoBoundary(state["fields"]["deltab_flutter_x"], delta_B.x / coords->Bxy());
+    setNoBoundary(state["fields"]["deltab_flutter_z"], delta_B.z / coords->Bxy());
 #endif
   }
 }

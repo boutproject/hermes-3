@@ -3,11 +3,11 @@
 # Plots logarithm of time derivatives as a function of output step
 #
 
-from boutdata import collect
-import numpy as np
-import matplotlib.pyplot as plt
-
 import argparse
+
+import matplotlib.pyplot as plt
+import numpy as np
+from boutdata import collect
 
 parser = argparse.ArgumentParser(description="Plot logarithm of time derivatives")
 parser.add_argument("datapath", type=str, help="The path to the data (BOUT.dmp files)")

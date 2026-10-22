@@ -173,6 +173,10 @@ void EvolveDensity::transform_impl(GuardedOptions& state) {
 
   mesh->communicate(N);
 
+  if (N.isFci()) {
+    N.applyParallelBoundary();
+  }
+
   if (neumann_boundary_average_z) {
     // Take Z (usually toroidal) average and apply as X (radial) boundary condition
     if (mesh->firstX()) {
@@ -206,11 +210,14 @@ void EvolveDensity::transform_impl(GuardedOptions& state) {
       }
     }
   }
-
+  if (N.isFci()) {
+    ASSERT2(N.hasParallelSlices());
+  }
   auto species = state["species"][name];
-  set(species["density"], floor(N, 0.0)); // Density in state always >= 0
-  set(species["AA"], AA);                 // Atomic mass
-  if (charge != 0.0) {                    // Don't set charge for neutral species
+  Field3DParallel floored_N = floor(N, 0.0);
+  set(species["density"], floored_N); // Density in state always >= 0
+  set(species["AA"], AA);             // Atomic mass
+  if (charge != 0.0) {                // Don't set charge for neutral species
     set(species["charge"], charge);
   }
 
@@ -220,7 +227,7 @@ void EvolveDensity::transform_impl(GuardedOptions& state) {
     auto* coord = mesh->getCoordinates();
 
     Field3D low_n_coeff =
-        SQ(coord->dy) * coord->g_22
+        SQ(coord->dy()) * coord->g_22()
         * log(density_floor / clamp(N, 1e-3 * density_floor, density_floor));
     low_n_coeff.applyBoundary("neumann");
     set(species["low_n_coeff"], low_n_coeff);
@@ -306,7 +313,7 @@ void EvolveDensity::finally(const Options& state) {
 
   if (hyper_z > 0.) {
     auto* coord = N.getCoordinates();
-    ddt(N) -= hyper_z * SQ(SQ(coord->dz)) * D4DZ4(N);
+    ddt(N) -= hyper_z * SQ(SQ(coord->dz())) * D4DZ4(N);
   }
 
   // Collect the external source from above with all the sources from
@@ -335,10 +342,14 @@ void EvolveDensity::finally(const Options& state) {
     // Save flows if they are set
 
     if (species.isSet("particle_flow_xlow")) {
-      flow_xlow = get<Field3D>(species["particle_flow_xlow"]);
+      flow_xlow = GET_VALUE(Field3D, species["particle_flow_xlow"]);
     }
     if (species.isSet("particle_flow_ylow")) {
-      flow_ylow += get<Field3D>(species["particle_flow_ylow"]);
+      if (species.isSet("velocity")) {
+        flow_ylow += GET_VALUE(Field3D, species["particle_flow_ylow"]);
+      } else {
+        flow_ylow = GET_VALUE(Field3D, species["particle_flow_ylow"]);
+      }
     }
   }
 }

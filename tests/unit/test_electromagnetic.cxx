@@ -29,6 +29,9 @@ TEST_F(ElectromagneticTest, TransformNoChargedSpecies) {
   // Transform with no charged species
   Options state = {{"species", {{"d", {{"AA", 2.0}}}}}};
 
+#if BOUT_USE_METRIC_3D
+  EXPECT_THROW(component.transform(state), BoutException);
+#else
   component.transform(state);
 
   // Apar should be set
@@ -40,6 +43,7 @@ TEST_F(ElectromagneticTest, TransformNoChargedSpecies) {
 
   // Apar_flutter should not be set
   EXPECT_FALSE(state["fields"]["Apar_flutter"].isSet());
+#endif
 }
 
 TEST_F(ElectromagneticTest, FlutterSetsField) {
@@ -51,6 +55,9 @@ TEST_F(ElectromagneticTest, FlutterSetsField) {
   // Transform with no charged species
   Options state = {{"species", {{"d", {{"AA", 2.0}}}}}};
 
+#if BOUT_USE_METRIC_3D
+  EXPECT_THROW(component.transform(state), BoutException);
+#else
   component.transform(state);
 
   // Apar should be set
@@ -64,4 +71,5 @@ TEST_F(ElectromagneticTest, FlutterSetsField) {
   BOUT_FOR_SERIAL(i, Apar_flutter.getRegion("RGN_NOBNDRY")) {
     ASSERT_DOUBLE_EQ(Apar_flutter[i], 0.0);
   }
+#endif
 }

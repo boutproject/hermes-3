@@ -3,6 +3,18 @@
 #define FIXED_DENSITY_H
 
 #include "component.hxx"
+#include "guarded_options.hxx"
+#include "permissions.hxx"
+
+#include <bout/assert.hxx>
+#include <bout/bout_types.hxx>
+#include <bout/field3d.hxx>
+#include <bout/globals.hxx>
+#include <bout/mesh.hxx>
+#include <bout/options.hxx>
+#include <bout/unused.hxx>
+
+#include <string>
 
 /// Set ion density to a fixed value
 ///
@@ -26,6 +38,13 @@ struct FixedDensity : public NamedComponent<FixedDensity> {
 
     // Get the density and normalise
     N = options["density"].as<Field3D>() / Nnorm;
+
+    bout::globals::mesh->communicate(N);
+    if (N.isFci()) {
+      N.applyParallelBoundary("parallel_neumann_o2");
+      ASSERT2(N.hasParallelSlices());
+    }
+
     substitutePermissions("name", {name});
     substitutePermissions("vars", {"AA", "charge", "density"});
   }

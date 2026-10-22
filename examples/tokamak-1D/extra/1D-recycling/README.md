@@ -25,7 +25,7 @@ If using the CVODE (Sundials) solver, preconditioning is strongly recommended.
 
 Without preconditioning:
 
-    ./hermes-3 -d examples/1D-recycling/ solver:use_precon=false
+    ./hermes-3 -d examples/1D-recycling/ solver:cvode_precon_method=none
 
     2.000e+03      60874       1.23e+02    96.7    0.0    0.3    0.0    2.9
     4.000e+03      30359       6.29e+01    96.7    0.0    0.3    0.0    2.9
@@ -33,7 +33,7 @@ Without preconditioning:
 
 With preconditioning:
 
-    ./hermes-3 -d examples/1D-recycling/ solver:use_precon=true
+    ./hermes-3 -d examples/1D-recycling/ solver:cvode_precon_method=user
 
     2.000e+03       5840       1.18e+01    87.9    0.0    0.2    0.3   11.6
     4.000e+03       2670       5.41e+00    87.5    0.0    0.2    0.5   11.8

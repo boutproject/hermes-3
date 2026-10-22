@@ -53,14 +53,16 @@ Configuring CVODE
 
    [solver]
    type = cvode
-   use_precon = true   # Use the user-provided preconditioner
-   mxstep = 1e9        # Prevent timeout
-   mxorder = 3         # Limit to 3rd order
+   cvode_precon_method = user  # Use the user-provided preconditioner
+   mxstep = 1e9                # Prevent timeout
+   mxorder = 3                 # Limit to 3rd order
    atol = 1e-7
    rtol = 1e-5
 
-use_precon = true
-   Enables the physics-based preconditioners
+cvode_precon_method = user
+   Enables the physics-based preconditioners. The default is ``none``; other
+   choices are ``auto``, ``petsc`` and ``bbd``. The old ``use_precon`` option
+   is no longer accepted by CVODE and will raise an error if set.
 
 mxstep = 1e9
    Prevents the solver from timing out if it takes too long to converge.
@@ -230,21 +232,22 @@ The divergence of the flux, and so the rate of change of :math:`f` in cell
 Selecting slope limiter and conduction method
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Hermes-3 selects both the parallel advection slope limiter and the
-``Div_par_K_Grad_par_mod`` conduction discretisation at compile time
+Hermes-3 selects the parallel advection slope limiter at compile time
 through CMake cache options:
 
 .. code-block:: bash
 
    cmake -S . -B build \
-     -DHERMES_SLOPE_LIMITER=MC \
-     -DHERMES_CONDUCTION_METHOD=Original
+     -DHERMES_SLOPE_LIMITER=MC
 
 ``HERMES_SLOPE_LIMITER``
    Available values are ``MC``, ``VanAlbada``, ``WENO3``, ``MinMod``,
    ``Upwind``, and ``Superbee``.
 
-``HERMES_CONDUCTION_METHOD``
+
+The
+``Div_par_K_Grad_par_mod`` conduction discretisation can be choosen at run time with:
+``conduction_method``
    Selects the parallel heat conduction discretisation used in
    :cpp:func:`Div_par_K_Grad_par_mod`. Available values are:
 

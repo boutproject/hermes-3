@@ -13,8 +13,8 @@ if len(sys.argv) != 2:
 
 filename = sys.argv[1]
 
-from boututils.datafile import DataFile
 import numpy as np
+from boututils.datafile import DataFile
 
 # Read values from current grid file
 with DataFile(filename) as g:

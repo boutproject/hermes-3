@@ -12,7 +12,7 @@ ClassicalDiffusion::ClassicalDiffusion(std::string name, Options& alloptions, So
            readWrite("species:{all_species}:{output}")}) {
   Options& options = alloptions[name];
 
-  Bsq = SQ(bout::globals::mesh->getCoordinates()->Bxy);
+  Bsq = SQ(bout::globals::mesh->getCoordinates()->Bxy());
 
   diagnose =
       options["diagnose"].doc("Output additional diagnostics?").withDefault<bool>(false);

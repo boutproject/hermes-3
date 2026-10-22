@@ -6,7 +6,6 @@ linestyles = ["-", "--"]
 
 import matplotlib.pyplot as plt
 import numpy as np
-
 from boutdata import collect
 
 cumulative_calls = []
@@ -14,21 +13,18 @@ times = []
 source_mags = []
 
 for path in paths:
-    try:
-        # Number of calls
-        ncalls = collect("ncalls", path=path)  # number of calls each output
+    # Number of calls
+    ncalls = collect("ncalls", path=path)  # number of calls each output
 
-        cumulative_calls.append(np.cumsum(ncalls))  # Summed over outputs
+    cumulative_calls.append(np.cumsum(ncalls))  # Summed over outputs
 
-        t_array = collect("t_array", path=path)
-        wci = collect("Omega_ci", path=path)
-        times.append(t_array / wci)  # Seconds
+    t_array = collect("t_array", path=path)
+    wci = collect("Omega_ci", path=path)
+    times.append(t_array / wci)  # Seconds
 
-        # density source
-        m = collect("density_feedback_src_mult_d+", path=path)
-        source_mags.append(np.abs(m + 1))
-    except:
-        raise
+    # density source
+    m = collect("density_feedback_src_mult_d+", path=path)
+    source_mags.append(np.abs(m + 1))
 
 for calls, source, label, linestyle in zip(
     cumulative_calls, source_mags, labels, linestyles

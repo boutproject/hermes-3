@@ -1,6 +1,6 @@
-from boutdata import collect
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
+from boutdata import collect
 
 path = "annulus-isothermal-d"
 var = "Ne"

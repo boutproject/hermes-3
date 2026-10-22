@@ -1,10 +1,9 @@
-import xhermes
-from pathlib import Path
-import matplotlib.pyplot as plt
 import shutil
-from pathlib import Path
-import xhermes
 import tempfile
+from pathlib import Path
+
+import matplotlib.pyplot as plt
+import xhermes
 
 # Look in the folder where this script is located for the simulation data
 here = Path(__file__).parent

@@ -2,9 +2,10 @@
 
 # Python script to run and analyse MMS test
 
-from boututils.run_wrapper import launch_safe
-
+import sys
 from pathlib import Path
+
+from boututils.run_wrapper import launch_safe
 
 # Remove old test results and symlink executable
 for file in [
@@ -25,7 +26,7 @@ s, out = launch_safe("../../../hermes-3 -d data", nproc=1, pipe=True)
 if s != 0:
     print(" => Test failed: ")
     print(out)
-    exit(1)
+    sys.exit(1)
 
 # Save output to log file
 with open("run.log", "w") as f:
@@ -67,7 +68,7 @@ for line in expected_lines:
 # Final output
 if success:
     print(" => Test passed")
-    exit(0)
+    sys.exit(0)
 else:
     print(f" => Test failed: \n{message}")
-    exit(1)
+    sys.exit(1)

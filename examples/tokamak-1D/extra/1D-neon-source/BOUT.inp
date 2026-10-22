@@ -80,8 +80,8 @@ matrix_free_operator = false
 lag_jacobian = 1
 timestep = 0.001
 
-pid_controller = true # Change timestep
-target_its = 3        # Target number of nonlinear iterations
+timestep_control = pid_nonlinear_its # Change timestep
+target_its = 3                       # Target number of nonlinear iterations
 kP = 0.65
 kI = 0.3
 kD = 0.15

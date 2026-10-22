@@ -7,19 +7,19 @@ This section contains components which determine which equations are
 being solved in the code. There are two broad classes of components:
 
 Whole equations
-   For example, ``fixed_temperature``, ``evolve_pressure``, 
+   For example, ``fixed_temperature``, ``evolve_pressure``,
    ``evolve_energy`` allow the solution of energy in three levels
    of fidelity: constant temperature, a pressure equation and the
    conservative total energy equation. ``neutral_mixed`` contains
-   both parallel and perpendicular transport of neutrals and 
+   both parallel and perpendicular transport of neutrals and
    has several equations included within.
 
 Terms
    For example, ``anomalous_diffusion`` adds cross-field transport
    to the density, energy and momentum equations if they are available
-   while  ``diamagnetic_drift`` and ``polarisation_drift`` 
+   while  ``diamagnetic_drift`` and ``polarisation_drift``
    add drift terms.
-   
+
 Please refer to the examples for common component configurations.
 
 
@@ -120,9 +120,8 @@ quasineutral
 ~~~~~~~~~~~~
 
 This component sets the density of one species, so that the overall
-charge density is zero everywhere. This must therefore be done after
-all other charged species densities have been calculated. It only
-makes sense to use this component for species with a non-zero charge.
+charge density is zero everywhere. It only makes sense to use this
+component for species with a non-zero charge.
 
 .. doxygenstruct:: Quasineutral
    :members:
@@ -229,8 +228,8 @@ energy, :math:`\mathcal{E}`:
    \mathcal{E} = \frac{1}{\gamma - 1} P + \frac{1}{2}m nv_{||}^2
 
 Note that this component requires the parallel velocity :math:`v_{||}`
-to calculate the pressure. It must therefore be listed after a component
-that sets the velocity, such as `evolve_momentum`:
+to calculate the pressure. It must therefore be listed alongside a
+component that sets the velocity, such as `evolve_momentum`:
 
 .. code-block:: ini
 
@@ -293,13 +292,8 @@ conduction for all species that use :ref:`sec-evolve_pressure` or
 :ref:`sec-evolve_energy`, storing it in `energy_source`. If this is not
 desired for a particular species then it can be turned off by setting
 :code:`thermal_conduction = false` in the input options for that species.
-
-This component requires a collision time to have been calculated
-(i.e., with the :ref:`sec-collisions` component). It is
-recommended that this be one of the last component to run, to ensure density,
-pressure, and temperature have their final values. However, it must be
-run before :ref:`sec-recycling`, as that component will need to use the
-`energy_flow_ylow` value, to which conduction contributes.
+This component requires a collision time to be calculated
+(i.e., with the :ref:`sec-collisions` component).
 
 The choice of collision frequency used for conduction is set by the
 flag `conduction_collisions_mode`: `multispecies` uses all available
@@ -382,7 +376,7 @@ using flows already calculated for other species. It is used like `quasineutral`
 .. code-block:: ini
 
    [hermes]
-   components = h+, ..., e, ...   # Note: e after all other species
+   components = h+, ..., e, ...
 
    [e]
    type = ..., zero_current,... # Set e:velocity
@@ -410,7 +404,7 @@ This electric field is then used to calculate a force on the other species:
 
    F_z = Z n_z E_{||}
 
-which is added to the ion's `momentum_source`. 
+which is added to the ion's `momentum_source`.
 
 The implementation is in `ElectronForceBalance`:
 
@@ -436,7 +430,7 @@ The electron parallel viscosity is
    \eta_e = \frac{4}{3} 0.73 p_e \tau_e
 
 where :math:`\tau_e` is the electron collision time. The collisions between electrons
-and all other species therefore need to be calculated before this component is run:
+and all other species therefore need to be calculated:
 
 .. code-block:: ini
 
@@ -451,9 +445,8 @@ and all other species therefore need to be calculated before this component is r
 braginskii_ion_viscosity
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
-Adds ion viscosity terms to all charged species that are not electrons.
-The collision frequency is required so this is a top-level component that
-must be calculated after collisions:
+Adds ion viscosity terms to all charged species that are not
+electrons, calculated using collision frequencies.
 
 .. code-block:: ini
 
@@ -476,7 +469,7 @@ The ion parallel viscosity is
 The choice of collision frequency is set by the flag `viscosity_collisions_mode`: `multispecies` uses
 all available collision frequencies involving the chosen species, while `braginskii` uses only
 ii collisions. The default is `multispecies` and it is recommended when solving
-more than one ion. If you are solving for a single ion and want to recover Braginskii, 
+more than one ion. If you are solving for a single ion and want to recover Braginskii,
 use the `braginskii` mode.
 
 
@@ -512,7 +505,7 @@ A parallel force term is added, in addition to the parallel viscosity above:
 .. math::
 
    F = -\frac{2}{3}B^{3/2}\partial_{||}\left(\frac{\Pi_{ci\perp}}{B^{3/2}}\right)
-   
+
 In the vorticity equation the viscosity appears as a divergence of a current:
 
 .. math::
@@ -558,14 +551,14 @@ and neglecting parallel gradients of velocity gives:
 
    \Pi_{ci} \simeq 0.96 p_i\tau_i \left[ \frac{RB_{\zeta}}{B}F\left(\psi\right) - V_{||i} \right]\partial_{||}\ln B
 
-   
+
 .. note::
    Implementation details: The magnitude of :math:`\Pi_{ci\perp}` and :math:`\Pi_{ci||}` are
    individually limited to be less than or equal to the scalar pressure :math:`Pi` (though can have
    opposite sign). The reasoning is that if these off-diagonal terms become large then the model is
    likely breaking down. Occasionally happens in low-density regions.
 
-   
+
 .. doxygenstruct:: BraginskiiIonViscosity
    :members:
 
@@ -623,8 +616,7 @@ has cross-field transport. This discrepancy is due to historical reasons and wil
 1D: neutral_parallel_diffusion
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-This adds diffusion to **all** neutral species (those with no or zero charge),
-because it needs to be calculated after the collision frequencies are known.
+This adds diffusion to **all** neutral species (those with no or zero charge).
 
 .. code-block:: ini
 
@@ -655,7 +647,7 @@ The diffusion coefficient is in :math:`m^2/s` and is calculated as
    D_n = \left(\frac{B}{B_{pol}}\right)^2 \frac{eT_n}{m_{n} \nu}
 
 where ``m_{n}`` is the neutral species mass in kg and :math:`\nu` is the collision
-frequency (by default, this sums up all of the enabled neutral collisions from 
+frequency (by default, this sums up all of the enabled neutral collisions from
 the collisions component as well as the charge exchange rate).
 The factor :math:`B / B_{pol}` is the projection of the cross-field
 direction on the parallel transport, and is the ``dneut`` input setting. Currently, the recommended
@@ -670,35 +662,37 @@ it is recommended to set ``dneut`` according to the field line pitch at the targ
 2D/3D: neutral_mixed
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+Equations
+^^^^^^^^^
 
-The below describes the `neutral_mixed` component used for 2D and 3D simulations. Note that all dimensionalities
-are compatible with the `neutral_boundary` component which facilitates energy losses to the wall through neutral reflection.
+The below describes the `neutral_mixed` component used for 2D and 3D simulations. See :ref:`sec-neutral_mixed_bc` for the
+corresponding boundary conditions and :ref:`sec-neutral_boundary` on enabling wall energy losses due to neutral reflection.
 
 The `neutral_mixed` component solves fluid equations along :math:`y`
 (parallel to the magnetic field), and uses diffusive transport in :math:`x`
 and :math:`z`.  It was adopted from the approach used in UEDGE and this [M.V. Umansky, J.N.M (2003)]. The Hermes-3 approach
-is more advanced in having a separate neutral pressure equation, similar to the 
+is more advanced in having a separate neutral pressure equation, similar to the
 new AFN (Advanced Fluid Neutral) model in SOLPS-ITER [N. Horsten, N.F. (2017)].
 
 .. math::
-   
+
    \begin{aligned}
 
    \frac{\partial n_n}{\partial t} =& -\nabla\cdot\left(n_n\mathbf{b}v_{\parallel, n} + n_n\mathbf{v}_{\perp n}\right) \\
          &    + S \\
    \frac{\partial}{\partial t}\left(m_nn_nv_{\parallel, n}\right) =& -m_n \nabla\cdot\left(n_n v_{\parallel, n} (\mathbf{b}v_{||n} + \mathbf{v}_{\perp n}\right)) \\
          &    - \nabla_{\parallel}p_n \\
-         &    + \nabla \cdot (\eta_{n} (\nabla_{\perp} v_{\parallel n} + \mathbf{b} \nabla_{\parallel} v_{\parallel n} )) \\
+         &    + \nabla \cdot (\eta_{n,\perp} \nabla_{\perp} v_{\parallel n} + \mathbf{b} \eta_{n,\parallel} \nabla_{\parallel} v_{\parallel n} ) \\
          &    + F \\
    \frac{\partial p_n}{\partial t} =& -\frac{5}{3} \nabla\cdot\left(p_n\mathbf{b}v_{\parallel, n} +  p_n\mathbf{v}_{\perp n}\right) \\
          &    + \frac{2}{3}v_{\parallel, n} \nabla_{\parallel} p_n \\
-         &    + \frac{2}{3} \nabla\cdot\left(\kappa_n \left(\nabla_\perp T_n + \mathbf{b} \nabla_{\parallel} T_n\right)\right) \\
-         &    - \frac{2}{3} v_{\parallel,n} \nabla \cdot \left(\eta_{n} \left( \nabla_{\perp} v_{\parallel n} + \mathbf{b} \nabla_{\parallel} v_{\parallel n} \right) \right) \\
+         &    + \frac{2}{3} \nabla\cdot\left(\kappa_{n,\perp} \nabla_\perp T_n + \mathbf{b} \kappa_{n,\parallel} \nabla_{\parallel} T_n\right) \\
+         &    - \frac{2}{3} v_{\parallel,n} \nabla \cdot \left( \eta_{n,\perp} \nabla_{\perp} v_{\parallel n} + \mathbf{b} \eta_{n,\parallel} \nabla_{\parallel} v_{\parallel n} \right) \\
          &    + \frac{2}{3}E \\
 
    \end{aligned}
 
-Where for the density equation, the first row of terms contains the parallel and perpendicular 
+Where for the density equation, the first row of terms contains the parallel and perpendicular
 advection and the second row the particle sources. In the parallel momentum equation, the first row of terms
 features parallel and perpendicular advection of parallel momentum. This is followed by the compression term
 and the perpendicular and parallel viscosity (diffusion of parallel momentum) as well as the momentum source term.
@@ -706,51 +700,354 @@ In the pressure equation, the first row contains the parallel and perpendicular 
 by the compression term, the perpendicular and parallel conduction (diffusion of temperature) and perpendicular and parallel
 viscous heating, finally followed by the energy sources.
 
-While parallel momentum is evolved and is exchanged with the plasma parallel momentum, the advection of momentum is neglected in the perpendicular direction,
-resulting in the pressure diffusion model, where the pressure gradient is balanced by frictional forces. This is similar to Fickian diffusion with the pressure
-gradient replacing the density gradient as the flow driver, in an approach similar to that taken in nuclear fission neutronic transport modelling and several other edge codes.
+While parallel momentum is evolved and is exchanged with the plasma parallel momentum, the advection of momentum is neglected in the perpendicular direction.
+Instead, perpendicular advection is achieved through a pressure diffusion approach, where the pressure gradient is balanced by frictional forces and inertial terms are dropped.
+This is similar to Fickian diffusion with the pressure gradient replacing the density gradient as the flow driver. This approach is similar to that taken in nuclear fission neutronic
+transport modelling and is typical of fluid neutral models in other codes.
 
-The perpendicular velocity is calculated as:
+The perpendicular neutral particle flux is:
+
+.. math::
+   \begin{aligned}
+   \Gamma_{\perp,n_n} =& n_n \mathbf{v}_{\perp},
+   \end{aligned}
+
+with the perpendicular velocity :math:`v_{\perp}` calculated as:
 
 .. math::
 
    \begin{aligned}
-   v_{\perp} =& -D_n \frac{1}{P_n} \nabla_{\perp} p_n
+   v_{\perp} =& -D_n \frac{1}{p_n} \nabla_{\perp} p_n = -D_n \nabla_{\perp} \ln p_n.
    \end{aligned}
 
-Where in the code, :math:`\frac{1}{P_n} \nabla_{\perp}P_n` is represented as :math:`ln(P_n)`, which helps
-preserve pressure positivity. 
+In the code, :math:`\frac{1}{P_n} \nabla_{\perp}P_n` is represented as :math:`\nabla_{\perp} \ln P_n` for numerical reasons.
 
-The diffusion coefficients are defined as:
+The unlimited diffusion coefficient is defined as:
 
 .. math::
 
-   \begin{aligned} 
-   D_n =& \frac{v_{th,n}^{2}}{\nu_{n, tot}} = \frac{T_n}{m_n \nu_{n, tot}} \\
-   \kappa_{n} =& \frac{5}{2} D_n N_n \\
+   \begin{aligned}
+   D_{n,unlim} =& \frac{v_{th,n}^{2}}{\nu_{n}}
+      = \frac{T_n}{m_n \nu_n} \\
+   \end{aligned}
+
+Here :math:`v_{th,n} = \sqrt{T_n / m_n}` is the neutral thermal speed used in
+the diffusion coefficient and :math:`\nu_{n,eff}` is the neutral
+collision frequency after flooring. A soft floor is applied to prevent
+:math:`D_{n,unlim}` from becoming unphysically large at
+low collisionality, ensuring that :math:`\nu_n` never goes below a pseudo collision frequency
+calculated from the maximum neutral mean free path :math:`l_{\max}`:
+
+.. math::
+   \begin{aligned}
+   \nu_{mfp} =& \frac{v_{th,n}}{l_{\max}} \\
+   \nu_{n} =& \nu_{n}
+      + \nu_{mfp}\exp\left(-\frac{\nu_{n}}{\nu_{mfp}}\right) .
+   \end{aligned}
+
+Here :math:`l_{\max}` is set by the ``neutral_lmax`` parameter with a default of 1 m.
+This is primarily a regularisation: it prevents division by
+zero when collision processes are disabled or very weak. In the limit
+:math:`\nu_{n} \ll \nu_{mfp}`, the effective collision
+frequency tends to :math:`\nu_{mfp}`; in the opposite limit it tends
+to the physical collision frequency.
+
+The value of :math:`\nu_{n}` depends on the selected collision mode. When the
+``afn`` mode is selected using the
+``diffusion_collisions_mode`` setting, the collision frequency is built from
+charge exchange, ionisation, and neutral-neutral collisions. When
+``multispecies`` mode is selected, Hermes-3 uses charge exchange and all collisions
+enabled for neutrals (set in the `braginskii_collisions` component), but ionisation
+is neglected.  ``afn`` is the recommended mode, and is based on the Advanced Fluid Neutral
+model in SOLPS-ITER.
+
+Flux limiting
+^^^^^^^^^^^^^
+
+The diffusive closure places no bound on the transport speed. As the neutral
+mean free path grows, the collision frequency falls and the transport
+coefficients tend towards infinity. This unphysical behaviour is mitigated
+by flux limitation where a flux cap is calculated from a user-specified fraction
+of the free-streaming flux.
+Hermes-3 limits all three diffusive transport channels: perpendicular
+particle diffusion :math:`D_n`, heat conduction :math:`\kappa_n` and viscosity
+:math:`\eta_n`.
+
+Each channel is treated in the same four steps:
+
+1. The unlimited coefficient is calculated from the collisionality, as described
+   above.
+2. The maximum coefficient according to the desired free-streaming fraction
+   is calculated.
+3. Optionally, an additional, explicit user-set diffusion coefficient cap
+   is blended with the free-streaming maximum. The model can also run with a
+   purely explicit cap and no free-streaming based limit.
+4. The unlimited coefficient and the maximum are blended into the final
+   coefficient using a smooth limiter function.
+
+Each flux is the product of a coefficient and a gradient, so step 2 is a
+division by the local gradient. That gradient is first regularised using the
+function :math:`R`, which is described in the next section:
+
+.. math::
+
+   \begin{aligned}
+   D_{n,\max} =& \alpha_{D} \frac{1}{4} \bar{v}_{n}
+       \;\Big/\; R\!\left(\nabla_{\perp}\ln p_n\right) \\
+   \kappa_{n,\max}^{\perp,\parallel} =& \alpha_{\kappa}^{\perp,\parallel}
+       \frac{1}{2} \bar{v}_{n} n_n
+       \;\Big/\; R\!\left(\nabla_{\perp,\parallel} T_n / T_n\right) \\
+   \eta_{n,\max}^{\perp,\parallel} =& \alpha_{\eta}^{\perp,\parallel} p_n
+       \;\Big/\; R_{\eta}\!\left(\nabla_{\perp,\parallel} v_{\parallel n}\right) \\
+   \end{aligned}
+
+Here :math:`\bar{v}_{n} = \sqrt{8T_n / \pi m_n}` is the mean speed of a
+non-drifting Maxwellian [Stangeby eq. 2.21, p.67]. The numerators are the
+free-streaming fluxes of each quantity: :math:`\frac{1}{4} n_n \bar{v}_n` for
+particles [Stangeby, under eq. 2.24, p.67], :math:`\frac{1}{2} p_n \bar{v}_n`
+for heat, and :math:`p_n` for parallel momentum. The density factor cancels in
+:math:`D_{n,\max}` because the perpendicular particle flux is
+:math:`\Gamma_{\perp} = -D_n n_n \nabla_{\perp} \ln p_n`.
+
+Conduction and viscosity are limited separately in the parallel and
+perpendicular directions, each using the corresponding component of its
+gradient. Only the perpendicular direction is
+limited for particle transport, because parallel particle transport is
+advective rather than diffusive.
+
+Regularising the gradient
+^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The gradient in the denominator is smoothly clamped to the range
+:math:`[g_{\min}, g_{\max}]` before the division:
+
+.. math::
+
+   \begin{aligned}
+   R(g) =& \sqrt{\frac{g^{2} g_{\max}^{2}}{g^{2} + g_{\max}^{2}} + g_{\min}^{2}}
+   \end{aligned}
+
+This has three limits:
+
+- :math:`|g| \ll g_{\min}`: :math:`R \rightarrow g_{\min}`. The floor prevents
+  division by zero where the gradient vanishes. It is applied as a sum of
+  squares so that :math:`R` remains smooth at :math:`g = 0` instead of
+  developing a kink. The cost is a small additional reduction of the flux limit
+  in shallow gradients.
+- :math:`g_{\min} \ll |g| \ll g_{\max}`: :math:`R \rightarrow |g|`, so the
+  gradient passes through unmodified.
+- :math:`|g| \gg g_{\max}`: :math:`R \rightarrow g_{\max}`. The ceiling stops
+  the maximum coefficient from becoming arbitrarily small at very steep
+  gradients, which improves robustness where the limiter is saturated. In the
+  saturated limit the neutral transport depends on the free-streaming speed
+  without a dependence on a gradient, making it behave like an advective term.
+  This makes the central difference scheme implemented in its operator unstable
+  due to the risk of checkerboarding. The gradient ceiling ensures that the term
+  can never become fully advective and improves simulation robustness during transients.
+  The default value is set so that it has very little impact in steady state.
+
+When separate limiters are used, special handling of the regularisation terms is required.
+The particle and conduction limiters divide by an inverse gradient length in
+:math:`m^{-1}`, while the viscosity limiter divides by a velocity gradient in
+:math:`s^{-1}`. In order for all three channels to share regularisation settings,
+the viscosity floor and ceiling are calculated from the shared settings by multiplying
+them by the local mean thermal speed :math:`\bar{v}_{n}`, which converts them from the
+inverse lengths used by the other channels into the velocity gradient units this limiter
+needs. That scaled pair is written :math:`R_{\eta}` above. The viscosity floor therefore
+follows the local neutral temperature rather than being a single value across the domain.
+
+Separating the limiters also introduces separate limitation for parallel and perpendicular
+conduction and viscosity. The parallel floor is derived from
+``limiter_gradient_floor`` by dividing it by the setting ``limiter_gradient_floor_ratio``,
+to account for the much shallower gradients typically seen in the parallel direction. This is
+set to 40 by default. The gradient ceiling is shared between the perpendicular and parallel
+directions.
+
+.. list-table::
+   :header-rows: 1
+   :widths: 26 14 12 24 24
+
+   * - Gradient
+     - Used in
+     - Units
+     - Floor option (default)
+     - Ceiling option (default)
+   * - :math:`\nabla_{\perp}\ln p_n`
+     - :math:`D_{n,\max}`
+     - :math:`m^{-1}`
+     - ``limiter_gradient_floor`` (10)
+     - ``limiter_gradient_ceiling`` (100)
+   * - :math:`\nabla_{\perp,\parallel} T_n / T_n`
+     - :math:`\kappa_{n,\max}`
+     - :math:`m^{-1}`
+     - ``limiter_gradient_floor`` (10) for :math:`\perp`, divided by
+       ``limiter_gradient_floor_ratio`` (40) for :math:`\parallel`
+     - ``limiter_gradient_ceiling`` (100)
+   * - :math:`\nabla_{\perp,\parallel} v_{\parallel n}`
+     - :math:`\eta_{n,\max}`
+     - :math:`s^{-1}`
+     - ``limiter_gradient_floor`` (10) :math:`\times \bar{v}_n` for
+       :math:`\perp`, divided by ``limiter_gradient_floor_ratio`` (40) for
+       :math:`\parallel`
+     - ``limiter_gradient_ceiling`` (100) :math:`\times \bar{v}_n`
+
+Raising a floor or lowering a ceiling improves robustness but changes the
+answer, so both should be checked for convergence.
+
+Applying the limit
+^^^^^^^^^^^^^^^^^^
+
+The final coefficient is a smooth blend of the unlimited coefficient and the
+maximum. Writing this for :math:`D_n`, and with the same form used for
+:math:`\kappa_n` and :math:`\eta_n`:
+
+.. math::
+
+   \begin{aligned}
+   D_n = D_{n,unlim}
+      \left[1 + \left(\frac{D_{n,unlim}}{D_{n,\max}}\right)^\gamma
+      \right]^{-1/\gamma},
+   \end{aligned}
+
+where :math:`\gamma` is set by ``flux_limiter_sharpness``. The default
+:math:`\gamma = 1` gives the harmonic mean
+
+.. math::
+
+   \begin{aligned}
+   D_n = \frac{D_{n,unlim}D_{n,\max}}
+              {D_{n,unlim} + D_{n,\max}} ,
+   \end{aligned}
+
+and larger values of :math:`\gamma` make the transition sharper.
+
+The flux limit fraction :math:`\alpha` also acts as a switch on its channel:
+
+- :math:`\alpha < 0` disables the free-streaming limiter, so the unlimited
+  coefficient is used unless an explicit cap is set.
+- :math:`\alpha = 0` sets the coefficient to zero, switching the channel off.
+  Note that with ``combined_limiters = true``, setting ``flux_limit = 0``
+  switches off diffusion, conduction and viscosity together.
+
+Explicit coefficient caps
+^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Each channel can also be capped by an explicit, user-set maximum coefficient,
+using ``diffusion_limit``, ``conduction_limit`` and ``viscosity_limit``. These
+are set in SI units and are negative by default, which disables them.
+
+If both the flux limit fraction and the explicit cap are set for a channel, the
+maximum coefficient is the harmonic mean of the two. If only the explicit cap is
+set, the maximum coefficient is that value. If neither is set, the channel is
+not limited at all.
+
+Combined and separate limiters
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The conduction and viscosity coefficients are related to the diffusion
+coefficient by the Chapman-Enskog approximation:
+
+.. math::
+
+   \begin{aligned}
+   \kappa_{n} =& \frac{5}{2} D_n n_n \\
    \eta_{n} =& \frac{2}{5} m_n \kappa_{n} \\
    \end{aligned}
 
-Where :math:`v_{th,n}= \sqrt{\frac{T_n}{m_n}}` is the thermal velocity of neutrals and :math:`\nu_{n, tot}` is the total
-neutral collisionality.  When the `AFN` diffusion collision mode is selected using the `diffusion_collisions_mode` setting, 
-this collisionality is the sum of charge exchange, ionisation, neutral-neutral collisions and the 
-pseudo-collisionality `Rnn`, which represents a mean-free path limit. When the `multispecies` mode is selected, all available 
-collision frequencies are enabled instead of ionisation. `AFN` is recommended in all cases, with the `multispecies` mode representing
-a legacy approach. The `Rnn` pseudo-collisionality is based on the `neutral_lmax` parameter, currently hardcoded to 0.1m, 
-which acts as an effective maximum neutral mean free path. It represents the distance that neutrals can travel before
-hitting a solid surface.
+This relation always holds for the unlimited coefficients. Whether it also holds
+for the limited coefficients is controlled by ``combined_limiters``.
 
-In an additional effort to limit the diffusivitiy to more physical values, a flux limiter has been implemented which clamps
-:math:`D_n` to :math:`D_{n,max}` defined as:
+With ``combined_limiters = true``, which is the default, only :math:`D_n` is
+limited, and the limited :math:`\kappa_n` and :math:`\eta_n` are calculated from
+the limited :math:`D_n` using the relation above. The limiting is then isotropic
+and is driven by the pressure gradient alone. This is cheaper and more robust,
+but less physically accurate. In this mode, the conduction and viscosity limiter
+options have no effect, and setting any of ``flux_limit_cond_perp``,
+``flux_limit_cond_par``, ``flux_limit_visc_perp``, ``flux_limit_visc_par``,
+``conduction_limit`` or ``viscosity_limit`` raises an exception rather than
+being silently ignored.
 
-.. math::
+With ``combined_limiters = false``, each channel is limited by its own
+free-streaming flux and its own gradient, separately in the parallel and
+perpendicular directions, as described above.
 
-   \begin{aligned}
-   D_{n,max} =& f_l \frac{v_{th,n}}{abs(\nabla ln(P_n) + 1/l_{max})}
-   \end{aligned}
+Flux limiter options
+^^^^^^^^^^^^^^^^^^^^
 
-This formulation is equivalent to defining a :math:`D_n` with a free streaming velocity while accounting for the pseudo collisionality due 
-to the maximum vessel mean free path :math:`l_{max}`. The flux limiter :math:`f_l` is set to 1.0 by default.
+.. list-table::
+   :header-rows: 1
+   :widths: 30 18 52
+
+   * - Option
+     - Default
+     - Meaning
+   * - ``combined_limiters``
+     - ``true``
+     - Derive the :math:`\kappa_n` and :math:`\eta_n` limits from :math:`D_n`
+   * - ``flux_limit``
+     - 0.5
+     - :math:`\alpha_{D}`, fraction of free-streaming particle flux
+   * - ``flux_limit_cond_perp``
+     - ``flux_limit``
+     - :math:`\alpha_{\kappa}^{\perp}`, fraction of free-streaming heat flux
+   * - ``flux_limit_cond_par``
+     - ``flux_limit_cond_perp``
+     - :math:`\alpha_{\kappa}^{\parallel}`
+   * - ``flux_limit_visc_perp``
+     - ``flux_limit``
+     - :math:`\alpha_{\eta}^{\perp}`, fraction of free-streaming momentum flux
+   * - ``flux_limit_visc_par``
+     - ``flux_limit_visc_perp``
+     - :math:`\alpha_{\eta}^{\parallel}`
+   * - ``flux_limiter_sharpness``
+     - 1.0
+     - :math:`\gamma`, sharpness of the blend between unlimited and maximum
+   * - ``diffusion_limit``
+     - -1
+     - Explicit cap on :math:`D_n` in :math:`m^{2} s^{-1}`
+   * - ``conduction_limit``
+     - -1
+     - Explicit cap on :math:`\kappa_n` in :math:`W\,m^{-1}\,eV^{-1}`
+   * - ``viscosity_limit``
+     - -1
+     - Explicit cap on :math:`\eta_n` in :math:`Pa\,s`
+   * - ``limiter_gradient_floor``
+     - 10
+     - :math:`g_{\min}` for every perpendicular channel, in :math:`m^{-1}`
+   * - ``limiter_gradient_floor_ratio``
+     - 40
+     - Parallel floor is ``limiter_gradient_floor`` divided by this
+   * - ``limiter_gradient_ceiling``
+     - 100
+     - :math:`g_{\max}` for every channel, in :math:`m^{-1}`
+
+Setting a flux limit fraction or an explicit cap below zero disables it.
+
+Flux limiter diagnostics
+^^^^^^^^^^^^^^^^^^^^^^^^
+
+Setting ``diagnose = true`` writes the coefficients at each stage of the
+limiting to the output. The names below are for a species ``d``.
+
+.. list-table::
+   :header-rows: 1
+   :widths: 34 66
+
+   * - Diagnostic
+     - Meaning
+   * - ``Dnnd_unlimited``, ``kappa_d_unlimited``, ``eta_d_unlimited``
+     - Coefficients from the collisionality, before any limiting
+   * - ``Dnnd_max``, ``kappa_d_max_perp``, ``kappa_d_max_par``,
+       ``eta_d_max_perp``, ``eta_d_max_par``
+     - Maximum coefficients, after any explicit cap is blended in
+   * - ``Dnnd``, ``kappa_d_perp``, ``kappa_d_par``, ``eta_d_perp``,
+       ``eta_d_par``
+     - Final coefficients used in the equations
+
+The maximum coefficients are only written if the corresponding limiter is
+enabled. With ``combined_limiters = true``, the conduction and viscosity
+maximums are derived from ``Dnnd_max`` and are written for diagnostic purposes
+only.
 
 .. doxygenstruct:: NeutralMixed
    :members:
@@ -874,7 +1171,7 @@ which are implemented as
 These components are then advected as scalars for the
 :math:`\mathbf{v}_n\cdot\nabla\mathbf{v}_n` term, and are diffused for
 the :math:`\nabla\cdot\left(\mu \nabla\mathbf{v}\right)` kinematic
-viscosity. 
+viscosity.
 
 The advection of momentum :math:`\mathbf{v}\cdot\nabla\mathbf{v}` is
 controlled by these settings:
@@ -883,7 +1180,7 @@ controlled by these settings:
    nonlinear advection term. This keeps the inertia in the time
    derivative, but neglects the neutral dynamic pressure in the
    momentum balance.
-   
+
 #. `toroidal_flow` is ``true`` by default, which includes the toroidal
    (:math:`z`) component of the neutral flow. Importantly, this allows
    the parallel and poloidal flows to evolve independently: The
@@ -946,14 +1243,14 @@ equations. Calculates the diamagnetic drift velocity as
 where the curvature vector :math:`\nabla\times\left(\frac{\mathbf{b}}{B}\right)`
 is read from the `bxcv` mesh input variable.
 
-Two forms are available, which are implemented differently for density, momentum, and pressure equations. In the density equation, form 0 uses the diamagnetic velocity perpendicular to b and the gradient of P; 
+Two forms are available, which are implemented differently for density, momentum, and pressure equations. In the density equation, form 0 uses the diamagnetic velocity perpendicular to b and the gradient of P;
 at the boundaries this velocity is perpendicular to the boundary. Form 1 uses the magnetic gyro-center drifts, which are mostly vertical;
-at the boundaries this form produces a flow through the boundary. 
-Forms 0 and 1 are analytically equivalent and should give the same result away from boundaries, 
+at the boundaries this form produces a flow through the boundary.
+Forms 0 and 1 are analytically equivalent and should give the same result away from boundaries,
 but form 0 doesn't produce flows through boundaries. This is an approach that UEDGE uses to avoid unphysical boundary flows.
 
 
-However, Form 1 is nice because the flow velocity depends on the temperature, not the pressure gradient. 
+However, Form 1 is nice because the flow velocity depends on the temperature, not the pressure gradient.
 This usually makes it better behaved numerically. To make the most of both, the `diamagnetic_drift` component allows the forms to be mixed
 using the ``diamag_form`` setting. For example, the :code:`tcv-x21` example blends it such that form 0 is at the boundary:
 
@@ -964,7 +1261,7 @@ using the ``diamag_form`` setting. For example, the :code:`tcv-x21` example blen
    diamag_form = x * (1 - x)  # 0 = gradient; 1 = divergence
 
 
-A table of the two forms used in Hermes-3, and the corresponding terms in `Simakov & Catto <https://doi.org/10.1063/1.1623492>`_ is shown below, where :math:`\mathbf{C}=\nabla\times\left(\frac{\mathbf{b}}{B}\right)` is the curvature vector. Instead of the diamagnetic velocity, the whole terms associated are shown. The difference among the forms is the divergence of a curl, which vanishes. The diamagnetic velocity :math:`\mathbf{v}_{dia}` is defined above. Notice that Simakov & Catto used Gaussian units, but Hermes-3 uses SI units. 
+A table of the two forms used in Hermes-3, and the corresponding terms in `Simakov & Catto <https://doi.org/10.1063/1.1623492>`_ is shown below, where :math:`\mathbf{C}=\nabla\times\left(\frac{\mathbf{b}}{B}\right)` is the curvature vector. Instead of the diamagnetic velocity, the whole terms associated are shown. The difference among the forms is the divergence of a curl, which vanishes. The diamagnetic velocity :math:`\mathbf{v}_{dia}` is defined above. Notice that Simakov & Catto used Gaussian units, but Hermes-3 uses SI units.
 
 .. list-table::
    :header-rows: 1
@@ -987,7 +1284,7 @@ A table of the two forms used in Hermes-3, and the corresponding terms in `Simak
      - :math:`\dfrac{5}{2}\nabla\cdot (p \mathbf{v}_{dia})`
      - Eq. (56): :math:`\nabla\cdot\left(\dfrac{5}{2 m \Omega} \mathbf{b} \times \nabla(p T)\right)`
 
-\* Eq.(64) in Simakov & Catto is derived for ion parallel momentum, but it is also applicable to electrons since it comes from the gyro-viscosity and the mass factors of :math:`m_i` or :math:`m_e` cancel out. 
+\* Eq.(64) in Simakov & Catto is derived for ion parallel momentum, but it is also applicable to electrons since it comes from the gyro-viscosity and the mass factors of :math:`m_i` or :math:`m_e` cancel out.
 
 
 .. doxygenstruct:: DiamagneticDrift
@@ -1010,9 +1307,8 @@ electrostatic potential :math:`\phi` in the frame of the fluid, with
 an ion diamagnetic contribution. This is calculated by inverting a
 Laplacian equation similar to that solved in the vorticity equation.
 
-This component needs to be run after all other currents have been
-calculated.  It marks currents as used, so out-of-order modifications
-should raise errors.
+This component will be run after all other currents have been
+calculated.
 
 See the :file:`examples/blob2d-vpol` example, which contains:
 
@@ -1058,9 +1354,9 @@ cross-field diffusion:
    \begin{aligned}
    \frac{\partial N}{\partial t} =& \ldots + \nabla\cdot\left(\mathbf{b}\frac{D}{\Theta}\partial_{||}N\right) \\
    \frac{\partial P}{\partial t} =& \ldots + \frac{2}{3}\nabla\cdot\left(\mathbf{b}\frac{\chi}{\Theta} N\partial_{||}T\right) \\
-   \frac{\partial}{\partial t}\left(NV\right) =& \ldots + \nabla\cdot\left(\mathbf{b}\frac{\nu}{\Theta} \partial_{||}NV\right) 
+   \frac{\partial}{\partial t}\left(NV\right) =& \ldots + \nabla\cdot\left(\mathbf{b}\frac{\nu}{\Theta} \partial_{||}NV\right)
    \end{aligned}
-   
+
 The diffusion coefficients `D`, `\chi` and `\nu` and field line pitch `\Theta` are prescribed in the input file.
 
 
@@ -1150,7 +1446,7 @@ as
 .. math::
 
    \nabla\cdot\left[\frac{\overline{A}\overline{n}}{B^2}\nabla_\perp \left(\phi + \frac{\hat{p}}{\overline{n}}\right) \right] = \Omega
-   
+
 Note that if ``diamagnetic_polarisation = false`` then the ion
 pressure terms are removed from the vorticity, and also from other ion
 pressure terms coming from the polarisation current
@@ -1169,7 +1465,7 @@ and is derived by replacing
    \sum_i A_i n_i \rightarrow \overline{A}\overline{n}
 
 In the case of multiple species, this Boussinesq approximation means that the ion diamagnetic flow
-terms 
+terms
 
 The vorticity equation that is integrated in time is
 
@@ -1194,7 +1490,7 @@ When ``exb_advection_simplified = false`` then the more complete
 .. math::
 
    \nabla\cdot\mathbf{J_{exb}} = -\nabla\cdot\left[\frac{\overline{A}}{2B^2}\nabla_\perp\left(\mathbf{V}_{E\times B}\cdot\nabla \hat{p}\right) + \frac{\Omega}{2} \mathbf{V}_{E\times B} + \frac{\overline{A}\overline{n}}{2B^2}\nabla_\perp^2\phi\left(\mathbf{V}_{E\times B} + \frac{\mathbf{b}}{B}\times\nabla\hat{p}\right) \right]
-   
+
 The form of the vorticity equation is based on `Simakov & Catto
 <https://doi.org/10.1063/1.1623492>`_ (corrected in `erratum 2004
 <https://doi.org/10.1063/1.1703527>`_), in the Boussinesq limit and

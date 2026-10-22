@@ -4,7 +4,6 @@
 
 import matplotlib.pyplot as plt
 import numpy as np
-
 from boutdata import collect
 
 history = [
@@ -87,6 +86,6 @@ for grid, paths, paths2 in history:
 plt.yscale("log")
 plt.xlabel("Wall time [hours]")
 plt.ylabel(varname + r" time derivative [$10^{19}$m$^{-3}$ / sec]")
-plt.savefig(f"history.png")
-plt.savefig(f"history.pdf")
+plt.savefig("history.png")
+plt.savefig("history.pdf")
 plt.show()

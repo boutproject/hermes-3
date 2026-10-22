@@ -47,15 +47,19 @@ DiamagneticDrift::DiamagneticDrift(std::string name, Options& alloptions,
   Curlb_B.y *= SQ(Lnorm);
   Curlb_B.z *= SQ(Lnorm);
 
-  Curlb_B *= 2. / mesh->getCoordinates()->Bxy;
+  Curlb_B *= 2. / mesh->getCoordinates()->Bxy();
 
   // Set drift to zero through sheath boundaries.
   // Flux through those cell faces should be set by sheath.
   for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
-    Curlb_B.y(r.ind, mesh->ystart - 1) = -Curlb_B.y(r.ind, mesh->ystart);
+    for (int k = 0; k < Curlb_B.y.getNz(); ++k) {
+      Curlb_B.y(r.ind, mesh->ystart - 1, k) = -Curlb_B.y(r.ind, mesh->ystart, k);
+    }
   }
   for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
-    Curlb_B.y(r.ind, mesh->yend + 1) = -Curlb_B.y(r.ind, mesh->yend);
+    for (int k = 0; k < Curlb_B.y.getNz(); ++k) {
+      Curlb_B.y(r.ind, mesh->yend + 1, k) = -Curlb_B.y(r.ind, mesh->yend, k);
+    }
   }
 
   // FIXME: density, pressure, and momentum will not be read even if

@@ -1,7 +1,8 @@
-from boutdata import collect
-import numpy as np
-import matplotlib.pyplot as plt
 import os
+
+import matplotlib.pyplot as plt
+import numpy as np
+from boutdata import collect
 
 datasets = [
     ("D", "annulus-isothermal-d", ["."]),

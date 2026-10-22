@@ -1,0 +1,112 @@
+#!/usr/bin/env python3
+
+# Python script to run and analyse MMS test
+
+import sys
+from pathlib import Path
+
+from boutdata.collect import collect
+from boututils.run_wrapper import launch_safe, shell
+from numpy import abs, array, log, max, mean, sqrt
+
+gridpath = "../../../grids/MMS_slab_y/"
+
+
+def gridname(ny):
+    return gridpath + f"MMS_straight_slab_6_{ny}_4_False.fci.grid.nc"
+
+
+# List of NY values to use
+nylist = [16, 32]
+
+nout = 20
+timestep = 1e4 / nout
+
+nproc = 1
+
+var = "Pe"
+
+petsc_options = ["True", "False"]
+
+results = {}
+
+for petsc in petsc_options:
+    results[petsc] = {"l2": [], "inf": []}
+
+    for ny in nylist:
+        args = f"mesh:file={gridname(ny)} nout={nout} timestep={timestep} use_petsc_operator={petsc}"
+        print("Running with " + args)
+
+        # Delete old data
+        shell("rm data/BOUT.dmp.*.nc")
+
+        # Command to run
+        cmd = "../../../hermes-3 " + args
+        # Launch using MPI
+        _, out = launch_safe(cmd, nproc=nproc, pipe=True)
+        Path(f"run.log.{ny}").write_text(out)
+
+        # Collect data
+        E = collect("E_" + var, tind=[nout, nout], path="data", info=False)
+        E = E[:, 2:-2, :, :]
+
+        l2 = float(sqrt(mean(E**2)))
+        linf = float(sqrt(max(abs(E))))
+        results[petsc]["l2"].append(l2)
+        results[petsc]["inf"].append(linf)
+
+        print(f"Error norm {var}: l-2 {l2:f} l-inf {linf:f}")
+
+    # Calculate grid spacing
+    dy = 1.0 / array(nylist)
+
+    success = True
+
+    l2 = results[petsc]["l2"]
+    order = log(l2[-1] / l2[-2]) / log(dy[-1] / dy[-2])
+    print(f"Convergence order {var}, petsc={petsc} = {order:f}")
+
+    if order < 1.8:
+        success = False
+
+print(results)
+
+# plot errors
+try:
+    import matplotlib.pyplot as plt
+
+    for petsc in petsc_options:
+        l2 = results[petsc]["l2"]
+        inf = results[petsc]["inf"]
+        order = log(l2[-1] / l2[-2]) / log(dy[-1] / dy[-2])
+
+        plt.plot(dy, l2, "-o", label=r"$l_2$ (petsc=" + petsc + ")")
+        plt.plot(dy, inf, "-x", label=r"$l_\infty$ (petsc=" + petsc + ")")
+        plt.plot(dy, l2[-1] * (dy / dy[-1]) ** order, "--", label=f"Order {order:.1f}")
+
+    plt.legend(loc="upper left")
+    plt.grid()
+
+    plt.yscale("log")
+    plt.xscale("log")
+
+    plt.xlabel(r"Mesh spacing $\delta y$")
+    plt.ylabel("Error norm")
+
+    plt.savefig("conduction_norm.pdf")
+    plt.savefig("conduction_norm.png")
+
+    # plt.show()
+    plt.close()
+except:  # noqa
+    # Plotting could fail for any number of reasons, and the actual
+    # error raised may depend on, among other things, the current
+    # matplotlib backend, so catch everything
+    pass
+
+if success:
+    print(" => Test passed")
+    sys.exit(0)
+else:
+    print(" => Test failed")
+    sys.exit(1)

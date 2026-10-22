@@ -2,10 +2,12 @@
 
 # Python script to run and analyse 2D energy test
 
-from boututils.run_wrapper import shell, launch_safe, getmpirun
-from boutdata.collect import collect
+import sys
+from pathlib import Path
 
 import numpy as np
+from boutdata.collect import collect
+from boututils.run_wrapper import launch_safe, shell
 
 path = "data"
 nproc = 1
@@ -20,9 +22,7 @@ shell("rm data/BOUT.dmp.*.nc")
 s, out = launch_safe("./hermes-3 -d data", nproc=nproc, pipe=True)
 
 # Save output to log file
-f = open("run.log", "w")
-f.write(out)
-f.close()
+Path("run.log").write_text(out)
 
 # Collect data
 pe = collect("Pe", path=path, info=False)
@@ -51,7 +51,7 @@ if p_tot[-1] < p_tot[0]:
 
 if success:
     print(" => Test passed")
-    exit(0)
+    sys.exit(0)
 else:
     print(" => Test failed")
-    exit(1)
+    sys.exit(1)
