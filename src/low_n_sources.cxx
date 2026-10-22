@@ -292,8 +292,8 @@ void LowNSources::instantiate_reactions() {
           // transform_guarded() reuses LowNSources' own permission-checked state, so any
           // permissions a PseudoReaction sets on itself (e.g. when adding diagnostics) must be copied across
           for (const auto& [varname, region] :
-               this->reactions.back()->getPermissions().getVariablesWithPermission(
-                   PermissionTypes::Write, false)) {
+               this->reactions.back()->getPermissions().getVariablesWithMinimumPermission(
+                   PermissionTypes::Write)) {
             setPermissions(readWrite(varname, region));
           }
         };
