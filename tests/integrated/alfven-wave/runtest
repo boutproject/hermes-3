@@ -5,13 +5,16 @@
 # References:
 # - M.V.Umansky et al. CPP 2008 https://doi.org/10.1002/ctpp.200810004
 
+from pathlib import Path
+
 plotting = False
 fail_early = True  # Stop on the first failure?
 
-import numpy as np
-from boututils.run_wrapper import shell, launch_safe, getmpirun
 import sys
+
+import numpy as np
 from boutdata import collect
+from boututils.run_wrapper import launch_safe, shell
 
 # Link to the executable
 shell("ln -s ../../../hermes-3 hermes-3")
@@ -56,9 +59,7 @@ for Ly in Lys:
         )
 
         # Save output to log file
-        f = open(f"run.log_{Ly}_{Lz}", "w")
-        f.write(out)
-        f.close()
+        Path(f"run.log_{Ly}_{Lz}").write_text(out)
 
         Omega_ci = collect("Omega_ci", path="data")
         t_array = collect("t_array", path="data")

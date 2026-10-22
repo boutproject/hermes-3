@@ -116,7 +116,7 @@ private:
   BoutReal phi_boundary_last_update; ///< Time when last updated
   bool phi_core_averagey;            ///< Average phi core boundary in Y?
 
-  Coordinates::FieldMetric Bsq;           ///< SQ(coord->Bxy)
+  Coordinates::FieldMetric Bsq;           ///< SQ(coord->Bxy())
   VectorMetric Curlb_B;                   ///< Curvature vector Curl(b/B)
   BoutReal hyper_z;                       ///< Hyper-viscosity in Z
   Coordinates::FieldMetric viscosity;     ///< Perpendicular Kinematic viscosity

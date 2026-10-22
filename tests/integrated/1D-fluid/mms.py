@@ -1,8 +1,6 @@
-from __future__ import division
-from __future__ import print_function
-
-from boutdata.mms import Metric, sin, cos, Div_par, Grad_par, exprToStr, diff, y, t
 from math import pi
+
+from boutdata.mms import Div_par, Grad_par, Metric, cos, diff, exprToStr, sin, t, y
 
 # Length of the y domain
 Ly = 10.0

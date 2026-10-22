@@ -43,7 +43,7 @@
 /*!
  * Diffusion in index space
  *
- * Similar to using Div_par_diffusion(SQ(mesh->dy)*mesh->g_22, f)
+ * Similar to using Div_par_diffusion(SQ(mesh->dy())*mesh->g_22(), f)
  *
  * @param[in] The field to be differentiated
  * @param[in] bndry_flux  Are fluxes through the boundary calculated?
@@ -73,6 +73,10 @@ Field2D Laplace_FV(const Field2D& k, const Field2D& f);
 /// Takes Div_a_Grad_perp from BOUT++ and adds flows
 Field3D Div_a_Grad_perp_flows(const Field3D& a, const Field3D& f, Field3D& flux_xlow,
                               Field3D& flux_ylow);
+inline Field3D Div_a_Grad_perp_flows(const Field2D& a, const Field2D& f,
+                                     Field3D& flux_xlow, Field3D& flux_ylow) {
+  return Div_a_Grad_perp_flows(Field3D{a}, Field3D{f}, flux_xlow, flux_ylow);
+}
 /// Same but with upwinding
 /// WARNING: Causes checkerboarding in neutral_mixed integrated test
 Field3D Div_a_Grad_perp_upwind(const Field3D& a, const Field3D& f);
@@ -80,6 +84,10 @@ Field3D Div_a_Grad_perp_upwind(const Field3D& a, const Field3D& f);
 /// WARNING: Causes checkerboarding in neutral_mixed integrated test
 Field3D Div_a_Grad_perp_upwind_flows(const Field3D& a, const Field3D& f,
                                      Field3D& flux_xlow, Field3D& flux_ylow);
+inline Field3D Div_a_Grad_perp_upwind_flows(const Field2D& a, const Field2D& f,
+                                            Field3D& flux_xlow, Field3D& flux_ylow) {
+  return Div_a_Grad_perp_upwind_flows(Field3D{a}, Field3D{f}, flux_xlow, flux_ylow);
+}
 
 /*!
  * Div ( a Grad_perp(f) ) -- ∇⊥ ( a ⋅ ∇⊥ f) -- Vorticity
@@ -90,5 +98,37 @@ Field3D Div_a_Grad_perp_upwind_flows(const Field3D& a, const Field3D& f,
  */
 Field3D Div_a_Grad_perp_nonorthog(const Field3D& a, const Field3D& x, Field3D& flux_xlow,
                                   Field3D& flux_ylow);
+
+namespace FCI {
+
+class dagp_fv {
+public:
+  Field3D operator()(const Field3D& a, const Field3D& f, Field3D& low_xlow,
+                     Field3D& flow_zlow, bool upwinding);
+  Field3D operator()(const Field3D& a, const Field3D& f, bool upwinding);
+  dagp_fv(Mesh& mesh);
+  dagp_fv& operator*=(BoutReal fac) {
+    volume /= fac * fac;
+    return *this;
+  }
+  dagp_fv& operator/=(BoutReal fac) { return operator*=(1 / fac); }
+
+private:
+  template <bool extra, bool upwinding>
+  Field3D operator()(const Field3D& a, const Field3D& f, Field3D* low_xlow,
+                     Field3D* flow_zlow);
+  Field3D fac_XX;
+  Field3D fac_XZ;
+  Field3D fac_ZX;
+  Field3D fac_ZZ;
+  Field3D volume;
+  template <bool upwinding>
+  BoutReal xflux(const Field3D& a, const Field3D& f, const Ind3D& i);
+  template <bool upwinding>
+  BoutReal zflux(const Field3D& a, const Field3D& f, const Ind3D& i);
+};
+
+std::shared_ptr<dagp_fv> getDagp_fv(Mesh* mesh, BoutReal rho_s0);
+} // namespace FCI
 
 #endif //  DIV_OPS_H

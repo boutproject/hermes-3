@@ -1,6 +1,7 @@
 #include "../include/snb_conduction.hxx"
 #include <bout/constants.hxx>
 
+#if !BOUT_USE_METRIC_3D
 #include <bout/bout.hxx>
 using bout::globals::mesh;
 
@@ -13,14 +14,15 @@ void SNBConduction::transform_impl(GuardedOptions& state) {
 
   // SNB non-local heat flux. Also returns the Spitzer-Harm value for comparison
   // Note: Te in eV, Ne in Nnorm
-  auto dy_orig = mesh->getCoordinates()->dy;
-  mesh->getCoordinates()->dy *= rho_s0; // Convert distances to m
+  auto dy_orig = mesh->getCoordinates()->dy();
+  ASSERT2(not dy_orig.isFci());
+  dy_orig *= rho_s0; // Convert distances to m
 
   // Inputs in eV and m^-3
   Div_Q_SNB = snb.divHeatFlux(Te, Ne, &Div_Q_SH);
 
   // Restore the metric tensor
-  mesh->getCoordinates()->dy = dy_orig;
+  mesh->getCoordinates()->setDy(dy_orig);
 
   // Normalise from eV/m^3/s
   Div_Q_SNB /= Tnorm * Nnorm * Omega_ci;
@@ -56,3 +58,4 @@ void SNBConduction::outputVars(Options& state) {
                     {"source", "snb_conduction"}});
   }
 }
+#endif

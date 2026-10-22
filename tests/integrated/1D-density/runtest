@@ -1,0 +1,134 @@
+#!/usr/bin/env python3
+
+# Run a closed 1D density problem and check conservation plus MPI consistency.
+
+import shutil
+import sys
+from pathlib import Path
+
+import numpy as np
+from boutdata.collect import collect
+from boututils.run_wrapper import launch_safe
+
+conservation_tolerance = 1e-12
+activity_tolerance = 1e-6
+mpi_tolerance = 1e-10
+
+# Settings to use
+nylist = [16]
+nprocs = [1, 2]
+settings = [
+    {
+        "name": "temp-constant-no-sound-speed",
+        "args": "'hermes:components=h+' 'h+:temperature=1.0'",
+    },
+    {
+        "name": "temp-jump-no-sound-speed",
+        "args": "'hermes:components=h+' 'h+:temperature=1.0+H(y-pi)'",
+    },
+    {
+        "name": "temp-constant-with-sound-speed",
+        "args": "'hermes:components=h+, sound_speed' 'h+:temperature=1.0'",
+    },
+    {
+        "name": "temp-jump-with-sound-speed",
+        "args": "'hermes:components=h+, sound_speed' 'h+:temperature=1.0+H(y-pi)'",
+    },
+]
+
+run_root = Path("runs")
+input_file = Path("data/BOUT.inp")
+results = {}
+hermes_candidates = [Path("../../../hermes-3"), Path("../../../build/hermes-3")]
+hermes_exec = next((path for path in hermes_candidates if path.exists()), None)
+
+if hermes_exec is None:
+    raise FileNotFoundError("Could not find hermes-3 executable in repo root or build/")
+
+
+def run_case(nproc, ny, setting):
+    args = f"mesh:ny={ny} {setting['args']}"
+    case_dir = run_root / f"{setting['name']}.np{nproc}.ny{ny}"
+
+    print(f"Processors {nproc} args {args}")
+
+    if case_dir.exists():
+        shutil.rmtree(case_dir)
+    case_dir.mkdir(parents=True)
+    shutil.copy(input_file, case_dir / "BOUT.inp")
+
+    status, out = launch_safe(
+        f"{hermes_exec} -d {case_dir} {args}", nproc=nproc, pipe=True
+    )
+    (case_dir / "run.log").write_text(out)
+
+    if status != 0:
+        raise RuntimeError(f"Hermes run failed for {case_dir}")
+
+    density = np.asarray(collect("Nh+", path=str(case_dir), info=False)).squeeze()
+    density = np.atleast_2d(density)
+
+    total_n = np.sum(density.reshape(density.shape[0], -1), axis=1)
+    conservation_error = abs(total_n[-1] - total_n[0])
+    max_change = np.max(np.abs(density[-1] - density[0]))
+
+    print(f"    Conservation error={conservation_error}", end="")
+    if conservation_error < conservation_tolerance:
+        print(" -> Passed")
+    else:
+        print(" -> Failed")
+
+    print(f"    Max field change={max_change}", end="")
+    if max_change > activity_tolerance:
+        print(" -> Passed")
+    else:
+        print(" -> Failed")
+
+    return {
+        "case_dir": case_dir,
+        "final_density": density[-1].copy(),
+        "conservation_error": conservation_error,
+        "max_change": max_change,
+    }
+
+
+success = True
+
+for nproc in nprocs:
+    for ny in nylist:
+        for setting in settings:
+            case_result = run_case(nproc, ny, setting)
+            results[(ny, setting["name"], nproc)] = case_result
+
+            if case_result["conservation_error"] >= conservation_tolerance:
+                success = False
+            if case_result["max_change"] <= activity_tolerance:
+                success = False
+
+for ny in nylist:
+    for setting in settings:
+        serial_result = results[(ny, setting["name"], 1)]
+        parallel_result = results[(ny, setting["name"], 2)]
+        mpi_diff = np.max(
+            np.abs(serial_result["final_density"] - parallel_result["final_density"])
+        )
+
+        print(f"MPI consistency {setting['name']} ny={ny}: max diff={mpi_diff}", end="")
+        if mpi_diff < mpi_tolerance:
+            print(" -> Passed")
+        else:
+            print(" -> Failed")
+            print(
+                "    Serial output:",
+                serial_result["case_dir"],
+                "Parallel output:",
+                parallel_result["case_dir"],
+            )
+            success = False
+
+if success:
+    print(" => Test passed")
+    sys.exit(0)
+else:
+    print(" => Test failed")
+    sys.exit(1)

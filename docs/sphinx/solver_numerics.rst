@@ -53,14 +53,16 @@ Configuring CVODE
 
    [solver]
    type = cvode
-   use_precon = true   # Use the user-provided preconditioner
-   mxstep = 1e9        # Prevent timeout
-   mxorder = 3         # Limit to 3rd order
+   cvode_precon_method = user  # Use the user-provided preconditioner
+   mxstep = 1e9                # Prevent timeout
+   mxorder = 3                 # Limit to 3rd order
    atol = 1e-7
    rtol = 1e-5
 
-use_precon = true
-   Enables the physics-based preconditioners
+cvode_precon_method = user
+   Enables the physics-based preconditioners. The default is ``none``; other
+   choices are ``auto``, ``petsc`` and ``bbd``. The old ``use_precon`` option
+   is no longer accepted by CVODE and will raise an error if set.
 
 mxstep = 1e9
    Prevents the solver from timing out if it takes too long to converge.

@@ -1,10 +1,11 @@
 # Calculate spatial correlation
 
 
-import numpy as np
-import matplotlib.pyplot as plt
-import pickle
 import os
+import pickle
+
+import matplotlib.pyplot as plt
+import numpy as np
 
 datasets = [
     ("D 64x64", "annulus-isothermal-d", "b--", 1, 1),

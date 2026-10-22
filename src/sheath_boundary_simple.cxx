@@ -58,19 +58,19 @@ BoutReal limitFree(BoutReal fm, BoutReal fc, BoutReal mode) {
 
 SheathBoundarySimple::SheathBoundarySimple(std::string name, Options& alloptions, Solver*)
     : NamedComponent(name, {
-                               readIfSet("species:e:{e_whole_domain}"),
-                               writeBoundary("species:e:{e_boundary}"),
+                               readIfSet("species:e:AA"),
+                               writeBoundaryFinal("species:e:{e_boundary}"),
                                readWrite("species:e:energy_source"),
                                readWrite("species:e:energy_flow_ylow"),
-                               writeBoundaryIfSet("species:e:{e_optional}"),
+                               writeBoundaryFinalIfSet("species:e:{e_optional}"),
                                writeBoundaryReadInteriorIfSet("species:e:pressure"),
                                readIfSet("species:{all_species}:charge"),
                                readOnly("species:{ions}:AA"),
                                readWrite("species:{ions}:energy_source"),
                                readWrite("species:{ions}:energy_flow_ylow"),
-                               writeBoundary("species:{ions}:{ion_boundary}"),
+                               writeBoundaryFinal("species:{ions}:{ion_boundary}"),
                                writeBoundaryReadInteriorIfSet("species:{ions}:pressure"),
-                               writeBoundaryIfSet("species:{ions}:{ion_optional}"),
+                               writeBoundaryFinalIfSet("species:{ions}:{ion_optional}"),
                            }) {
 
   Options& options = alloptions[name];
@@ -145,7 +145,6 @@ SheathBoundarySimple::SheathBoundarySimple(std::string name, Options& alloptions
                  .doc("Save additional output diagnostics")
                  .withDefault<bool>(false);
 
-  substitutePermissions("e_whole_domain", {"AA", "charge"});
   substitutePermissions("e_boundary", {"density", "temperature"});
   substitutePermissions("e_optional", {"velocity", "momentum"});
   substitutePermissions("ion_boundary", {"density", "temperature"});
@@ -394,11 +393,12 @@ void SheathBoundarySimple::transform_impl(GuardedOptions& state) {
         q -= (2.5 * tesheath + 0.5 * Me * SQ(vesheath)) * nesheath * vesheath;
 
         // Cross-sectional area in XZ plane and cell volume
-        BoutReal da = (coord->J[i] + coord->J[im])
-                      / (sqrt(coord->g_22[i]) + sqrt(coord->g_22[im])) * 0.5
-                      * (coord->dx[i] + coord->dx[im]) * 0.5
-                      * (coord->dz[i] + coord->dz[im]);                           // [m^2]
-        BoutReal dv = (coord->dx[i] * coord->dy[i] * coord->dz[i] * coord->J[i]); // [m^3]
+        BoutReal da = (coord->J()[i] + coord->J()[im])
+                      / (sqrt(coord->g_22()[i]) + sqrt(coord->g_22()[im])) * 0.5
+                      * (coord->dx()[i] + coord->dx()[im]) * 0.5
+                      * (coord->dz()[i] + coord->dz()[im]); // [m^2]
+        BoutReal dv =
+            (coord->dx()[i] * coord->dy()[i] * coord->dz()[i] * coord->J()[i]); // [m^3]
 
         // Get power and energy source
         BoutReal heatflow = q * da;     // [W]
@@ -459,11 +459,12 @@ void SheathBoundarySimple::transform_impl(GuardedOptions& state) {
         q -= (2.5 * tesheath + 0.5 * Me * SQ(vesheath)) * nesheath * vesheath;
 
         // Cross-sectional area in XZ plane and cell volume
-        BoutReal da = (coord->J[i] + coord->J[ip])
-                      / (sqrt(coord->g_22[i]) + sqrt(coord->g_22[ip])) * 0.5
-                      * (coord->dx[i] + coord->dx[ip]) * 0.5
-                      * (coord->dz[i] + coord->dz[ip]);                           // [m^2]
-        BoutReal dv = (coord->dx[i] * coord->dy[i] * coord->dz[i] * coord->J[i]); // [m^3]
+        BoutReal da = (coord->J()[i] + coord->J()[ip])
+                      / (sqrt(coord->g_22()[i]) + sqrt(coord->g_22()[ip])) * 0.5
+                      * (coord->dx()[i] + coord->dx()[ip]) * 0.5
+                      * (coord->dz()[i] + coord->dz()[ip]); // [m^2]
+        BoutReal dv =
+            (coord->dx()[i] * coord->dy()[i] * coord->dz()[i] * coord->J()[i]); // [m^3]
 
         // Get power and energy source
         BoutReal heatflow = q * da;     // [W]
@@ -607,12 +608,12 @@ void SheathBoundarySimple::transform_impl(GuardedOptions& state) {
           q -= (2.5 * tisheath + 0.5 * Mi * SQ(visheath)) * nisheath * visheath;
 
           // Cross-sectional area in XZ plane and cell volume
-          BoutReal da = (coord->J[i] + coord->J[ip])
-                        / (sqrt(coord->g_22[i]) + sqrt(coord->g_22[ip])) * 0.5
-                        * (coord->dx[i] + coord->dx[ip]) * 0.5
-                        * (coord->dz[i] + coord->dz[ip]); // [m^2]
+          BoutReal da = (coord->J()[i] + coord->J()[ip])
+                        / (sqrt(coord->g_22()[i]) + sqrt(coord->g_22()[ip])) * 0.5
+                        * (coord->dx()[i] + coord->dx()[ip]) * 0.5
+                        * (coord->dz()[i] + coord->dz()[ip]); // [m^2]
           BoutReal dv =
-              (coord->dx[i] * coord->dy[i] * coord->dz[i] * coord->J[i]); // [m^3]
+              (coord->dx()[i] * coord->dy()[i] * coord->dz()[i] * coord->J()[i]); // [m^3]
 
           // Get power and energy source
           BoutReal heatflow = q * da;     // [W]
@@ -677,12 +678,12 @@ void SheathBoundarySimple::transform_impl(GuardedOptions& state) {
           q -= (2.5 * tisheath + 0.5 * Mi * SQ(visheath)) * nisheath * visheath;
 
           // Cross-sectional area in XZ plane and cell volume
-          BoutReal da = (coord->J[i] + coord->J[ip])
-                        / (sqrt(coord->g_22[i]) + sqrt(coord->g_22[ip])) * 0.5
-                        * (coord->dx[i] + coord->dx[ip]) * 0.5
-                        * (coord->dz[i] + coord->dz[ip]); // [m^2]
+          BoutReal da = (coord->J()[i] + coord->J()[ip])
+                        / (sqrt(coord->g_22()[i]) + sqrt(coord->g_22()[ip])) * 0.5
+                        * (coord->dx()[i] + coord->dx()[ip]) * 0.5
+                        * (coord->dz()[i] + coord->dz()[ip]); // [m^2]
           BoutReal dv =
-              (coord->dx[i] * coord->dy[i] * coord->dz[i] * coord->J[i]); // [m^3]
+              (coord->dx()[i] * coord->dy()[i] * coord->dz()[i] * coord->J()[i]); // [m^3]
 
           // Get power and energy source
           BoutReal heatflow = q * da;     // [W]

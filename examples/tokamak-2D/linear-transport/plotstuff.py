@@ -1,6 +1,6 @@
-import xhermes
 import matplotlib.pyplot as plt
 import numpy as np
+import xhermes
 
 # Open the dataset
 bd = xhermes.open(".", geometry="toroidal", gridfilepath="eqd1031204007.00740.bout.nc")
@@ -22,8 +22,8 @@ for ix, iy in [(30, 30), (20, 50)]:
     T0 = T1 / np.exp(-gamma * Te.t[-1])
 
     plt.plot([0.0, Te.t[-1]], [T0, T1], "--k")
-    plt.title(r"Decay time: {:.2f} ms @ ix={},iy={}".format(1000.0 / gamma, ix, iy))
+    plt.title(rf"Decay time: {1000.0 / gamma:.2f} ms @ ix={ix},iy={iy}")
     plt.yscale("log")
     plt.tight_layout()
-    plt.savefig("Te_{}_{}.png".format(ix, iy))
+    plt.savefig(f"Te_{ix}_{iy}.png")
     plt.close("all")

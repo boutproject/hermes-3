@@ -47,8 +47,13 @@ if(HERMES_BUILD_BOUT)
   set(HERMES_BOUT_SRC
       "external/BOUT-dev"
       CACHE STRING "Directory of BOUT++ dir")
-  add_subdirectory(${HERMES_BOUT_SRC}
-                   ${CMAKE_CURRENT_BINARY_DIR}/external/BOUT-dev SYSTEM)
+  # Set a consistent variable for the build location with the `find_package`
+  # call when we're not building BOUT++ here
+  set(bout++_DIR
+      ${CMAKE_CURRENT_BINARY_DIR}/external/BOUT-dev
+      CACHE FILEPATH "BOUT++ build directory" FORCE)
+
+  add_subdirectory(${HERMES_BOUT_SRC} ${bout++_DIR} SYSTEM)
 else()
   find_package(bout++ REQUIRED)
 endif()
@@ -89,6 +94,7 @@ set(HERMES_SOURCES
     src/relax_potential.cxx
     src/sheath_closure.cxx
     src/sheath_boundary.cxx
+    src/sheath_boundary_fci.cxx
     src/sheath_boundary_simple.cxx
     src/sheath_boundary_insulating.cxx
     src/snb_conduction.cxx
@@ -168,6 +174,7 @@ set(HERMES_SOURCES
     include/recycling.hxx
     include/relax_potential.hxx
     include/sheath_boundary.hxx
+    include/sheath_boundary_fci.hxx
     include/sheath_boundary_simple.hxx
     include/sheath_boundary_insulating.hxx
     include/simple_conduction.hxx
@@ -332,8 +339,12 @@ if(HERMES_TESTS)
       # Make copies of the test exec and input file in the build directory and
       # keep them up to date
       configure_file(${INT_TEST_SRC}/runtest ${INT_TEST_DEST}/runtest COPYONLY)
-      configure_file(${INT_TEST_SRC}/data/BOUT.inp
-                     ${INT_TEST_DEST}/data/BOUT.inp COPYONLY)
+      if(EXISTS ${INT_TEST_SRC}/data/BOUT.inp)
+        configure_file(${INT_TEST_SRC}/data/BOUT.inp
+                       ${INT_TEST_DEST}/data/BOUT.inp COPYONLY)
+      elseif(EXISTS ${INT_TEST_DEST}/data/BOUT.inp)
+        file(REMOVE ${INT_TEST_DEST}/data/BOUT.inp)
+      endif()
     else()
       set(INT_TEST_DEST
           ${CMAKE_CURRENT_SOURCE_DIR}/tests/integrated/${TESTNAME})
@@ -366,6 +377,7 @@ if(HERMES_TESTS)
     endif()
   endfunction()
 
+  hermes_add_integrated_test(1D-density CONFLICTS BOUT_ENABLE_METRIC_3D)
   hermes_add_integrated_test(1D-fluid CONFLICTS BOUT_ENABLE_METRIC_3D)
   hermes_add_integrated_test(1D-low-n-srcs CONFLICTS BOUT_ENABLE_METRIC_3D)
   hermes_add_integrated_test(1D-recycling CONFLICTS BOUT_ENABLE_METRIC_3D)
@@ -385,10 +397,22 @@ if(HERMES_TESTS)
   hermes_add_integrated_test(2D-production CONFLICTS BOUT_ENABLE_METRIC_3D)
   hermes_add_integrated_test(2D-energy CONFLICTS BOUT_ENABLE_METRIC_3D)
   hermes_add_integrated_test(2D-recycling CONFLICTS BOUT_ENABLE_METRIC_3D)
+  hermes_add_integrated_test(examples CONFLICTS BOUT_ENABLE_METRIC_3D)
+  hermes_add_integrated_test(component-order CONFLICTS BOUT_ENABLE_METRIC_3D)
 
   hermes_add_integrated_test(1D-density-fci REQUIRES BOUT_ENABLE_METRIC_3D)
   hermes_add_integrated_test(1D-momentum-fci REQUIRES BOUT_ENABLE_METRIC_3D)
   hermes_add_integrated_test(1D-pressure-fci REQUIRES BOUT_ENABLE_METRIC_3D)
+  hermes_add_integrated_test(1D-ionviscosity-fci REQUIRES BOUT_ENABLE_METRIC_3D)
+  hermes_add_integrated_test(1D-electronviscosity-fci REQUIRES
+                             BOUT_ENABLE_METRIC_3D)
+  hermes_add_integrated_test(2D-density-anomalous-fci REQUIRES
+                             BOUT_ENABLE_METRIC_3D)
+  hermes_add_integrated_test(2D-fluid-anomalous-fci REQUIRES
+                             BOUT_ENABLE_METRIC_3D)
+  hermes_add_integrated_test(1D-conduction-fci REQUIRES BOUT_ENABLE_METRIC_3D)
+  hermes_add_integrated_test(1D-golden-answer-fci REQUIRES
+                             BOUT_ENABLE_METRIC_3D)
 
   # Unit tests
   option(HERMES_UNIT_TESTS "Build the unit tests" ON)
@@ -398,23 +422,20 @@ if(HERMES_TESTS)
       # again causes errors
       add_subdirectory(external/googletest)
     endif()
-    if(BOUT_ENABLE_METRIC_3D)
-      message(STATUS "CONFLICT unit-tests and BOUT_ENABLE_METRIC_3D")
-    else()
-      file(GLOB_RECURSE TEST_SOURCES tests/unit/test_*.cxx)
 
-      add_executable(hermes_unit_tests tests/unit/main.cxx ${TEST_SOURCES})
+    file(GLOB_RECURSE TEST_SOURCES tests/unit/test_*.cxx)
 
-      target_link_libraries(hermes_unit_tests PRIVATE hermes_warnings)
+    add_executable(hermes_unit_tests tests/unit/main.cxx ${TEST_SOURCES})
 
-      add_test(NAME hermes_unit_tests COMMAND hermes_unit_tests)
-      set_tests_properties(hermes_unit_tests PROPERTIES LABELS unit)
-      target_link_libraries(hermes_unit_tests PRIVATE gtest bout++::bout++
-                                                      hermes-3-lib)
-      # Have hermes_unit_tests look for dynamic libs in ./ before searching
-      # elsewhere
-      set_target_properties(hermes_unit_tests PROPERTIES BUILD_RPATH "$ORIGIN")
-    endif()
+    target_link_libraries(hermes_unit_tests PRIVATE hermes_warnings)
+
+    add_test(NAME hermes_unit_tests COMMAND hermes_unit_tests)
+    set_tests_properties(hermes_unit_tests PROPERTIES LABELS unit)
+    target_link_libraries(hermes_unit_tests PRIVATE gtest bout++::bout++
+                                                    hermes-3-lib)
+    # Have hermes_unit_tests look for dynamic libs in ./ before searching
+    # elsewhere
+    set_target_properties(hermes_unit_tests PROPERTIES BUILD_RPATH "$ORIGIN")
   endif()
 
   # Method of manufactured solutions (MMS) tests of operators
@@ -472,6 +493,8 @@ endif()
 
 configure_file(include/hermes_build_config.hxx.in
                include/hermes_build_config.hxx)
+
+configure_file(cmake/hermesconfig.py.in hermesconfig.py)
 
 # Installation
 if(BUILD_SHARED_LIBS)

@@ -3,7 +3,18 @@
 #define FIXED_TEMPERATURE_H
 
 #include "component.hxx"
+#include "guarded_options.hxx"
+#include "permissions.hxx"
+
+#include <bout/bout_types.hxx>
 #include <bout/constants.hxx>
+#include <bout/field3d.hxx>
+#include <bout/globals.hxx>
+#include <bout/mesh.hxx>
+#include <bout/options.hxx>
+#include <bout/unused.hxx>
+
+#include <string>
 
 /// Set species temperature to a fixed value
 ///
@@ -27,8 +38,8 @@ struct FixedTemperature : public NamedComponent<FixedTemperature> {
     T = options["temperature"].doc("Constant temperature [eV]").as<Field3D>()
         / Tnorm; // Normalise
 
+    bout::globals::mesh->communicate(T);
     if (T.isFci()) {
-      bout::globals::mesh->communicate(T);
       T.applyParallelBoundary("parallel_neumann_o2");
     }
 

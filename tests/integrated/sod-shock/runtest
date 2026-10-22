@@ -7,11 +7,13 @@
 #   https://www.mathworks.com/matlabcentral/fileexchange/46311-sod-shock-tube-problem-solver
 #
 
-from math import sqrt
-import numpy as np
-from boututils.run_wrapper import shell, launch_safe
-from boutdata.collect import collect
 import sys
+from math import sqrt
+from pathlib import Path
+
+import numpy as np
+from boutdata.collect import collect
+from boututils.run_wrapper import launch_safe, shell
 
 resolutions = [
     (100, "ob", 0.05),
@@ -128,9 +130,7 @@ for ny, sym, tol in resolutions:
     s, out = launch_safe(f"../../../hermes-3 mesh:ny={ny}", nproc=1, pipe=True)
 
     # Save output to log file
-    f = open(f"run.log.{ny}", "w")
-    f.write(out)
-    f.close()
+    Path(f"run.log.{ny}").write_text(out)
 
     n = collect("Ni", path="data", tind=-1, info=False).squeeze()
 
