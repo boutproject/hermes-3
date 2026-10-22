@@ -4,14 +4,12 @@
 #  1. An animation of the density evolution
 #  2. A plot of the initial densities.
 
-from __future__ import division
-from __future__ import print_function
-
 import os.path
 import pathlib
-import xhermes
+import sys
 
 import matplotlib.pyplot as plt
+import xhermes
 from matplotlib.animation import PillowWriter
 
 this_dir = pathlib.Path(__file__).parent
@@ -19,21 +17,36 @@ data_dir = this_dir / "data"
 hermes_exec = this_dir.parent.parent.parent / "hermes-3"
 data_path = data_dir / "BOUT.dmp.0.nc"
 scale_anim_size = 1.2
+for_presentation = True
 
 if not data_path.is_file():
     print(f"No data to plot at [{data_path}], bailing out")
-    exit(1)
+    sys.exit(1)
 
 # Read data
-ds = xhermes.open(data_dir, unnormalise=False)
+ds = xhermes.open(data_dir, unnormalise=True)
+density_normalisation = ds.metadata["Nnorm"]
+source_normalisation = density_normalisation * ds.metadata["Omega_ci"]
 
 # Species densities
 species_list = ["d", "d+", "t", "t+"]
+density_labels = {
+    "d": r"$n_D$",
+    "d+": r"$n_{D^+}$",
+    "t": r"$n_T$",
+    "t+": r"$n_{T^+}$",
+}
+threshold_labels = {
+    "d": r"$n_{D,th}$",
+    "d+": r"$n_{D^+,th}$",
+    "t": r"$n_{T,th}$",
+    "t+": r"$n_{T^+,th}$",
+}
 dens_group_indices = [[0, 1], [2, 3]]
 dens_var_groups = [
     [f"N{species_list[i]}" for i in group] for group in dens_group_indices
 ]
-dens_subplot_titles = ["Deuterium atoms,ions", "Tritium atoms,ions"]
+dens_subplot_titles = ["", ""]
 
 # Source diagnostics
 src_list = [
@@ -44,12 +57,20 @@ src_list = [
     "St+_low-n_ionization",
     "St+_low-n_external_src",
 ]
+source_labels = {
+    "Sd_low-n_recombination": r"rec pseudo-src ($D$)",
+    "Sd+_low-n_ionization": r"izn pseudo-src ($D^+$)",
+    "Sd+_low-n_external_src": r"external pseudo-src ($D^+$)",
+    "St_low-n_recombination": r"rec pseudo-src ($T$)",
+    "St+_low-n_ionization": r"izn pseudo-src ($T^+$)",
+    "St+_low-n_external_src": r"external pseudo-src ($T^+$)",
+}
 src_group_indices = [[0, 1, 2], [3, 4, 5]]
 src_var_groups = [[f"{src_list[i]}" for i in group] for group in src_group_indices]
 anim_vars = [[f"N{species_list[i]}" for i in group] for group in dens_group_indices]
 anim_vars.extend(src_var_groups)
 anim_subplot_titles = list(dens_subplot_titles)
-anim_subplot_titles.extend(["Deuterium sources", "Tritium sources"])
+anim_subplot_titles.extend(["", ""])
 anim_logscales = [True, True, False, False]
 
 # Extract density thresholds
@@ -63,8 +84,8 @@ for species in species_list:
         floor = 1e-7
     else:
         floor = options[species].as_dict().get("density_floor", 1e-7)
-    floors[species] = floor
-    thresholds[species] = floor * thresh_fac
+    floors[species] = floor * density_normalisation
+    thresholds[species] = floor * thresh_fac * density_normalisation
 
 
 print("Generating ICs plot")
@@ -75,10 +96,11 @@ fig, axes = plt.subplots(len(dens_var_groups), 1, sharex=True)
 for ax, title, group, species_group in zip(
     axes, dens_subplot_titles, dens_var_groups, dens_group_indices
 ):
-    for var in group:
+    for var, species_index in zip(group, species_group):
         # animate_list() mutates density_vars in place, replacing names with DataArrays
         var_name = var if isinstance(var, str) else var.name
-        ds_first[var_name].plot(ax=ax, label=var_name)
+        species = species_list[species_index]
+        ds_first[var_name].plot(ax=ax, label=density_labels[species])
     ax.set_yscale("log")
     ax.set_ylim(bottom=min(floors[species_list[i]] / 2 for i in species_group))
     for i in species_group:
@@ -89,9 +111,9 @@ for ax, title, group, species_group in zip(
             thresholds[species],
             color=color,
             linestyle=linestyle,
-            label=f"N{species}_th",
+            label=threshold_labels[species],
         )
-    ax.set_ylabel("number density [normalised]")
+    ax.set_ylabel(r"number density [$\mathrm{m}^{-3}$]")
     ax.set_title(title)
     ax.legend()
 fig.tight_layout()
@@ -124,35 +146,47 @@ anim_fig.set_size_inches(
 plot_axes = {block.ax for block in animation.blocks}
 for axis in list(animation.blocks[0].ax.figure.axes):
     if axis in plot_axes:
-        axis.set_xlabel("Parallel connection length [normalised]")
+        axis.set_xlabel("Parallel connection length [m]")
     else:
         axis.remove()
 
 # animation.blocks has one entry per line, in the order the variables were
 # passed to animate_list, i.e. all density panel lines followed by all source panel lines
 n_dens_blocks = sum(len(group) for group in dens_var_groups)
+for axis in {block.ax for block in animation.blocks[:n_dens_blocks]}:
+    axis.set_xlabel("")
 
 # Add horizontal lines to indicate density thresholds, colored consistently with the corresponding density variable
 for block, species in zip(animation.blocks[:n_dens_blocks], species_list):
     color = block.line.get_color()
     linestyle = ":" if species.endswith("+") else "--"
+    block.line.set_label(density_labels[species])
     block.ax.axhline(
         thresholds[species],
         color=color,
         linestyle=linestyle,
-        label=f"N{species}_th",
+        label=threshold_labels[species],
     )
     block.ax.legend(loc="lower left", fontsize=8)
     current_ylim = block.ax.get_ylim()
-    block.ax.set_ylabel("[normalised] density")
+    block.ax.set_ylabel(r"density [$\mathrm{m}^{-3}$]")
     block.ax.set_ylim(
         bottom=min(floors[species] / 2, current_ylim[0]),
         top=max(thresholds[species] * 2, current_ylim[1]),
     )
 
-for block in animation.blocks[n_dens_blocks:]:
-    block.ax.set_ylabel("[normalised] source")
+for block, source in zip(animation.blocks[n_dens_blocks:], src_list):
+    block.line.set_label(source_labels[source])
+    block.ax.set_ylabel(r"source [$\mathrm{m}^{-3}\,\mathrm{s}^{-1}$]")
     block.ax.legend(fontsize=8)
 
+plot_axes_in_order = list(dict.fromkeys(block.ax for block in animation.blocks))
+for axis in plot_axes_in_order[1::2]:
+    axis.set_ylabel("")
+
+animation.blocks[-1].ax.set_ylim(top=3e17)
+anim_fig.subplots_adjust(
+    left=0.10, right=0.98, bottom=0.09, top=0.98, hspace=0.25, wspace=0.1
+)
 animation.save(anim_output_path + ".gif", writer=PillowWriter(fps=10))
 print(f"Wrote output to {anim_output_path}.gif")
