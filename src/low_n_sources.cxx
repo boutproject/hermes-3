@@ -74,10 +74,17 @@ PseudoReactionSpec make_reaction_spec(PseudoReactionType type,
   spec.type = type;
 
   switch (type) {
-  case PseudoReactionType::association:
-    spec.reaction_str = fmt::format("2{} -> {}", species1, species2);
+  case PseudoReactionType::association: {
+    // Allow for molecules made up of any number of atoms (of the same element)
+    const SpeciesParser molecule(species2);
+    const int atoms_per_molecule =
+        stringToInt(molecule.get_base_species().substr(molecule.get_element().size()));
+    // N.B. SpeciesParser constructor reject molecule strings with <1 atoms, so we can assume
+    // atoms_per_molecule is +ve
+    spec.reaction_str = fmt::format("{}{} -> {}", atoms_per_molecule, species1, species2);
     spec.target_species = species2;
     return spec;
+  }
   case PseudoReactionType::recombination:
     spec.reaction_str = fmt::format("{} + e -> {}", species1, species2);
     spec.target_species = species2;
