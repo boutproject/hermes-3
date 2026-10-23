@@ -23,6 +23,7 @@ jobs:
         uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
+          version: "0.13.4"
 
       - name: Install dev tools
         run: uv sync --only-dev

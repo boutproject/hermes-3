@@ -40,6 +40,8 @@ if(HERMES_REVISION STREQUAL "GITDIR-NOTFOUND")
 endif()
 message(STATUS "Git revision: ${HERMES_REVISION}")
 
+option(BUILD_SHARED_LIBS "Build shared libs" ON)
+
 # BOUT++ is a dependency
 option(HERMES_BUILD_BOUT "Build BOUT++ in external/BOUT-dev" ON)
 if(HERMES_BUILD_BOUT)
@@ -411,15 +413,19 @@ if(HERMES_TESTS)
   hermes_add_integrated_test(1D-golden-answer-fci REQUIRES
                              BOUT_ENABLE_METRIC_3D)
 
-  # Unit tests
   option(HERMES_UNIT_TESTS "Build the unit tests" ON)
-  if(HERMES_UNIT_TESTS)
+  option(HERMES_DIVOPS_MMS_TESTS "Build the differential operator MMS tests" ON)
+
+  if(HERMES_UNIT_TESTS OR HERMES_DIVOPS_MMS_TESTS)
     if(NOT PACKAGE_TESTS)
       # Not running BOUT++ tests Since BOUT++ includes googletest, adding it
       # again causes errors
       add_subdirectory(external/googletest)
     endif()
+  endif()
 
+  # Unit tests
+  if(HERMES_UNIT_TESTS)
     file(GLOB_RECURSE TEST_SOURCES tests/unit/test_*.cxx)
 
     add_executable(hermes_unit_tests tests/unit/main.cxx ${TEST_SOURCES})
@@ -436,7 +442,6 @@ if(HERMES_TESTS)
   endif()
 
   # Method of manufactured solutions (MMS) tests of operators
-  option(HERMES_DIVOPS_MMS_TESTS "Build the differential operator MMS tests" ON)
   if(HERMES_DIVOPS_MMS_TESTS)
     if(BOUT_ENABLE_METRIC_3D)
       message(STATUS "CONFLICT mms-operator-tests and BOUT_ENABLE_METRIC_3D")
