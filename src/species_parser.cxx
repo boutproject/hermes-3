@@ -65,43 +65,36 @@ SpeciesTypeAlt SpeciesParser::get_type(const SpeciesParser& species) {
 ///
 SpeciesParser::SpeciesParser(const std::string& species_str) {
 
-  // Extract base species, charge and ionisation state with regex
-  // Any number preceding the base species is discarded
-  std::regex pattern("^([0-9]*)([a-zA-Z]{1,2}[0-9]*)([\\+|\\-]?)([0-9]*)$");
-  std::smatch matches;
-  bool has_matches = std::regex_search(species_str, matches, pattern);
-  // String must provide at least a base species
-  if (!has_matches || !matches[1].matched) {
+  // Capture 1. base species (element with optional molecule count), 2. charge sign and
+  // 3. charge magnitude. Any leading number is discarded in a non-capturing group.
+  static const std::regex pattern(
+      "(?:[1-9][0-9]*)?(([a-zA-Z]{1,2})([1-9][0-9]*)?)([+-]?)([1-9][0-9]*)?");
+  std::smatch all_components;
+  if (!std::regex_match(species_str, all_components, pattern)) {
     throw BoutException(fmt::format(
         "Unable to extract species properties from string '{}'", species_str));
   }
 
-  // Store base species; always lower case
-  this->base_species = matches[2];
+  // Store base species (atom or molecule) in lower case
+  this->base_species = all_components[1];
   std::transform(this->base_species.begin(), this->base_species.end(),
                  this->base_species.begin(), ::tolower);
+  // Store element, also in lower case
+  this->element = this->base_species.substr(
+      0, static_cast<std::string::size_type>(all_components[2].length()));
+  this->_is_molecule = all_components[3].matched;
 
-  std::regex mol_pattern("^([a-zA-Z]{1,2})([0-9]{0,2})$");
-  std::smatch mol_matches;
-  bool has_mol_matches = std::regex_search(this->base_species, mol_matches, mol_pattern);
-  // base_species must at least contain an element
-  if (!has_mol_matches || !mol_matches[1].matched) {
-    throw BoutException(
-        fmt::format("Unable to extract element from species name {}", species_str));
-  }
-  this->element = mol_matches[1];
-  this->_is_molecule = !mol_matches[2].str().empty();
-
-  // Extract charge, electron is a special case
+  // Store charge. Electron is a special case
   if (species_str == "e") {
     this->charge = -1;
   } else {
-    int sign = matches[3] == "+" ? 1 : matches[3] == "-" ? -1 : 0;
-    int num = (matches[4].length() == 0) ? 1 : stringToInt(matches[4]);
+    int sign = all_components[4] == "+" ? 1 : all_components[4] == "-" ? -1 : 0;
+    int num = (all_components[5].length() == 0) ? 1 : stringToInt(all_components[5]);
     this->charge = sign * num;
   }
 
-  // Stored species string discards any leading number and is always lower case
+  // The stored species string is a sanitized version of the input;
+  // Any leading number is discarded and the string is always lower case
   this->species_str = construct_species_str(this->base_species, this->charge);
 }
 

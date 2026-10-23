@@ -25,14 +25,34 @@ TEST_F(SpeciesParserTest, GetTypeFromString) {
 
 /// @brief Check that constructor throws for a variety of invalid strings
 TEST_F(SpeciesParserTest, InvalidStrings) {
+  // Empty string
   ASSERT_THROW(SpeciesParser(""), BoutException);
+  // Only numbers
   ASSERT_THROW(SpeciesParser("123"), BoutException);
+  // Only a charge sign without a base species
   ASSERT_THROW(SpeciesParser("+"), BoutException);
+  // Only a charge sign without a base species
   ASSERT_THROW(SpeciesParser("+2"), BoutException);
+  // Charge sign before element
   ASSERT_THROW(SpeciesParser("-h"), BoutException);
+  // Invalid characters
   ASSERT_THROW(SpeciesParser("%&?!"), BoutException);
+  // Invalid characters
+  ASSERT_THROW(SpeciesParser("he|2"), BoutException);
+  // Space before charge specifier
   ASSERT_THROW(SpeciesParser("he +"), BoutException);
+  // Space before charge specifier
   ASSERT_THROW(SpeciesParser("H -"), BoutException);
+  // Double charge sign
+  ASSERT_THROW(SpeciesParser("d2++"), BoutException);
+  // Invalid molecule count of zero
+  ASSERT_THROW(SpeciesParser("d0"), BoutException);
+  // Invalid molecule count (leading zero)
+  ASSERT_THROW(SpeciesParser("d01"), BoutException);
+  // Base species can't be more than 2 characters
+  ASSERT_THROW(SpeciesParser("abc"), BoutException);
+  // Invalid charge specifier
+  ASSERT_THROW(SpeciesParser("he+0"), BoutException);
 }
 
 /// @brief Check ionisation of a highly-ionised species.
@@ -209,6 +229,16 @@ TEST_F(SpeciesParserTest, ParseNeutral) {
   EXPECT_EQ(parser.get_charge(), 0);
   // Species string should not include the prefix number and should be lower case
   EXPECT_EQ(parser.get_str(), "he");
+}
+
+/// @brief Extract every component in a prefixed molecular ion.
+TEST_F(SpeciesParserTest, ParsePrefixedMolecularIon) {
+  SpeciesParser parser("12He10-2");
+  EXPECT_EQ(parser.get_element(), "he");
+  EXPECT_EQ(parser.get_base_species(), "he10");
+  EXPECT_TRUE(parser.is_molecule());
+  EXPECT_EQ(parser.get_charge(), -2);
+  EXPECT_EQ(parser.get_str(), "he10-2");
 }
 
 /// @brief Check parsing of various positively charged species.
