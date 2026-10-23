@@ -25,6 +25,10 @@ struct DipoleAnomalousDiffusion : public NamedComponent<DipoleAnomalousDiffusion
   ///   - dipole_quasilinear_D      Quasilinear diffusion flux function Dpsi
   ///   - dipole_quasilinear_model  Scaling of dipole_quasilinear_D. Default 1:
   ///                               D = Dpsi/(R^2 B^2), Dpsi in [Wb^2 rad^-2 s^-1]
+  ///   - dipole_quasilinear_D_initial  Relax Dpsi from this value (same units) to
+  ///                               dipole_quasilinear_D: D(t) = D + (D_initial - D)
+  ///                               exp(-t / dipole_quasilinear_D_relax_time)
+  ///   - dipole_quasilinear_D_relax_time  Relaxation time [s]. Default -1 (off)
   ///   - dipole_quasilinear_closure  Scale dipole_quasilinear_D (then D0) by d/gamma,
   ///                               d = -dln p/dln U, p the total charged pressure,
   ///                               U = int dl/B. Default false
@@ -43,6 +47,8 @@ private:
   Field2D dipole_anomalous_D; ///< Anomalous density diffusion coefficient
   Field2D dipole_anomalous_chi; ///< Anomalous thermal diffusion coefficient
   Field2D dipole_quasilinear_D; ///< Quasilinear particle diffusion coefficient
+  Field2D dipole_quasilinear_D_initial; ///< Starting value of the relaxation in time
+  BoutReal D_relax_time; ///< Relaxation time (normalised); <= 0: no relaxation
   Field2D B2D;
   bool dipole_inner_noflux_particle; ///< No quasilinear particle flux at inner x?
   bool dipole_inner_noflux_heat;     ///< No quasilinear entropy (heat) flux at inner x?

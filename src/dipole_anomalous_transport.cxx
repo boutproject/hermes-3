@@ -166,6 +166,24 @@ DipoleAnomalousDiffusion::DipoleAnomalousDiffusion(std::string name, Options& al
                              .withDefault(dipole_quasilinear_D)
                          * model_scaling(dipole_quasilinear_model);
 
+  // Optional relaxation in time from D_initial to dipole_quasilinear_D, e.g. to start
+  // with a large D (fast, robust relaxation) and reach the target D smoothly
+  D_relax_time = options["dipole_quasilinear_D_relax_time"]
+                     .doc("Relaxation time [s] of the quasilinear D from "
+                          "dipole_quasilinear_D_initial to dipole_quasilinear_D: D(t) = "
+                          "D + (D_initial - D) exp(-t / relax_time). <= 0: off")
+                     .withDefault(-1.0)
+                 / alloptions["units"]["seconds"].as<BoutReal>();
+  if (D_relax_time > 0) {
+    dipole_quasilinear_D_initial =
+        options["dipole_quasilinear_D_initial"]
+            .doc("Starting value of the quasilinear D relaxation (units as "
+                 "dipole_quasilinear_D)")
+            .as<Field2D>()
+        * model_scaling(dipole_quasilinear_model);
+    setPermissions(readOnly("time"));
+  }
+
   dipole_quasilinear_closure =
       options["dipole_quasilinear_closure"]
           .doc("Scale dipole_quasilinear_D by d/dipole_gamma, d = -dln p/dln U from the "
@@ -194,6 +212,10 @@ DipoleAnomalousDiffusion::DipoleAnomalousDiffusion(std::string name, Options& al
   dipole_anomalous_D *= closed;
   dipole_anomalous_chi *= closed;
   dipole_quasilinear_D *= closed;
+  if (D_relax_time > 0) {
+    dipole_quasilinear_D_initial *= closed;
+    mesh->communicate(dipole_quasilinear_D_initial);
+  }
 
   mesh->communicate(dipole_anomalous_D);
   mesh->communicate(dipole_anomalous_chi);
@@ -284,6 +306,11 @@ void DipoleAnomalousDiffusion::transform_impl(GuardedOptions& state) {
                  dipole_inner_noconvection_particle);
   const Coordinates* coord = mesh->getCoordinates();
   Field2D D_QL = DC(dipole_quasilinear_D);
+  if (D_relax_time > 0) {
+    // Absolute simulation time: on restart the relaxation continues where it was
+    const BoutReal time = get<BoutReal>(state["time"]);
+    D_QL += (DC(dipole_quasilinear_D_initial) - D_QL) * exp(-time / D_relax_time);
+  }
   if (dipole_quasilinear_closure) {
     // Interchange closure D(psi) = D0 d/gamma, d = -dln p/dln U (marginal: p U^gamma
     // = const). Total charged pressure: the displacement is common to all species
@@ -420,6 +447,19 @@ void DipoleAnomalousDiffusion::outputVars(Options& state) {
          {"standard_name", "dipole quasilinear density diffusion"},
          {"long_name", std::string("Dipole quasilinear density diffusion of ") + name},
          {"source", "dipole_anomalous_transport"}});
+    // Fixed at initialisation, so saved once without a time dimension
+    set_with_attrs(state[fmt::format("dipole_anomalous_D_{}", name)], dipole_anomalous_D,
+                   {{"units", "m^2 s^-1"},
+                    {"conversion", rho_s0 * rho_s0 * Omega_ci},
+                    {"standard_name", "dipole anomalous density diffusion"},
+                    {"long_name", "Dipole anomalous density diffusion of " + name},
+                    {"source", "dipole_anomalous_transport"}});
+    set_with_attrs(state[fmt::format("dipole_anomalous_chi_{}", name)], dipole_anomalous_chi,
+                   {{"units", "m^2 s^-1"},
+                    {"conversion", rho_s0 * rho_s0 * Omega_ci},
+                    {"standard_name", "dipole anomalous thermal diffusion"},
+                    {"long_name", "Dipole anomalous thermal diffusion of " + name},
+                    {"source", "dipole_anomalous_transport"}});
 
     if (dipole_quasilinear_closure) {
       set_with_attrs(state[fmt::format("dipole_d_{}", name)], closure_d,

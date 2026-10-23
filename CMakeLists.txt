@@ -77,6 +77,7 @@ set(HERMES_SOURCES
     src/izn_rec_reaction.cxx
     src/div_ops.cxx
     src/neutral_mixed.cxx
+    src/neutral_radial.cxx
     src/neutral_full_velocity.cxx
     src/electromagnetic.cxx
     src/electron_force_balance.cxx
@@ -162,6 +163,7 @@ set(HERMES_SOURCES
     include/izn_rec_reaction.hxx
     include/neutral_boundary.hxx
     include/neutral_mixed.hxx
+    include/neutral_radial.hxx
     include/neutral_parallel_diffusion.hxx
     include/solkit_neutral_parallel_diffusion.hxx
     include/noflow_boundary.hxx

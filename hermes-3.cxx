@@ -60,6 +60,7 @@
 #include "include/neutral_boundary.hxx"
 #include "include/neutral_full_velocity.hxx"
 #include "include/neutral_mixed.hxx"
+#include "include/neutral_radial.hxx"
 #include "include/neutral_parallel_diffusion.hxx"
 #include "include/noflow_boundary.hxx"
 #include "include/penalisation.hxx"
