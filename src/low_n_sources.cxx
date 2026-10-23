@@ -120,14 +120,14 @@ void set_unique_species_or_throw(std::string& existing_species,
 namespace hermes {
 
 // ======================= LowNSources member functions =======================
-LowNSources::LowNSources(std::string name, Options& options,
+LowNSources::LowNSources(const std::string& name, Options& options,
                          [[maybe_unused]] Solver* solver)
-    : LowNSources(std::move(name), options) {}
+    : LowNSources(name, options) {}
 
-LowNSources::LowNSources(std::string name, Options& options)
+LowNSources::LowNSources(const std::string& name, Options& options)
     : NamedComponent(name, {readOnly("species:{all_species}:{read_vals}"),
                             readWrite("species:{all_species}:{write_vals}")}),
-      options(options), all_species{} {
+      options(options) {
   substitutePermissions("read_vals", {"AA", "density", "velocity", "temperature"});
   substitutePermissions("write_vals", {"density_source", "momentum_source",
                                        "energy_source", "collision_frequency"});
@@ -389,26 +389,23 @@ void LowNSources::outputVars(Options& state) {
 }
 
 PseudoReaction::PseudoReaction(Options& options, const PseudoReactionSpec& spec)
-    : Reaction(PSEUDO_REACTION_COMPONENT_NAME, options) {
-  this->type = spec.type;
-  this->density_threshold = spec.density_threshold;
-  this->low_n_timescale = spec.low_n_timescale;
-  this->target_species = spec.target_species;
-  this->gate_species = spec.gate_species;
-  this->gate_species_threshold = spec.gate_species_threshold;
-  this->boost_species = spec.boost_species;
-  this->boost_species_threshold = spec.boost_species_threshold;
-  this->boost_requires_deficit = spec.boost_requires_deficit;
-  this->strategy = LowNSrcsStrategyFromString(spec.strategy);
+    : Reaction(PSEUDO_REACTION_COMPONENT_NAME, options), type(spec.type),
+      density_threshold(spec.density_threshold), low_n_timescale(spec.low_n_timescale),
+      target_species(spec.target_species), gate_species(spec.gate_species),
+      gate_species_threshold(spec.gate_species_threshold),
+      boost_species(spec.boost_species),
+      boost_species_threshold(spec.boost_species_threshold),
+      boost_requires_deficit(spec.boost_requires_deficit),
+      strategy(LowNSrcsStrategyFromString(spec.strategy)) {
 
   if (this->diagnose) {
     // Set up a diagnostic for the density source of the target (produced) species
-    std::string label =
+    std::string diag_name =
         fmt::format("S{:s}_low-n_{:s}", this->target_species, toString(this->type));
     std::string description = fmt::format("Particle source of {:s} due to low-n {:s}",
                                           this->target_species, toString(this->type));
     std::string src_name = fmt::format("low_n_{:s}", toString(this->type));
-    add_diagnostic(this->target_species, label, description,
+    add_diagnostic(this->target_species, diag_name, description,
                    ReactionDiagnosticType::density_src, src_name, identity);
   }
 }

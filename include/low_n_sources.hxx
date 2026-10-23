@@ -33,8 +33,8 @@ public:
 
   using ReactionDef = std::tuple<std::string, std::string, PseudoReactionType>;
 
-  LowNSources(std::string name, Options& options);
-  LowNSources(std::string name, Options& options, Solver* solver);
+  LowNSources(const std::string& name, Options& options);
+  LowNSources(const std::string& name, Options& options, Solver* solver);
 
   std::vector<ReactionDef> get_reaction_defs() const;
 
