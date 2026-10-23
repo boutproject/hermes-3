@@ -274,14 +274,6 @@ TEST_F(LowNSourcesTest, FailOnInvalidStrategy) {
       make_test_options(nfloor, nfloor, nfloor, "does_not_exist");
   EXPECT_THROW(hermes::LowNSources component("low_n_sources", options_invalid_strat),
                BoutException);
-
-  // Check that string for a valid, but unimplemented strategy throws on transform
-  Options options_unimplemented_strat =
-      make_test_options(nfloor, nfloor, nfloor, "uedge");
-  hermes::LowNSources component("low_n_sources", options_unimplemented_strat);
-  Options state;
-  set_state(state, nfloor, nfloor, nfloor);
-  EXPECT_THROW(component.transform(state), BoutException);
 }
 
 /**

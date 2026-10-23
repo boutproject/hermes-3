@@ -472,16 +472,10 @@ RateData PseudoReaction::get_rate_standard(GuardedOptions& state) {
   return result;
 }
 
-RateData PseudoReaction::get_rate_uedge([[maybe_unused]] GuardedOptions& state) {
-  throw BoutException("PseudoReaction::get_rate_uedge() not yet implemented");
-}
-
 RateData PseudoReaction::get_rate(GuardedOptions& state) {
   switch (this->strategy) {
   case LowNSrcsStrategy::standard:
     return get_rate_standard(state);
-  case LowNSrcsStrategy::uedge:
-    return get_rate_uedge(state);
   default:
     throw std::runtime_error("Unknown low-n sources strategy [" + toString(this->strategy)
                              + "]");

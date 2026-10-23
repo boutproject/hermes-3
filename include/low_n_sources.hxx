@@ -142,8 +142,6 @@ private:
 
   /// Calculate rate using 'standard' strategy (default)
   RateData get_rate_standard(GuardedOptions& state);
-  /// Calculate rate using 'uedge' strategy
-  RateData get_rate_uedge(GuardedOptions& state);
 };
 
 } // namespace hermes
