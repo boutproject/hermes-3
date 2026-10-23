@@ -125,7 +125,11 @@ private:
   template <bool upwinding>
   BoutReal xflux(const Field3D& a, const Field3D& f, const Ind3D& i);
   template <bool upwinding>
+  BoutReal xflux_full(const Field3D& a, const Field3D& f, const Ind3D& i);
+  template <bool upwinding>
   BoutReal zflux(const Field3D& a, const Field3D& f, const Ind3D& i);
+  template <bool upwinding>
+  BoutReal zflux_full(const Field3D& a, const Field3D& f, const Ind3D& i);
 };
 
 std::shared_ptr<dagp_fv> getDagp_fv(Mesh* mesh, BoutReal rho_s0);

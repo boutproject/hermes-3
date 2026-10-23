@@ -8,6 +8,7 @@
 #include <bout/field3d.hxx>
 #include <bout/fv_ops.hxx>
 #include <bout/globals.hxx>
+#include <bout/immersed_boundary.hxx>
 #include <bout/options.hxx>
 #include <bout/output.hxx>
 #include <bout/output_bout_types.hxx>
@@ -80,6 +81,18 @@ EvolveMomentum::EvolveMomentum(std::string name, Options& alloptions, Solver* so
           .doc("Fix Y boundary momentum flux to boundary midpoint value?")
           .withDefault<bool>(false);
 
+  if (immBndry) {
+    NV.name = std::string("NV") + name;
+    if (!immBndry->CheckFieldSetUp(NV.name)) {
+      immBndry->FieldSetup(NV);
+    }
+    V = zeroFrom(NV); //IB_TODO: Need this because not yet allocated.
+    V.name = std::string("V") + name;
+    if (!immBndry->CheckFieldSetUp(V.name)) {
+      immBndry->FieldSetup(V);
+    }
+  }
+
   // Set to zero so set for output
   momentum_source = 0.0;
   NV_err = 0.0;
@@ -105,7 +118,13 @@ void EvolveMomentum::transform_impl(GuardedOptions& state) {
   const BoutReal AA = get<BoutReal>(species["AA"]); // Atomic mass
 
   V = Field3DParallel(NV / (AA * Nlim));
-  V.applyBoundary();
+  if (immBndry) {
+    //Note, dont need to set NV below if N already has IB BCs.
+    V.name = std::string("V") + name; //IB_TODO: Name might be mangled above.
+    immBndry->SetBoundary(V);
+  } else {
+    V.applyBoundary();
+  }
 
   if (NV.isFci()) {
     ASSERT2(V.hasParallelSlices());
@@ -136,7 +155,11 @@ void EvolveMomentum::finally(const Options& state) {
   // Get the species density
   const Field3D N = get<Field3D>(species["density"]);
   // Apply a floor to the density
-  const Field3D Nlim = softFloor(N.asField3DParallel(), density_floor);
+  Field3D Nlim = softFloor(N.asField3DParallel(), density_floor);
+  if (immBndry) { //IB_TODO: Temp reset for ghosts after flooring in case negative.
+    Nlim.name = std::string("N") + name; //Field helpers can mangle names; reset before IB lookup.
+    immBndry->SetBoundary(Nlim);
+  }
 
   // Typical wave speed used for numerical diffusion
   Field3D fastest_wave;
@@ -144,7 +167,14 @@ void EvolveMomentum::finally(const Options& state) {
     fastest_wave = get<Field3D>(state["fastest_wave"]);
   } else {
     const Field3D T = get<Field3D>(species["temperature"]);
-    fastest_wave = sqrt(T / AA);
+    if (immBndry) {
+      fastest_wave = zeroFrom(T);
+      BOUT_FOR(i, T.getRegion("RGN_NO_IMM_BNDRY")) {
+        fastest_wave[i] = sqrt(T[i]/AA);
+      }
+    } else {
+      fastest_wave = sqrt(T / AA);
+    }
   }
 
   // Parallel flow
@@ -267,6 +297,7 @@ void EvolveMomentum::finally(const Options& state) {
   // -> Add term to force NV_solver towards NV
   // Note: This correction is calculated in transform()
   //       because NV may be modified by electromagnetic terms
+  //IB_TODO: Is this ok for all? Timestepper shouldnt use ghosts/non-plasma cells now.
   ddt(NV) += NV_err;
 
   // Scale time derivatives

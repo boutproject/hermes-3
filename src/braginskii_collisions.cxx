@@ -8,6 +8,7 @@
 #include <bout/boutexception.hxx>
 #include <bout/constants.hxx>
 #include <bout/field3d.hxx>
+#include <bout/immersed_boundary.hxx>
 #include <bout/msg_stack.hxx>
 #include <bout/options.hxx>
 #include <bout/output.hxx>
@@ -147,6 +148,7 @@ void BraginskiiCollisions::collide(GuardedOptions& species1, GuardedOptions& spe
     const Field3D density2 = GET_NOBOUNDARY(Field3D, species2["density"]);
 
     const Field3D nu = filledFrom(nu_12, [&](auto& i) {
+      if (immBndry && !immBndry->IsInside(i)) {return 0.0;}
       return nu_12[i] * (A1 / A2) * density1[i] / softFloor(density2[i], 1e-5);
     });
 
@@ -182,6 +184,7 @@ void BraginskiiCollisions::transform_impl(GuardedOptions& state) {
         }
 
         const Field3D nu_ee = filledFrom(Ne, [&](auto& i) {
+          if (immBndry && !immBndry->IsInside(i)) {return 0.0;}
           const BoutReal Telim = softFloor(Te[i], 0.1);
           const BoutReal Nelim = softFloor(Ne[i], 1e10);
           const BoutReal logTe = log(Telim);
@@ -224,6 +227,7 @@ void BraginskiiCollisions::transform_impl(GuardedOptions& state) {
         const BoutReal me_mi = SI::Me / (SI::Mp * Ai); // m_e / m_i
 
         const Field3D nu_ei = filledFrom(Ne, [&](auto& i) {
+          if (immBndry && !immBndry->IsInside(i)) {return 0.0;}
           // NRL formulary 2019, page 34
           const BoutReal coulomb_log =
               ((Te[i] < 0.1) || (Ni[i] < 1e10) || (Ne[i] < 1e10)) ? 10
@@ -280,6 +284,7 @@ void BraginskiiCollisions::transform_impl(GuardedOptions& state) {
         BoutReal a0 = 5e-19; // Cross-section [m^2]
 
         const Field3D nu_en = filledFrom(Ne, [&](auto& i) {
+          if (immBndry && !immBndry->IsInside(i)) {return 0.0;}
           // Electron thermal speed (normalised)
           const BoutReal vth_e = sqrt((SI::Mp / SI::Me) * Te[i] / Tnorm);
 
@@ -363,6 +368,7 @@ void BraginskiiCollisions::transform_impl(GuardedOptions& state) {
 
           // Ion-ion collisions
           const Field3D nu_12 = filledFrom(density1, [&](auto& i) {
+            if (immBndry && !immBndry->IsInside(i)) {return 0.0;}
             const BoutReal Tlim1 = softFloor(temperature1[i], 0.1);
             const BoutReal Tlim2 = softFloor(temperature2[i], 0.1);
 
@@ -404,6 +410,7 @@ void BraginskiiCollisions::transform_impl(GuardedOptions& state) {
           BoutReal a0 = 5e-19; // Cross-section [m^2]
 
           const Field3D nu_12 = filledFrom(density1, [&](auto& i) {
+            if (immBndry && !immBndry->IsInside(i)) {return 0.0;}
             // Relative velocity is sqrt( v1^2 + v2^2 )
             const BoutReal vrel =
                 sqrt(temperature1[i] / (Tnorm * AA1) + temperature2[i] / (Tnorm * AA2));
@@ -453,6 +460,7 @@ void BraginskiiCollisions::transform_impl(GuardedOptions& state) {
           BoutReal a0 = 5e-19; // Cross-section [m^2]
 
           const Field3D nu_12 = filledFrom(density1, [&](auto& i) {
+            if (immBndry && !immBndry->IsInside(i)) {return 0.0;}
             // Relative velocity is sqrt( v1^2 + v2^2 )
             const BoutReal vrel =
                 sqrt(temperature1[i] / (Tnorm * AA1) + temperature2[i] / (Tnorm * AA2));
@@ -482,6 +490,7 @@ void BraginskiiCollisions::transform_impl(GuardedOptions& state) {
           BoutReal a0 = PI * SQ(2.8e-10); // Cross-section [m^2]
 
           const Field3D nu_12 = filledFrom(density1, [&](auto& i) {
+            if (immBndry && !immBndry->IsInside(i)) {return 0.0;}
             // Relative velocity is sqrt( v1^2 + v2^2 )
             const BoutReal vrel =
                 sqrt(temperature1[i] / (Tnorm * AA1) + temperature2[i] / (Tnorm * AA2));

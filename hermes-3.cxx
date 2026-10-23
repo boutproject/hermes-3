@@ -87,6 +87,7 @@
 #include <bout/boundary_op.hxx>
 #include <bout/constants.hxx>
 #include <bout/field_factory.hxx>
+#include <bout/immersed_boundary.hxx>
 #include <bout/tokamak_coordinates.hxx>
 
 #include "include/recalculate_metric.hxx"
@@ -258,6 +259,16 @@ int Hermes::init(bool restarting) {
       mesh->getCoordinates()->normaliseMetric(
           bout::TokamakOrFCIMetricNormaliser(mesh, Bnorm, rho_s0));
     }
+  }
+
+  //IB_TODO: Can move into mesh if inside BOUT++ now? Requires coordinates made first so not sure where to put it.
+  if (options["imm_bndry"]
+          .doc("Use immersed boundary method. Requires FCI.")
+          .withDefault(false)) {
+    if (!mesh->isFci()) {
+      throw BoutException("hermes:imm_bndry requires an FCI mesh");
+    }
+    immBndry = std::make_unique<ImmersedBoundary>();
   }
 
   // Tell the components if they are restarting

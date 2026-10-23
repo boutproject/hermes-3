@@ -10,6 +10,7 @@
 #include <bout/constants.hxx>
 #include <bout/field3d.hxx>
 #include <bout/globals.hxx>
+#include <bout/immersed_boundary.hxx>
 #include <bout/mesh.hxx>
 #include <bout/options.hxx>
 #include <bout/unused.hxx>
@@ -37,6 +38,14 @@ struct FixedTemperature : public NamedComponent<FixedTemperature> {
     // Get the temperature and normalise
     T = options["temperature"].doc("Constant temperature [eV]").as<Field3D>()
         / Tnorm; // Normalise
+
+    if (immBndry) {
+      T.name = std::string("T") + name;
+      if (!immBndry->CheckFieldSetUp(T.name)) {
+        immBndry->FieldSetup(T);
+      }
+      immBndry->SetBoundary(T); //Can do at init because fixed.
+    }
 
     bout::globals::mesh->communicate(T);
     if (T.isFci()) {

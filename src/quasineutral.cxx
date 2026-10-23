@@ -1,4 +1,5 @@
 
+#include <bout/immersed_boundary.hxx>
 #include <bout/mesh.hxx>
 
 #include "../include/quasineutral.hxx"
@@ -54,6 +55,15 @@ void Quasineutral::transform_impl(GuardedOptions& state) {
 
   // Calculate density required. Floor so that density is >= 0
   density = floor(Field3D{rho / (-charge)}, 0.0);
+
+  if (immBndry) {
+    density.name = std::string("N") + name;
+    //IB_TODO: Late setup for field data existing.
+    if (!immBndry->CheckFieldSetUp(density.name)) {
+      immBndry->FieldSetup(density);
+    }
+    immBndry->SetBoundary(density);
+  }
 
   if (density.isFci()) {
     density.getMesh()->communicate(density);

@@ -11,6 +11,7 @@
 #include <bout/boutexception.hxx>
 #include <bout/field3d.hxx>
 #include <bout/globals.hxx>
+#include <bout/immersed_boundary.hxx>
 #include <bout/mesh.hxx>
 #include <bout/options.hxx>
 #include <bout/unused.hxx>
@@ -44,6 +45,14 @@ struct FixedVelocity : public NamedComponent<FixedVelocity> {
     // Option overrides mesh value
     // so use mesh value (if any) as default value.
     V = options["velocity"].withDefault(V) / Cs0;
+
+    if (immBndry) { //IB_TODO: Combine into one function?
+      V.name = std::string("V") + name;
+      if (!immBndry->CheckFieldSetUp(V.name)) {
+        immBndry->FieldSetup(V);
+      }
+      immBndry->SetBoundary(V); //Can do at init because fixed.
+    }
 
     bout::globals::mesh->communicate(V);
     if (V.isFci()) {

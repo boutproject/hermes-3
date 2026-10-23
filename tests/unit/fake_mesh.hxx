@@ -318,6 +318,25 @@ public:
     rval = def;
     return false;
   }
+  //IB_TODO: Fix these and other older instances.
+  bool get([[maybe_unused]] Mesh* m, Array<BoutReal>& rval, const std::string& name,
+           BoutReal def = 0.0) override {
+    if (values[name].isSet()) {
+      rval = values[name].as<Array<BoutReal>>();
+      return true;
+    }
+    rval = def;
+    return false;
+  }
+  bool get([[maybe_unused]] Mesh* m, Matrix<BoutReal>& rval, const std::string& name,
+           BoutReal def = 0.0) override {
+    if (values[name].isSet()) {
+      rval = values[name].as<Matrix<BoutReal>>();
+      return true;
+    }
+    rval = def;
+    return false;
+  }
   bool get(Mesh* mesh, Field2D& fval, const std::string& name, BoutReal def = 0.0,
            CELL_LOC UNUSED(location) = CELL_DEFAULT) override {
     if (values[name].isSet()) {
@@ -343,6 +362,21 @@ public:
       return true;
     }
     fval = def;
+    return false;
+  }
+  //IB_TODO: Fix these and other older instances.
+  bool get(Array<int>& var, const std::string& name) override {
+    if (values[name].isSet()) {
+      var = values[name].as<Array<int>>();
+      return true;
+    }
+    return false;
+  }
+  bool get(Array<BoutReal>& var, const std::string& name) override {
+    if (values[name].isSet()) {
+      var = values[name].as<Array<BoutReal>>();
+      return true;
+    }
     return false;
   }
 

@@ -9,6 +9,7 @@
 #include <bout/field_factory.hxx>
 #include <bout/fv_ops.hxx>
 #include <bout/globals.hxx>
+#include <bout/immersed_boundary.hxx>
 #include <bout/initialprofiles.hxx>
 #include <bout/invert_pardiv.hxx>
 #include <bout/options.hxx>
@@ -183,6 +184,18 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
   substitutePermissions("name", {name});
   substitutePermissions("inputs", {"density"});
   substitutePermissions("outputs", {"pressure", "temperature"});
+
+  if (immBndry) {
+    P.name = std::string("P") + name;
+    if (!immBndry->CheckFieldSetUp(P.name)) {
+      immBndry->FieldSetup(P);
+    }
+    T = zeroFrom(P); //IB_TODO: Need this because not yet allocated.
+    T.name = std::string("T") + name;
+    if (!immBndry->CheckFieldSetUp(T.name)) {
+      immBndry->FieldSetup(T);
+    }
+  }
 }
 
 void EvolvePressure::transform_impl(GuardedOptions& state) {
@@ -240,7 +253,13 @@ void EvolvePressure::transform_impl(GuardedOptions& state) {
 
   Field3DParallel Pfloor = floor(P, 0.0);
   T = Pfloor / softFloor(N, density_floor);
+  if (immBndry) {
+    T.name = std::string("T") + name; //Field expressions can mangle names; reset before IB lookup.
+    immBndry->SetBoundary(T);
+  } //IB_TODO: Note, dont need to set P IB BCs because N and T have them now?
+
   Pfloor = N * T; // Ensure consistency
+  if (immBndry) {Pfloor.name = P.name;} //Field operators can mess up names for IB...
 
   set(species["pressure"], Pfloor);
   set(species["temperature"], T);
@@ -257,7 +276,11 @@ void EvolvePressure::finally(const Options& state) {
     P.clearParallelSlices();
   }
 
-  const Field3DParallel Pfloor = floor(P, 0.0); // Restricted to never go below zero
+  Field3DParallel Pfloor = floor(P, 0.0); // Restricted to never go below zero
+  if (immBndry) { //Reset ghosts in case floored.
+    Pfloor.name = std::string("P") + name; //Field helpers can mangle names; reset before IB lookup.
+    immBndry->SetBoundary(Pfloor);
+  }
 
   T = get<Field3D>(species["temperature"]);
   N = get<Field3D>(species["density"]);
@@ -282,7 +305,14 @@ void EvolvePressure::finally(const Options& state) {
       fastest_wave = get<Field3D>(state["fastest_wave"]);
     } else {
       const BoutReal AA = get<BoutReal>(species["AA"]);
-      fastest_wave = sqrt(T / AA);
+      if (immBndry) {
+        fastest_wave = zeroFrom(T);
+        BOUT_FOR(i, T.getRegion("RGN_NO_IMM_BNDRY")) {
+          fastest_wave[i] = sqrt(T[i]/AA);
+        }
+      } else {
+        fastest_wave = sqrt(T / AA);
+      }
     }
 
     if (p_div_v) {

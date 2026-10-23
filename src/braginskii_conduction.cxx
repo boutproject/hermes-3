@@ -11,6 +11,7 @@
 #include <bout/field_factory.hxx>
 #include <bout/fv_ops.hxx>
 #include <bout/globals.hxx>
+#include <bout/immersed_boundary.hxx>
 #include <bout/options.hxx>
 #include <bout/output.hxx>
 #include <bout/solver.hxx>
@@ -257,7 +258,8 @@ void BraginskiiConduction::transform_impl(GuardedOptions& state) {
     if (!P.isFci()) {
       P.clearParallelSlices();
     }
-    const Field3D Pfloor = floor(P, 0.0); // Restricted to never go below zero
+    Field3D Pfloor = floor(P, 0.0); // Restricted to never go below zero
+
     const Field3D T = get<Field3D>(species["temperature"]);
     const Field3D N = get<Field3D>(species["density"]);
 
@@ -287,6 +289,7 @@ void BraginskiiConduction::transform_impl(GuardedOptions& state) {
       // Spitzer-Harm heat flux
       const Field3D q_SH = kappa_par * Grad_par(T);
       // Free-streaming flux
+      //IB_TODO: Limit sqrt(T) to plasma cells as with fastest_wave if IB...
       const Field3D q_fl = kappa_limit_alpha * N * T * sqrt(T / AA);
 
       // This results in a harmonic average of the heat fluxes
@@ -298,10 +301,18 @@ void BraginskiiConduction::transform_impl(GuardedOptions& state) {
 
     // Fci does not work with mesh->iterateBndryLowerY(), so set the boundaries differently
     if (P.isFci()) {
+      if (immBndry) {
+        //IB_TODO: Old code called applyBoundary, but no longer does. Is it needed still for IB ghosts?
+        //Note, complex setup because not in constructor...
+        kappa_par.name = std::string("kappa_par") + name;
+        if (!immBndry->CheckFieldSetUp(kappa_par.name)) {
+          immBndry->FieldSetup(kappa_par);
+        }
+        immBndry->SetBoundary(kappa_par);
+      }
 
       mesh->communicate(kappa_par);
       kappa_par.applyParallelBoundary("parallel_neumann_o1");
-
     } else {
       for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
         for (int jz = 0; jz < mesh->LocalNz; jz++) {
@@ -385,13 +396,16 @@ void BraginskiiConduction::outputVars(Options& state) {
                     {"species", name},
                     {"source", "evolve_pressure"}});
 
-    set_with_attrs(state[fmt::format("ef{}_cond_ylow", name)], flow_ylow_conduction,
-                   {{"time_dimension", "t"},
-                    {"units", "W"},
-                    {"conversion", rho_s0 * SQ(rho_s0) * Pnorm * Omega_ci},
-                    {"standard_name", "power"},
-                    {"long_name", name + " conduction through Y cell face."},
-                    {"species", name},
-                    {"source", "evolve_pressure"}});
+    //This output only exists if not using petsc operators...
+    if (!use_petsc_operator) {
+      set_with_attrs(state[fmt::format("ef{}_cond_ylow", name)], flow_ylow_conduction,
+                     {{"time_dimension", "t"},
+                      {"units", "W"},
+                      {"conversion", rho_s0 * SQ(rho_s0) * Pnorm * Omega_ci},
+                      {"standard_name", "power"},
+                      {"long_name", name + " conduction through Y cell face."},
+                      {"species", name},
+                      {"source", "evolve_pressure"}});
+    }
   }
 }

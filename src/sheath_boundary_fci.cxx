@@ -5,6 +5,7 @@
 #include <bout/yboundary_regions.hxx>
 
 #include "bout/constants.hxx"
+#include "bout/immersed_boundary.hxx"
 #include "bout/mesh.hxx"
 using bout::globals::mesh;
 
@@ -181,6 +182,24 @@ void SheathBoundaryFci::transform_impl(GuardedOptions& state) {
 
   Coordinates* coord = mesh->getCoordinates();
 
+  //IB_TODO: Define new functions to handle sheath when prev() and next() are out of plasma.
+  const auto isValidIB = [](const Ind3D& i) {
+    return immBndry && !immBndry->IsInside(i);
+  };
+
+  const auto& yboundary = coord->getYBoundary();
+  const auto prevAlsoSheath = [&](const auto& pnt) {
+    return yboundary.contains(-pnt.dir(), pnt.ind());
+  };
+
+  const auto limitFreeIB = [&](const auto& pnt, const auto& f,
+                              BoutReal mode) -> BoutReal {
+    if (prevAlsoSheath(pnt)) {
+      return pnt.current(f);
+    }
+    return limitFree(pnt.prev(f), pnt.current(f), mode);
+  };
+
   //////////////////////////////////////////////////////////////////
   // Electrostatic potential
   // If phi is set, use free boundary condition
@@ -214,13 +233,15 @@ void SheathBoundaryFci::transform_impl(GuardedOptions& state) {
                                ? getNoBoundary<Field3D>(species["velocity"])
                                : zeroFrom(Ni);
 
-      mesh->getCoordinates()->getYBoundary().iter([&](auto& pnt) {
-        const BoutReal Ni_im =
-            limitFree(pnt.prev(Ni), pnt.current(Ni), density_boundary_mode);
-        const BoutReal Ti_im =
-            limitFree(pnt.prev(Ti), pnt.current(Ti), temperature_boundary_mode);
-        const BoutReal Te_im =
-            limitFree(pnt.prev(Te), pnt.current(Te), temperature_boundary_mode);
+      yboundary.iter([&](auto& pnt) {
+        const auto& i = pnt.ind();
+        if (isValidIB(i)) {
+          return;
+        }
+
+        const BoutReal Ni_im = limitFreeIB(pnt, Ni, density_boundary_mode);
+        const BoutReal Ti_im = limitFreeIB(pnt, Ti, temperature_boundary_mode);
+        const BoutReal Te_im = limitFreeIB(pnt, Te, temperature_boundary_mode);
 
         const BoutReal nisheath = 0.5 * (Ni_im + pnt.current(Ni));
         const BoutReal tesheath =
@@ -248,13 +269,17 @@ void SheathBoundaryFci::transform_impl(GuardedOptions& state) {
     // ion_sum now contains the ion current, sum Z_i n_i C_i over all ion species
     // at mesh->ystart and mesh->yend indices
 
-    mesh->getCoordinates()->getYBoundary().iter([&](auto& pnt) {
+    yboundary.iter([&](auto& pnt) {
       const auto& i = pnt.ind();
 
-      const BoutReal Ne_im =
-          limitFree(pnt.prev(Ne), pnt.current(Ne), density_boundary_mode);
-      const BoutReal Te_im =
-          limitFree(pnt.prev(Te), pnt.current(Te), temperature_boundary_mode);
+      if (isValidIB(i) || (pnt.current(Te) <= 0.0)) {
+        pnt.current(phi) = wall_potential[i];
+        pnt.next(phi) = pnt.current(phi);
+        return;
+      }
+
+      const BoutReal Ne_im = limitFreeIB(pnt, Ne, density_boundary_mode);
+      const BoutReal Te_im = limitFreeIB(pnt, Te, temperature_boundary_mode);
 
       const BoutReal nesheath = 0.5 * (Ne_im + pnt.current(Ne));
       const BoutReal tesheath = floor(0.5 * (Te_im + pnt.current(Te)), 1e-5);
@@ -283,14 +308,25 @@ void SheathBoundaryFci::transform_impl(GuardedOptions& state) {
 
   hflux_e = zeroFrom(electron_energy_source); // sheath heat flux for diagnostics
 
-  mesh->getCoordinates()->getYBoundary().iter([&](auto& pnt) {
+  yboundary.iter([&](auto& pnt) {
     const auto& i = pnt.ind();
 
-    pnt.next(Ne) = limitFree(pnt.prev(Ne), pnt.current(Ne), density_boundary_mode);
-    pnt.next(Te) = limitFree(pnt.prev(Te), pnt.current(Te), temperature_boundary_mode);
-    pnt.next(Pe) = limitFree(pnt.prev(Pe), pnt.current(Pe), pressure_boundary_mode);
+    if (isValidIB(i)) {
+      pnt.next(Ne) = pnt.current(Ne);
+      pnt.next(Te) = pnt.current(Te);
+      pnt.next(Pe) = pnt.current(Pe);
+      pnt.next(phi) = pnt.current(phi);
+      pnt.next(Ve) = pnt.current(Ve);
+      pnt.next(NVe) = pnt.current(NVe);
+      return;
+    }
 
-    pnt.next(phi) = 2.0 * pnt.current(phi) - pnt.prev(phi);
+    pnt.next(Ne) = limitFreeIB(pnt, Ne, density_boundary_mode);
+    pnt.next(Te) = limitFreeIB(pnt, Te, temperature_boundary_mode);
+    pnt.next(Pe) = limitFreeIB(pnt, Pe, pressure_boundary_mode);
+
+    pnt.next(phi) = prevAlsoSheath(pnt) ? pnt.current(phi)
+                      : 2.0 * pnt.current(phi) - pnt.prev(phi);
 
     const BoutReal nesheath = 0.5 * (pnt.next(Ne) + pnt.current(Ne));
     const BoutReal tesheath = 0.5 * (pnt.next(Te) + pnt.current(Te));
@@ -390,16 +426,25 @@ void SheathBoundaryFci::transform_impl(GuardedOptions& state) {
     // Initialise sheath ion heat flux. This will be created for each species
     // saved in diagnostics struct and then destroyed and re-created for next species
 
-    mesh->getCoordinates()->getYBoundary().iter([&](auto& pnt) {
+    yboundary.iter([&](auto& pnt) {
       const auto& i = pnt.ind();
+
+      if (isValidIB(i)) {
+        pnt.next(Ni) = pnt.current(Ni);
+        pnt.next(Ti) = pnt.current(Ti);
+        pnt.next(Pi) = pnt.current(Pi);
+        pnt.next(Vi) = pnt.current(Vi);
+        pnt.next(NVi) = pnt.current(NVi);
+        return;
+      }
 
       // Free gradient of log electron density and temperature
       // This ensures that the guard cell values remain positive
       // exp( 2*log(N[i]) - log(N[ip]) )
 
-      pnt.next(Ni) = limitFree(pnt.prev(Ni), pnt.current(Ni), density_boundary_mode);
-      pnt.next(Ti) = limitFree(pnt.prev(Ti), pnt.current(Ti), temperature_boundary_mode);
-      pnt.next(Pi) = limitFree(pnt.prev(Pi), pnt.current(Pi), pressure_boundary_mode);
+      pnt.next(Ni) = limitFreeIB(pnt, Ni, density_boundary_mode);
+      pnt.next(Ti) = limitFreeIB(pnt, Ti, temperature_boundary_mode);
+      pnt.next(Pi) = limitFreeIB(pnt, Pi, pressure_boundary_mode);
 
       // Calculate sheath values at half-way points (cell edge)
       const BoutReal nisheath = 0.5 * (pnt.current(Ni) + pnt.next(Ni));

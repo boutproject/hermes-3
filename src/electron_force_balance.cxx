@@ -4,6 +4,7 @@
 #include <bout/mesh.hxx>
 
 #include "../include/electron_force_balance.hxx"
+#include <bout/immersed_boundary.hxx>
 
 using bout::globals::mesh;
 
@@ -33,6 +34,14 @@ void ElectronForceBalance::transform_impl(GuardedOptions& state) {
   // Parallel electric field. Stored as a private member variable
   // and may be saved as an output diagnostic
   Epar = force_density / floor(Ne, 1e-5);
+  if (immBndry) {
+    //IB_TODO: Complex logic for late Epar setup.
+    Epar.name = "Epar";
+    if (!immBndry->CheckFieldSetUp(Epar.name)) {
+      immBndry->FieldSetup(Epar);
+    }
+    immBndry->SetBoundary(Epar);
+  }
 
   // Now calculate forces on other species
   GuardedOptions allspecies = state["species"];

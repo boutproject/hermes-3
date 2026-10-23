@@ -33,6 +33,7 @@
 #include <bout/field3d.hxx>
 #include <bout/fv_ops_impl.hxx>
 #include <bout/globals.hxx>
+#include <bout/immersed_boundary.hxx>
 #include <bout/mesh.hxx>
 #include <bout/output.hxx>
 #include <bout/region.hxx>
@@ -1833,10 +1834,14 @@ dagp_fv::dagp_fv(Mesh& mesh)
   ASSERT0(mesh.get(volume, "dagp_fv_volume", 0.0, false) == 0);
   ASSERT0(volume.hasParallelSlices() == false);
   volume.setRegion("RGN_NOBNDRY");
-  if (!mesh.hasRegion3D("RGN_dapg_fv_xbndry")) {
-    mesh.addRegion("RGN_dapg_fv_xbndry",
+  if (!mesh.hasRegion3D("RGN_dagp_fv_xbndry")) {
+    mesh.addRegion("RGN_dagp_fv_xbndry",
                    Region<>(mesh.xstart - 1, mesh.xstart - 1, mesh.ystart, mesh.yend,
                             mesh.zstart, mesh.zend, mesh.LocalNy, mesh.LocalNz));
+  }
+  if (!mesh.hasRegion3D("RGN_dagp_fv_zbndry")) {
+    Region<>::RegionIndices zboundary_indices;
+    mesh.addRegion("RGN_dagp_fv_zbndry", Region<>(zboundary_indices));
   }
 }
 
@@ -1860,22 +1865,31 @@ Field3D dagp_fv::operator()(const Field3D& a, const Field3D& f, bool upwinding) 
 template <bool extra, bool upwinding>
 Field3D dagp_fv::operator()(const Field3D& a, const Field3D& f, Field3D* flow_xlow,
                             Field3D* flow_zlow) {
+  //IB_TODO: Note immBndry requires midpoint rule for cut-face fluxes...and a at partial edge midpoint.
   auto result{zeroFrom(f)};
   ASSERT1_FIELDS_COMPATIBLE(a, f);
   if constexpr (extra) {
     flow_xlow->allocate();
     flow_zlow->allocate();
   }
-  BOUT_FOR(i, f.getRegion("RGN_dapg_fv_xbndry")) {
+  BOUT_FOR(i, f.getRegion("RGN_dagp_fv_xbndry")) {
     const auto xf = xflux<upwinding>(a, f, i);
-    result[i.xp()] = xf;
+    result[i.xp()] += xf;
     if constexpr (extra) {
       (*flow_xlow)[i.xp()] = xf;
     }
   }
-  BOUT_FOR(i, f.getRegion("RGN_NOBNDRY")) {
+  BOUT_FOR(i, f.getRegion("RGN_dagp_fv_zbndry")) {
+    const auto zf = zflux<upwinding>(a, f, i);
+    result[i.zp()] += zf;
+    if constexpr (extra) {
+      (*flow_zlow)[i.zp()] = zf;
+    }
+  }
+  const auto plasma_region = immBndry ? "RGN_NO_IMM_BNDRY" : "RGN_NOBNDRY";
+  BOUT_FOR(i, f.getRegion(plasma_region)) {
     const auto xf = xflux<upwinding>(a, f, i);
-    result[i.xp()] = xf;
+    result[i.xp()] += xf;
     result[i] -= xf;
     if constexpr (extra) {
       (*flow_xlow)[i.xp()] = xf;
@@ -1887,6 +1901,11 @@ Field3D dagp_fv::operator()(const Field3D& a, const Field3D& f, Field3D* flow_xl
       (*flow_zlow)[i.zp()] = zf;
     }
   }
+  if (immBndry) {
+    //IB_TODO: Cleaner way to do this? Should IB class know how to compute cut-cell dagp fluxes?
+    immBndry->ComputeBoundaryFluxes(a, f, result);
+  }
+  //IB_TODO: Do regions here matter? i.e. for dividing by non-zero volume for instance. Currently use 1 outside IB.
   result.setRegion("RGN_NOBNDRY");
   if constexpr (extra) {
     flow_xlow->setRegion("RGN_NOBNDRY");
@@ -1900,6 +1919,28 @@ Field3D dagp_fv::operator()(const Field3D& a, const Field3D& f, Field3D* flow_xl
 
 template <bool upwinding>
 inline BoutReal dagp_fv::xflux(const Field3D& a, const Field3D& f, const Ind3D& i) {
+  const auto F0 = xflux_full<upwinding>(a, f, i);
+
+  if (!immBndry) {return F0;}
+
+  const BoutReal alpha = immBndry->xFaceFrac(i);
+  if (alpha == 0.0) {return 0.0;}
+  if (alpha == 1.0) {return F0;}
+
+  const auto offset = immBndry->xFaceGradOffset(i);
+  if (offset == 0) {return alpha * F0;}
+
+  //TODO: Eventually need xflux_full to get av at face midpoint if not constant everywhere.
+  const auto i2 = offset == 1 ? i.zp() : i.zm();
+  const auto F1 = xflux_full<upwinding>(a, f, i2);
+  const auto w0 = 0.5 * (1.0 + alpha);
+  const auto w1 = 0.5 * (1.0 - alpha);
+  return alpha * (w0 * F0 + w1 * F1);
+}
+
+template <bool upwinding>
+inline BoutReal dagp_fv::xflux_full(const Field3D& a, const Field3D& f,
+                                    const Ind3D& i) {
   const auto ixp = i.xp();
   const auto dx = f[ixp] - f[i];
   BoutReal av;
@@ -1914,6 +1955,28 @@ inline BoutReal dagp_fv::xflux(const Field3D& a, const Field3D& f, const Ind3D& 
 
 template <bool upwinding>
 inline BoutReal dagp_fv::zflux(const Field3D& a, const Field3D& f, const Ind3D& i) {
+  const auto F0 = zflux_full<upwinding>(a, f, i);
+
+  if (!immBndry) {return F0;}
+
+  const BoutReal alpha = immBndry->zFaceFrac(i);
+  if (alpha == 0.0) {return 0.0;}
+  if (alpha == 1.0) {return F0;}
+
+  const auto offset = immBndry->zFaceGradOffset(i);
+  if (offset == 0) {return alpha * F0;}
+
+  //TODO: Eventually need xflux_full to get av at face midpoint if not constant everywhere.
+  const auto i2 = offset == 1 ? i.xp() : i.xm();
+  const auto F1 = zflux_full<upwinding>(a, f, i2);
+  const auto w0 = 0.5 * (1.0 + alpha);
+  const auto w1 = 0.5 * (1.0 - alpha);
+  return alpha * (w0 * F0 + w1 * F1);
+}
+
+template <bool upwinding>
+inline BoutReal dagp_fv::zflux_full(const Field3D& a, const Field3D& f,
+                                    const Ind3D& i) {
   const auto izp = i.zp();
   const auto dz = f[izp] - f[i];
   BoutReal av;

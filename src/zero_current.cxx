@@ -1,6 +1,7 @@
 
 #include <bout/difops.hxx>
 #include <bout/field3d.hxx>
+#include <bout/immersed_boundary.hxx>
 #include <bout/mesh.hxx>
 #include <bout/options.hxx>
 
@@ -75,6 +76,16 @@ void ZeroCurrent::transform_impl(GuardedOptions& state) {
 
   velocity = current / (-charge * softFloor(N, 1e-7));
 
+  //Note, dont need to handle mom below if N and V have IB BCs.
+  if (immBndry) {
+    //IB_TODO: Late setup for field data existence...
+    velocity.name = std::string("V") + name;
+    if (!immBndry->CheckFieldSetUp(velocity.name)) {
+      immBndry->FieldSetup(velocity);
+    }
+    immBndry->SetBoundary(velocity);
+  }
+
   momentum = GET_VALUE(BoutReal, species["AA"]) * N * velocity;
 
   if (velocity.isFci()) {
@@ -84,7 +95,6 @@ void ZeroCurrent::transform_impl(GuardedOptions& state) {
   }
 
   set(species["velocity"], velocity);
-
   set(species["momentum"], momentum);
 }
 

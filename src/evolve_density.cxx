@@ -9,6 +9,7 @@
 #include <bout/field_factory.hxx>
 #include <bout/fv_ops.hxx>
 #include <bout/globals.hxx>
+#include <bout/immersed_boundary.hxx>
 #include <bout/initialprofiles.hxx>
 #include <bout/options.hxx>
 #include <bout/output.hxx>
@@ -149,6 +150,13 @@ EvolveDensity::EvolveDensity(std::string name, Options& alloptions, Solver* solv
           .doc("Apply neumann boundary with Z average?")
           .withDefault<bool>(false);
 
+  if (immBndry) {
+    N.name = std::string("N") + name;
+    if (!immBndry->CheckFieldSetUp(N.name)) {
+      immBndry->FieldSetup(N);
+    }
+  }
+
   std::vector<std::string> outputs = {"AA", "density", "density_source"};
   if (charge != 0.) {
     outputs.push_back("charge");
@@ -215,6 +223,13 @@ void EvolveDensity::transform_impl(GuardedOptions& state) {
   }
   auto species = state["species"][name];
   Field3DParallel floored_N = floor(N, 0.0);
+  if (immBndry) {
+    //IB_TODO: Revisit floor value. Old IB path floored to non-zero to match evolve_pressure, but can lead to issues with atomics/neutrals apparently.
+    immBndry->FloorField(floored_N, density_floor);
+    floored_N.name = std::string("N") + name; //Field helpers can mangle names; reset before IB lookup.
+    immBndry->SetBoundary(floored_N);
+  }
+
   set(species["density"], floored_N); // Density in state always >= 0
   set(species["AA"], AA);             // Atomic mass
   if (charge != 0.0) {                // Don't set charge for neutral species
@@ -280,7 +295,14 @@ void EvolveDensity::finally(const Options& state) {
     } else {
       const Field3D T = get<Field3D>(species["temperature"]);
       const BoutReal AA = get<BoutReal>(species["AA"]);
-      fastest_wave = sqrt(T / AA);
+      if (immBndry) {
+        fastest_wave = zeroFrom(T);
+        BOUT_FOR(i, T.getRegion("RGN_NO_IMM_BNDRY")) {
+          fastest_wave[i] = sqrt(T[i]/AA);
+        }
+      } else {
+        fastest_wave = sqrt(T / AA);
+      }
     }
 
     ddt(N) -= FV::Div_par_mod<hermes::Limiter>(N, V, fastest_wave, flow_ylow);
