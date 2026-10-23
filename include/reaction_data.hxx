@@ -13,7 +13,7 @@
 
 BOUT_ENUM_CLASS(RateParamsTypes, T, ET, nT, undefined)
 BOUT_ENUM_CLASS(ReactionCoeffTypes, sigma_v, sigma_v_E)
-BOUT_ENUM_CLASS(ReactionDataTypes, ADAS, Amjuel, HydHel, undefined)
+BOUT_ENUM_CLASS(ReactionDataTypes, ADAS, Amjuel, HydHel, single_rate, undefined)
 
 /**
  * @brief Get the json database location from options, or default to a standard location
@@ -44,7 +44,7 @@ public:
   explicit ReactionData(ReactionDataTypes type, std::string data_label,
                         std::vector<std::string> metadata_keys = {})
       : type(type), data_label(std::move(data_label)),
-        metadata_keys(std::move(metadata_keys)){};
+        metadata_keys(std::move(metadata_keys)) {};
 
   /**
    * @brief Subclasses must implement retrieval/calculation of coefficients.

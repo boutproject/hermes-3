@@ -4,18 +4,26 @@
 
 #include <string>
 
+#include "bout/bout_enum_class.hxx"
+
+BOUT_ENUM_CLASS(SpeciesTypeAlt, electron, ion, molecular_ion, neutral, molecule);
+
 /**
  * @brief Class to parse species strings and extract charge information.
  *
  */
 class SpeciesParser {
+
 public:
+  static SpeciesTypeAlt get_type(const std::string& species_str);
+  static SpeciesTypeAlt get_type(const SpeciesParser& species);
   /**
-   * @brief Construct a new SpeciesParser object by extracting the element and charge from
-   * a species string.
+   * @brief Construct a new SpeciesParser object by extracting the base species and charge
+   * from a species string.
    * @details Valid string requirements:
-   * - Element name must be 1 or 2 letters and is stored in lower case.
-   * - Any integer can precede the element name, but is discarded
+   * - Base species (atom, molecule, or electron) consists of 1 or 2 letters optionally
+   * followed by an integer, and is stored in lower case. e.g. "he" or "h2"
+   * - Any integer can *precede* the base species, but is discarded
    *     e.g. "2he" is parsed as "he"
    * - A "+" or a "-", optionally followed by an integer is interpreted as the charge.
    *     e.g. "he-1" (-1), "H" (0) or "ne+8" (+8)
@@ -27,15 +35,14 @@ public:
   SpeciesParser(const std::string& species_str);
 
   int get_charge() const { return this->charge; }
-  std::string get_element() const { return this->element; }
+  std::string get_base_species() const { return this->base_species; }
   std::string get_str() const { return this->species_str; }
 
   /**
-   * @brief Get an appropriate long name for the element in this species (e.g. "hydrogen"
-   * for "h").
+   * @brief Get an appropriate long name for the base species (e.g. "hydrogen" for "h").
    *
-   * @return std::string The long name of the species, or the element name if no long name
-   * is defined
+   * @return std::string The long name of the species, or the base species name if no long
+   * name is defined
    */
   std::string long_name() const;
 
@@ -46,6 +53,12 @@ public:
    */
   SpeciesParser ionised();
 
+  std::string get_element() const { return this->element; }
+
+  bool is_molecule() const { return this->_is_molecule; }
+
+  bool is_neutral() const { return this->charge == 0; }
+
   /**
    * @brief Construct a new object with the charge reduced by 1.
    *
@@ -54,16 +67,23 @@ public:
   SpeciesParser recombined();
 
 private:
-  SpeciesParser(const std::string element, int charge);
+  /// Almost-copy constructor that allows charge to be changed. Used by ionised() and recombined().
+  SpeciesParser(const SpeciesParser& other, const int charge);
 
-  /// Species string
-  std::string species_str;
-
-  /// Atomic element of the species (or 'e' for electrons)
-  std::string element;
+  /// Base species. Can be an atom, a molecule (made up of a single element), or an electron
+  std::string base_species;
 
   /// Charge of the species
   int charge;
+
+  /// Element symbol (e.g. "H" for hydrogen)
+  std::string element;
+
+  /// Flag indicating if the species is a molecule
+  bool _is_molecule;
+
+  /// Species string
+  std::string species_str;
 };
 
 #endif // SPECIES_PARSER_H
