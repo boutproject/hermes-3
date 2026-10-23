@@ -1,7 +1,7 @@
-.. _sec-solver_numerics:
+.. _sec-numerics_performance:
 
-Solvers and numerical methods
-==============================
+Solvers, performance and numerical methods
+==========================================
 
 
 Solvers
@@ -18,32 +18,38 @@ CVODE
    to be matrix-free and preconditioned using physical preconditioners
    for electron conduction and neutral cross-field diffusion. It has
    an adaptive order algorithm and will try to go as high order
-   in time as possible and take long timesteps. Please
-   see the `developer page <https://computing.llnl.gov/
+   in time as possible and take long timesteps. The timestep is limited either
+   by the truncation error (the time integration error) or, more commonly, by solver failures.
+   See the `developer page <https://computing.llnl.gov/
    projects/sundials/cvode>`__ for details. CVODE is required for 3D
-   turbulence simulations and currently gives better results in 2D
-   simulations. `The BOUT++ implementation is here. <https
+   turbulence simulations. For 2D or 1D, it is generally very slow, but
+   tends to be more robust than SNES depending on settings. `The BOUT++ implementation is here. <https
    ://github.com/mikekryjak/BOUT-dev/blob/master/src/solver/impls/cvode/cvode.cxx>`__
 
-beuler
-   A first-order in time implementation of the backward Euler method.
-   This is implemented using the `SNES <https://petsc.org/release/manual/snes/>`__
-   nonlinear solver in `PETSc <https://petsc.org/release/>`__, and
-   currently uses a GMRES linear solver and an ILU-type preconditioner
-   in `hypre <https://hypre.readthedocs.io/en/latest/ch-intro.html>`__.
-   The algebraic preconditioner allows for extreme speedups over CVODE,
-   and can already be used in 1D with good results. 2D performance is
-   highly mixed and still in development. 3D use is not feasible as the
-   matrix size precludes the use of algebraic preconditioners.
-   Due to its first order nature, it will be less accurate for time-dependent
-   problems, and it is mostly intended to solve for steady-state problems.
+SNES
+   This an implementation of a first-order in time backward Euler method using the
+   `SNES <https://petsc.org/release/manual/snes/>`__
+   nonlinear solver in `PETSc <https://petsc.org/release/>`__. It features a range
+   of linear solvers and preconditioners available through PETSc, and is typically
+   set up with an LU/ILU preconditioner like Hypre ilu, MUMPS or STRUMPACK.
+   This allows the entire system to be preconditioned numerically, instead of
+   relying on physical preconditioning of select terms as in CVODE.
+   Unlike CVODE, the SNES solver features no time integration error control,
+   and its discretisation in time is first order only. This is to prioritise
+   faster steady-state convergence at the cost of accuracy in the time evolution.
+
+   SNES can lead to substantially improved performance in 1D or 2D
+   systems. It is not suitable for 3D turbulence applications due to
+   ILU/LU not scaling well to systems that size and due to the vorticity equation
+   leading to a very dense Jacobian.
+
    `The BOUT++ implementation is here. <https://github.com/mikekryjak/
    BOUT-dev/blob/master/src/solver/impls/snes/snes.cxx>`__. See the
    higher level BOUT++ PETSc implementation `here <https://github.com
    /mikekryjak/BOUT-dev/blob/master/src/solver/impls/petsc/petsc.cxx>`__.
 
-Both CVODE and beuler have an adaptive timestepper and will take as long a
-timestep as the Newton iteration failure rate will allow.
+Both CVODE and SNES have an adaptive timestepper and will take as long a
+timestep as the solver failure rate will allow.
 
 Configuring CVODE
 ~~~~~~~~~~~~~~~~~~~~~
@@ -86,30 +92,70 @@ rtol = 1e-5
    Available in all solvers.
 
 
-Configuring beuler
+Configuring SNES
 ~~~~~~~~~~~~~~~~~~~~~
 
-Here is the recommended configuration for the ``beuler`` solver using the
-Hypre Euclid preconditioner:
+Here is the recommended configuration for the ``SNES`` solver using MUMPS
+LU preconditioning (recipe SNES-MUMPS-3):
 
 .. code-block:: ini
 
    [solver]
-   type = beuler                 # Backward Euler steady-state solver
-   snes_type = newtonls          # Nonlinear solver
-   ksp_type = gmres              # Linear solver
-   max_nonlinear_iterations = 10 # Max Newton iterations until iteration failure
-   pc_type = hypre               # Preconditioner type
-   pc_hypre_type = euclid        # Hypre preconditioner type
-   lag_jacobian = 500            # Iterations between jacobian recalculations
-   atol = 1e-7                   # Absolute tolerance
-   rtol = 1e-5                   # Relative tolerance
+   diagnose = true
+   type = snes
+   snes_type = newtonls
+   ksp_type = fgmres
+   pc_type = lu
+   max_nonlinear_iterations = 10
+   atol = 1e-3
+   rtol = 1e-5
+   stol = 1e-12
+   maxf = 2000
+   maxl = 260
+   matrix_free_operator = false
+   lag_jacobian = 3
+   timestep = 0.1
+   max_snes_failures = 20
+   scale_vars = true
+
+   timestep_control = pid_nonlinear_its
+   target_its = 7
+   kP = 0.233
+   kI = 0.133
+   kD = 0.0
+
+   [petsc]
+   snes_fd_color_use_mat
+   ksp_type = fgmres
+   pc_type = lu
+   pc_factor_mat_solver_type = mumps
+   snes_linesearch_type = basic
+   mat_mumps_icntl_24 = 1
 
 
-There is an additional option ``stol`` which allows the Newton iteration
-to "converge" if the simulation has only changed by a small amount.
-This enables the simulation to iterate almost instantly if it detects that the
-results aren't changing.
+Tolerances
+   In SNES, ``atol``, ``rtol`` and ``stol`` are the absolute, relative and step nonlinear solver tolerances, respectively.
+   This is in contrast to CVODE which has no ``stol`` and where ``atol`` and ``rtol`` are tolerances for time integration accuracy
+   with the nonlinear tolerances being derived from them.
+   ``stol`` allows a Newton step to succeed if the system has changed by only a very small amount during the step.
+   It should be used with caution, as an ``stol`` that is too loose can lead to the solver prematurely declaring convergence,
+   leading to an unstable solution.
+
+Jacobian lagging
+   One of the largest drivers of performance is the lagging of the Jacobian, which is a linearisation of the nonlinear system
+   of equations calculated by finite differences. This is expensive and can cost ~70% of the total computational time within
+   a typical timestep.
+   When `lag_jacobian = 0`, the Jacobian is updated at every nonlinear iteration, and higher numbers
+   indicate the number of nonlinear iterations for which the Jacobian is reused before being recalculated.
+   Lower values lead to a higher cost per iteration, but a more accurate linear system, and the optimal
+   value is problem dependent. Note that the Jacobian is always recalculated after a nonlinear solver failure.
+
+Adaptive timestep control
+   SNES currently uses a PID-based adaptive timestep control strategy implemented on the BOUT++ side.
+   By default, it controls the timestep based on the number of nonlinear iterations required
+   for convergence as a proxy of convergence difficulty. The three PID coefficients
+   ``kP``, ``kI`` and ``kD`` control the proportional, integral and derivative contributions to the timestep adjustment.
+
 
 PETSc can print quite extensive performance diagnostics. These can be enabled
 by putting in the BOUT.inp options file:
@@ -122,6 +168,91 @@ by putting in the BOUT.inp options file:
 This section can also be used to set other PETSc flags, just omitting
 the leading ``-`` from the PETSc option.
 
+
+Performance
+------------------------------
+
+Troubleshooting performance
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Hermes-3 uses fully implicit Newton-Krylov solvers. These have high performance
+potential but are sensitive to:
+
+- Discontinuities in reaction rates, slope limiter functions, floors or boundary conditions
+- Numerical oscillations
+- Poor preconditioning
+
+First establish whether the bottleneck is in the linear or the nonlinear solver.
+Many linear iterations per nonlinear iteration usually indicate poor preconditioning.
+Many nonlinear iterations per timestep, or frequent nonlinear failures, indicate a
+strongly nonlinear or stiff system. In CVODE, there are also truncation error failures,
+which indicate that the timestep was too large for the desired time evolution accuracy.
+Note that this can be triggered both by genuinely fast evolving system, but also by
+numerical modes or unphysical fluctuations.
+
+To count iterations:
+
+- Every solver prints a progress line at each output, to the screen and to
+  ``BOUT.log.0``, including the number of right-hand-side (RHS) evaluations since
+  the previous output.
+- With SNES, ``diagnose = true`` in ``[solver]`` also prints a line per timestep
+  with the timestep, the nonlinear (``nl iter``) and linear (``lin iter``)
+  iterations, the PETSc convergence reason and the number of failures.
+- With CVODE, the output file holds cumulative counts: ``cvode_nsteps``
+  (timesteps), ``cvode_nniters`` (nonlinear iterations), ``cvode_nliters`` (linear
+  iterations), ``cvode_nfevals`` (RHS evaluations), and ``cvode_num_fails`` and
+  ``cvode_nonlin_fails`` (truncation error and nonlinear solver failures, respectively).
+  Their differences between outputs give the counts per output interval.
+
+PETSc can print the nonlinear residual norm at each iteration. This is the scalar quantity
+that the solver tries to drive to zero at each iteration:
+
+.. code-block:: ini
+
+   [petsc]
+   snes_monitor
+   snes_converged_reason
+
+``snes_monitor`` prints the 2-norm of the residual at every nonlinear iteration, and
+``snes_converged_reason`` prints why each solve stopped. Close to convergence, the
+norm should fall faster with each iteration. A norm that stalls or rises suggests an
+inaccurate Jacobian (for example from ``lag_jacobian`` set too high) or a
+non-differentiable term such as a floor, limiter or switch. ``log_view`` (see
+Configuring SNES) shows where the time is spent.
+
+The nonlinear residual also shows which equations and grid cells cause the failures.
+Set ``diagnose = true`` in the ``[solver]`` section to write the residual of each
+evolved variable at every output time as ``resid_<variable>`` (e.g. ``resid_Pe`` or
+``resid_Nd+``). This is the residual that SNES drives below ``atol`` and ``rtol``,
+taken from the last solve before the output. Large values mark the equations and
+cells that dominate the error. Setting ``diagnose_failures = true`` in ``[solver]``
+also prints the range of each variable and of its time derivative after every
+failed solve.
+
+Neutral model performance
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The neutral model can cause significant performance degradation when using CVODE due to the poor performance
+of the current physical preconditioner.
+This is likely due to the short transport timescales in the perpendicular transport terms when crossing the separatrix,
+with faster fluxes generally causing more trouble for the solver.
+
+One way to mitigate this is to reduce the ``flux_limit`` value to artificially suppress neutral diffusive fluxes.
+However, this can significantly affect the physical accuracy of the solution.
+
+Significant performance improvements have been achieved in both CVODE and SNES by lagging a part of the
+neutral flux limiter formula:
+
+.. code-block:: ini
+
+   [d]
+   type = neutral_mixed
+   lag_limiter_gradient = true
+
+This computes the regularised gradients in the limiter denominators (see
+:ref:`sec-neutral_mixed`) once per timestep and holds them fixed for linear and
+nonlinear iterations within the timestep. In 2D tests, this had a very small impact on
+the time evolution of the solution but led to a large performance improvement.
+The benefit is problem dependent. The option is off by default.
 
 
 Numerics
