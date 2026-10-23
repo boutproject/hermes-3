@@ -4,6 +4,7 @@
 
 #include <bout/boutexception.hxx>
 #include <bout/options.hxx>
+#include <bout/output.hxx>
 #include <bout/utils.hxx>
 
 #include "guarded_options.hxx"
@@ -190,6 +191,15 @@ LowNSources::LowNSources(const std::string& name, Options& options)
 
 void LowNSources::append_species_by_type(const SpeciesParser& species,
                                          SpeciesTypeAlt type) {
+  if (type != SpeciesTypeAlt::electron
+      and (species.get_charge() < 0 or species.get_charge() > 1)) {
+    output_warn.write(
+        "LowNSources: species '{}' has unsupported ion charge {}; no low-n sources "
+        "will be added for this species.\n",
+        species.get_str(), species.get_charge());
+    return;
+  }
+
   // The full species string
   const std::string& species_str = species.get_str();
   const std::string element_str = species.get_element();

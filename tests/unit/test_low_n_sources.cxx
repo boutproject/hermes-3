@@ -229,6 +229,12 @@ TEST(LowNSourcesConstructionTest, ConstructorBuildsOrderedPairsByElement) {
                                 {"he+", "he", PseudoReactionType::external_src},
                                 {"d+", "d+", PseudoReactionType::external_src}});
   test_reaction_def_creation(species_masses5, expected_pairs5);
+
+  // Check that ions with charges < 0 or > 1 are ignored (for now).
+  auto species_masses6 = species_masses2;
+  species_masses6.emplace("he+2", "4.0");
+  species_masses6.emplace("he-", "4.0");
+  test_reaction_def_creation(species_masses6, expected_pairs2);
 }
 
 TEST_F(LowNSourcesTest, DiagnosticsWrittenToOutput) {
@@ -274,26 +280,6 @@ TEST_F(LowNSourcesTest, FailOnInvalidStrategy) {
       make_test_options(nfloor, nfloor, nfloor, "does_not_exist");
   EXPECT_THROW(hermes::LowNSources component("low_n_sources", options_invalid_strat),
                BoutException);
-}
-
-/**
- * @brief Having multiple +ve ions associated with the same element isn't supported yet when running with low-n-sources.
- * Ensure it throws on construction for now.
- *
- */
-TEST_F(LowNSourcesTest, FailOnMultipleIonChargeStates) {
-  const BoutReal nfloor = 1e-7;
-
-  // Add two He ion components. 'AA' is sufficient for them to be recognised as species.
-  const std::string he_plus = "he+";
-  const std::string he_plus2 = "he+2";
-  std::string component_str =
-      fmt::format("e, low_n_sources, d, d+, d2, {}, {}", he_plus, he_plus2);
-  Options options = make_test_options(nfloor, nfloor, nfloor, "standard", component_str);
-  options[he_plus]["AA"] = 4.0;
-  options[he_plus2]["AA"] = 4.0;
-
-  EXPECT_THROW(hermes::LowNSources component("low_n_sources", options), BoutException);
 }
 
 /**
