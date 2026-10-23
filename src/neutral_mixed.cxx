@@ -1431,13 +1431,16 @@ void NeutralMixed::precon([[maybe_unused]] const Options& state, BoutReal gamma)
     return;
   }
 
+  const std::string bndry = "neumann"; // Previously Dirichlet was used here, but Neumann performs better
+  const BoutReal schur_factor = neutral_conduction ? 10. / 3 : 5. / 3;
+
   // First matrix
   //   ( I   0)
   //   (-LE  I)
 
   Field3D DTdtN = Dnn * Tn * ddt(Nn);
   mesh->communicate(DTdtN);
-  DTdtN.applyBoundary("dirichlet");
+  DTdtN.applyBoundary(bndry);
 
   ddt(Pn) -= (gamma * 5. / 3) * FV::Div_a_Grad_perp(DTdtN, logPnlim);
 
@@ -1449,23 +1452,23 @@ void NeutralMixed::precon([[maybe_unused]] const Options& state, BoutReal gamma)
   inv->setCoefA(1 - gamma * FV::Div_a_Grad_perp(Dnn, logPnlim));
   inv->setCoefC1(-1. / ((gamma * 5. / 3) * Dnn));
   inv->setCoefC2(logPnlim);
-  inv->setCoefD((-gamma * 5. / 3) * Dnn);
+  inv->setCoefD(-gamma * schur_factor * Dnn);
 
   // inv->setInnerBoundaryFlags(INVERT_DC_GRAD);
   // inv->setOuterBoundaryFlags(INVERT_DC_GRAD);
 
   ddt(Pn) = inv->solve(ddt(Pn));
   mesh->communicate(ddt(Pn));
-  ddt(Pn).applyBoundary("dirichlet");
+  ddt(Pn).applyBoundary(bndry);
 
   // Third matrix: update Nn and NVn equations
   // ( I   E^-1U )
   // ( 0     I   )
 
-  ddt(Nn) -= gamma * FV::Div_a_Grad_perp(DnnNn / Pnlim, ddt(Pn));
+  ddt(Nn) += gamma * FV::Div_a_Grad_perp(DnnNn / Pnlim, ddt(Pn));
 
   if (evolve_momentum) {
-    ddt(NVn) -= gamma * FV::Div_a_Grad_perp(DnnNVn / Pnlim, ddt(Pn));
+    ddt(NVn) += gamma * FV::Div_a_Grad_perp(DnnNVn / Pnlim, ddt(Pn));
   }
 
   for (auto& i : Nn.getRegion("RGN_NOBNDRY")) {
@@ -1475,7 +1478,7 @@ void NeutralMixed::precon([[maybe_unused]] const Options& state, BoutReal gamma)
     if (!std::isfinite(ddt(Pn)[i])) {
       throw BoutException("Precon ddt(P{}) non-finite at {}\n", name, i);
     }
-    if (!std::isfinite(ddt(NVn)[i])) {
+    if (evolve_momentum and !std::isfinite(ddt(NVn)[i])) {
       throw BoutException("Precon ddt(NV{}) non-finite at {}\n", name, i);
     }
   }
