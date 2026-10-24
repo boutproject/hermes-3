@@ -56,17 +56,17 @@ for var, lab in zip([Pe, Pi, Ni], ["Pe", "Pi", "Ni"]):
     print(f"{lab}: ", var[0])
 
 
-Nival = 0.25647799178771336
+Nival = 0.3678157927353081
 if abs(Ni[0] - Nival) > tol:
     print("Density mismatch. ", abs(Ni[0] - Nival))
     success = False
 
-Pival = 0.17425070863314052
+Pival = 0.255053074543757
 if abs(Pi[0] - Pival) > tol:
     print("Pi mismatch. ", abs(Pi[0] - Pival))
     success = False
 
-Peval = 0.25205122346033126
+Peval = 0.2937040986433129
 if abs(Pe[0] - Peval) > tol:
     print("Pe mismatch. ", abs(Pe[0] - Peval))
     success = False

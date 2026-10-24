@@ -216,6 +216,11 @@ int Hermes::init(bool restarting) {
   // e.g. bndry_sol = decaylength(0.003 / rho_s0) sets up a decay length of 3mm
   BoundaryFactory::getInstance()->add(new DecayLengthBoundary(), "decaylength");
 
+  if (mesh->isFci() and (mesh->ystart > 1)) {
+    throw BoutException(
+        "In Fci, MYG>1 is currently not implemented! Please use nslice=1 in Zoidberg :)");
+  }
+
   /////////////////////////////////////////////////////////
   // Load metric tensor from the mesh, passing length and B
   // field normalisations

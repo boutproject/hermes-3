@@ -79,9 +79,18 @@ void BraginskiiElectronViscosity::transform_impl(GuardedOptions& state) {
   }
 
   // Save term for output diagnostic
-  viscosity =
-      sqrtB
-      * FV::Div_par_K_Grad_par(Field3DParallel{eta / Bxy}, Field3DParallel{sqrtB * V});
+  if (eta.isFci()) {
+    Field3D dummy;
+    viscosity = sqrtB
+                * Div_par_K_Grad_par_mod(Field3DParallel{eta / Bxy},
+                                         Field3DParallel{sqrtB * V}, dummy, true);
+
+  } else {
+    viscosity =
+        sqrtB
+        * FV::Div_par_K_Grad_par(Field3DParallel{eta / Bxy}, Field3DParallel{sqrtB * V});
+  }
+
   add(species["momentum_source"], viscosity);
 }
 
