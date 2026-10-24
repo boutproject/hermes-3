@@ -84,6 +84,7 @@ set(HERMES_SOURCES
     src/evolve_energy.cxx
     src/evolve_pressure.cxx
     src/evolve_momentum.cxx
+    src/evolve_vorticity_ion_energy.cxx
     src/external_apar.cxx
     src/guarded_options.cxx
     src/isothermal.cxx
@@ -146,6 +147,7 @@ set(HERMES_SOURCES
     include/evolve_energy.hxx
     include/evolve_momentum.hxx
     include/evolve_pressure.hxx
+    include/evolve_vorticity_ion_energy.hxx
     include/external_apar.hxx
     include/fixed_density.hxx
     include/fixed_fraction_ions.hxx

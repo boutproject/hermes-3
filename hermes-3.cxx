@@ -46,6 +46,7 @@
 #include "include/evolve_energy.hxx"
 #include "include/evolve_momentum.hxx"
 #include "include/evolve_pressure.hxx"
+#include "include/evolve_vorticity_ion_energy.hxx"
 #include "include/external_apar.hxx"
 #include "include/fieldline_geometry.hxx"
 #include "include/fixed_density.hxx"
