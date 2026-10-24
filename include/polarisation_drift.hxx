@@ -2,9 +2,16 @@
 #ifndef POLARISATION_DRIFT_H
 #define POLARISATION_DRIFT_H
 
+#include <bout/bout_types.hxx>
 #include <bout/coordinates.hxx>
+#include <bout/field3d.hxx>
+#include <bout/options.hxx>
 
 #include "component.hxx"
+#include "guarded_options.hxx"
+
+#include <memory>
+#include <string>
 
 class Laplacian;
 
@@ -47,6 +54,9 @@ struct PolarisationDrift : public NamedComponent<PolarisationDrift> {
   ///
   /// Adds energy_source for all species that have charge, mass and pressure
   /// Throws a BoutException if boussinesq=true
+  ///
+  /// This should NOT be enabled if total ion energy is evolved,
+  /// since in that case this energy transfer is internal.
   void diamagneticCompression(GuardedOptions& state, Field3D DivJ);
 
   /// Solve for time derivative of potential

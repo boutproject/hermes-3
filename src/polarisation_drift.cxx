@@ -1,10 +1,22 @@
 #include "../include/polarisation_drift.hxx"
+#include "../include/component.hxx"
+#include "../include/guarded_options.hxx"
+#include "../include/permissions.hxx"
 
+#include <bout/bout_types.hxx>
+#include <bout/boutexception.hxx>
 #include <bout/constants.hxx>
 #include <bout/difops.hxx>
+#include <bout/field.hxx>
+#include <bout/field3d.hxx>
 #include <bout/fv_ops.hxx>
+#include <bout/globals.hxx>
 #include <bout/invert_laplace.hxx>
+#include <bout/mesh.hxx>
 #include <bout/output_bout_types.hxx>
+
+#include <string>
+#include <vector>
 
 using bout::globals::mesh;
 
@@ -22,7 +34,7 @@ PolarisationDrift::PolarisationDrift(std::string name, Options& alloptions,
   auto& options = alloptions[name];
 
   // Cache the B^2 value
-  auto coord = mesh->getCoordinates();
+  const auto* coord = mesh->getCoordinates();
   Bsq = SQ(coord->Bxy());
 
   phiSolver = Laplacian::create(&options["laplacian"]);
@@ -127,9 +139,6 @@ Field3D PolarisationDrift::calcDivJ(GuardedOptions& state) {
 }
 
 void PolarisationDrift::diamagneticCompression(GuardedOptions& state, Field3D DivJ) {
-  // Compression of ion diamagnetic contribution to polarisation velocity
-  // Note: For now this ONLY includes the parallel and diamagnetic current terms
-  //       Other terms e.g. ion viscous current, are in their separate components
   if (!boussinesq) {
     throw BoutException("diamagnetic_polarisation not implemented for non-Boussinesq");
   }
@@ -157,7 +166,7 @@ void PolarisationDrift::diamagneticCompression(GuardedOptions& state, Field3D Di
     const auto P = GET_NOBOUNDARY(Field3D, species["pressure"]);
     const auto AA = get<BoutReal>(species["AA"]);
 
-    Field3D energy_source = P * (AA / average_atomic_mass / charge) * DivJ;
+    const Field3D energy_source = P * (AA / average_atomic_mass / charge) * DivJ;
 
     if (diagnose) {
       set_with_attrs(diagnostics[fmt::format("E{}_pol", kv.first)], energy_source,
@@ -236,7 +245,7 @@ void PolarisationDrift::polarisationAdvection(GuardedOptions& state, Field3D phi
     const BoutReal A = get<BoutReal>(species["AA"]);
 
     // Shared coefficient in polarisation velocity
-    Field3D coef = Field3D{(A / Z) / Bsq};
+    const Field3D coef = Field3D{(A / Z) / Bsq};
 
     if (IS_SET(species["density"])) {
       auto N = GET_VALUE(Field3D, species["density"]);
