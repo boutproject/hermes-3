@@ -36,7 +36,7 @@ def compute_trigger_mask(
 ):
     """Find data points (over whole grid and at all times) where the trigger conditions for a source are expected to be satisfied."""
 
-    floor_to_th_fac = ds.options["low_n_sources"]["low_n_floor_fac"]
+    floor_to_th_fac = ds.options["low_n_sources"]["floor_factor"]
     ntarget = get_density(ds, target_species, "target")
     target_th = (
         ds.options[target_species].as_dict().get("density_floor", 1e-7)
@@ -173,7 +173,7 @@ for atom_sp in ["d", "t"]:
 
         # The smoothed low-n source law is continuous near the activation thresholds.
         # Check the robust features of that law instead of expecting a sharp on/off switch.
-        floor_to_th_fac = ds.options["low_n_sources"]["low_n_floor_fac"]
+        floor_to_th_fac = ds.options["low_n_sources"]["floor_factor"]
         nth = (
             ds.options[target_sp].as_dict().get("density_floor", 1e-7) * floor_to_th_fac
         )

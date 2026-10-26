@@ -75,7 +75,7 @@ anim_logscales = [True, True, False, False]
 
 # Extract density thresholds
 options = ds.options
-thresh_fac = options["low_n_sources"]["low_n_floor_fac"]
+thresh_fac = options["low_n_sources"]["floor_factor"]
 floors = {}
 thresholds = {}
 for species in species_list:

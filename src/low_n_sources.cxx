@@ -141,16 +141,16 @@ LowNSources::LowNSources(const std::string& name, Options& options)
 
   // Read control parameters
   /// Floor factor
-  this->low_n_floor_fac = options[name]["low_n_floor_fac"]
-                              .doc("Multiplier applied to the low-density floor")
-                              .withDefault<BoutReal>(10.0);
+  this->floor_factor = options[name]["floor_factor"]
+                           .doc("Multiplier applied to the low-density floor")
+                           .withDefault<BoutReal>(10.0);
   /// Timescale over which low density sources act (input value is in normalised units;
   /// default is 1e-5 s converted to normalised units)
   const BoutReal seconds_norm = get<BoutReal>(options["units"]["seconds"]);
-  this->low_n_timescale = options[name]["low_n_timescale"]
-                              .doc("Timescale over which low density sources act "
-                                   "[normalised]")
-                              .withDefault<BoutReal>(1e-5 / seconds_norm);
+  this->timescale = options[name]["timescale"]
+                        .doc("Timescale over which low density sources act "
+                             "[normalised]")
+                        .withDefault<BoutReal>(1e-5 / seconds_norm);
   /// Rate calculation strategy
   this->strategy =
       options[name]["strategy"]
@@ -190,7 +190,7 @@ LowNSources::LowNSources(const std::string& name, Options& options)
     const BoutReal density_floor = options[species_name]["density_floor"]
                                        .doc("Minimum density floor")
                                        .withDefault<BoutReal>(1e-7);
-    this->density_thresholds[species_name] = this->low_n_floor_fac * density_floor;
+    this->density_thresholds[species_name] = this->floor_factor * density_floor;
   }
 
   instantiate_reactions();
@@ -321,7 +321,7 @@ void LowNSources::instantiate_reactions() {
           const BoutReal boost_species_threshold =
               boost_species.empty() ? 0.0 : this->density_thresholds.at(boost_species);
           spec.density_threshold = this->density_thresholds.at(spec.target_species);
-          spec.low_n_timescale = this->low_n_timescale;
+          spec.timescale = this->timescale;
           spec.gate_species = gate_species;
           spec.gate_species_threshold = gate_species_threshold;
           spec.boost_species = boost_species;
@@ -410,7 +410,7 @@ void LowNSources::outputVars(Options& state) {
 PseudoReaction::PseudoReaction(Options& options, const PseudoReactionSpec& spec)
     : Reaction(PSEUDO_REACTION_COMPONENT_NAME, options), type(spec.type),
       external_src_mom_energy_enabled(spec.external_src_mom_energy_enabled),
-      density_threshold(spec.density_threshold), low_n_timescale(spec.low_n_timescale),
+      density_threshold(spec.density_threshold), timescale(spec.timescale),
       target_species(spec.target_species), gate_species(spec.gate_species),
       gate_species_threshold(spec.gate_species_threshold),
       boost_species(spec.boost_species),
@@ -449,12 +449,12 @@ RateData PseudoReaction::get_rate_standard(GuardedOptions& state) {
     coll_freq = zeroFrom(n_target);
   }
 
-  // Set rate such that the source term will restore the target species to its threshold density over delta_t = [low_n_timescale]
+  // Set rate such that the source term will restore the target species to its threshold density over delta_t = [timescale]
   //   (deficit = source = 0  when n_target > n_thresh)
   BOUT_FOR(i, region) {
     const BoutReal n_deficit =
         std::max<BoutReal>(0.0, this->density_threshold - n_target[i]);
-    result.rate[i] = n_deficit / this->low_n_timescale;
+    result.rate[i] = n_deficit / this->timescale;
   }
 
   // If this reaction has a gate species, smoothly reduce the rate towards zero as it

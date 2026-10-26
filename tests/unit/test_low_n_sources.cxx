@@ -65,8 +65,8 @@ make_test_options(BoutReal atom_density_floor, BoutReal ion_density_floor,
   options[ion_species]["density_floor"] = ion_density_floor;
   options[mol_species]["density_floor"] = molecule_density_floor;
 
-  options["low_n_sources"]["low_n_floor_fac"] = 100.0;
-  options["low_n_sources"]["low_n_timescale"] = 1.0;
+  options["low_n_sources"]["floor_factor"] = 100.0;
+  options["low_n_sources"]["timescale"] = 1.0;
 
   // Tests all assume 'standard' rate strategt for now.
   options["low_n_sources"]["strategy"] = strategy;
@@ -292,8 +292,7 @@ TEST_F(LowNSourcesTest, NoSrcsAboveThreshold) {
   hermes::LowNSources component("low_n_sources", options);
 
   // Set all densities well above the threshold and call transform
-  const BoutReal nth =
-      nfloor * options["low_n_sources"]["low_n_floor_fac"].as<BoutReal>();
+  const BoutReal nth = nfloor * options["low_n_sources"]["floor_factor"].as<BoutReal>();
   Options state;
   set_state(state, 10 * nth, 10 * nth, 10 * nth);
   component.transform(state);
@@ -318,8 +317,7 @@ TEST_F(LowNSourcesTest, LargerDensityDeficitGivesLargerSource) {
   hermes::LowNSources component("low_n_sources", options);
 
   // Set (uniform) atomic, molecular densities well above their respective thresholds
-  const BoutReal nth =
-      nfloor * options["low_n_sources"]["low_n_floor_fac"].as<BoutReal>();
+  const BoutReal nth = nfloor * options["low_n_sources"]["floor_factor"].as<BoutReal>();
   const BoutReal natom = 10 * nth;
   const BoutReal nmol = 10 * nth;
 
@@ -365,8 +363,7 @@ TEST_F(LowNSourcesTest, ParticleConservingSourceMagnitudes) {
   hermes::LowNSources component("low_n_sources", options);
 
   // Same density threshold for all species
-  const BoutReal nth =
-      nfloor * options["low_n_sources"]["low_n_floor_fac"].as<BoutReal>();
+  const BoutReal nth = nfloor * options["low_n_sources"]["floor_factor"].as<BoutReal>();
 
   // Set up state with ions above threshold, atoms and molecules below
   const BoutReal natom = 0.5 * nth;
@@ -377,19 +374,18 @@ TEST_F(LowNSourcesTest, ParticleConservingSourceMagnitudes) {
 
   // Expected source sizes.
   // Note that target species population changes are +1 for all pseudo-reactions, so density_src == rate
-  const BoutReal low_n_timescale =
-      options["low_n_sources"]["low_n_timescale"].as<BoutReal>();
+  const BoutReal timescale = options["low_n_sources"]["timescale"].as<BoutReal>();
   // Recombination restores atoms, boosted the further molecules fall below their own
   // threshold (boost factor clamped to avoid divide-by-zero, as in the production code)
   const BoutReal mol_thresh_ratio = nmol / nth;
   const BoutReal inv_boost =
       0.01 + 0.99 / (1.0 + std::exp(-(mol_thresh_ratio - 0.505) / 0.01));
   const BoutReal recomb_boost_fac = 1.0 / inv_boost;
-  const BoutReal recomb_rate = ((nth - natom) / low_n_timescale) * recomb_boost_fac;
+  const BoutReal recomb_rate = ((nth - natom) / timescale) * recomb_boost_fac;
   // Ions are depleted by recombination
   const BoutReal expected_ion_source = -recomb_rate;
   // Molecules are boosted by association; source only depends on molecule deficit
-  const BoutReal expected_mol_source = (nth - nmol) / low_n_timescale;
+  const BoutReal expected_mol_source = (nth - nmol) / timescale;
   // Atoms are boosted by recombination, but depleted by association - need to subtract the molecule source
   //  (association consumes two atoms to make one molecule, so the atom loss is 2x the molecule source)
   const BoutReal atom_loss_to_association = 2 * expected_mol_source;
@@ -422,8 +418,7 @@ TEST_F(LowNSourcesTest, MomentumEnergySources) {
   hermes::LowNSources component("low_n_sources", options);
 
   // Same density threshold for all species
-  const BoutReal nth =
-      nfloor * options["low_n_sources"]["low_n_floor_fac"].as<BoutReal>();
+  const BoutReal nth = nfloor * options["low_n_sources"]["floor_factor"].as<BoutReal>();
 
   // Set up state with only molecules below threshold; only association will be triggered
   const BoutReal natom = 2 * nth;
@@ -434,7 +429,7 @@ TEST_F(LowNSourcesTest, MomentumEnergySources) {
 
   // Calc expected source sizes
   BoutReal expected_rate =
-      (nth - nmol) / options["low_n_sources"]["low_n_timescale"].as<BoutReal>();
+      (nth - nmol) / options["low_n_sources"]["timescale"].as<BoutReal>();
   const int atom_pop_change = -2;
   const int mol_pop_change = 1;
   const BoutReal atom_mass = get<BoutReal>(state["species"][atom_species]["AA"]);
@@ -534,8 +529,7 @@ TEST_F(LowNSourcesTest, EffectOfExternalIonSource) {
   hermes::LowNSources component("low_n_sources", options);
 
   // Same density threshold for all species
-  const BoutReal nth =
-      nfloor * options["low_n_sources"]["low_n_floor_fac"].as<BoutReal>();
+  const BoutReal nth = nfloor * options["low_n_sources"]["floor_factor"].as<BoutReal>();
 
   // Ion density is always below threshold, molecules always above.
   const BoutReal nion = 1e-2 * nth;
@@ -595,7 +589,7 @@ TEST_F(LowNSourcesTest, EffectOfExternalIonSource) {
 
   // Both atom deficits saturate the sigmoid boost near 100x. Check net sources,
   // including the small ionisation rate admitted by the smooth gate.
-  const BoutReal timescale = options["low_n_sources"]["low_n_timescale"].as<BoutReal>();
+  const BoutReal timescale = options["low_n_sources"]["timescale"].as<BoutReal>();
   for (const auto& [atom_density, ion_source, atom_source] :
        {std::make_tuple(small_deficit_natom, small_natom_deficit_ion_src,
                         small_natom_deficit_atom_src),

@@ -39,9 +39,9 @@ atol = 1e-7
 rtol = 1e-5
 
 [low_n_sources]
-low_n_floor_fac = 10
+floor_factor = 10
 # Arbitrarily increase the source timescale to make visualising the result easier
-low_n_timescale = 1000
+timescale = 1000
 diagnose = true
 
 # ======================================== Deuterium atoms ========================================
@@ -59,10 +59,10 @@ diagnose = true
 # Initial values are
 # - first half of the distribution below the source activation threshold (low-n recombination source should turn on immediately)
 # - second half of the distribution above the source activation threshold
-function = `low_n_sources:low_n_floor_fac` * `d:density_floor` * (y / (2*pi) + 0.5)
+function = `low_n_sources:floor_factor` * `d:density_floor` * (y / (2*pi) + 0.5)
 
 [Pd]
-function = `low_n_sources:low_n_floor_fac` * `d:density_floor` * (y / (2*pi) + 0.5) / 10
+function = `low_n_sources:floor_factor` * `d:density_floor` * (y / (2*pi) + 0.5) / 10
 
 # ======================================== Deuterium ions =========================================
 [d+]
@@ -82,10 +82,10 @@ diagnose = true
 
 [Nd+]
 # Starts at 0.5x the threshold for the low-n source
-function = 0.5 * `low_n_sources:low_n_floor_fac` * `d+:density_floor`
+function = 0.5 * `low_n_sources:floor_factor` * `d+:density_floor`
 
 [Pd+]
-function = 0.5 * `low_n_sources:low_n_floor_fac` * `d+:density_floor` / 10
+function = 0.5 * `low_n_sources:floor_factor` * `d+:density_floor` / 10
 
 [NVd+]
 function = 0

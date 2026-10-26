@@ -55,10 +55,10 @@ private:
   // Control params
   /// Whether to enable momentum and energy sources for external ion sources
   bool external_src_mom_energy_enabled;
-  /// Reactions kick in when density is at or below (species density_floor)*low_n_floor_fac
-  BoutReal low_n_floor_fac;
+  /// Reactions kick in when density is at or below (species density_floor)*floor_factor
+  BoutReal floor_factor;
   /// Timescale over which sources aim to return density to the threshold value
-  BoutReal low_n_timescale;
+  BoutReal timescale;
 
   /// Per-species density thresholds, used to enable/disable sources
   std::map<std::string, BoutReal> density_thresholds;
@@ -97,7 +97,7 @@ struct PseudoReactionSpec {
   PseudoReactionType type;
   std::string target_species;
   BoutReal density_threshold{0.0};
-  BoutReal low_n_timescale{0.0};
+  BoutReal timescale{0.0};
   std::string gate_species;
   BoutReal gate_species_threshold{0.0};
   std::string boost_species;
@@ -133,7 +133,7 @@ private:
   /// Threshold density below which the source term is activated
   BoutReal density_threshold;
   /// Timescale over which the source term would restore density to the threshold value
-  BoutReal low_n_timescale;
+  BoutReal timescale;
   /// Species whose density may be boosted by the reaction
   std::string target_species;
   /// Species whose depletion will disable this reaction entirely (empty string means no gating)
