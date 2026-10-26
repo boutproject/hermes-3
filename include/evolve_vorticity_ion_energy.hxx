@@ -94,10 +94,11 @@ private:
   bool neumann_boundary_average_z; ///< Set pressure constant in Z, Neumann in X
   BoutReal density_floor;          ///< Used to calculate Ti
 
-  Field3D phi{0.0};                          ///< Electrostatic potential Φ
-  Field3D dPhidt{0.0};                       ///< Part of polarisation drift
-  Field3D Pi_sum;                            ///< Total ion pressure
-  Field3D Ti;                                ///< Common ion temperature
+  Field3D phi{0.0};    ///< Electrostatic potential ϕ
+  Field3D dPhidt{0.0}; ///< Generalised potential time derivative ∂tΦ
+  Field3D Pi_sum;      ///< Total ion pressure
+  Field3D psi;         ///< Pressure potential Σ A_s p_s / (Abar Z_s)
+  Field3D Ti;          ///< Common ion temperature
   Coordinates::FieldMetric boussinesq_coeff; ///< c = mass / B^2
   std::unique_ptr<Laplacian> phiSolver;      ///< Laplacian solver in X-Z
 
@@ -120,6 +121,7 @@ private:
   Field3D DivEExB;      ///< Divergence of ExB energy flux
   Field3D DivEReynolds; ///< Divergence of Reynolds stress energy flux
   Field3D DivEelectric; ///< Divergence of ion electrical work Div(phi (Jpar + Jdia))
+  Field3D DivEparallel; ///< Divergence of parallel ion enthalpy and kinetic energy flux
   Field3D DivEpol;      ///< Divergence of polarisation drift energy flux
 
   Field3D phi_Div_Je; ///< Energy transferred to/from electrons
@@ -146,7 +148,7 @@ private:
   /// Apply a boundary condition to given pressure field `P`
   void applyPressureBoundary(Field3D& P) const;
 
-  /// Sum energy sources to all ions from other components
+  /// Sum thermal sources and kinetic energy changes from momentum and particle sources
   Field3D sumIonEnergySources(const Options& allspecies) const;
 
   /// Calculate ion perpendicular kinetic energy, K⊥ = 1/2 c |∇⊥Φ|^2
@@ -155,7 +157,7 @@ private:
   /// so that the integration by parts of Vort * Phi over the domain
   /// gives the kinetic perpendicular energy plus boundary terms.
   ///
-  Field3D calculateKEperp(const Field3D& phi, const Field3D& Pi) const;
+  Field3D calculateKEperp(const Field3D& phi, const Field3D& psi) const;
 };
 
 namespace {

@@ -21,11 +21,14 @@ total_Eelectron = volume_integrate(Eelectron)
 for term in [
     "DivEExB",
     "DivEReynolds",
+    "DivEelectric",
+    "DivEparallel",
     "DivEpol",
     "phi_Div_Je",
     "Eion_src",
     "Eion",
     "ion_KE_perp",
+    "ion_KE_parallel",
     "ddt(Eion)",
 ]:
     if term in bd:
