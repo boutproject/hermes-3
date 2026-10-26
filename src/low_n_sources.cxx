@@ -95,6 +95,8 @@ PseudoReactionSpec make_reaction_spec(PseudoReactionType type,
     spec.target_species = species2;
     return spec;
   case PseudoReactionType::external_src:
+    // N.B. Since no species in this reaction has a -ve pop. change, Reaction::transform doesn't add momentum and energy sources.
+    // These are added in PseudoReaction::transform_impl instead, unless turned off with external_src_mom_energy_enabled=false.
     spec.reaction_str = fmt::format("{} -> 2{}", species1, species1);
     spec.target_species = species1;
     return spec;
@@ -159,6 +161,12 @@ LowNSources::LowNSources(const std::string& name, Options& options)
   this->diagnose = options[name]["diagnose"]
                        .doc("Whether or not to output diagnostics for the low-n sources")
                        .withDefault<bool>(false);
+
+  /// Whether to enable momentum and energy terms for external ion sources
+  this->external_src_mom_energy_enabled =
+      options[name]["external_src_mom_energy_enabled"]
+          .doc("Whether to enable momentum and energy sources for external ion sources")
+          .withDefault<bool>(true);
 
   // Classify species by element and by type
   std::vector<std::string> species_with_mass;
@@ -319,6 +327,7 @@ void LowNSources::instantiate_reactions() {
           spec.boost_species = boost_species;
           spec.boost_species_threshold = boost_species_threshold;
           spec.boost_requires_deficit = boost_requires_deficit;
+          spec.external_src_mom_energy_enabled = this->external_src_mom_energy_enabled;
           spec.strategy = this->strategy;
 
           // Instantiate and add to the (pseudo-)reaction list
@@ -400,6 +409,7 @@ void LowNSources::outputVars(Options& state) {
 
 PseudoReaction::PseudoReaction(Options& options, const PseudoReactionSpec& spec)
     : Reaction(PSEUDO_REACTION_COMPONENT_NAME, options), type(spec.type),
+      external_src_mom_energy_enabled(spec.external_src_mom_energy_enabled),
       density_threshold(spec.density_threshold), low_n_timescale(spec.low_n_timescale),
       target_species(spec.target_species), gate_species(spec.gate_species),
       gate_species_threshold(spec.gate_species_threshold),
@@ -421,6 +431,7 @@ PseudoReaction::PseudoReaction(Options& options, const PseudoReactionSpec& spec)
 }
 
 // ===================== PseudoReaction member functions ======================
+
 RateData PseudoReaction::get_rate_standard(GuardedOptions& state) {
 
   // Get target species density
@@ -490,6 +501,32 @@ RateData PseudoReaction::get_rate(GuardedOptions& state) {
     throw std::runtime_error("Unknown low-n sources strategy [" + toString(this->strategy)
                              + "]");
   }
+}
+
+/**
+ * @brief Add momentum and energy for external ion sources.
+ *
+ * @details The external ion source abuses the reaction framework using a string like "ion -> 2ion".
+ * Since the only reactant has a +ve population change, Reaction::transform won't generate momentum
+ * or energy sources. Add them here instead, unless they've been explicitly disabled.
+ *
+ */
+void PseudoReaction::transform_additional(GuardedOptions& state,
+                                          const RateData& rate_calc_results) {
+  // Momentum and energy sources (for the external ion source only)
+  if (this->type != PseudoReactionType::external_src
+      || !this->external_src_mom_energy_enabled) {
+    return;
+  }
+  const auto species = state["species"][this->target_species];
+  const Field3D momentum_source = rate_calc_results.rate * get<BoutReal>(species["AA"])
+                                  * get<Field3D>(species["velocity"]);
+  const Field3D energy_source =
+      rate_calc_results.rate * (3. / 2) * get<Field3D>(species["temperature"]);
+  update_source<add<Field3D>>(state, this->target_species,
+                              ReactionDiagnosticType::momentum_src, momentum_source);
+  update_source<add<Field3D>>(state, this->target_species,
+                              ReactionDiagnosticType::energy_src, energy_source);
 }
 
 } // namespace hermes

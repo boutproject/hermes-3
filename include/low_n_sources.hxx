@@ -53,6 +53,8 @@ private:
   bool diagnose;
 
   // Control params
+  /// Whether to enable momentum and energy sources for external ion sources
+  bool external_src_mom_energy_enabled;
   /// Reactions kick in when density is at or below (species density_floor)*low_n_floor_fac
   BoutReal low_n_floor_fac;
   /// Timescale over which sources aim to return density to the threshold value
@@ -101,6 +103,7 @@ struct PseudoReactionSpec {
   std::string boost_species;
   BoutReal boost_species_threshold{0.0};
   bool boost_requires_deficit{false};
+  bool external_src_mom_energy_enabled{true};
   std::string strategy;
 };
 
@@ -118,9 +121,15 @@ protected:
   /// Override Reaction::get_rate to bypass RateHelper and use custom rates
   RateData get_rate(GuardedOptions& state) override;
 
+  /// Inject external particles at the target species' local velocity and temperature.
+  void transform_additional(GuardedOptions& state,
+                            const RateData& rate_calc_results) override;
+
 private:
   /// Type of the pseudo-reaction
   PseudoReactionType type;
+  /// Whether external ion sources add momentum and energy sources as well as density
+  bool external_src_mom_energy_enabled;
   /// Threshold density below which the source term is activated
   BoutReal density_threshold;
   /// Timescale over which the source term would restore density to the threshold value

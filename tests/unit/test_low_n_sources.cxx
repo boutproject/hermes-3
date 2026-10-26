@@ -485,6 +485,42 @@ TEST_F(LowNSourcesTest, MomentumEnergySources) {
 }
 
 /**
+ * @brief Check that momentum and energy sources for external ion sources are added, unless
+ * explicitly disabled with `external_src_mom_energy_enabled=false`.
+ *
+ */
+TEST_F(LowNSourcesTest, ExternalSourceMomentumAndEnergyFollowConfig) {
+  const BoutReal nfloor = 1e-7;
+  // Include ions only
+  Options options =
+      make_test_options(nfloor, nfloor, nfloor, "standard", "low_n_sources, d+");
+  for (const bool mom_energy_srcs_enabled : {true, false}) {
+    SCOPED_TRACE(mom_energy_srcs_enabled);
+    options["low_n_sources"]["external_src_mom_energy_enabled"].force(
+        mom_energy_srcs_enabled);
+    hermes::LowNSources component("low_n_sources", options);
+
+    // Set up a depleted ion state with non-zero velocity and temperature.
+    Options state;
+    set_state(state, 0.0, 0.0, 0.0);
+    auto& ion = state["species"][ion_species];
+    ion["momentum_source"] = Field3D(0.0, mesh);
+    ion["energy_source"] = Field3D(0.0, mesh);
+
+    // Run transform
+    component.transform(state);
+
+    // Mom/energy sources must be zero when disabled, non-zero otherwise
+    EXPECT_EQ(
+        IsFieldEqual(getNonFinal<Field3D>(ion["momentum_source"]), 0.0, "RGN_NOBNDRY"),
+        !mom_energy_srcs_enabled);
+    EXPECT_EQ(
+        IsFieldEqual(getNonFinal<Field3D>(ion["energy_source"]), 0.0, "RGN_NOBNDRY"),
+        !mom_energy_srcs_enabled);
+  }
+}
+
+/**
  * @brief Check that source sizes are as expected when the ion density is low, particularly the effect of the external ion source.
  * @details Three scenarios:
  * 1. nion is low, natom is above its threshold (no external source, ionisation boosts ions)
