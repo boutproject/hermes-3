@@ -56,3 +56,70 @@ Effect of these terms
 
 The ``transport_broadening`` and ``magnetic_field_strength`` terms directly affect the Jacobian, which is set to :math:`J=(\lambda_{int}/\lambda_{q,up})/B`.
 The ``cell_side_area`` and ``cell_volume`` affect the interaction of the cells with other components such as the reservoir model.
+
+
+Reading inputs from a 1D grid file
+----------------------------------
+
+The magnetic geometry and transport broadening can also be read from a 1D grid file.
+This is useful for a more precise comparison with a higher fidelity simulation, such as SOLPS-ITER, by using profiles extracted along a field line.
+
+An example of a 1D grid file is shown below:
+
+Example
+^^^^^^^
+
+This writes a grid file with the same mesh as ``examples/tokamak-1D/1D-threshold`` and a simple analytic geometry:
+
+.. code-block:: python
+
+ import numpy as np
+ from boututils.datafile import DataFile
+
+ # Same mesh as examples/tokamak-1D/1D-threshold
+ ny = 400
+ length = 30.0  # [m]
+ length_xpt = 10.0  # [m]
+ dymin = 0.1
+
+ y = 2 * np.pi * (np.arange(ny) + 0.5) / ny  # BOUT++ y at cell centres
+ dy = (length / ny) * (1 + (1 - dymin) * (1 - y / np.pi))  # Cell widths [m]
+ lpar = np.cumsum(dy) - 0.5 * dy  # Parallel distance of cell centres [m]
+
+ # Simple geometry: R decreases and Bpol falls towards the target
+ R = 1.4 - 0.4 * lpar / length  # [m]
+ Bpol = 0.3 - 0.2 * lpar / length  # [T]
+ Btor = -2.0 * R[0] / R  # [T]
+
+ # 1 mm up to the X-point, broadening linearly to 3 mm at the target
+ lambda_int = np.interp(lpar, [0, length_xpt, length], [1e-3, 1e-3, 3e-3])  # [m]
+
+ with DataFile("grid_1d.nc", write=True, create=True) as f:
+     f.write("nx", 1)
+     f.write("ny", ny)
+     f.write("nz", 1)
+     f.write("ixseps1", -1)
+     f.write("ixseps2", -1)
+     f.write("dy", dy.reshape(1, ny))
+     f.write("J", np.ones((1, ny)))
+     f.write("lambda_int", lambda_int.reshape(1, ny))
+     f.write("fieldline_radius", R.reshape(1, ny))
+     f.write("poloidal_magnetic_field", Bpol.reshape(1, ny))
+     f.write("toroidal_magnetic_field", Btor.reshape(1, ny))
+
+Finally, point the ``[mesh]`` section at the grid file, and remove ``nx``, ``ny``, ``nz``, ``dy``, ``J``, ``ixseps1`` and ``ixseps2`` from ``[mesh]``, as these now come from the grid file:
+
+.. code-block:: ini
+
+ [mesh]
+ file = "path/to/grid_1d.nc"
+
+The ``fieldline_geometry`` component reads any of its inputs found in the grid file, which take precedence over the same options in the input file:
+
+.. code-block:: ini
+
+ [fieldline_geometry]
+ # lambda_int, fieldline_radius, poloidal_magnetic_field and
+ # toroidal_magnetic_field are all read from grid_1d.nc
+ compute_Btor_from_R = false  # Use toroidal_magnetic_field from the grid file
+ diagnose = true
