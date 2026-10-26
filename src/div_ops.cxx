@@ -117,7 +117,7 @@ void MC(Stencil1D& n) {
  * positive   - If true, limit advected quantity (n_in) to be positive
  */
 Field3D Div_n_bxGrad_f_B_XPPM(const Field3D& n, const Field3D& f, bool bndry_flux,
-                              bool poloidal, bool positive) {
+                              bool poloidal, bool positive, const Field3D* flux_weight) {
   Field3D result{0.0};
 
   Coordinates* coord = mesh->getCoordinates();
@@ -172,6 +172,21 @@ Field3D Div_n_bxGrad_f_B_XPPM(const Field3D& n, const Field3D& f, bool bndry_flu
         BoutReal vL = 0.5 * (coord->J(i, j, k) + coord->J(i - 1, j, k)) * (fmp - fmm)
                       / coord->dz(i, j, k); // J*df/dz
 
+        // Weight the common reconstructed flux, preserving linearity in the
+        // species fractions even when the reconstruction of n is limited.
+        const BoutReal wR =
+            flux_weight ? 0.5 * ((*flux_weight)(i, j, k) + (*flux_weight)(i + 1, j, k))
+                        : 1.0;
+        const BoutReal wL =
+            flux_weight ? 0.5 * ((*flux_weight)(i, j, k) + (*flux_weight)(i - 1, j, k))
+                        : 1.0;
+        const BoutReal wU =
+            flux_weight ? 0.5 * ((*flux_weight)(i, j, k) + (*flux_weight)(i, j, kp))
+                        : 1.0;
+        const BoutReal wD =
+            flux_weight ? 0.5 * ((*flux_weight)(i, j, k) + (*flux_weight)(i, j, km))
+                        : 1.0;
+
         // 3) Calculate n on the cell faces. The sign of the
         //    velocity determines which side is used.
 
@@ -198,6 +213,7 @@ Field3D Div_n_bxGrad_f_B_XPPM(const Field3D& n, const Field3D& f, bool bndry_flu
               // Flux in from boundary
               flux = vR * 0.5 * (n(i + 1, j, k) + n(i, j, k));
             }
+            flux *= wR;
             result(i, j, k) += flux / (coord->dx(i, j, k) * coord->J(i, j, k));
             result(i + 1, j, k) -=
                 flux / (coord->dx(i + 1, j, k) * coord->J(i + 1, j, k));
@@ -206,7 +222,7 @@ Field3D Div_n_bxGrad_f_B_XPPM(const Field3D& n, const Field3D& f, bool bndry_flu
           // Not at a boundary
           if (vR > 0.0) {
             // Flux out into next cell
-            BoutReal flux = vR * s.R;
+            BoutReal flux = vR * s.R * wR;
             result(i, j, k) += flux / (coord->dx(i, j, k) * coord->J(i, j, k));
             result(i + 1, j, k) -=
                 flux / (coord->dx(i + 1, j, k) * coord->J(i + 1, j, k));
@@ -233,6 +249,7 @@ Field3D Div_n_bxGrad_f_B_XPPM(const Field3D& n, const Field3D& f, bool bndry_flu
               // Flux in from boundary
               flux = vL * 0.5 * (n(i - 1, j, k) + n(i, j, k));
             }
+            flux *= wL;
             result(i, j, k) -= flux / (coord->dx(i, j, k) * coord->J(i, j, k));
             result(i - 1, j, k) +=
                 flux / (coord->dx(i - 1, j, k) * coord->J(i - 1, j, k));
@@ -241,7 +258,7 @@ Field3D Div_n_bxGrad_f_B_XPPM(const Field3D& n, const Field3D& f, bool bndry_flu
           // Not at a boundary
 
           if (vL < 0.0) {
-            BoutReal flux = vL * s.L;
+            BoutReal flux = vL * s.L * wL;
             result(i, j, k) -= flux / (coord->dx(i, j, k) * coord->J(i, j, k));
             result(i - 1, j, k) +=
                 flux / (coord->dx(i - 1, j, k) * coord->J(i - 1, j, k));
@@ -259,12 +276,12 @@ Field3D Div_n_bxGrad_f_B_XPPM(const Field3D& n, const Field3D& f, bool bndry_flu
         MC(s);
 
         if (vU > 0.0) {
-          BoutReal flux = vU * s.R / (coord->J(i, j, k) * coord->dz(i, j, k));
+          BoutReal flux = vU * s.R * wU / (coord->J(i, j, k) * coord->dz(i, j, k));
           result(i, j, k) += flux;
           result(i, j, kp) -= flux;
         }
         if (vD < 0.0) {
-          BoutReal flux = vD * s.L / (coord->J(i, j, k) * coord->dz(i, j, k));
+          BoutReal flux = vD * s.L * wD / (coord->J(i, j, k) * coord->dz(i, j, k));
           result(i, j, k) -= flux;
           result(i, j, km) += flux;
         }
@@ -345,6 +362,9 @@ Field3D Div_n_bxGrad_f_B_XPPM(const Field3D& n, const Field3D& f, bool bndry_flu
             flux *= nval;
           }
 
+          if (flux_weight) {
+            flux *= 0.5 * ((*flux_weight)(i, j, k) + (*flux_weight)(i + 1, j, k));
+          }
           result(i, j, k) += flux / (coord->dx(i, j, k) * coord->J(i, j, k));
           result(i + 1, j, k) -= flux / (coord->dx(i + 1, j, k) * coord->J(i + 1, j, k));
         }
@@ -362,6 +382,7 @@ Field3D Div_n_bxGrad_f_B_XPPM(const Field3D& n, const Field3D& f, bool bndry_flu
     // This calculation is in field aligned coordinates
     dfdx = toFieldAligned(dfdx);
     Field3D n_fa = toFieldAligned(n);
+    const Field3D weight_fa = flux_weight ? toFieldAligned(*flux_weight) : Field3D{1.0};
 
     Field3D yresult{zeroFrom(n_fa)};
 
@@ -425,6 +446,7 @@ Field3D Div_n_bxGrad_f_B_XPPM(const Field3D& n, const Field3D& f, bool bndry_flu
             flux *= nval;
           }
 
+          flux *= 0.5 * (weight_fa(i, j, k) + weight_fa(i, j + 1, k));
           yresult(i, j, k) += flux / (coord->dy(i, j, k) * coord->J(i, j, k));
           yresult(i, j + 1, k) -= flux / (coord->dy(i, j + 1, k) * coord->J(i, j + 1, k));
         }

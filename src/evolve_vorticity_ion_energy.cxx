@@ -30,6 +30,7 @@
 #include <algorithm>
 #include <memory>
 #include <string>
+#include <utility>
 
 using bout::globals::mesh;
 
@@ -72,60 +73,95 @@ void forAllIons(const Options& allspecies, Function func) {
   }
 }
 
-Field3D Div_a_Grad_perp_XZ(const Field3D& a, const Field3D& f) {
-  ASSERT0(a.getLocation() == f.getLocation());
+struct PerpFaceFluxes {
+  BoutReal xp, xm, zp, zm;
+};
 
-  Field3D result{zeroFrom(f)};
-
-  const Coordinates* coord = f.getCoordinates();
-
+// Each mixed term comes from the same corner bilinear form. In particular,
+// averaging transverse derivatives independently at faces would not give a
+// symmetric operator on a nonuniform mesh.
+PerpFaceFluxes perpendicularFaceFluxes(const Field3D& a, const Field3D& f,
+                                       const Ind3D& i) {
+  const auto* coord = f.getCoordinates();
   const auto& J = coord->J();
   const auto& g11 = coord->g11();
   const auto& g33 = coord->g33();
+  const auto& g13 = coord->g13();
   const auto& dx = coord->dx();
   const auto& dz = coord->dz();
 
+  const auto xflux = [&](const Ind3D& l) {
+    const auto r = l.xp();
+    return 0.5 * (a[l] + a[r]) * (J[l] * g11[l] * dz[l] + J[r] * g11[r] * dz[r])
+           * (f[r] - f[l]) / (dx[l] + dx[r]);
+  };
+  const auto zflux = [&](const Ind3D& l) {
+    const auto r = l.zp();
+    return 0.5 * (a[l] + a[r]) * (J[l] * g33[l] * dx[l] + J[r] * g33[r] * dx[r])
+           * (f[r] - f[l]) / (dz[l] + dz[r]);
+  };
+  const auto corner = [&](const Ind3D& l) {
+    const auto x = l.xp();
+    const auto z = l.zp();
+    const auto xz = x.zp();
+    const BoutReal coefficient =
+        0.0625 * (a[l] + a[x] + a[z] + a[xz])
+        * (J[l] * g13[l] + J[x] * g13[x] + J[z] * g13[z] + J[xz] * g13[xz]);
+    // Centre-to-centre lengths cancel against the corner area in the
+    // integrated cross flux. These are averaged differences, not derivatives.
+    return std::pair<BoutReal, BoutReal>{0.5 * coefficient * (f[x] - f[l] + f[xz] - f[z]),
+                                         0.5 * coefficient
+                                             * (f[z] - f[l] + f[xz] - f[x])};
+  };
+  const auto pp = corner(i);
+  const auto mp = corner(i.xm());
+  const auto pm = corner(i.zm());
+  const auto mm = corner(i.xm().zm());
+  return {xflux(i) + 0.5 * (pp.second + pm.second),
+          xflux(i.xm()) + 0.5 * (mp.second + mm.second),
+          zflux(i) + 0.5 * (pp.first + mp.first),
+          zflux(i.zm()) + 0.5 * (pm.first + mm.first)};
+}
+} // namespace
+
+namespace bout::ion_energy {
+Field3D Div_a_Grad_perp_XZ(const Field3D& a, const Field3D& f, bool bndry_flux) {
+  ASSERT0(a.getLocation() == f.getLocation());
+  Field3D result{zeroFrom(f)};
+  const auto* coord = f.getCoordinates();
   BOUT_FOR(i, result.getRegion("RGN_NOBNDRY")) {
-    const BoutReal volume = J[i] * dx[i] * dz[i];
-
-    // Flux in x
-    const auto ixp = i.xp();
-    const auto ixm = i.xm();
-
-    // Area of cell edges
-    const BoutReal area_xp = 0.5 * (J[i] * g11[i] * dz[i] + J[ixp] * g11[ixp] * dz[ixp]);
-    const BoutReal area_xm = 0.5 * (J[i] * g11[i] * dz[i] + J[ixm] * g11[ixm] * dz[ixm]);
-
-    // Coefficient `a` at cell edges
-    const BoutReal coeff_xp = 0.5 * (a[i] + a[ixp]);
-    const BoutReal coeff_xm = 0.5 * (a[i] + a[ixm]);
-
-    // Gradient at cell edges
-    const BoutReal grad_xp = 2. * (f[ixp] - f[i]) / (dx[i] + dx[ixp]);
-    const BoutReal grad_xm = 2. * (f[i] - f[ixm]) / (dx[i] + dx[ixm]);
-
-    // Flux in z
-    const auto izp = i.zp();
-    const auto izm = i.zm();
-
-    const BoutReal area_zp = 0.5 * (J[i] * g33[i] * dx[i] + J[izp] * g33[izp] * dx[izp]);
-    const BoutReal area_zm = 0.5 * (J[i] * g33[i] * dx[i] + J[izm] * g33[izm] * dx[izm]);
-
-    const BoutReal coeff_zp = 0.5 * (a[i] + a[izp]);
-    const BoutReal coeff_zm = 0.5 * (a[i] + a[izm]);
-
-    const BoutReal grad_zp = 2. * (f[izp] - f[i]) / (dz[i] + dz[izp]);
-    const BoutReal grad_zm = 2. * (f[i] - f[izm]) / (dz[i] + dz[izm]);
-
-    result[i] = (+(area_xp * coeff_xp * grad_xp) - (area_xm * coeff_xm * grad_xm)
-                 + (area_zp * coeff_zp * grad_zp) - (area_zm * coeff_zm * grad_zm))
-                / volume;
+    auto flux = perpendicularFaceFluxes(a, f, i);
+    // A zero X derivative alone does not eliminate the g13 normal flux.
+    if (!bndry_flux && !f.getMesh()->periodicX) {
+      if (f.getMesh()->firstX() && i.x() == f.getMesh()->xstart) {
+        flux.xm = 0.0;
+      }
+      if (f.getMesh()->lastX() && i.x() == f.getMesh()->xend) {
+        flux.xp = 0.0;
+      }
+    }
+    result[i] = (flux.xp - flux.xm + flux.zp - flux.zm)
+                / (coord->J()[i] * coord->dx()[i] * coord->dz()[i]);
   }
-
   return result;
 }
 
-}; // namespace
+Field3D kineticEnergyPerp(const Field3D& a, const Field3D& f) {
+  ASSERT0(a.getLocation() == f.getLocation());
+  Field3D result{zeroFrom(f)};
+  const auto* coord = f.getCoordinates();
+  BOUT_FOR(i, result.getRegion("RGN_NOBNDRY")) {
+    const auto flux = perpendicularFaceFluxes(a, f, i);
+    // Half of each face's 1/2 * delta(f) * flux belongs to this cell.
+    result[i] = ((f[i.xp()] - f[i]) * flux.xp + (f[i] - f[i.xm()]) * flux.xm
+                 + (f[i.zp()] - f[i]) * flux.zp + (f[i] - f[i.zm()]) * flux.zm)
+                / (4. * coord->J()[i] * coord->dx()[i] * coord->dz()[i]);
+  }
+  return result;
+}
+} // namespace bout::ion_energy
+
+using bout::ion_energy::Div_a_Grad_perp_XZ;
 
 EvolveVorticityIonEnergy::EvolveVorticityIonEnergy(std::string name, Options& alloptions,
                                                    Solver* solver)
@@ -143,6 +179,8 @@ EvolveVorticityIonEnergy::EvolveVorticityIonEnergy(std::string name, Options& al
                       // Ion outputs
                       readWrite("species:{ions}:pressure"),
                       readWrite("species:{ions}:temperature"),
+                      readWrite("species:{ions}:density_source"),
+                      readWrite("species:{ions}:momentum_source"),
                       // Fields
                       readWrite("fields:vorticity"), readWrite("fields:phi")}) {
 
@@ -214,13 +252,16 @@ EvolveVorticityIonEnergy::EvolveVorticityIonEnergy(std::string name, Options& al
 
   // Fixed point iteration settings
   phi_max_iterations = options["phi_max_iterations"]
-                           .doc("Maximum number of phi <-> Pi iterations")
-                           .withDefault(5);
+                           .doc("Maximum number of finite-volume potential iterations")
+                           .withDefault(100);
   phi_atol =
       options["phi_atol"].doc("phi convergence absolute tolerance [eV]").withDefault(1.0)
       / Tnorm;
   phi_rtol =
       options["phi_rtol"].doc("phi convergence relative tolerance").withDefault(1e-3);
+  vort_atol = options["vort_atol"]
+                  .doc("Absolute tolerance on the normalised forward vorticity residual")
+                  .withDefault(1e-10);
 
   // Read curvature vector
   try {
@@ -275,12 +316,14 @@ void EvolveVorticityIonEnergy::transform_impl(GuardedOptions& state) {
   ion_KE_parallel = 0.0;
   Field3D Ni_sum = 0.0;
   Field3D mass_charge_density = 0.0;
+  Field3D mass_density = 0.0;
   forAllIons(allspecies, [&](GuardedOptions species) {
     const BoutReal AA = get<BoutReal>(species["AA"]);
     const BoutReal Z = get<BoutReal>(species["charge"]);
     auto N = GET_NOBOUNDARY(Field3D, species["density"]);
     Ni_sum += N;
     mass_charge_density += (AA / Z) * N;
+    mass_density += AA * N;
 
     if (!species.isSet("velocity")) {
       return;
@@ -296,6 +339,7 @@ void EvolveVorticityIonEnergy::transform_impl(GuardedOptions& state) {
   const Field3D pressure_weight =
       mass_charge_density / (average_atomic_mass * Ni_sum_floor);
   psi = pressure_weight * Pi_sum;
+  const BoutReal vort_tolerance = vort_atol + phi_rtol * max(abs(Vort), true);
 
   int iteration = 0;
   BoutReal phi_err;
@@ -309,8 +353,10 @@ void EvolveVorticityIonEnergy::transform_impl(GuardedOptions& state) {
     // ∇·(c∇⊥Φ) = ω for Φ = ϕ + psi
     // with c = rho_0 / B^2 and psi = sum_s(A_s p_s / (Abar Z_s))
 
-    phi = phiSolver->solve(
-        (Vort - Div_a_Grad_perp_XZ(boussinesq_coeff, psi)) / boussinesq_coeff, phi);
+    mesh->communicate(phi, psi);
+    // The spectral solver is only an approximate inverse. Defect correction
+    // converges to the same finite-volume operator used for kinetic energy.
+    phi = correctPotential(Vort, phi + psi) - psi;
 
     // With the Boussinesq approximation the perpendicular flow velocity is
     // v⊥0 = b × ∇Φ / B = v_E + v∗
@@ -325,21 +371,48 @@ void EvolveVorticityIonEnergy::transform_impl(GuardedOptions& state) {
 
     applyPressureBoundary(Pi_sum);
     psi = pressure_weight * Pi_sum;
+    mesh->communicate(phi, psi);
 
     phi_err = max((abs(phi - phi_last)) / (abs(phi) + phi_atol), true);
     const BoutReal psi_err = max(abs(psi - psi_last) / (abs(psi) + phi_atol), true);
     phi_err = std::max(phi_err, psi_err);
+    const BoutReal vort_err =
+        max(abs(Vort - Div_a_Grad_perp_XZ(boussinesq_coeff, phi + psi)), true);
     ++iteration;
 
     //output.write("Iteration {} phi_err {}\n", iteration, phi_err);
 
-    if (iteration > phi_max_iterations) {
-      output_warn.write("\nMaximum phi iterations {} reached. phi error {}\n", iteration,
-                        phi_err);
+    if (phi_err <= phi_rtol && vort_err <= vort_tolerance) {
       break;
     }
-  } while (phi_err > phi_rtol);
+    if (iteration >= phi_max_iterations) {
+      throw BoutException("Potential recovery did not converge in {} iterations: "
+                          "potential error {}, vorticity residual {} (tolerance {})",
+                          iteration, phi_err, vort_err, vort_tolerance);
+    }
+  } while (true);
   mesh->communicate(phi, Pi_sum, psi);
+
+  // Free parallel boundaries, as in the vorticity component. The spectral
+  // inverse does not supply these, but electron compression uses Grad(phi).
+  if (mesh->ystart > 0) {
+    Field3D phi_fa = toFieldAligned(phi);
+    const int lower_neighbour = std::min(mesh->ystart + 1, mesh->yend);
+    const int upper_neighbour = std::max(mesh->yend - 1, mesh->ystart);
+    for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
+      for (int z = 0; z < mesh->LocalNz; ++z) {
+        phi_fa(r.ind, mesh->ystart - 1, z) =
+            2 * phi_fa(r.ind, mesh->ystart, z) - phi_fa(r.ind, lower_neighbour, z);
+      }
+    }
+    for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
+      for (int z = 0; z < mesh->LocalNz; ++z) {
+        phi_fa(r.ind, mesh->yend + 1, z) =
+            2 * phi_fa(r.ind, mesh->yend, z) - phi_fa(r.ind, upper_neighbour, z);
+      }
+    }
+    phi = fromFieldAligned(phi_fa);
+  }
 
   auto fields = state["fields"];
   set(fields["vorticity"], Vort);
@@ -424,60 +497,83 @@ void EvolveVorticityIonEnergy::transform_impl(GuardedOptions& state) {
   DivEExB = Div_n_bxGrad_f_B_XPPM((3. / 2) * Pi_sum + ion_KE_parallel, phi, false,
                                   poloidal_flows, true);
 
-  // Energy transfer to/from electrons: phi * Div(J_e)
-  // Add to electrons, subtract from ions
+  // The total electron energy exchange is phi * Div(J_e). evolve_pressure
+  // evolves thermal energy, so only ExB compression belongs in energy_source.
+  // Parallel electrical work is already in the electron momentum equation.
   phi_Div_Je = phi * (DivJdia_e + Div_par(Jpar_e));
-
-  add(electrons["energy_source"], phi_Div_Je);
+  electron_exb_work = -(Jdia_e * Grad(phi));
+  add(electrons["energy_source"], electron_exb_work);
 
   //////////////////////////////////////////////////////////
   // Polarisation drift
 
-  // Note: This will be handled in the `polarisation_drift`
-  // component, because it needs to include other currents
-  // due to e.g. ion viscosity
-
-  // Energy density advected by polarisation drift
-  // pi + 1/2 m_i n_0 v^2_||i + en_0ϕ
-  // Note the n_0 in the parallel kinetic energy and phi term
-  Field3D E_adv = (5. / 2) * Pi_sum + phi;
-
-  forAllIons(allspecies, [&](GuardedOptions species) {
-    if (!species.isSet("velocity")) {
-      return;
-    }
-    const BoutReal AA = get<BoutReal>(species["AA"]);
-    auto V = GET_NOBOUNDARY(Field3D, species["velocity"]);
-
-    // Density is n_0 due to Boussinesq approximation
-    E_adv += 0.5 * AA * SQ(V);
-  });
-
-  // Calculate Div( E_adv v_pol )
-  //
-  // vpol = - c / (en_0) Grad_perp dPhi/dt - G / (en_0)
-
   // Solve for Div( c Grad_perp dPhi/dt ) = dVort/dt
   // Note: Check case where boundaries are relaxed
   const Field3D dVortdt = DivJReynolds + DivJdia;
-  dPhidt = phiSolver->solve(dVortdt / boussinesq_coeff, dPhidt);
+  const BoutReal dVort_tolerance = vort_atol + phi_rtol * max(abs(dVortdt), true);
+  for (int step = 0; step < phi_max_iterations; ++step) {
+    mesh->communicate(dPhidt);
+    dPhidt = correctPotential(dVortdt, dPhidt);
+    mesh->communicate(dPhidt);
+    const BoutReal residual =
+        max(abs(dVortdt - Div_a_Grad_perp_XZ(boussinesq_coeff, dPhidt)), true);
+    if (residual <= dVort_tolerance) {
+      break;
+    }
+    if (step + 1 == phi_max_iterations) {
+      throw BoutException("Polarisation potential did not converge in {} iterations: "
+                          "vorticity residual {} (tolerance {})",
+                          phi_max_iterations, residual, dVort_tolerance);
+    }
+  }
 
-  // Set Neumann boundaries so energy fluxes through boundaries are disabled.
+  // Set Neumann boundaries; divPol also suppresses the g13 radial flux.
   // Solving for dPhidt with two Neumann boundaries is ill conditioned
   dPhidt.applyBoundary("neumann_o2");
+  mesh->communicate(dPhidt);
 
-  // Divergence of energy flux due carried by polarisation drift
-  DivEpol =
-      // Potential flow part of polarisation drift
-      -Div_a_Grad_perp_XZ(E_adv * boussinesq_coeff, dPhidt)
-      // Reynolds stress part of the polarisation drift
-      // Note: The stream functions are negated so that upwinding works correctly
-      + Div_n_bxGrad_f_B_XPPM(E_adv * 0.5 * Vort, -phi, false, poloidal_flows)
-      - Div_a_Grad_perp_XZ(E_adv * 0.5 * boussinesq_coeff, vEdotGradPsi)
-      + Div_n_bxGrad_f_B_XPPM(E_adv * DelpPhi_2B2, -(phi + psi), false, poloidal_flows);
+  // Divergence of a scalar times the total polarisation current, Jpol.
+  const auto divPol = [&](const Field3D& weight) -> Field3D {
+    return
+        // Potential flow part of polarisation drift
+        -Div_a_Grad_perp_XZ(weight * boussinesq_coeff, dPhidt, false)
+        // Reynolds stress part of the polarisation drift
+        // Note: The stream functions are negated so that upwinding works correctly
+        + Div_n_bxGrad_f_B_XPPM(0.5 * Vort, -phi, false, poloidal_flows, false, &weight)
+        - Div_a_Grad_perp_XZ(weight * 0.5 * boussinesq_coeff, vEdotGradPsi, false)
+        + Div_n_bxGrad_f_B_XPPM(DelpPhi_2B2, -(phi + psi), false, poloidal_flows, false,
+                                &weight);
+  };
+  DivJpol = divPol(Field3D{1.0});
 
-  // Fluxes of ion densities and (if set) momentum
-  // This requires a partition of the polarisation current between species.
+  // Jps = (A_s n_s / rho) Jpol, Gamma_ps = Jps / Z_s. Use the actual
+  // mass density, so the species currents sum to Jpol above the floor.
+  mass_density = floor(mass_density, average_atomic_mass * density_floor);
+  Field3D E_adv = copy(phi);
+  polarisation_sources = Options{};
+  forAllIons(allspecies, [&](GuardedOptions species) {
+    const BoutReal AA = get<BoutReal>(species["AA"]);
+    const BoutReal Z = get<BoutReal>(species["charge"]);
+    const Field3D N = GET_NOBOUNDARY(Field3D, species["density"]);
+    const Field3D P = GET_NOBOUNDARY(Field3D, species["pressure"]);
+    const Field3D coefficient = (AA / Z) / mass_density;
+    const Field3D density_source = -divPol(coefficient * N);
+    add(species["density_source"], density_source);
+    polarisation_sources[species.name()]["density"] = density_source;
+    E_adv += coefficient * (5. / 2) * P;
+    if (species.isSet("velocity")) {
+      const Field3D V = GET_NOBOUNDARY(Field3D, species["velocity"]);
+      E_adv += coefficient * 0.5 * AA * N * SQ(V);
+    }
+    if (species.isSet("momentum")) {
+      const Field3D NV = GET_NOBOUNDARY(Field3D, species["momentum"]);
+      const Field3D momentum_source = -divPol(coefficient * NV);
+      add(species["momentum_source"], momentum_source);
+      polarisation_sources[species.name()]["momentum"] = momentum_source;
+    }
+  });
+  // Sum_s[(5/2 p_s + K_parallel_s) A_s/(Z_s rho)] + phi.
+  DivEpol = divPol(E_adv);
 }
 
 void EvolveVorticityIonEnergy::finally(const Options& state) {
@@ -555,6 +651,10 @@ void EvolveVorticityIonEnergy::outputVars(Options& state) {
                   {"source", "evolve_vorticity_ion_energy"}});
 
   if (diagnose) {
+    set_with_attrs(state["DivJpol"], DivJpol,
+                   {{"time_dimension", "t"},
+                    {"units", "A m^-3"},
+                    {"conversion", SI::qe * Nnorm * Omega_ci}});
     set_with_attrs(state["ion_pressure_potential"], psi,
                    {{"time_dimension", "t"}, {"units", "V"}, {"conversion", Tnorm}});
     set_with_attrs(
@@ -584,6 +684,9 @@ void EvolveVorticityIonEnergy::outputVars(Options& state) {
         {{"time_dimension", "t"}, {"units", "W m^-3"}, {"conversion", Pnorm * Omega_ci}});
     set_with_attrs(
         state["phi_Div_Je"], phi_Div_Je,
+        {{"time_dimension", "t"}, {"units", "W m^-3"}, {"conversion", Pnorm * Omega_ci}});
+    set_with_attrs(
+        state["electron_exb_work"], electron_exb_work,
         {{"time_dimension", "t"}, {"units", "W m^-3"}, {"conversion", Pnorm * Omega_ci}});
     set_with_attrs(
         state["Eion_src"], Eion_src,
@@ -633,7 +736,7 @@ Field3D EvolveVorticityIonEnergy::sumIonEnergySources(const Options& allspecies)
   Field3D src = 0.0;
   forAllIons(allspecies, [&](const Options& species) {
     if (species.isSet("energy_source")) {
-      src += get<Field3D>(species["energy_source"]); // For diagnostic output
+      src += get<Field3D>(species["energy_source"]); // Thermal energy only
     }
     if (species.isSet("velocity")) {
       const Field3D V = get<Field3D>(species["velocity"]);
@@ -644,65 +747,43 @@ Field3D EvolveVorticityIonEnergy::sumIonEnergySources(const Options& allspecies)
         const BoutReal AA = get<BoutReal>(species["AA"]);
         src -= 0.5 * AA * SQ(V) * get<Field3D>(species["density_source"]);
       }
+      // Polarisation advection is already present in the total-energy flux.
+      // Remove its local kinetic-energy conversion using the completed V.
+      if (polarisation_sources.isSection(species.name())) {
+        const auto& pol = polarisation_sources[species.name()];
+        if (pol.isSet("momentum")) {
+          src -= V * get<Field3D>(pol["momentum"]);
+        }
+        if (pol.isSet("density")) {
+          const BoutReal AA = get<BoutReal>(species["AA"]);
+          src += 0.5 * AA * SQ(V) * get<Field3D>(pol["density"]);
+        }
+      }
     }
   });
   return src;
 }
 
-// Perpendicular kinetic energy
-// This uses the same discretisation at Div_a_Grad_perp_XZ
+// Use exactly the same face fluxes as the forward vorticity operator.
 Field3D EvolveVorticityIonEnergy::calculateKEperp(const Field3D& phi,
                                                   const Field3D& psi) const {
+  return bout::ion_energy::kineticEnergyPerp(boussinesq_coeff, phi + psi);
+}
 
-  const Coordinates* coord = phi.getCoordinates();
-
-  const auto& J = coord->J();
-  const auto& g11 = coord->g11();
-  const auto& g33 = coord->g33();
-  const auto& dx = coord->dx();
-  const auto& dz = coord->dz();
-
-  const Field3D a = boussinesq_coeff;
-  const Field3D f = phi + psi;
-
-  Field3D result{zeroFrom(f)};
-
-  BOUT_FOR(i, result.getRegion("RGN_NOBNDRY")) {
-    const BoutReal volume = J[i] * dx[i] * dz[i];
-
-    // X cell faces
-    const auto ixp = i.xp();
-    const auto ixm = i.xm();
-
-    // Area of cell edges
-    const BoutReal area_xp = 0.5 * (J[i] * g11[i] * dz[i] + J[ixp] * g11[ixp] * dz[ixp]);
-    const BoutReal area_xm = 0.5 * (J[i] * g11[i] * dz[i] + J[ixm] * g11[ixm] * dz[ixm]);
-
-    // Coefficient `a` at cell edges
-    const BoutReal coeff_xp = 0.5 * (a[i] + a[ixp]);
-    const BoutReal coeff_xm = 0.5 * (a[i] + a[ixm]);
-
-    // Gradient at cell edges
-    const BoutReal grad2_xp = 2. * SQ(f[ixp] - f[i]) / (dx[i] + dx[ixp]);
-    const BoutReal grad2_xm = 2. * SQ(f[i] - f[ixm]) / (dx[i] + dx[ixm]);
-
-    // Flux in z
-    const auto izp = i.zp();
-    const auto izm = i.zm();
-
-    const BoutReal area_zp = 0.5 * (J[i] * g33[i] * dx[i] + J[izp] * g33[izp] * dx[izp]);
-    const BoutReal area_zm = 0.5 * (J[i] * g33[i] * dx[i] + J[izm] * g33[izm] * dx[izm]);
-
-    const BoutReal coeff_zp = 0.5 * (a[i] + a[izp]);
-    const BoutReal coeff_zm = 0.5 * (a[i] + a[izm]);
-
-    const BoutReal grad2_zp = 2. * SQ(f[izp] - f[i]) / (dz[i] + dz[izp]);
-    const BoutReal grad2_zm = 2. * SQ(f[i] - f[izm]) / (dz[i] + dz[izm]);
-
-    result[i] = (+(area_xp * coeff_xp * grad2_xp) + (area_xm * coeff_xm * grad2_xm)
-                 + (area_zp * coeff_zp * grad2_zp) + (area_zm * coeff_zm * grad2_zm))
-                / (4. * volume);
+Field3D EvolveVorticityIonEnergy::correctPotential(const Field3D& rhs,
+                                                   const Field3D& potential) const {
+  // Homogeneous correction boundaries preserve the separately imposed phi
+  // boundaries, including INVERT_SET values supplied by a restart.
+  Field3D residual{zeroFrom(rhs)};
+  const Field3D forward = Div_a_Grad_perp_XZ(boussinesq_coeff, potential);
+  BOUT_FOR(i, residual.getRegion("RGN_NOBNDRY")) {
+    residual[i] = (rhs[i] - forward[i]) / boussinesq_coeff[i];
   }
-
-  return result;
+  const Field3D approximate = phiSolver->solve(residual, zeroFrom(potential));
+  // Spectral solvers can leave Y guard cells uninitialised. Only copy the
+  // X-Z planes they solve; communication supplies inter-process Y guards.
+  Field3D correction{zeroFrom(potential)};
+  BOUT_FOR(i, correction.getRegion("RGN_NOY")) { correction[i] = approximate[i]; }
+  mesh->communicate(correction);
+  return potential + correction;
 }

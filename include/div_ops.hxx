@@ -50,8 +50,11 @@
  */
 Field3D Div_par_diffusion_index(const Field3D& f, bool bndry_flux = true);
 
+/// Optional flux_weight is averaged onto faces after reconstructing n. This
+/// permits several weighted fluxes to sum to a common limited flux exactly.
 Field3D Div_n_bxGrad_f_B_XPPM(const Field3D& n, const Field3D& f, bool bndry_flux = true,
-                              bool poloidal = false, bool positive = false);
+                              bool poloidal = false, bool positive = false,
+                              const Field3D* flux_weight = nullptr);
 
 /// This version has an extra coefficient 'g' that is linearly interpolated
 /// onto cell faces

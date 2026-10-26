@@ -151,3 +151,32 @@ It is planned to replace that check with quantitative criteria:
 The test is very low resolution, so it does not check convergence. A companion
 test, `2D-energy-budget`, runs a resolution and option matrix to measure each
 non-conservative term.
+
+## Ion total energy variant
+
+`data-Eion` uses `evolve_vorticity_ion_energy` to evolve the aggregate ion
+energy and recover a common ion temperature. Electrons use `evolve_pressure`.
+All `energy_source` fields supply thermal energy; the ion component adds the
+kinetic energy changes associated with external particle and momentum sources.
+The electron thermal source receives ExB compression work
+`-Jdia_e dot Grad(phi)`. Parallel electron electrical work belongs to the
+electron momentum equation.
+
+For several ions, the polarisation current is distributed by the actual mass
+fractions `A_s n_s / sum(A_s n_s)`. The resulting particle and momentum
+advection is included in the species sources, and its energy transport is
+included once in the aggregate energy flux.
+
+Potential recovery uses the Laplacian solver as an approximate inverse and
+iterates on the residual of `Div_a_Grad_perp_XZ(c, phi + psi)`. This finite-volume
+operator and the perpendicular kinetic energy use the same face fluxes,
+including `g13`. `phi_max_iterations` defaults to 100; convergence checks both
+potential changes and the forward vorticity residual, with relative tolerance
+`phi_rtol` and absolute residual tolerance `vort_atol` (normalised units).
+Failure to converge raises an exception.
+
+The unit tests check integration by parts, including radial boundary work,
+operator symmetry on a nonuniform mesh, and a Fourier mode with nonzero `g13`.
+They also check the finite-volume inversion, species polarisation transport,
+and electron thermal-source convention. These checks do not establish global
+energy conservation for the full model.

@@ -25,6 +25,7 @@ for term in [
     "DivEparallel",
     "DivEpol",
     "phi_Div_Je",
+    "electron_exb_work",
     "Eion_src",
     "Eion",
     "ion_KE_perp",

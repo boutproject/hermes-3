@@ -14,12 +14,22 @@
 #include <memory>
 #include <string>
 
+namespace bout::ion_energy {
+/// Conservative X-Z operator, including the cross metric g13.
+Field3D Div_a_Grad_perp_XZ(const Field3D& a, const Field3D& f, bool bndry_flux = true);
+/// Face-based energy density consistent with Div_a_Grad_perp_XZ.
+Field3D kineticEnergyPerp(const Field3D& a, const Field3D& f);
+} // namespace bout::ion_energy
+
 /// Evolves vorticity and ion total energy
 ///
 /// These are evolved together because the ion perpendicular kinetic energy
 /// depends on the ion pressure through the diamagnetic drift.
 /// This formulation means that dissipation in the vorticity equation
 /// is automatically converted to ion heating.
+/// All species energy_source fields supply thermal energy. Electron pressure
+/// must be evolved by evolve_pressure; electron parallel electrical work is
+/// accounted for by the electron momentum equation.
 ///
 /// # Mesh inputs
 ///
@@ -55,7 +65,7 @@ struct EvolveVorticityIonEnergy : public NamedComponent<EvolveVorticityIonEnergy
   /// - species
   ///   - <name>
   ///     - velocity. Must have sound_speed or temperature
-  ///     - energy_source
+  ///     - energy_source. Thermal energy, excluding parallel kinetic energy
   /// - fields
   ///   - phi      Electrostatic potential -> ExB drift
   ///
@@ -110,12 +120,18 @@ private:
   int phi_max_iterations; ///< Maximum number of Vort,E -> phi, Pi iterations
   BoutReal phi_atol;      ///< Absolute tolerance on phi
   BoutReal phi_rtol;      ///< Relative tolerance on phi
+  BoutReal vort_atol;     ///< Absolute tolerance on forward vorticity residual
+
+  // Internal transport sources are excluded from conversion of external
+  // sources to total energy: their energy flux is already in DivEpol.
+  Options polarisation_sources;
 
   VectorMetric Curlb_B; // Curvature vector Curl(b/B)
 
   // Divergence of currents
   Field3D DivJdia;      ///< Divergence of diamagnetic current
   Field3D DivJReynolds; ///< Divergence of Reynolds stress current
+  Field3D DivJpol;      ///< Divergence of the total polarisation current used in fluxes
 
   // Divergence of energy fluxes
   Field3D DivEExB;      ///< Divergence of ExB energy flux
@@ -124,7 +140,8 @@ private:
   Field3D DivEparallel; ///< Divergence of parallel ion enthalpy and kinetic energy flux
   Field3D DivEpol;      ///< Divergence of polarisation drift energy flux
 
-  Field3D phi_Div_Je; ///< Energy transferred to/from electrons
+  Field3D phi_Div_Je;        ///< Energy transferred to/from electrons
+  Field3D electron_exb_work; ///< Thermal work -Jdia_e dot Grad(phi)
 
   Field3D Eion_src; ///< Ion energy sources from other components
 
@@ -150,6 +167,9 @@ private:
 
   /// Sum thermal sources and kinetic energy changes from momentum and particle sources
   Field3D sumIonEnergySources(const Options& allspecies) const;
+
+  /// Use the Laplacian as a preconditioner for a finite-volume residual step.
+  Field3D correctPotential(const Field3D& rhs, const Field3D& potential) const;
 
   /// Calculate ion perpendicular kinetic energy, K⊥ = 1/2 c |∇⊥Φ|^2
   ///
