@@ -43,9 +43,11 @@ Reaction::Reaction(std::string name, Options& options)
   // Parse the reaction string
   this->parser = std::make_unique<ReactionParser>(reaction_str);
 
-  std::vector<std::string> metadata_keys = {};
-  this->rate_data = ReactionDataFactory::getInstance().create(
-      toString(data_src_type), data_src_id, options, metadata_keys);
+  if (data_src_type != ReactionDataTypes::None) {
+    std::vector<std::string> metadata_keys = {};
+    this->reaction_data = ReactionDataFactory::getInstance().create(
+        toString(data_src_type), data_src_id, options, metadata_keys);
+  }
 
   std::vector<std::string> species = this->parser->get_species();
   this->reactant_names = this->parser->get_species(species_filter::reactants);
@@ -99,6 +101,13 @@ void Reaction::add_diagnostic(const std::string& sp_name, const std::string& dia
                                      standard_name, this->units, transformer)));
   }
   setPermissions(readWrite(diag_name));
+}
+
+ReactionData& Reaction::get_reaction_data() const {
+  if (!this->reaction_data) {
+    throw BoutException("Trying to get reaction data, but none has been set.");
+  }
+  return *this->reaction_data;
 }
 
 ///
@@ -237,13 +246,13 @@ RateData Reaction::get_rate(GuardedOptions& state) {
 
   // Create rate helper and compute reaction rate, collision frequencies
   RateData rate_calc_results(this->reactant_names);
-  RateParamsTypes rate_params_type = this->rate_data->get_fit_type();
+  RateParamsTypes rate_params_type = get_reaction_data().get_fit_type();
   if (rate_params_type == RateParamsTypes::ET) {
     throw BoutException("RateParamsTypes::ET not implemented");
   } else if (rate_params_type == RateParamsTypes::nT) {
     TwoDRateFunc calc_rate = [&](BoutReal ne, BoutReal te) {
-      BoutReal result = this->rate_data->eval_sigma_v_nT(te * Tnorm, ne * Nnorm) * Nnorm
-                        / FreqNorm * rate_multiplier;
+      BoutReal result = get_reaction_data().eval_sigma_v_nT(te * Tnorm, ne * Nnorm)
+                        * Nnorm / FreqNorm * rate_multiplier;
       return result;
     };
     auto rate_helper =
@@ -251,7 +260,7 @@ RateData Reaction::get_rate(GuardedOptions& state) {
     rate_calc_results = rate_helper.calc_rates(calc_rate, this->do_parallel_averaging);
   } else if (rate_params_type == RateParamsTypes::T) {
     OneDRateFunc calc_rate = [&](BoutReal Teff) {
-      BoutReal result = 1e-6 * this->rate_data->eval_sigma_v_T(Teff) * Nnorm / FreqNorm
+      BoutReal result = 1e-6 * get_reaction_data().eval_sigma_v_T(Teff) * Nnorm / FreqNorm
                         * rate_multiplier;
       return result;
     };

@@ -8,7 +8,6 @@
 #include <bout/utils.hxx>
 
 #include "guarded_options.hxx"
-#include "single_rate_reaction_data.hxx"
 #include "species_parser.hxx"
 
 // ======================= Helper struct and functions ========================
@@ -307,8 +306,9 @@ void LowNSources::instantiate_reactions() {
           this->reaction_options_store.emplace_back(this->options.copy());
           Options& reaction_options = this->reaction_options_store.back();
           reaction_options[PSEUDO_REACTION_COMPONENT_NAME]["data_srcs"] =
-              SINGLE_RATE_REACTION_DATA_LBL;
-          reaction_options[PSEUDO_REACTION_COMPONENT_NAME]["data_ids"] = "pseudo_rate";
+              toString(ReactionDataTypes::None);
+          reaction_options[PSEUDO_REACTION_COMPONENT_NAME]["data_ids"] =
+              toString(ReactionDataTypes::None);
           reaction_options[PSEUDO_REACTION_COMPONENT_NAME]["type"] = spec.reaction_str;
           reaction_options[PSEUDO_REACTION_COMPONENT_NAME]["diagnose"] = this->diagnose;
           /// This ensures that PseudoReaction instances don't interfere with the parsing of reaction strings from the config

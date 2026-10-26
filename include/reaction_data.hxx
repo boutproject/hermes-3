@@ -13,7 +13,7 @@
 
 BOUT_ENUM_CLASS(RateParamsTypes, T, ET, nT, undefined)
 BOUT_ENUM_CLASS(ReactionCoeffTypes, sigma_v, sigma_v_E)
-BOUT_ENUM_CLASS(ReactionDataTypes, ADAS, Amjuel, HydHel, single_rate, undefined)
+BOUT_ENUM_CLASS(ReactionDataTypes, ADAS, Amjuel, HydHel, None, undefined)
 
 /**
  * @brief Get the json database location from options, or default to a standard location

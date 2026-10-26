@@ -44,6 +44,22 @@ TEST(ReactionTest, InputOptions) {
   ASSERT_THROW(ConcreteCXReaction(comp_name, invalid_input2), BoutException);
 }
 
+/// @brief If no reaction data is set, Reaction.get_reaction_data() must throw.
+TEST(ReactionTest, ThrowsWithoutReactionData) {
+  const std::string comp_name = "test";
+  Options base_input{
+      {comp_name,
+       {{"type", "(h + h+ -> h+ + h, d + d+ -> d+ + d)"}, {"is_internal", "true"}}},
+      {"units", {{"eV", 1.0}, {"inv_meters_cubed", 1.0}, {"seconds", 1.0}}}};
+
+  // Don't read any reaction data
+  base_input[comp_name]["data_srcs"] = "none";
+  base_input[comp_name]["data_ids"] = "none";
+
+  ConcreteCXReaction component(comp_name, base_input);
+  ASSERT_THROW(component.get_reaction_data(), BoutException);
+}
+
 //======================== CX reaction class tests =======================
 
 /// @brief CXReaction constructor should throw for strings that aren't valid CX

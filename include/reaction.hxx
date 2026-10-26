@@ -90,9 +90,6 @@ protected:
   /// Reaction string parser
   std::unique_ptr<ReactionParser> parser;
 
-  /// Reaction data
-  std::unique_ptr<ReactionData> rate_data;
-
   /// Units and normalisations extracted to member vars for convenience
   Options& units;
   BoutReal Tnorm, Nnorm, FreqNorm;
@@ -141,6 +138,9 @@ protected:
                       const std::string& data_source,
                       DiagnosticTransformerType transformer = negate,
                       const std::string& standard_name = "");
+
+  // Borrow the reaction data owned by this reaction. Throws if no data is set.
+  ReactionData& get_reaction_data() const;
 
   /**
    * @brief Set weights for any reactant => product momentum / energy channel that hasn't
@@ -246,6 +246,9 @@ private:
 
   /// Participation factors of all species - currently set to 1!
   std::map<std::string, BoutReal> pfactors;
+
+  /// Reaction data
+  std::unique_ptr<ReactionData> reaction_data;
 
   /**
    * @brief Extract reaction string and data type and data ID for this reaction from the

@@ -9,6 +9,8 @@ namespace hermes {
 
 struct ConcreteCXReaction : public CXReaction {
   using CXReaction::CXReaction;
+  // Expose (protected) get_reaction_data() for testing
+  using Reaction::get_reaction_data;
   static constexpr auto type = "test_cx_reaction";
 };
 
