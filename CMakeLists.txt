@@ -47,8 +47,13 @@ if(HERMES_BUILD_BOUT)
   set(HERMES_BOUT_SRC
       "external/BOUT-dev"
       CACHE STRING "Directory of BOUT++ dir")
-  add_subdirectory(${HERMES_BOUT_SRC}
-                   ${CMAKE_CURRENT_BINARY_DIR}/external/BOUT-dev SYSTEM)
+  # Set a consistent variable for the build location with the `find_package`
+  # call when we're not building BOUT++ here
+  set(bout++_DIR
+      ${CMAKE_CURRENT_BINARY_DIR}/external/BOUT-dev
+      CACHE FILEPATH "BOUT++ build directory" FORCE)
+
+  add_subdirectory(${HERMES_BOUT_SRC} ${bout++_DIR} SYSTEM)
 else()
   find_package(bout++ REQUIRED)
 endif()
@@ -88,6 +93,7 @@ set(HERMES_SOURCES
     src/relax_potential.cxx
     src/sheath_closure.cxx
     src/sheath_boundary.cxx
+    src/sheath_boundary_fci.cxx
     src/sheath_boundary_simple.cxx
     src/sheath_boundary_insulating.cxx
     src/snb_conduction.cxx
@@ -166,6 +172,7 @@ set(HERMES_SOURCES
     include/recycling.hxx
     include/relax_potential.hxx
     include/sheath_boundary.hxx
+    include/sheath_boundary_fci.hxx
     include/sheath_boundary_simple.hxx
     include/sheath_boundary_insulating.hxx
     include/simple_conduction.hxx
@@ -286,6 +293,18 @@ endif()
 if(HERMES_TESTS)
   enable_testing()
 
+  if(BOUT_ENABLE_METRIC_3D)
+    find_program(PYTHON_EXECUTABLE NAMES python3.12 python3 REQUIRED)
+
+    add_custom_command(
+      TARGET setup-test
+      PRE_BUILD
+      COMMAND ${PYTHON_EXECUTABLE} create_fci_grids.py
+      WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/grids)
+    file(CREATE_LINK ${CMAKE_CURRENT_SOURCE_DIR}/grids
+         ${CMAKE_CURRENT_BINARY_DIR}/grids SYMBOLIC)
+  endif()
+
   # Integrated tests
   function(hermes_add_integrated_test TESTNAME)
     set(oneValueArgs DOWNLOAD DOWNLOAD_NAME)
@@ -309,7 +328,6 @@ if(HERMES_TESTS)
           STATUS "Not building test ${TESTNAME}, conflicts with: ${CONFLICT}")
         return()
       endif()
-      message(STATUS "CONFLICT ${CONFLICT} ${${CONFLICT}}")
     endforeach()
 
     if(HERMES_COPY_TESTS_TO_BUILD)
@@ -319,8 +337,12 @@ if(HERMES_TESTS)
       # Make copies of the test exec and input file in the build directory and
       # keep them up to date
       configure_file(${INT_TEST_SRC}/runtest ${INT_TEST_DEST}/runtest COPYONLY)
-      configure_file(${INT_TEST_SRC}/data/BOUT.inp
-                     ${INT_TEST_DEST}/data/BOUT.inp COPYONLY)
+      if(EXISTS ${INT_TEST_SRC}/data/BOUT.inp)
+        configure_file(${INT_TEST_SRC}/data/BOUT.inp
+                       ${INT_TEST_DEST}/data/BOUT.inp COPYONLY)
+      elseif(EXISTS ${INT_TEST_DEST}/data/BOUT.inp)
+        file(REMOVE ${INT_TEST_DEST}/data/BOUT.inp)
+      endif()
     else()
       set(INT_TEST_DEST
           ${CMAKE_CURRENT_SOURCE_DIR}/tests/integrated/${TESTNAME})
@@ -353,22 +375,41 @@ if(HERMES_TESTS)
     endif()
   endfunction()
 
-  hermes_add_integrated_test(1D-fluid)
-  hermes_add_integrated_test(1D-recycling)
-  hermes_add_integrated_test(1D-recycling-dthe)
-  hermes_add_integrated_test(diffusion)
-  hermes_add_integrated_test(evolve_density)
-  hermes_add_integrated_test(neutral_mixed)
-  hermes_add_integrated_test(vorticity)
-  hermes_add_integrated_test(sod-shock)
-  hermes_add_integrated_test(sod-shock-energy)
-  hermes_add_integrated_test(drift-wave)
-  hermes_add_integrated_test(alfven-wave)
-  hermes_add_integrated_test(collfreq-braginskii-afn)
-  hermes_add_integrated_test(collfreq-multispecies)
-  hermes_add_integrated_test(2D-production)
-  hermes_add_integrated_test(2D-energy)
-  hermes_add_integrated_test(2D-recycling)
+  hermes_add_integrated_test(1D-density CONFLICTS BOUT_ENABLE_METRIC_3D)
+  hermes_add_integrated_test(1D-fluid CONFLICTS BOUT_ENABLE_METRIC_3D)
+  hermes_add_integrated_test(1D-recycling CONFLICTS BOUT_ENABLE_METRIC_3D)
+  hermes_add_integrated_test(1D-recycling-dthe CONFLICTS BOUT_ENABLE_METRIC_3D)
+  hermes_add_integrated_test(diffusion CONFLICTS BOUT_ENABLE_METRIC_3D)
+  hermes_add_integrated_test(evolve_density CONFLICTS BOUT_ENABLE_METRIC_3D)
+  hermes_add_integrated_test(neutral_mixed CONFLICTS BOUT_ENABLE_METRIC_3D)
+  hermes_add_integrated_test(vorticity CONFLICTS BOUT_ENABLE_METRIC_3D)
+  hermes_add_integrated_test(sod-shock CONFLICTS BOUT_ENABLE_METRIC_3D)
+  hermes_add_integrated_test(sod-shock-energy CONFLICTS BOUT_ENABLE_METRIC_3D)
+  hermes_add_integrated_test(drift-wave CONFLICTS BOUT_ENABLE_METRIC_3D)
+  hermes_add_integrated_test(alfven-wave CONFLICTS BOUT_ENABLE_METRIC_3D)
+  hermes_add_integrated_test(collfreq-braginskii-afn CONFLICTS
+                             BOUT_ENABLE_METRIC_3D)
+  hermes_add_integrated_test(collfreq-multispecies CONFLICTS
+                             BOUT_ENABLE_METRIC_3D)
+  hermes_add_integrated_test(2D-production CONFLICTS BOUT_ENABLE_METRIC_3D)
+  hermes_add_integrated_test(2D-energy CONFLICTS BOUT_ENABLE_METRIC_3D)
+  hermes_add_integrated_test(2D-recycling CONFLICTS BOUT_ENABLE_METRIC_3D)
+  hermes_add_integrated_test(examples CONFLICTS BOUT_ENABLE_METRIC_3D)
+  hermes_add_integrated_test(component-order CONFLICTS BOUT_ENABLE_METRIC_3D)
+
+  hermes_add_integrated_test(1D-density-fci REQUIRES BOUT_ENABLE_METRIC_3D)
+  hermes_add_integrated_test(1D-momentum-fci REQUIRES BOUT_ENABLE_METRIC_3D)
+  hermes_add_integrated_test(1D-pressure-fci REQUIRES BOUT_ENABLE_METRIC_3D)
+  hermes_add_integrated_test(1D-ionviscosity-fci REQUIRES BOUT_ENABLE_METRIC_3D)
+  hermes_add_integrated_test(1D-electronviscosity-fci REQUIRES
+                             BOUT_ENABLE_METRIC_3D)
+  hermes_add_integrated_test(2D-density-anomalous-fci REQUIRES
+                             BOUT_ENABLE_METRIC_3D)
+  hermes_add_integrated_test(2D-fluid-anomalous-fci REQUIRES
+                             BOUT_ENABLE_METRIC_3D)
+  hermes_add_integrated_test(1D-conduction-fci REQUIRES BOUT_ENABLE_METRIC_3D)
+  hermes_add_integrated_test(1D-golden-answer-fci REQUIRES
+                             BOUT_ENABLE_METRIC_3D)
 
   # Unit tests
   option(HERMES_UNIT_TESTS "Build the unit tests" ON)
@@ -378,6 +419,7 @@ if(HERMES_TESTS)
       # again causes errors
       add_subdirectory(external/googletest)
     endif()
+
     file(GLOB_RECURSE TEST_SOURCES tests/unit/test_*.cxx)
 
     add_executable(hermes_unit_tests tests/unit/main.cxx ${TEST_SOURCES})
@@ -396,28 +438,32 @@ if(HERMES_TESTS)
   # Method of manufactured solutions (MMS) tests of operators
   option(HERMES_DIVOPS_MMS_TESTS "Build the differential operator MMS tests" ON)
   if(HERMES_DIVOPS_MMS_TESTS)
-    # TEST_SOURCES=
-    add_executable(hermes_mms_operator_tests tests/mms_operator/main.cxx)
-    # ${TEST_SOURCES})
-    target_link_libraries(hermes_mms_operator_tests
-                          PRIVATE gtest bout++::bout++ hermes-3-lib)
-    add_test(
-      NAME differential_operators_mms_orthogonal
-      WORKING_DIRECTORY tests/mms_operator/
-      COMMAND python3 orthogonal_test.py)
-    set_tests_properties(differential_operators_mms_orthogonal
-                         PROPERTIES LABELS integration)
-    add_test(
-      NAME differential_operators_mms_nonorthogonal
-      WORKING_DIRECTORY tests/mms_operator/
-      COMMAND python3 nonorthogonal_test.py)
-    set_tests_properties(differential_operators_mms_nonorthogonal
-                         PROPERTIES LABELS integration)
-    add_test(
-      NAME rhs_mms_neutral_mixed
-      WORKING_DIRECTORY tests/mms_operator/
-      COMMAND python3 neutral_mixed_ddt_test.py)
-    set_tests_properties(rhs_mms_neutral_mixed PROPERTIES LABELS integration)
+    if(BOUT_ENABLE_METRIC_3D)
+      message(STATUS "CONFLICT mms-operator-tests and BOUT_ENABLE_METRIC_3D")
+    else()
+      # TEST_SOURCES=
+      add_executable(hermes_mms_operator_tests tests/mms_operator/main.cxx)
+      # ${TEST_SOURCES})
+      target_link_libraries(hermes_mms_operator_tests
+                            PRIVATE gtest bout++::bout++ hermes-3-lib)
+      add_test(
+        NAME differential_operators_mms_orthogonal
+        WORKING_DIRECTORY tests/mms_operator/
+        COMMAND python3 orthogonal_test.py)
+      set_tests_properties(differential_operators_mms_orthogonal
+                           PROPERTIES LABELS integration)
+      add_test(
+        NAME differential_operators_mms_nonorthogonal
+        WORKING_DIRECTORY tests/mms_operator/
+        COMMAND python3 nonorthogonal_test.py)
+      set_tests_properties(differential_operators_mms_nonorthogonal
+                           PROPERTIES LABELS integration)
+      add_test(
+        NAME rhs_mms_neutral_mixed
+        WORKING_DIRECTORY tests/mms_operator/
+        COMMAND python3 neutral_mixed_ddt_test.py)
+      set_tests_properties(rhs_mms_neutral_mixed PROPERTIES LABELS integration)
+    endif()
   endif()
 endif()
 
@@ -429,14 +475,6 @@ set(HERMES_SLOPE_LIMITER
     CACHE STRING "Set advection slope limiter")
 set_property(CACHE HERMES_SLOPE_LIMITER PROPERTY STRINGS ${SLOPE_LIMITERS})
 message(STATUS "Slope limiter: ${HERMES_SLOPE_LIMITER}")
-
-set(CONDUCTION_METHODS Original ProductJK Harmonic)
-set(HERMES_CONDUCTION_METHOD
-    Original
-    CACHE STRING "Parallel conduction method")
-set_property(CACHE HERMES_CONDUCTION_METHOD PROPERTY STRINGS
-                                                     ${CONDUCTION_METHODS})
-message(STATUS "Conduction method: ${HERMES_CONDUCTION_METHOD}")
 
 # Generate the build config header
 
@@ -452,6 +490,8 @@ endif()
 
 configure_file(include/hermes_build_config.hxx.in
                include/hermes_build_config.hxx)
+
+configure_file(cmake/hermesconfig.py.in hermesconfig.py)
 
 # Installation
 if(BUILD_SHARED_LIBS)

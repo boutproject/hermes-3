@@ -4,10 +4,11 @@
 # Run the test, check it completed successfully
 #
 
-from boututils.run_wrapper import launch_safe
-from boutdata.collect import collect
 from sys import exit
+
 import numpy as np
+from boutdata.collect import collect
+from boututils.run_wrapper import launch_safe
 
 # Run the case
 s, out = launch_safe("../../../hermes-3", nproc=1, mthread=1, pipe=True)

@@ -68,6 +68,7 @@
 #include "include/scale_timederivs.hxx"
 #include "include/set_temperature.hxx"
 #include "include/sheath_boundary.hxx"
+#include "include/sheath_boundary_fci.hxx"
 #include "include/sheath_boundary_insulating.hxx"
 #include "include/sheath_boundary_simple.hxx"
 #include "include/sheath_closure.hxx"
@@ -86,6 +87,7 @@
 #include <bout/boundary_op.hxx>
 #include <bout/constants.hxx>
 #include <bout/field_factory.hxx>
+#include <bout/tokamak_coordinates.hxx>
 
 #include "include/recalculate_metric.hxx"
 
@@ -121,9 +123,9 @@ public:
 
     // Get cell radial length
     Coordinates* coord = mesh->getCoordinates();
-    Field2D dx = coord->dx;
-    Field2D g11 = coord->g11;
-    Field2D dr =
+    auto dx = coord->dx();
+    auto g11 = coord->g11();
+    Coordinates::FieldMetric dr =
         dx / sqrt(g11); // cell radial length. dr = dx/(Bpol * R) and g11 = (Bpol*R)**2
 
     // Only implemented for cell centre quantities
@@ -149,9 +151,10 @@ public:
         //    (0, -1) Y lower boundary (inner lower target)
 
         // Distance between final cell centre and inner guard cell centre in normalised units
-        BoutReal distance =
-            0.5
-            * (dr(bndry->x, bndry->y) + dr(bndry->x - bndry->bx, bndry->y - bndry->by));
+
+        BoutReal distance = 0.5
+                            * (dr(bndry->x, bndry->y, zk)
+                               + dr(bndry->x - bndry->bx, bndry->y - bndry->by, zk));
 
         // Exponential decay
         f(bndry->x, bndry->y, zk) = f(bndry->x - bndry->bx, bndry->y - bndry->by, zk)
@@ -186,9 +189,6 @@ int Hermes::init(bool restarting) {
   output.write("Slope limiter: {}\n", hermes::limiter_typename);
   options["slope_limiter"] = hermes::limiter_typename;
   options["slope_limiter"].setConditionallyUsed();
-  output.write("Conduction method: {}\n", hermes::conduction_typename);
-  options["conduction_method"] = hermes::conduction_typename;
-  options["conduction_method"].setConditionallyUsed();
 
   // Choose normalisations
   Tnorm = options["Tnorm"].doc("Reference temperature [eV]").withDefault(100.);
@@ -255,29 +255,8 @@ int Hermes::init(bool restarting) {
     if (options["normalise_metric"]
             .doc("Normalise input metric tensor? (assumes input is in SI units)")
             .withDefault<bool>(true)) {
-      Coordinates* coord = mesh->getCoordinates();
-      // To use non-orthogonal metric
-      // Normalise
-      coord->dx /= rho_s0 * rho_s0 * Bnorm;
-      coord->Bxy /= Bnorm;
-      // Metric is in grid file - just need to normalise
-      coord->g11 /= SQ(Bnorm * rho_s0);
-      coord->g22 *= SQ(rho_s0);
-      coord->g33 *= SQ(rho_s0);
-      coord->g12 /= Bnorm;
-      coord->g13 /= Bnorm;
-      coord->g23 *= SQ(rho_s0);
-
-      coord->J *= Bnorm / rho_s0;
-
-      coord->g_11 *= SQ(Bnorm * rho_s0);
-      coord->g_22 /= SQ(rho_s0);
-      coord->g_33 /= SQ(rho_s0);
-      coord->g_12 *= Bnorm;
-      coord->g_13 *= Bnorm;
-      coord->g_23 /= SQ(rho_s0);
-
-      coord->geometry(); // Calculate other metrics
+      mesh->getCoordinates()->normaliseMetric(
+          bout::TokamakOrFCIMetricNormaliser(mesh, Bnorm, rho_s0));
     }
   }
 

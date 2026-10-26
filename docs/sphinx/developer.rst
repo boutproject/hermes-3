@@ -265,14 +265,14 @@ This is important as it uses a single dictionary-like ``state`` class to hold al
 the variables in one place, which could allow some components to overwrite others.
 
 In ``component.hxx`` there is the function ``get``, which once called sets the
-"final" and "final-domain" attributes:
+"final-bounds" and "final-domain" attributes:
 
 .. code-block:: ini
 
    T get(const Options& option, const std::string& location = "") {
    #if CHECKLEVEL >= 1
    // Mark option as final, both inside the domain and the boundary
-   const_cast<Options&>(option).attributes["final"] = location;
+   const_cast<Options&>(option).attributes["final-bounds"] = location;
    const_cast<Options&>(option).attributes["final-domain"] = location;
    #endif
    return getNonFinal<T>(option);
@@ -286,9 +286,9 @@ already been "gotten", they can't be set again:
    Options& set(Options& option, T value) {
    // Check that the value has not already been used
    #if CHECKLEVEL >= 1
-   if (option.hasAttribute("final")) {
+   if (option.hasAttribute("final-bounds")) {
       throw BoutException("Setting value of {} but it has already been used in {}.",
-                           option.name(), option.attributes["final"].as<std::string>());
+                           option.name(), option.attributes["final-bounds"].as<std::string>());
    }
    if (option.hasAttribute("final-domain")) {
       throw BoutException("Setting value of {} but it has already been used in {}.",
@@ -301,8 +301,10 @@ already been "gotten", they can't be set again:
    }
    #endif
 
-There is a special use case which allows you to use this "locking" scheme for only
-the domain cells, leaving the guard cells to be settable using ``getNoBoundary``:
+There are special use cases which allows you to use this "locking"
+scheme for only some cells: ``getNoBoundary`` locks the domain cells
+while leaving the boundary cells settable. ``getBoundary`` locks the
+boundary cells while leaving the domain cells settable.
 
 .. code-block:: ini
 
@@ -314,16 +316,17 @@ the domain cells, leaving the guard cells to be settable using ``getNoBoundary``
    return getNonFinal<T>(option);
    }
 
-And there is a corresponding ``setBoundary`` that can be used for BC operations:
+And there are corresponding ``setBoundary`` and ``setNoBoundary``
+functions that can be used for BC and domain operations:
 
 .. code-block:: ini
 
    Options& setBoundary(Options& option, T value) {
    // Check that the value has not already been used
    #if CHECKLEVEL >= 1
-   if (option.hasAttribute("final")) {
+   if (option.hasAttribute("final-bounds")) {
       throw BoutException("Setting boundary of {} but it has already been used in {}.",
-                           option.name(), option.attributes["final"].as<std::string>());
+                           option.name(), option.attributes["final-bounds"].as<std::string>());
    }
    #endif
    option.force(std::move(value));
@@ -333,9 +336,10 @@ And there is a corresponding ``setBoundary`` that can be used for BC operations:
 All of these functions are overloaded to accept both `Options` and
 `GuardedOptions` objects.
 
-These functions take a second argument which tells you where they were set, which is easier for debugging.
-They are wrapped into additional functions, ``GET_VALUE`` and ``GET_NOBOUNDARY`` which automatically
-include this argument.
+These functions take a second argument which tells you where they were
+set, which is easier for debugging.  They are wrapped into additional
+functions, ``GET_VALUE``, ``GET_BOUNDARY``, and ``GET_NOBOUNDARY``
+which automatically include this argument.
 
 Please review `component.hxx <https://github.com/boutproject/hermes-3/blob/master/include/component.hxx#L163>`__
 for more details.
@@ -586,7 +590,6 @@ The `name` is a string labelling the instance. The `alloptions` tree contains at
 * ``alloptions[name]`` options for this instance
 * ``alloptions['units']``
 
-
 Component Permissions
 `````````````````````
 
@@ -628,9 +631,15 @@ and then in `Hermes::rhs` the components are run by a call::
   scheduler->transform(state);
 
 The call to `ComponentScheduler::create` treats the "components"
-option as a comma-separated list of names. The order of the components
-is the order that they are run in. For each name in the list, the
-scheduler looks up the options under the section of that name.
+option as a comma-separated list of names. For each name in the list,
+the scheduler looks up the options under the section of that name. By
+default, the
+``ComponentScheduler`` will use permission information stored by each
+component in `Component::state_variable_access` to work out the order
+to execute components. It will ensure that all writes to a variable
+have occurred before the first time it is read. If there is a variable
+needed by some component which is never set or if there is a circular
+dependency then it will throw an exception.
 
 .. code-block:: ini
 
@@ -645,10 +654,11 @@ scheduler looks up the options under the section of that name.
 
    # options to control component2
 
-This would create two `Component` objects, of type `component1` and
-`component2`. Each time `Hermes::rhs` is run, the `transform`
-functions of `component1` and then `component2` will be called,
-followed by their `finally` functions.
+This would create two `Component` objects, of type ``component1`` and
+``component2``. Each time `Hermes::rhs` is run, the `transform`
+methods of ``component1`` and ``component2`` will be called, with the
+order depending on what state variables each reads and writes. This is
+followed by a call to their `finally` functions.
 
 It is often useful to group components together, for example to
 define the governing equations for different species. A `type` setting
@@ -670,12 +680,120 @@ of components
    # options to control component3
 
 This will create three components, which will be run in the order
-`component1`, `component2`, `component3`: First all the components
-in `group1`, and then `component3`.
+determined by the topological sorting algorithm. First all the
+components in `group1`, and then `component3` are flattened into a
+single list. The access permissions of each component, i.e. which
+quantities each component reads or writes, are used to put the
+components in order. This means that grouped components may not run
+together: The scheduler may run `component1` then `component3` then
+`component2` if the inputs and outputs of the components require this.
+
+The user can optionally turn off automatic sorting of components:
+
+.. code-block:: ini
+   [hermes]
+   components = group1, component3
+   autosort = false
+
+In that case it is guaranteed that the `transform` methods of each
+component would be run in the order listed in the input file (i.e.,
+``component1``, then ``component2``, and then ``component2``). It
+becomes the responsibility of the user to ensure components are listed
+in a order that ensures variables are written and read in the
+sequence. In general they will not want to do this, but it might be
+necessary if there is a bug in the sorting algorithm or the access permissions
+of some component.
+
 
 .. doxygenclass:: ComponentScheduler
    :members:
 
+Component sorting algorithm
+```````````````````````````
+
+The algorithm for sorting components is slightly complicated. Normally
+users and developers will not need to be concerned with it but, in the
+event that it is ever necessary to modify or debug the algorithm, the
+steps are provided below.
+
+1. Construct a map between names and the variable(s) to which
+   they refer (section names refer to all variables contained within
+   the section). This is used so that, when a permission is set for
+   a whole section, we can work out what are the actual variables
+   to which the permission applies. Note that names for sections or
+   variables with readIfSet permissions will only be mapped if they
+   are, in fact, set somewhere.
+2. Identify the components which have permission to do final writes
+   and non- final writes on each variable.
+3. Construct a map between variable names and which components last
+   write to them.
+
+   - For variables where a component has final write permission,
+     it is that component.
+   - Otherwise, it is all components which have non-final write
+     permission for the variable.
+
+4. Establish the dependencies between components.
+
+   - Components which have final-write permission for a variable
+     depend on any components that have non-final write permission for
+     that variable.
+   - Components that have read permission for a variable will depend
+     on whichever component(s) last write to that variable, as
+     determined in the previous step.
+
+5. Use this dependency information to perform a topological sort on
+   the components.
+
+Below are graphs illustrating how this algorithm applied to the
+:ref:`sec-Blob2d` example.
+
+
+.. _fig-toposort-comp-var-deps:
+.. figure:: figs/toposort-component-variable-deps.svg
+   :alt: A directed acyclic graph illustrating which variables are
+         read and written by which components. species:e:charge,
+         species:e:AA, and species:e:density are written by (e)
+         evolve_density. species:e:density source is written by both
+         sheath_closure and (e) evolve_density. (e) isothermal reads
+         species:e:density. species:e:pressure and
+         species:e:temperature are written by (e)
+         isothermal. vorticity reads species:e:pressure,
+         species:e:temperature, species:e:charge, and
+         species:e:AA. field:DivJdia, fields:vorticity, and fields:phi
+         are written by vorticity. species:e:energy_source is written
+         by vorticity and sheath_closure. sheath_closure reads
+         fields:phi, species:e:temperature, and
+         species:e:density. fields:DivJextra is written by
+         sheath_closure.
+
+   A directed acyclic graph showing which variables are written
+   and read by each component in the Blob2d example,
+
+.. _fig-toposort-comp-deps:
+.. figure:: figs/toposort-component-deps.svg
+   :alt: A directed acyclic graph illustrating the following
+         dependencies between components: sheath_closure depends on
+         vorticity, (e) isothermal, and (e) evolve_density; vorticity
+         depends on (e) isothermal and (e) evolve_density; (e)
+         isothermal depends on (e) evolve_density.
+
+   A directed acyclic graph showing the dependency between
+   components used in the Blob2d example. It is produced from
+   :numref:`fig-toposort-comp-var-deps` by making any
+   component which reads a variable depend on any component
+   which writes that variable.
+
+.. _fig-toposort-final:
+.. figure:: figs/toposort-final-sorted.svg
+   :alt: The components in their final run order: (e)
+         evolve_density, (e) isothermal, vorticity, and finally
+         sheath_closure.
+
+   The order in which the components from the Blob2d example
+   must be run. This is obtained by applying a topological
+   sorting algorithm to the directed acyclic graph in
+   :numref:`fig-toposort-comp-deps`.
 
 .. _sec-permissions:
 
@@ -1078,7 +1196,7 @@ Source term calculation
 Density, momentum and energy source fields are constructed in `Reaction::transform_impl` using the
 `RateHelper` class to calculate reaction rates and collision frequencies.
 
-On instantiation, :code:`RateHelper` assembles maps containing (pointers to) all reactant densities
+On instantiation, :code:`RateHelper` assembles vectors containing (pointers to) all reactant densities
 and any other fields required as inputs.
 
 `RateHelper::calc_rates` is "run-time templated", allowing it to accept rate functions with 1D and
@@ -1237,6 +1355,8 @@ The specification of the Toro tests used here is taken from
 originally from Toro's book `Riemann Solvers and Numerical Methods for
 Fluid Dynamics <https://link.springer.com/book/10.1007/b79761>`__.
 
+.. _subsec-1d-recycling-dthe:
+
 1D-recycling-dthe
 ~~~~~~~~~~~~~~~~~
 
@@ -1250,6 +1370,8 @@ exchange channels in the final domain cell against a reference.
 
 The test file can be used to generate the test data if `gen_data` is set to `True` in the beginning
 of the script.
+
+.. _subsec-2d-production:
 
 2D-production
 ~~~~~~~~~~~~~~
@@ -1281,6 +1403,29 @@ This test is a reproduction of C++ code, and therefore there is no golden answer
 
 This test plots results and can be used to help with developing the recycling component. There
 is a `plot` flag near the beginning of the file.
+
+1D-density (conservation)
+~~~~~~~~~~~~~~
+
+``tests/integrated/1D-density``
+
+This conservation test checks that total particle content of the simulation is conserved on
+a periodic 1D domain while the density is evolved and the temperature and velocity are fixed.
+The test runs four cases: constant temperature and a Heaviside temperature jump, each with and
+without the ``sound_speed`` component, and repeats each case on 1 and 2 MPI ranks.
+
+The script checks three things:
+
+1. total particle content is conserved in this closed periodic system;
+2. the density profile actually changes in time, so the advection path is active;
+3. the final density field matches between the 1-rank and 2-rank runs.
+
+The Heaviside temperature jump is included to stress fluxes that use numerical Lax dissipation
+(see section `Numerics`_), because the wave speed entering that term must be communicated
+consistently across processor boundaries. The constant-temperature cases provide a baseline that
+still checks conservation and MPI decomposition independence. In this testcase the geometry factors
+are constant, so the script checks ``sum(N)`` rather than explicitly evaluating
+:math:`\sum N J\,dx\,dy\,dz`.
 
 1D fluid (MMS)
 ~~~~~~~~~~~~~~
@@ -1537,3 +1682,83 @@ across `neutral_mixed`, `evolve_pressure`, `ion_viscosity` and `neutral_parallel
 A minimal 3D geometry is run for one RHS evaluation, and the test checks the log file
 to make sure the correct collisionalities were selected. One of the tests is for the `multispecies`
 mode across all components, while the other is for `braginskii` for plasma and `afn` for neutrals.
+
+.. _sec-benchmarking:
+
+Benchmarking
+------------
+
+`Airspeed Velocity
+<https://asv.readthedocs.io/en/latest/index.html>`__ (``asv``) is used to
+benchmark performance of Hermes-3. The following tests and examples
+are used for this:
+
+- :ref:`subsec-1d-recycling-dthe`
+- :ref:`subsec-2d-production`
+- :ref:`subsec-2d-drift-plane-turbulence-te-ti`
+
+The number and length of timesteps is adjusted so that the benchmarks
+will run for a reasonable length of time. They must run long enough
+that the runtime is not dominated by constructors, but not so long as
+to be inconvenient.
+
+``asv`` was written for use with Python projects and it expects them
+to be installable using typical Python tooling. A `Python wheel
+<https://pythonwheels.com/>`__ (binary package) can be built for
+Hermes-3 using `scikit-build-core
+<https://scikit-build-core.readthedocs.io/en/latest/>`__. This is all
+configured in ``pyproject.toml`` and ``asv`` should be able to build
+and install the wheels automatically. However, this requires all the
+normal Hermes-3 build-dependencies to be findable on your system. See
+the instructions to
+:ref:`sec-hermes-install-spack`/:ref:`sec-install-hermes-3` in a
+``spack`` environment for the simplest way to achieve this. You will
+then need to install ``asv`` itself. This can be done with `uv
+<https://docs.astral.sh/uv/>`__ (various useful linters will also be
+installed).
+
+.. code-block:: bash
+
+   . activate_h3env
+   # Install uv, if not already available on your system
+   curl -LsSf https://astral.sh/uv/install.sh | sh
+   # Set up uv workspace with development dependencies
+   uv sync --only-dev
+   # Run asv from within the uv workspace; the first run will take a minute to install it
+   uv run asv --help
+
+You can run ``asv`` on your current commit with the command
+
+.. code-block:: bash
+
+   uv run asv run HEAD
+
+The first time you run ``asv`` benchmarks on a machine, it will prompt
+you for some information about that computer's specifications. It will
+normally be able to detect the information itself, so the defaults
+should be fine.
+
+.. tip::
+
+   Note that ``asv`` can only run against commits; changes to your
+   code that have not been committed will not be included in the
+   benchmarking tests. The exception to this is the ``asv`` *configurations and
+   benchmarking tests themselves*. ``asv`` will use whatever is in the
+   working tree for these.
+
+You can run ``asv`` it on two commits and compare their performance with
+
+.. code-block:: bash
+
+   uv run asv continuous OLDER_COMMIT NEWER_COMMIT
+   uv run asv compare --split OLDER_COMMIT NEWER_COMMIT
+
+This is useful for checking that a branch you are working on hasn't
+introduced any regressions compared to ``master``. ``asv``
+will automatically handle checking out the necessary commits and
+building Hermes-3 for you. It will do all of this in its own directory
+structure and will not make any changes to your repo.
+
+There is a CI workflow which will run these commands comparing each
+Pull Request to its base commit. **The workflow will fail if the
+runtime of any of the benchmarks increases by more than 10%.**

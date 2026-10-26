@@ -46,12 +46,26 @@ private:
       diffusion_collisions_mode; ///< Collision selection, either afn or multispecies
   Field3D nu;                    ///< Collisionality to use for diffusion
   Field3D Dnn;                   ///< Diffusion coefficient
+  Field3D Dnn_unlimited, Dmax;   ///< Unlimited and max Dnn
   Field3D DnnNn, DnnPn, DnnTn, DnnNVn; ///< Used for operators
-  BoutReal flux_limit;                 ///< Diffusive flux limit
-  BoutReal diffusion_limit;            ///< Maximum diffusion coefficient
-  BoutReal neutral_lmax;
+  bool combined_limiters;              ///< Derive kappa, eta limiters from Dnn
+  BoutReal flux_limit_adv;         ///< Advective flux limit, fraction of free streaming
+  BoutReal flux_limit_cond_perp;   ///< Perpendicular conductive flux limit
+  BoutReal flux_limit_cond_par;    ///< Parallel conductive flux limit
+  BoutReal flux_limit_visc_perp;   ///< Perpendicular viscous flux limit
+  BoutReal flux_limit_visc_par;    ///< Parallel viscous flux limit
+  BoutReal flux_limiter_sharpness; ///< Sharpness of the diffusive flux limiter
+  BoutReal limiter_gradient_floor; ///< Perpendicular floor, all limiter denominators
+  BoutReal limiter_gradient_floor_ratio; ///< Perpendicular floor / parallel floor
+  BoutReal limiter_gradient_floor_par;   ///< Parallel floor, derived from the two above
+  BoutReal limiter_gradient_ceiling;     ///< Ceiling for gradient in every denominator
+  BoutReal diffusion_limit;              ///< Explicit cap on Dnn [m^2/s]
+  BoutReal conduction_limit;             ///< Explicit cap on kappa_n [W m^-1 eV^-1]
+  BoutReal viscosity_limit;              ///< Explicit cap on eta_n [Pa s]
+  BoutReal neutral_lmax;                 ///< Used for collisionality floor
 
   bool sheath_ydown, sheath_yup;
+  bool zero_sheath_conductivity, zero_sheath_viscosity;
 
   BoutReal density_floor; ///< Minimum Nn used when dividing NVn by Nn to get Vn.
   BoutReal temperature_floor;
@@ -67,7 +81,14 @@ private:
   bool evolve_momentum;    ///< Evolve parallel momentum?
   bool normalise_sources;  ///< Normalise input sources?
 
-  Field3D kappa_n, eta_n; ///< Neutral conduction and viscosity
+  /// Neutral conduction and viscosity. The unlimited coefficients are isotropic;
+  /// the limited ones are not, because the parallel and perpendicular limiters
+  /// use different gradients and may use different flux limit fractions.
+  Field3D kappa_n_unlimited, eta_n_unlimited;
+  Field3D kappa_n_perp, kappa_n_par;         ///< Limited neutral conduction
+  Field3D eta_n_perp, eta_n_par;             ///< Limited neutral viscosity
+  Field3D kappa_n_max_perp, kappa_n_max_par; ///< Free-streaming conduction caps
+  Field3D eta_n_max_perp, eta_n_max_par;     ///< Free-streaming viscosity caps
 
   bool nonorthogonal_operators;   ///< Use nonorthogonal operators for radial transport?
   bool precondition{true};        ///< Enable preconditioner?
@@ -81,6 +102,8 @@ private:
 
   bool output_ddt; ///< Save time derivatives?
   bool diagnose;   ///< Save additional diagnostics?
+
+  bout::ConductionMethod conduction_method{bout::ConductionMethod::Original};
 
   // Flow diagnostics
   Field3D pf_adv_perp_xlow, pf_adv_perp_ylow, pf_adv_par_ylow;

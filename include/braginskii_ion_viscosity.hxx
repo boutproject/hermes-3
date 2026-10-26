@@ -6,11 +6,10 @@
 #include <string>
 #include <vector>
 
+#include "component.hxx"
 #include <bout/bout_types.hxx>
 #include <bout/options.hxx>
-#include <bout/vector2d.hxx>
-
-#include "component.hxx"
+#include <bout/vectormetric.hxx>
 
 /// Ion viscosity terms
 ///
@@ -56,7 +55,7 @@ private:
   std::string viscosity_collisions_mode; ///< Collision selection, either multispecies or
                                          ///< braginskii
   Field3D nu;                            ///< Collision frequency for conduction
-  Vector2D Curlb_B;                      ///< Curvature vector Curl(b/B)
+  VectorMetric Curlb_B;                  ///< Curvature vector Curl(b/B)
   bool bounce_frequency;         ///< Modify the collision time with the bounce frequency?
   BoutReal bounce_frequency_q95; ///< Input q95 for when including bounce frequency change
   BoutReal bounce_frequency_epsilon; ///< Input inverse aspect ratio for including bounce
@@ -64,7 +63,7 @@ private:
   BoutReal bounce_frequency_R;       ///< Input major radius
   BoutReal density_floor;            ///< Minimum density used in calculating Pi_ciperp
   bool diagnose;                     ///< Output additional diagnostics?
-
+  bool viscous_heating;              ///< Include the heating due to viscosity?
   /// Per-species diagnostics
   struct Diagnostics {
     Field3D Pi_ciperp; ///< Perpendicular part of Pi scalar
@@ -74,6 +73,8 @@ private:
     Field3D nu_star;
   };
 
+  bout::FieldMetricParallel Bxy, sqrtB; ///< Magnetic field variables
+  Field3D Grad_par_logB;
   /// Store diagnostics for each species
   std::map<std::string, Diagnostics> diagnostics;
 

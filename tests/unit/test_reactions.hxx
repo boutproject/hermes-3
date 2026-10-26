@@ -47,7 +47,7 @@ class ReactionTest : public FakeMeshFixture_tmpl<8, 8, 8> {
 
 protected:
   ReactionTest(std::string lbl, std::string reaction_str)
-      : lbl(lbl), parser(reaction_str){};
+      : lbl(lbl), parser(reaction_str) {};
 
   std::string lbl;
   ReactionParser parser;
@@ -165,6 +165,7 @@ protected:
    * point, but the last \p ignore_last_n_sigfigs significant digits are ignored in the
    * comparison.
    */
+  template <bool expectThrow = false>
   void sources_regression_test(bool compare_all_values = true,
                                const int ignore_last_n_sigfigs = 6) {
 
@@ -187,10 +188,14 @@ protected:
 
     // Run reaction
     RTYPE component = RTYPE("test" + lbl, test_state, nullptr);
-    component.transform(test_state);
+    if (expectThrow) {
+      EXPECT_THROW(component.transform(test_state), BoutException);
+    } else {
+      component.transform(test_state);
 
-    compare_child_values(ref_state["species"], test_state["species"], compare_all_values,
-                         ignore_last_n_sigfigs);
+      compare_child_values(ref_state["species"], test_state["species"],
+                           compare_all_values, ignore_last_n_sigfigs);
+    }
   }
 
   /**

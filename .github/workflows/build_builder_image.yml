@@ -32,6 +32,9 @@ jobs:
   # each by digest only. The merge job below assembles them into a single
   # multi-arch manifest.
   build-builder-image:
+    # Scheduled/release runs only on the canonical repo; forks may still manually
+    # dispatch to validate the build, but must not publish (see 'publish_image').
+    if: github.repository == 'boutproject/hermes-3' || github.event_name == 'workflow_dispatch'
 
     strategy:
       fail-fast: false
@@ -59,6 +62,9 @@ jobs:
           dockerfile: ${{ env.BUILDER_DOCKERFILE }}
           platform: ${{ matrix.platform }}
           cache-scope: builder
+          # Only the canonical repo publishes; a fork's manual dispatch builds
+          # for validation without pushing.
+          publish_image: ${{ github.repository == 'boutproject/hermes-3' }}
           token: ${{ secrets.GITHUB_TOKEN }}
           # Credentials for the self-hosted OCI Spack build cache, so the build
           # can pull previously-compiled binaries and push newly-built ones.
@@ -69,7 +75,9 @@ jobs:
 
   # Combine the per-arch builder images into one multi-arch manifest and apply tags.
   merge-builder-image:
-
+    # On a fork dispatch the builder was built without pushing, so there are no
+    # digests to merge; publishing only happens on the canonical repo.
+    if: github.repository == 'boutproject/hermes-3'
     needs: build-builder-image
     runs-on: ubuntu-latest
 

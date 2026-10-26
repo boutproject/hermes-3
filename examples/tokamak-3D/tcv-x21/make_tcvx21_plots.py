@@ -1,10 +1,10 @@
-import tcvx21
-from tcvx21 import Quantity
 import matplotlib.pyplot as plt
-from tcvx21.record_c import Record
 import numpy as np
-from scipy.stats import linregress
+import tcvx21
 from scipy.optimize import curve_fit
+from scipy.stats import linregress
+from tcvx21 import Quantity
+from tcvx21.record_c import Record
 
 plt.style.use(tcvx21.style_sheet)
 

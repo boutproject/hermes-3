@@ -1,0 +1,15 @@
+"""Functions for getting the config used for compiling Hermes-3"""
+
+import sys
+from pathlib import Path
+
+# Path to built BOUT++, allows us to then import boutconfig
+sys.path.append("@bout++_DIR@/tools/pylib/")
+
+config = {
+    "git": "@HERMES_REVISION@",
+    "src": Path("@CMAKE_CURRENT_SOURCE_DIR@"),
+    "exe": Path("@hermes-3_BINARY_DIR@/hermes-3"),
+    "limiter": "@HERMES_SLOPE_LIMITER@",
+    "BOUT++": Path("@bout++_DIR@"),
+}

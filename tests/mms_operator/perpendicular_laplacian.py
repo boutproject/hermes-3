@@ -1,7 +1,6 @@
+from boutdata.mms import identity, x, y, z
 from sympy import diff, sqrt
 from sympy.matrices import Matrix
-
-from boutdata.mms import identity, x, y, z
 
 
 # A class very similar to boutdata.mms.Metric
@@ -50,22 +49,6 @@ class GeneralMetric:
 # see notes for formulae
 # https://bout-dev.readthedocs.io/en/stable/user_docs/coordinates.html#the-perpendicular-laplacian-in-divergence-form
 def Div_a_Grad_perp_f(a, f, metric=identity):
-    g11, g12, g13, g22, g23, g33 = (
-        metric.g11,
-        metric.g12,
-        metric.g13,
-        metric.g22,
-        metric.g23,
-        metric.g33,
-    )
-    g_11, g_12, g_13, g_22, g_23, g_33 = (
-        metric.g_11,
-        metric.g_12,
-        metric.g_13,
-        metric.g_22,
-        metric.g_23,
-        metric.g_33,
-    )
     J = metric.J
     # use the metric internal variables for derivatives
     x, y, z = metric.x, metric.y, metric.z
@@ -74,12 +57,12 @@ def Div_a_Grad_perp_f(a, f, metric=identity):
     dfdy = diff(f, y)
     dfdz = diff(f, z)
 
-    df1 = dfdx - (g_12 / g_22) * dfdy
-    df3 = dfdz - (g_23 / g_22) * dfdy
+    df1 = dfdx - (metric.g_12 / metric.g_22) * dfdy
+    df3 = dfdz - (metric.g_23 / metric.g_22) * dfdy
 
-    a_grad_perp_f_x = a * J * (g11 * df1 + g13 * df3)
-    a_grad_perp_f_y = a * J * (g12 * df1 + g23 * df3)
-    a_grad_perp_f_z = a * J * (g13 * df1 + g33 * df3)
+    a_grad_perp_f_x = a * J * (metric.g11 * df1 + metric.g13 * df3)
+    a_grad_perp_f_y = a * J * (metric.g12 * df1 + metric.g23 * df3)
+    a_grad_perp_f_z = a * J * (metric.g13 * df1 + metric.g33 * df3)
 
     div_a_grad_perp_f = (1 / J) * (
         diff(a_grad_perp_f_x, x) + diff(a_grad_perp_f_y, y) + diff(a_grad_perp_f_z, z)
@@ -88,26 +71,8 @@ def Div_a_Grad_perp_f(a, f, metric=identity):
 
 
 def Div_par_k_Grad_par_f(a, f, metric=identity):
-    g11, g12, g13, g22, g23, g33 = (
-        metric.g11,
-        metric.g12,
-        metric.g13,
-        metric.g22,
-        metric.g23,
-        metric.g33,
-    )
-    g_11, g_12, g_13, g_22, g_23, g_33 = (
-        metric.g_11,
-        metric.g_12,
-        metric.g_13,
-        metric.g_22,
-        metric.g_23,
-        metric.g_33,
-    )
     J = metric.J
-    # use the metric internal variables for derivatives
-    x, y, z = metric.x, metric.y, metric.z
-    dfdy = diff(f, y)
-    k_grad_par_f = a * J * dfdy / g_22
-    div_par_k_grad_par_f = (1 / J) * (diff(k_grad_par_f, y))
+    dfdy = diff(f, metric.y)
+    k_grad_par_f = a * J * dfdy / metric.g_22
+    div_par_k_grad_par_f = (1 / J) * (diff(k_grad_par_f, metric.y))
     return div_par_k_grad_par_f

@@ -3,7 +3,18 @@
 #define FIXED_TEMPERATURE_H
 
 #include "component.hxx"
+#include "guarded_options.hxx"
+#include "permissions.hxx"
+
+#include <bout/bout_types.hxx>
 #include <bout/constants.hxx>
+#include <bout/field3d.hxx>
+#include <bout/globals.hxx>
+#include <bout/mesh.hxx>
+#include <bout/options.hxx>
+#include <bout/unused.hxx>
+
+#include <string>
 
 /// Set species temperature to a fixed value
 ///
@@ -26,6 +37,11 @@ struct FixedTemperature : public NamedComponent<FixedTemperature> {
     // Get the temperature and normalise
     T = options["temperature"].doc("Constant temperature [eV]").as<Field3D>()
         / Tnorm; // Normalise
+
+    bout::globals::mesh->communicate(T);
+    if (T.isFci()) {
+      T.applyParallelBoundary("parallel_neumann_o2");
+    }
 
     diagnose = options["diagnose"]
                    .doc("Save additional output diagnostics")
@@ -67,8 +83,8 @@ struct FixedTemperature : public NamedComponent<FixedTemperature> {
 private:
   std::string name; ///< Short name of species e.g "e"
 
-  Field3D T; ///< Species temperature (normalised)
-  Field3D P; ///< Species pressure (normalised)
+  Field3D T;         ///< Species temperature (normalised)
+  Field3DParallel P; ///< Species pressure (normalised)
 
   bool diagnose; ///< Output additional fields
 

@@ -53,16 +53,17 @@ SheathBoundaryInsulating::SheathBoundaryInsulating(std::string name, Options& al
     : NamedComponent(name, {
                                readIfSet("species:{all_species}:charge"),
                                readIfSet("species:e:{e_whole_domain}"),
-                               writeBoundary("species:e:{e_boundary}"),
+                               writeBoundaryFinal("species:e:{e_boundary}"),
                                readWrite("species:e:energy_source"),
-                               writeBoundaryIfSet("species:e:{e_optional}"),
+                               writeBoundaryFinalIfSet("species:e:{e_optional}"),
                                writeBoundaryReadInteriorIfSet("species:e:pressure"),
                                readIfSet("species:{ions}:adiabatic"),
                                readOnly("species:{ions}:AA"),
                                readWrite("species:{ions}:energy_source"),
-                               writeBoundary("species:{ions}:{ion_boundary}"),
-                               writeBoundaryIfSet("species:{ions}:{ion_optional}"),
+                               writeBoundaryFinal("species:{ions}:{ion_boundary}"),
+                               writeBoundaryFinalIfSet("species:{ions}:{ion_optional}"),
                                writeBoundaryReadInteriorIfSet("species:{ions}:pressure"),
+                               writeBoundaryFinalIfSet("fields:phi"),
                            }) {
 
   Options& options = alloptions[name];
@@ -96,7 +97,6 @@ SheathBoundaryInsulating::SheathBoundaryInsulating(std::string name, Options& al
   substitutePermissions("e_optional", {"velocity", "momentum"});
   substitutePermissions("ion_boundary", {"density", "temperature"});
   substitutePermissions("ion_optional", {"velocity", "momentum"});
-  setPermissions(writeBoundaryIfSet("fields:phi"));
 }
 
 void SheathBoundaryInsulating::transform_impl(GuardedOptions& state) {
@@ -106,7 +106,8 @@ void SheathBoundaryInsulating::transform_impl(GuardedOptions& state) {
 
   // Need electron properties
   // Not const because boundary conditions will be set
-  Field3D Ne = toFieldAligned(floor(GET_NOBOUNDARY(Field3D, electrons["density"]), 0.0));
+  Field3D Ne =
+      toFieldAligned(Field3D(floor(GET_NOBOUNDARY(Field3D, electrons["density"]), 0.0)));
   Field3D Te = toFieldAligned(GET_NOBOUNDARY(Field3D, electrons["temperature"]));
   Field3D Pe = IS_SET_NOBOUNDARY(electrons["pressure"])
                    ? toFieldAligned(getNoBoundary<Field3D>(electrons["pressure"]))
@@ -240,7 +241,8 @@ void SheathBoundaryInsulating::transform_impl(GuardedOptions& state) {
                                    : 5. / 3; // Ratio of specific heats (ideal gas)
 
     // Density and temperature boundary conditions will be imposed (free)
-    Field3D Ni = toFieldAligned(floor(getNoBoundary<Field3D>(species["density"]), 0.0));
+    Field3D Ni =
+        toFieldAligned(Field3D(floor(getNoBoundary<Field3D>(species["density"]), 0.0)));
     Field3D Ti = toFieldAligned(getNoBoundary<Field3D>(species["temperature"]));
     Field3D Pi = species.isSet("pressure")
                      ? toFieldAligned(getNoBoundary<Field3D>(species["pressure"]))
@@ -331,11 +333,11 @@ void SheathBoundaryInsulating::transform_impl(GuardedOptions& state) {
           q = std::min(q, 0.0);
 
           // Multiply by cell area to get power
-          BoutReal flux = q * (coord->J[i] + coord->J[im])
-                          / (sqrt(coord->g_22[i]) + sqrt(coord->g_22[im]));
+          BoutReal flux = q * (coord->J()[i] + coord->J()[im])
+                          / (sqrt(coord->g_22()[i]) + sqrt(coord->g_22()[im]));
 
           // Divide by volume of cell to get energy loss rate (< 0)
-          BoutReal power = flux / (coord->dy[i] * coord->J[i]);
+          BoutReal power = flux / (coord->dy()[i] * coord->J()[i]);
           ASSERT1(std::isfinite(power));
           ASSERT2(power <= 0.0);
 
@@ -410,11 +412,11 @@ void SheathBoundaryInsulating::transform_impl(GuardedOptions& state) {
           q = std::max(q, 0.0);
 
           // Multiply by cell area to get power
-          BoutReal flux = q * (coord->J[i] + coord->J[ip])
-                          / (sqrt(coord->g_22[i]) + sqrt(coord->g_22[ip]));
+          BoutReal flux = q * (coord->J()[i] + coord->J()[ip])
+                          / (sqrt(coord->g_22()[i]) + sqrt(coord->g_22()[ip]));
 
           // Divide by volume of cell to get energy loss rate (> 0)
-          BoutReal power = flux / (coord->dy[i] * coord->J[i]);
+          BoutReal power = flux / (coord->dy()[i] * coord->J()[i]);
           ASSERT1(std::isfinite(power));
           ASSERT2(power >= 0.0);
 
@@ -471,11 +473,11 @@ void SheathBoundaryInsulating::transform_impl(GuardedOptions& state) {
                      * nesheath * vesheath;
 
         // Multiply by cell area to get power
-        BoutReal flux = q * (coord->J[i] + coord->J[im])
-                        / (sqrt(coord->g_22[i]) + sqrt(coord->g_22[im]));
+        BoutReal flux = q * (coord->J()[i] + coord->J()[im])
+                        / (sqrt(coord->g_22()[i]) + sqrt(coord->g_22()[im]));
 
         // Divide by volume of cell to get energy loss rate (< 0)
-        BoutReal power = flux / (coord->dy[i] * coord->J[i]);
+        BoutReal power = flux / (coord->dy()[i] * coord->J()[i]);
 
 #if CHECKLEVEL >= 1
         if (!std::isfinite(power)) {
@@ -507,11 +509,11 @@ void SheathBoundaryInsulating::transform_impl(GuardedOptions& state) {
                      * nesheath * vesheath;
 
         // Multiply by cell area to get power
-        BoutReal flux = q * (coord->J[i] + coord->J[ip])
-                        / (sqrt(coord->g_22[i]) + sqrt(coord->g_22[ip]));
+        BoutReal flux = q * (coord->J()[i] + coord->J()[ip])
+                        / (sqrt(coord->g_22()[i]) + sqrt(coord->g_22()[ip]));
 
         // Divide by volume of cell to get energy loss rate (> 0)
-        BoutReal power = flux / (coord->dy[i] * coord->J[i]);
+        BoutReal power = flux / (coord->dy()[i] * coord->J()[i]);
 #if CHECKLEVEL >= 1
         if (!std::isfinite(power)) {
           throw BoutException(

@@ -87,8 +87,8 @@ def Div_a_Grad_perp_upwind(bd, a, f):
         # of flux and cell volume.
         flux *= dy.isel(x=x) * dz.isel(x=x)
 
-        F_R[dict(x=x)] = flux
-        F_L[dict(x=xp)] = flux
+        F_R[{"x": x}] = flux
+        F_L[{"x": xp}] = flux
 
     return F_L, F_R
 
@@ -127,7 +127,6 @@ def sheath_boundary_simple(
 
     J = bd["J"]
     dx = bd["dx"]
-    dy = bd["dy"]
     dz = bd["dz"]
     g_22 = bd["g_22"]
 
@@ -289,14 +288,10 @@ total_F_R_i = F_R_i.isel(x=-3, zeta=0, theta=theta_slice).sum("theta")
 Pin = float(total_F_L_e + total_F_L_i)
 Poutx = float(total_F_R_e + total_F_R_i)
 print(
-    "Power in through X inner Pin = {} W  [{} ion {} electron]".format(
-        Pin, float(total_F_L_i), float(total_F_L_e)
-    )
+    f"Power in through X inner Pin = {Pin} W  [{float(total_F_L_i)} ion {float(total_F_L_e)} electron]"
 )
 print(
-    "Power out through X outer Pout,x {} W [{} ion {} electron]".format(
-        Poutx, float(total_F_R_i), float(total_F_R_e)
-    )
+    f"Power out through X outer Pout,x {Poutx} W [{float(total_F_R_i)} ion {float(total_F_R_e)} electron]"
 )
 
 # Sheath
@@ -321,14 +316,10 @@ if "sheath_boundary_simple" in bd.options:
     Poutd = float(total_sheath_down_e + total_sheath_down_i)
     Poutu = float(total_sheath_up_e + total_sheath_up_i)
     print(
-        "Power out through lower sheath: Pout,d = {} W [{} ion {} electron]".format(
-            Poutd, float(total_sheath_down_i), float(total_sheath_down_e)
-        )
+        f"Power out through lower sheath: Pout,d = {Poutd} W [{float(total_sheath_down_i)} ion {float(total_sheath_down_e)} electron]"
     )
     print(
-        "Power out through upper sheath: Pout,u = {} W [{} ion {} electron]".format(
-            Poutu, float(total_sheath_up_i), float(total_sheath_up_e)
-        )
+        f"Power out through upper sheath: Pout,u = {Poutu} W [{float(total_sheath_up_i)} ion {float(total_sheath_up_e)} electron]"
     )
 else:
     Poutd = 0.0
@@ -341,7 +332,7 @@ domain_volume = float(
     cell_volume.isel(x=slice(2, -2), theta=theta_slice).sum()
 )  # In m^3, excluding X guard cells
 
-print("Domain volume: {} m^3".format(domain_volume))
+print(f"Domain volume: {domain_volume} m^3")
 
 # Atomic processes, radiation and other sources/sinks of thermal energy
 
@@ -357,15 +348,11 @@ recombination_radiation = 1.5 * (Rrec * cell_volume).isel(
 
 Prad = -float(excitation_radiation + recombination_radiation)
 print(
-    "Net power radiation: Prad = {} W [{} excitation {} recombination]".format(
-        Prad, -float(excitation_radiation), -float(recombination_radiation)
-    )
+    f"Net power radiation: Prad = {Prad} W [{-float(excitation_radiation)} excitation {-float(recombination_radiation)} recombination]"
 )
 
 Pnet = Pin - Poutx - Poutd - Poutu - Prad
-print(
-    "Net input power Pnet = Pin - Pout,x - Pout,d - Pout,u - Prad = {} W".format(Pnet)
-)
+print(f"Net input power Pnet = Pin - Pout,x - Pout,d - Pout,u - Prad = {Pnet} W")
 
 print("------------")
 
@@ -376,16 +363,16 @@ total_particles_out_R = float(F_R.isel(x=-3, zeta=0, theta=theta_slice).sum("the
 sheath_flow_down = float(sheath_flow_down.isel(zeta=0, x=slice(2, -2)).sum("x"))
 sheath_flow_up = float(sheath_flow_up.isel(zeta=0, x=slice(2, -2)).sum("x"))
 
-print("Particle flux in through X inner: {} /s".format(total_particles_in_L))
-print("Particle flux out through X outer: {} /s".format(total_particles_out_R))
+print(f"Particle flux in through X inner: {total_particles_in_L} /s")
+print(f"Particle flux out through X outer: {total_particles_out_R} /s")
 
-print("Particle flux to lower sheath: {} /s".format(sheath_flow_down))
-print("Particle flux to upper sheath: {} /s".format(sheath_flow_up))
+print(f"Particle flux to lower sheath: {sheath_flow_down} /s")
+print(f"Particle flux to upper sheath: {sheath_flow_up} /s")
 
 frecyc = 1.0 - (total_particles_in_L - total_particles_out_R) / (
     sheath_flow_down + sheath_flow_up
 )
-print("Recycling fraction: {}".format(frecyc))
+print(f"Recycling fraction: {frecyc}")
 
 Siz = bd["Sd+_iz"]
 Srec = bd["Sd+_rec"]
@@ -401,8 +388,8 @@ total_rec = float(
     .sum(["x", "theta", "zeta"])
 )
 
-print("Total ionization rate: {} /s".format(total_iz))
-print("Total recombination rate: {} /s".format(total_rec))
+print(f"Total ionization rate: {total_iz} /s")
+print(f"Total recombination rate: {total_rec} /s")
 
 print("------------")
 
@@ -427,7 +414,5 @@ ddt_Ep = float(ddt_Ep)
 ddt_Ek = float(ddt_Ek)
 
 print(
-    "Rate of change of energy: {} [{} internal {} kinetic]".format(
-        ddt_Ep + ddt_Ek, ddt_Ep, ddt_Ek
-    )
+    f"Rate of change of energy: {ddt_Ep + ddt_Ek} [{ddt_Ep} internal {ddt_Ek} kinetic]"
 )

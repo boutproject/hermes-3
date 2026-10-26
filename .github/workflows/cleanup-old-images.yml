@@ -29,6 +29,8 @@ concurrency:
 jobs:
 
   cleanup-images:
+    # Skip scheduled runs on forks; still allow manual dispatch anywhere.
+    if: github.repository == 'boutproject/hermes-3' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -62,6 +64,8 @@ jobs:
   # next build). Prune untagged + entries >6 months, but keep the index tag so
   # `spack buildcache push --update-index` state is not orphaned.
   cleanup-spack-cache:
+    # Skip scheduled runs on forks; still allow manual dispatch anywhere.
+    if: github.repository == 'boutproject/hermes-3' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - name: Delete untagged cache blobs (hermes-3-spack-cache)

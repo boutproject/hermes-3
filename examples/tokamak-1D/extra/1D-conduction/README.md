@@ -7,7 +7,7 @@ The main purpose of this is to test preconditioning methods.
 
 With CVODE solver, no preconditioning:
 
-    ./hermes-3 -d examples/1D-conduction/ solver:use_precon=false
+    ./hermes-3 -d examples/1D-conduction/ solver:cvode_precon_method=none
 
     2.000e+03       1523       5.23e-01    89.3    0.0    0.3    4.7    5.6
     4.000e+03       1225       4.27e-01    89.9    0.0    0.3    3.9    5.9
@@ -16,7 +16,7 @@ With CVODE solver, no preconditioning:
 
 CVODE solver, with preconditioning:
 
-     ./hermes-3 -d examples/1D-conduction/ solver:use_precon=true
+     ./hermes-3 -d examples/1D-conduction/ solver:cvode_precon_method=user
 
     2.000e+03        209       1.18e-01    57.6    0.0    0.2   20.1   22.1
     4.000e+03         85       5.84e-02    47.5    0.0    0.2   28.0   24.3

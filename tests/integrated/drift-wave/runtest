@@ -5,11 +5,12 @@
 # References:
 # - M.V.Umansky et al. CPP 2008 https://doi.org/10.1002/ctpp.200810004
 
-import numpy as np
-from boututils.run_wrapper import shell, launch_safe
 import sys
+from pathlib import Path
 
 import analysis
+import numpy as np
+from boututils.run_wrapper import launch_safe, shell
 
 plotting = False
 
@@ -32,9 +33,7 @@ for B in Bs:
     s, out = launch_safe(f"../../../hermes-3 mesh:B={B}", nproc=1, pipe=True)
 
     # Save output to log file
-    f = open(f"run.log.{B}", "w")
-    f.write(out)
-    f.close()
+    Path(f"run.log.{B}").write_text(out)
 
     result = analysis.extract_data("data")
     sparns.append(result["sigmapar"] / result["wstar"])
