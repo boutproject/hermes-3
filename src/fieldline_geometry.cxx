@@ -228,6 +228,12 @@ FieldlineGeometry::FieldlineGeometry(std::string name, Options& options, Solver*
     }
   }
 
+  // Communicate the inputs to make sure that J is consistent across physical and processor boundaries to
+  // prevent
+  // mesh->communicate(lambda_int, fieldline_radius, poloidal_magnetic_field,
+  //                   toroidal_magnetic_field);
+
+
   // Compute the total magnetic field strength
   total_magnetic_field = sqrt(toroidal_magnetic_field * toroidal_magnetic_field
                               + poloidal_magnetic_field * poloidal_magnetic_field);
