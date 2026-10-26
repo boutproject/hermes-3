@@ -15,7 +15,9 @@
 #include <bout/options.hxx>
 #include <bout/output.hxx>
 #include <bout/output_bout_types.hxx>
+#include <bout/region.hxx>
 #include <bout/solver.hxx>
+#include <bout/vecops.hxx>
 
 #include "../include/component.hxx"
 #include "../include/div_ops.hxx"
@@ -177,7 +179,6 @@ EvolveVorticityIonEnergy::EvolveVorticityIonEnergy(std::string name, Options& al
   // so that phi can be saved and re-loaded
 
   // Set initial value. Will be overwritten if restarting
-  phi = 0.0;
   Pi_sum = (2. / 3) * Eion;
 
   // Coefficients for Boussinesq solve
@@ -319,6 +320,7 @@ void EvolveVorticityIonEnergy::transform_impl(GuardedOptions& state) {
       break;
     }
   } while (phi_err > phi_rtol);
+  mesh->communicate(phi, Pi_sum);
 
   auto fields = state["fields"];
   set(fields["vorticity"], Vort);
@@ -345,11 +347,11 @@ void EvolveVorticityIonEnergy::transform_impl(GuardedOptions& state) {
 
   // V_ExB dot Grad(Pi)
   Field3D vEdotGradPi = bracket(phi, Pi_sum, BRACKET_ARAKAWA);
-  vEdotGradPi.applyBoundary("free_o2");
+  vEdotGradPi.applyBoundary("neumann_o2");
 
   // delp2(phi) term
   Field3D DelpPhi_2B2 = 0.5 * boussinesq_coeff * Delp2(phi);
-  DelpPhi_2B2.applyBoundary("free_o2");
+  DelpPhi_2B2.applyBoundary("neumann_o2");
 
   mesh->communicate(vEdotGradPi, DelpPhi_2B2);
 
@@ -373,7 +375,7 @@ void EvolveVorticityIonEnergy::transform_impl(GuardedOptions& state) {
   const Vector3D Jdia_i = Pi_sum * Curlb_B;
 
   DivJdia = Div(Jdia_e + Jdia_i);
-  Field3D DivJdia_e = Div(Jdia_e);
+  const Field3D DivJdia_e = Div(Jdia_e);
 
   //////////////////////////////////////////////////////////
   // Parallel current
@@ -421,6 +423,49 @@ void EvolveVorticityIonEnergy::transform_impl(GuardedOptions& state) {
   // Note: This will be handled in the `polarisation_drift`
   // component, because it needs to include other currents
   // due to e.g. ion viscosity
+
+  // Energy density advected by polarisation drift
+  // pi + 1/2 m_i n_0 v^2_||i + en_0ϕ
+  // Note the n_0 in the parallel kinetic energy and phi term
+  Field3D E_adv = (5. / 2) * Pi_sum + phi;
+
+  forAllIons(allspecies, [&](GuardedOptions species) {
+    if (!species.isSet("velocity")) {
+      return;
+    }
+    const BoutReal AA = get<BoutReal>(species["AA"]);
+    auto V = GET_NOBOUNDARY(Field3D, species["velocity"]);
+
+    // Density is n_0 due to Boussinesq approximation
+    E_adv += 0.5 * AA * SQ(V);
+  });
+
+  // Calculate Div( E_adv v_pol )
+  //
+  // vpol = - c / (en_0) Grad_perp dPhi/dt - G / (en_0)
+
+  // Solve for Div( c Grad_perp dPhi/dt ) = dVort/dt
+  // Note: Check case where boundaries are relaxed
+  const Field3D dVortdt = DivJReynolds + DivJdia;
+  dPhidt = phiSolver->solve(dVortdt, dPhidt);
+
+  // Set Neumann boundaries so energy fluxes through boundaries are disabled.
+  // Solving for dPhidt with two Neumann boundaries is ill conditioned
+  dPhidt.applyBoundary("neumann_o2");
+
+  // Divergence of energy flux due carried by polarisation drift
+  DivEpol =
+      // Potential flow part of polarisation drift
+      -Div_a_Grad_perp_XZ(E_adv * boussinesq_coeff, dPhidt)
+      // Reynolds stress part of the polarisation drift
+      // Note: The stream functions are negated so that upwinding works correctly
+      + Div_n_bxGrad_f_B_XPPM(E_adv * 0.5 * Vort, -phi, false, poloidal_flows)
+      - Div_a_Grad_perp_XZ(E_adv * 0.5 * boussinesq_coeff, vEdotGradPi)
+      + Div_n_bxGrad_f_B_XPPM(E_adv * DelpPhi_2B2, -(phi + Pi_sum), false,
+                              poloidal_flows);
+
+  // Fluxes of ion densities and (if set) momentum
+  // This requires a partition of the polarisation current between species.
 }
 
 void EvolveVorticityIonEnergy::finally(const Options& state) {
@@ -434,7 +479,7 @@ void EvolveVorticityIonEnergy::finally(const Options& state) {
 
   Eion_src = sumIonEnergySources(state["species"]);
 
-  ddt(Eion) = -(DivEExB + DivEReynolds) - phi_Div_Je + Eion_src;
+  ddt(Eion) = -(DivEExB + DivEReynolds + DivEpol) - phi_Div_Je + Eion_src;
 }
 
 void EvolveVorticityIonEnergy::outputVars(Options& state) {
@@ -488,6 +533,9 @@ void EvolveVorticityIonEnergy::outputVars(Options& state) {
         {{"time_dimension", "t"}, {"units", "W m^-3"}, {"conversion", Pnorm * Omega_ci}});
     set_with_attrs(
         state["DivEReynolds"], DivEReynolds,
+        {{"time_dimension", "t"}, {"units", "W m^-3"}, {"conversion", Pnorm * Omega_ci}});
+    set_with_attrs(
+        state["DivEpol"], DivEpol,
         {{"time_dimension", "t"}, {"units", "W m^-3"}, {"conversion", Pnorm * Omega_ci}});
     set_with_attrs(
         state["phi_Div_Je"], phi_Div_Je,
@@ -550,7 +598,7 @@ Field3D EvolveVorticityIonEnergy::sumIonEnergySources(const Options& allspecies)
   return src;
 }
 
-// Perpendicular kineric energy
+// Perpendicular kinetic energy
 // This uses the same discretisation at Div_a_Grad_perp_XZ
 Field3D EvolveVorticityIonEnergy::calculateKEperp(const Field3D& phi,
                                                   const Field3D& Pi) const {

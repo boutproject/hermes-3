@@ -21,6 +21,7 @@ total_Eelectron = volume_integrate(Eelectron)
 for term in [
     "DivEExB",
     "DivEReynolds",
+    "DivEpol",
     "phi_Div_Je",
     "Eion_src",
     "Eion",

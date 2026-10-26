@@ -94,7 +94,8 @@ private:
   bool neumann_boundary_average_z; ///< Set pressure constant in Z, Neumann in X
   BoutReal density_floor;          ///< Used to calculate Ti
 
-  Field3D phi;                               ///< Electrostatic potential Φ
+  Field3D phi{0.0};                          ///< Electrostatic potential Φ
+  Field3D dPhidt{0.0};                       ///< Part of polarisation drift
   Field3D Pi_sum;                            ///< Total ion pressure
   Field3D Ti;                                ///< Common ion temperature
   Coordinates::FieldMetric boussinesq_coeff; ///< c = mass / B^2
@@ -118,7 +119,8 @@ private:
   // Divergence of energy fluxes
   Field3D DivEExB;      ///< Divergence of ExB energy flux
   Field3D DivEReynolds; ///< Divergence of Reynolds stress energy flux
-  Field3D DivEelectric; ///< Divergence of ion electrical work Div(phi J)
+  Field3D DivEelectric; ///< Divergence of ion electrical work Div(phi (Jpar + Jdia))
+  Field3D DivEpol;      ///< Divergence of polarisation drift energy flux
 
   Field3D phi_Div_Je; ///< Energy transferred to/from electrons
 
