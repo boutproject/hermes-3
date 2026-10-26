@@ -202,8 +202,7 @@ FieldlineGeometry::FieldlineGeometry(std::string name, Options& options, Solver*
     // Otherwise, use the provided function for toroidal_magnetic_field
     geo_options["upstream_toroidal_magnetic_field"]
         .setConditionallyUsed(); // Ensure upstream_toroidal_magnetic_field is not used
-    
-    
+
     // get toroidal_magnetic_field from grid file or input file
     if (mesh->sourceHasVar("toroidal_magnetic_field")) {
       mesh->get(toroidal_magnetic_field, "toroidal_magnetic_field");
@@ -231,7 +230,6 @@ FieldlineGeometry::FieldlineGeometry(std::string name, Options& options, Solver*
   // Communicate the inputs to make sure that J is consistent across inner and outer guard cells
   mesh->communicate(lambda_int, fieldline_radius, poloidal_magnetic_field,
                     toroidal_magnetic_field);
-
 
   // Compute the total magnetic field strength
   total_magnetic_field = sqrt(toroidal_magnetic_field * toroidal_magnetic_field
