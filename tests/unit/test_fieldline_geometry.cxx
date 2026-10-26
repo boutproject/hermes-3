@@ -294,4 +294,129 @@ TEST_F(FieldlineGeometryTest, TransformPublishesGeometryToState) {
       IsFieldEqual(get<Field3D>(options["fieldline_geometry_Rxy"]), 2.0, "RGN_NOBNDRY"));
 }
 
+// Adding tests for inputs provided by grid file instead of expressions, this should check that variables
+// are read from the grid file if available with FakeGridDataSource (as in test_neutral_full_velocity.cxx) as proxy for a grid file.
+
+TEST_F(FieldlineGeometryTest, GridFileInputsOverrideExpressions) {
+  // All four inputs are in the grid file, so the input file expressions
+  // should be ignored.
+  const BoutReal lambda_int = 0.02;
+  const BoutReal R = 3.0;
+  const BoutReal Bpol = 0.4;
+  const BoutReal Btor = 2.0;
+  const BoutReal Btotal = sqrt(Bpol * Bpol + Btor * Btor);
+
+  static_cast<FakeMesh*>(bout::globals::mesh)
+      ->setGridDataSource(new FakeGridDataSource{{{"lambda_int", lambda_int},
+                                                  {"fieldline_radius", R},
+                                                  {"poloidal_magnetic_field", Bpol},
+                                                  {"toroidal_magnetic_field", Btor}}});
+
+  // This in order of the input file [lambda_int, fieldline_radius, poloidal_magnetic_field, compute_Btor_from_R, toroidal_magnetic_field, diagnose]
+  Options options = makeOptions("0.01", "2.0", "0.5", false, "1.0", true); 
+  FieldlineGeometry component("test", options, nullptr);
+
+  Options outputs = {{"rho_s0", 1.0}, {"Bnorm", 1.0}};
+  component.outputVars(outputs); // send values to outputs 
+
+  // Assert that input values match output values
+
+  ASSERT_TRUE(IsFieldEqual(get<Field3D>(outputs["fieldline_geometry_lambda_int"]),
+                           lambda_int, "RGN_NOBNDRY"));
+  ASSERT_TRUE(
+      IsFieldEqual(get<Field3D>(outputs["fieldline_geometry_Rxy"]), R, "RGN_NOBNDRY"));
+  ASSERT_TRUE(IsFieldEqual(get<Field3D>(outputs["fieldline_geometry_Bpxy"]), Bpol,
+                           "RGN_NOBNDRY"));
+  ASSERT_TRUE(IsFieldEqual(get<Field3D>(outputs["fieldline_geometry_Btxy"]), Btor,
+                           "RGN_NOBNDRY"));
+  ASSERT_TRUE(IsFieldEqual(get<Field3D>(outputs["fieldline_geometry_Bxy"]), Btotal,
+                           "RGN_NOBNDRY"));
+}
+
+TEST_F(FieldlineGeometryTest, GridFileInputsDoNotNeedInputFileOptions) {
+  // When every geometry input is in the grid file, the corresponding input
+  // file options should not be required.
+  static_cast<FakeMesh*>(bout::globals::mesh)
+      ->setGridDataSource(new FakeGridDataSource{{{"lambda_int", 0.02},
+                                                  {"fieldline_radius", 3.0},
+                                                  {"poloidal_magnetic_field", 0.4},
+                                                  {"toroidal_magnetic_field", 2.0}}});
+
+  // Only units and compute_Btor_from_R: no geometry expressions at all
+  Options options;
+  options["units"]["meters"] = 1.0;
+  options["units"]["Tesla"] = 1.0;
+  options["test"]["compute_Btor_from_R"] = false;
+
+  EXPECT_NO_THROW(FieldlineGeometry component("test", options, nullptr));
+}
+
+TEST_F(FieldlineGeometryTest, GridFileInputsAreNormalised) {
+  // Grid values are in SI units, so should be normalised by Lnorm and Bnorm
+  // in the same way as the input file expressions.
+  const BoutReal lambda_int = 0.02;
+  const BoutReal R = 3.0;
+  const BoutReal Bpol = 0.4;
+  const BoutReal Btor = 2.0;
+  const BoutReal Lnorm = 2.0;
+  const BoutReal Bnorm = 4.0;
+
+  static_cast<FakeMesh*>(bout::globals::mesh)
+      ->setGridDataSource(new FakeGridDataSource{{{"lambda_int", lambda_int},
+                                                  {"fieldline_radius", R},
+                                                  {"poloidal_magnetic_field", Bpol},
+                                                  {"toroidal_magnetic_field", Btor}}});
+
+  Options options = makeOptions("0.01", "2.0", "0.5", false, "1.0", true);
+  options["units"]["meters"].force(Lnorm);
+  options["units"]["Tesla"].force(Bnorm);
+
+  FieldlineGeometry component("test", options, nullptr);
+
+  Options outputs = {{"rho_s0", Lnorm}, {"Bnorm", Bnorm}};
+  component.outputVars(outputs);
+
+  ASSERT_TRUE(IsFieldEqual(get<Field3D>(outputs["fieldline_geometry_lambda_int"]),
+                           lambda_int / Lnorm, "RGN_NOBNDRY"));
+  ASSERT_TRUE(IsFieldEqual(get<Field3D>(outputs["fieldline_geometry_Rxy"]), R / Lnorm,
+                           "RGN_NOBNDRY"));
+  ASSERT_TRUE(IsFieldEqual(get<Field3D>(outputs["fieldline_geometry_Bpxy"]), Bpol / Bnorm,
+                           "RGN_NOBNDRY"));
+  ASSERT_TRUE(IsFieldEqual(get<Field3D>(outputs["fieldline_geometry_Btxy"]), Btor / Bnorm,
+                           "RGN_NOBNDRY"));
+}
+
+TEST_F(FieldlineGeometryTest, GridFileInputsSetJacobianInGuardCells) {
+  // As SetsCoordinatesJacobianAndBxy, but with the inputs read from the grid
+  // file. The Jacobian is computed from these inputs in every cell, so it is
+  // only finite in the guard cells if the inputs are set there too.
+  const BoutReal Bpol = 0.4;
+  const BoutReal Btor = 2.0;
+
+  static_cast<FakeMesh*>(bout::globals::mesh)
+      ->setGridDataSource(new FakeGridDataSource{{{"lambda_int", 0.02},
+                                                  {"fieldline_radius", 3.0},
+                                                  {"poloidal_magnetic_field", Bpol},
+                                                  {"toroidal_magnetic_field", Btor}}});
+
+  Options options = makeOptions("0.01", "2.0", "0.5", false, "1.0");
+  FieldlineGeometry component("test", options, nullptr);
+
+  Coordinates* coord = mesh->getCoordinates();
+
+  // J = 1 / (Beff) / Lnorm. With constant inputs, transport_broadening = 1
+  // and Lnorm = 1, so J = 1/Btotal.
+  const BoutReal Btotal = sqrt(Bpol * Bpol + Btor * Btor);
+  for (int j = mesh->ystart; j <= mesh->yend; ++j) {
+    ASSERT_NEAR(coord->J(0, j, 0), 1.0 / Btotal, 1e-12);
+  }
+
+  // J must also be set in the guard cells, otherwise the metric is
+  // discontinuous at domain / inter-processor boundaries. Check the full
+  // local range including guard cells.
+  for (int j = 0; j < mesh->LocalNy; ++j) {
+    ASSERT_NEAR(coord->J(0, j, 0), 1.0 / Btotal, 1e-12);
+  }
+}
+
 #endif
