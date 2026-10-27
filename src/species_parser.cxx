@@ -42,23 +42,23 @@ std::string construct_species_str(std::string base_species, int charge) {
 
 } // namespace
 
-SpeciesTypeAlt SpeciesParser::get_type(const std::string& species_str) {
+SpeciesType SpeciesParser::get_type(const std::string& species_str) {
   return get_type(SpeciesParser(species_str));
 }
 
-SpeciesTypeAlt SpeciesParser::get_type(const SpeciesParser& species) {
+SpeciesType SpeciesParser::get_type(const SpeciesParser& species) {
   if (species.get_element() == "e") {
-    return SpeciesTypeAlt::electron;
+    return SpeciesType::electron;
   } else if (species.is_molecule()) {
     if (species.get_charge() == 0) {
-      return SpeciesTypeAlt::molecule;
+      return SpeciesType::molecule;
     } else {
-      return SpeciesTypeAlt::molecular_ion;
+      return SpeciesType::molecular_ion;
     }
   } else if (species.get_charge() == 0) {
-    return SpeciesTypeAlt::neutral;
+    return SpeciesType::neutral;
   } else {
-    return SpeciesTypeAlt::ion;
+    return SpeciesType::ion;
   }
 }
 

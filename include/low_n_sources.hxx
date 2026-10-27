@@ -83,7 +83,7 @@ private:
   /// Strategy to use when generating sources
   std::string strategy;
 
-  void append_species_by_type(const SpeciesParser& species, SpeciesTypeAlt type);
+  void append_species_by_type(const SpeciesParser& species, SpeciesType type);
 
   void instantiate_reactions();
   void populate_reaction_defs() const;

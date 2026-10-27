@@ -196,9 +196,8 @@ LowNSources::LowNSources(const std::string& name, Options& options)
   instantiate_reactions();
 }
 
-void LowNSources::append_species_by_type(const SpeciesParser& species,
-                                         SpeciesTypeAlt type) {
-  if (type != SpeciesTypeAlt::electron
+void LowNSources::append_species_by_type(const SpeciesParser& species, SpeciesType type) {
+  if (type != SpeciesType::electron
       and (species.get_charge() < 0 or species.get_charge() > 1)) {
     output_warn.write(
         "LowNSources: species '{}' has unsupported ion charge {}; no low-n sources "
@@ -219,12 +218,12 @@ void LowNSources::append_species_by_type(const SpeciesParser& species,
   }
   auto& element_group = element_group_it->second;
 
-  if (type == SpeciesTypeAlt::ion) {
+  if (type == SpeciesType::ion) {
     set_unique_species_or_throw(element_group.ion, species_str, element_str, "ion");
-  } else if (type == SpeciesTypeAlt::neutral) {
+  } else if (type == SpeciesType::neutral) {
     set_unique_species_or_throw(element_group.neutral, species_str, element_str,
                                 "neutral");
-  } else if (type == SpeciesTypeAlt::molecule) {
+  } else if (type == SpeciesType::molecule) {
     set_unique_species_or_throw(element_group.molecule, species_str, element_str,
                                 "molecule");
   }
@@ -239,10 +238,10 @@ void LowNSources::append_species_by_type(const SpeciesParser& species,
       this->base_species_order.push_back(mol_str);
     }
     auto& mol_group = this->species_by_base.at(mol_str);
-    if (type == SpeciesTypeAlt::molecular_ion) {
+    if (type == SpeciesType::molecular_ion) {
       // Treat it as an 'ion' of the molecule base
       set_unique_species_or_throw(mol_group.ion, species_str, mol_str, "ion");
-    } else if (type == SpeciesTypeAlt::molecule) {
+    } else if (type == SpeciesType::molecule) {
       // Treat it as a 'neutral' of the molecule base
       set_unique_species_or_throw(mol_group.neutral, species_str, mol_str, "neutral");
     }

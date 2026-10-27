@@ -5,7 +5,7 @@
 #include <algorithm>
 #include <cctype>
 
-#include "bout/bout_enum_class.hxx"
+#include "species_parser.hxx"
 #include "bout/traits.hxx"
 
 inline BoutReal floor(BoutReal value, BoutReal min) { return std::max(value, min); }
@@ -94,15 +94,6 @@ static inline std::vector<std::string> str_keys(const std::map<std::string, T>& 
   return keys;
 }
 
-// TODO: Replace the later SpeciesType with this one. This one
-// doesn't work in elec
-
-/// Enum that identifies the type of a species.
-///
-/// The ordering is significant for LowNSources pairing: adjacent values can be
-/// paired, with the lower-valued type appearing first.
-BOUT_ENUM_CLASS(SpeciesType, electron, ion, neutral, molecule);
-
 inline int identifySpeciesMultiplicity(const std::string& species) {
   auto end = species.find_first_of("+-");
   const std::string uncharged = species.substr(0, end);
@@ -130,16 +121,22 @@ inline std::string identifySpeciesElement(const std::string& species) {
   return uncharged;
 }
 
+/// True for atomic or molecular ions of either charge sign.
+inline bool isIonSpeciesType(SpeciesType type) {
+  return type == SpeciesType::ion or type == SpeciesType::molecular_ion;
+}
+
 inline bool isNeutralSpeciesType(SpeciesType type) {
   return type == SpeciesType::neutral or type == SpeciesType::molecule;
 }
 
-/// Identify species name string as electron, ion, atom or molecule
+/// Identify species name string as electron, atomic/molecular ion, atom or molecule
 inline SpeciesType identifySpeciesType(const std::string& species) {
   if (species == "e") {
     return SpeciesType::electron;
   } else if ((species == "i") or species.find_first_of("+-") != std::string::npos) {
-    return SpeciesType::ion;
+    return identifySpeciesMultiplicity(species) > 1 ? SpeciesType::molecular_ion
+                                                    : SpeciesType::ion;
   } else if (identifySpeciesMultiplicity(species) > 1) {
     return SpeciesType::molecule;
   }

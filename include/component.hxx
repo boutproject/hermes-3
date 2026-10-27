@@ -50,7 +50,7 @@ struct SpeciesInformation {
       const SpeciesType type = identifySpeciesType(sp);
       if (type == SpeciesType::electron) {
         electrons.push_back(sp);
-      } else if (type == SpeciesType::ion) {
+      } else if (isIonSpeciesType(type)) {
         positive_ions.push_back(sp);
       } else if (isNeutralSpeciesType(type)) {
         neutrals.push_back(sp);

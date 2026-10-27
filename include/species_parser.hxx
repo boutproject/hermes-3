@@ -6,7 +6,8 @@
 
 #include "bout/bout_enum_class.hxx"
 
-BOUT_ENUM_CLASS(SpeciesTypeAlt, electron, ion, molecular_ion, neutral, molecule);
+/// Enum used to categorise different species
+BOUT_ENUM_CLASS(SpeciesType, electron, ion, molecular_ion, neutral, molecule);
 
 /**
  * @brief Class to parse species strings and extract charge information.
@@ -15,8 +16,8 @@ BOUT_ENUM_CLASS(SpeciesTypeAlt, electron, ion, molecular_ion, neutral, molecule)
 class SpeciesParser {
 
 public:
-  static SpeciesTypeAlt get_type(const std::string& species_str);
-  static SpeciesTypeAlt get_type(const SpeciesParser& species);
+  static SpeciesType get_type(const std::string& species_str);
+  static SpeciesType get_type(const SpeciesParser& species);
   /**
    * @brief Construct a new SpeciesParser object by extracting the base species and charge
    * from a species string.

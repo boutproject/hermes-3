@@ -56,6 +56,7 @@ BraginskiiConduction::BraginskiiConduction(const std::string& name, Options& all
     BoutReal default_kappa; // default conductivity, changes depending on species
     switch (identifySpeciesType(name)) {
     case SpeciesType::ion:
+    case SpeciesType::molecular_ion:
       default_kappa = 3.9;
       break;
     case SpeciesType::electron:
@@ -168,7 +169,7 @@ void BraginskiiConduction::transform_impl(GuardedOptions& state) {
               collision_names.push_back(collision_name);
             }
 
-          } else if (species_type == SpeciesType::ion) {
+          } else if (isIonSpeciesType(species_type)) {
             if ( /// Self-collisions
                 (collisionSpeciesMatch(collision_name, species.name(), species.name(),
                                        "coll", "exact"))) {
