@@ -1,0 +1,109 @@
+# Closed source-free slab; output cadence is overridden by runtest.
+periodicX = true
+MYG = 2
+nout = 40
+timestep = 3
+
+[mesh]
+nx = 20
+ny = 4
+nz = 16
+Lrad = 0.05
+Lpol = 0.05
+Bpxy = 0.35
+Rxy = 1.5
+dx = Lrad * Rxy * Bpxy / (nx - 4)
+dz = Lpol / Rxy / nz
+hthe = 1
+sinty = 0
+Bxy = Bpxy
+Btxy = 0
+bxcvx = 0
+bxcvy = 0
+bxcvz = 1 / Rxy^2
+
+[mesh:ddz]
+first = FFT
+fft_filter = 0
+
+[mesh:paralleltransform]
+type = identity
+
+[solver]
+atol = 1e-11
+rtol = 1e-8
+mxstep = 10000
+
+[hermes]
+components = e, d+, impurity, evolve_vorticity_ion_energy
+recalculate_metric = true
+Nnorm = 2e18
+Bnorm = mesh:Bxy
+Tnorm = 5
+
+[e]
+type = quasineutral, evolve_pressure, zero_current
+charge = -1
+AA = 1/1836
+bndry_flux = false
+poloidal_flows = false
+thermal_conduction = false
+diagnose = false
+
+[Pe]
+function = 1 + 0.1 * sin(2*pi*x - z) + 0.04 * cos(4*pi*x + 2*z)
+source = 0
+bndry_all = neumann
+
+[d+]
+type = evolve_density, evolve_momentum
+charge = 1
+AA = 2
+bndry_flux = false
+poloidal_flows = false
+diagnose = false
+
+[Nd+]
+function = 0.5 * (1 + 0.1 * sin(2*pi*x - z) + 0.04 * cos(4*pi*x + 2*z))
+source = 0
+bndry_all = neumann
+
+[NVd+]
+function = 0.1
+
+[Vd+]
+bndry_all = neumann
+
+[impurity]
+type = evolve_density, evolve_momentum
+charge = 2
+AA = 3
+bndry_flux = false
+poloidal_flows = false
+diagnose = false
+
+[Nimpurity]
+function = 0.25 * (1 - 0.05 * sin(2*pi*x - z) + 0.03 * sin(4*pi*x + z))
+source = 0
+bndry_all = neumann
+
+[NVimpurity]
+function = -0.05
+
+[Vimpurity]
+bndry_all = neumann
+
+[evolve_vorticity_ion_energy]
+average_atomic_mass = 1.75
+poloidal_flows = false
+phi_boundary_relax = false
+phi_rtol = 1e-10
+vort_atol = 1e-13
+phi_max_iterations = 200
+diagnose = false
+
+[Eion]
+function = 1.2 * Pe:function
+
+[Vort]
+function = 0.001 * sin(2*pi*x + 2*z)

@@ -413,3 +413,194 @@ def test_cadence_refinement_distinguishes_quadrature_error():
         cadence_comparison(coarse, fine.isel(t=slice(1, None)))
     with pytest.raises(AuditError, match="integer refinement"):
         cadence_comparison(coarse, coarse)
+
+
+def test_transport_flux_gauss_and_weight_linearity():
+    from energy_analysis.transport import arakawa, face_divergence, xppm
+
+    f, g = fields()
+    g["dy"] = xr.ones_like(g.J)
+    stream = np.sin(2 * np.pi * f.x / 16) + 0.3 * np.cos(4 * np.pi * f.z / 16)
+    op = xppm(1 + f, stream, g)
+    volume = g.J * g.dx * g.dy * g.dz
+    assert_allclose((op.divergence * volume).isel(x=slice(2, -2)).sum(), 0, atol=1e-13)
+    w = 0.4 + 0.1 * f
+    weighted = xppm(1 + f, stream, g, weight=w)
+    other = xppm(1 + f, stream, g, weight=1 - w)
+    xr.testing.assert_allclose(weighted + other, op)
+    xr.testing.assert_allclose(
+        face_divergence({"x": op.flux_x, "z": op.flux_z}, g), op.divergence
+    )
+    h = np.sin(2 * np.pi * (f.x - 2) / 16 - 4 * np.pi * f.z / 16)
+    bracket = arakawa(f, h, g.dx, g.dz).isel(x=slice(2, -2))
+    assert_allclose(bracket.sum(), 0, atol=1e-14)
+    assert_allclose((f.isel(x=slice(2, -2)) * bracket).sum(), 0, atol=1e-14)
+
+
+def test_parallel_face_flux_and_open_midpoints():
+    from energy_analysis.transport import parallel_flux
+
+    y = np.arange(20)
+    f = xr.DataArray(
+        1 + 0.1 * np.cos(2 * np.pi * (y - 2) / 16), dims="y", coords={"y": y}
+    )
+    v = 0.3 + 0.05 * np.sin(2 * np.pi * (y - 2) / 16)
+    v = xr.DataArray(v, dims="y", coords={"y": y})
+    g = xr.Dataset({n: xr.ones_like(f) for n in ("J", "dx", "dy", "dz", "g_22")})
+    op = parallel_flux(f, v, xr.ones_like(f), g)
+    assert_allclose(op.divergence.isel(y=slice(2, -2)).sum(), 0, atol=1e-15)
+    opened = parallel_flux(f, v, xr.ones_like(f), g, periodic_y=False)
+    expected = ((f + f.shift(y=-1)) / 2) * ((v + v.shift(y=-1)) / 2)
+    assert_allclose(opened.flux_y.isel(y=[1, -3]), expected.isel(y=[1, -3]))
+    assert_allclose(
+        opened.divergence.isel(y=slice(2, -2)).sum(),
+        opened.flux_y.isel(y=-3) - opened.flux_y.isel(y=1),
+    )
+
+
+def test_sparse_polarisation_solve_and_neumann_guards(dataset):
+    from energy_analysis.fluxes import fill_transport_guards, solve_polarisation
+
+    dataset["g13"] *= 0
+    dataset["g_22"] = xr.ones_like(dataset.J)
+    run = open_run(dataset)
+    phi = xr.ones_like(dataset.phi) * np.cos(
+        2 * np.pi * (dataset.x - 2) / 8 + 2 * np.pi * dataset.z / 8
+    )
+    rhs = perpendicular_operator(1.75, phi, dataset).divergence
+    actual = solve_polarisation(run, rhs, True, True)
+    lazy = solve_polarisation(run, rhs.chunk({"t": 1, "x": 3, "z": 3}), True, True)
+    xr.testing.assert_allclose(lazy.compute(), actual)
+    xr.testing.assert_allclose(run.interior(actual), run.interior(phi), atol=2e-14)
+    guarded = fill_transport_guards(phi, run, False, True)
+    xr.testing.assert_allclose(guarded.isel(x=1, drop=True), phi.isel(x=2, drop=True))
+    xr.testing.assert_allclose(guarded.isel(x=0, drop=True), phi.isel(x=3, drop=True))
+    rhs = rhs + 0.1
+    with pytest.raises(AuditError, match="incompatible"):
+        solve_polarisation(run, rhs, True, True)
+
+
+def test_prescribed_source_conversion_and_coverage(dataset):
+    from energy_analysis.fluxes import PrescribedSources, reconstruct_sources
+    from scipy.constants import proton_mass
+
+    run = open_run(dataset)
+    zero = {s.name: 0 for s in run.species}
+    rates = PrescribedSources(
+        {**zero, "d+": 20},
+        {**zero, "d+": 3e20},
+        {**zero, "d+": 0.1},
+        "analytic SI source",
+    )
+    result = reconstruct_sources(run, rates)
+    v = dataset["NVd+"] / (2 * dataset["Nd+"])
+    expect = (
+        20 / (run.energy_scale * run.frequency)
+        + v * 0.1 / (proton_mass * 2e18 * run.length_scale * run.frequency**2)
+        - v**2 * 3e20 / (2e18 * run.frequency)
+    )
+    xr.testing.assert_allclose(result.Eion_src, expect)
+    with pytest.raises(AuditError, match="every species"):
+        reconstruct_sources(run, PrescribedSources({}, zero, zero, "incomplete"))
+
+
+def test_parallel_numerical_heating_kinetic_flux_identity():
+    from energy_analysis.transport import (
+        numerical_heating_defect,
+        numerical_parallel_heating,
+        parallel_flux,
+        parallel_kinetic_flux,
+    )
+
+    y = np.arange(36)
+    angle = 2 * np.pi * (y - 2) / 32
+    n = xr.DataArray(1 + 0.3 * np.cos(angle), dims="y", coords={"y": y})
+    v = xr.DataArray(0.4 + 0.2 * np.sin(2 * angle), dims="y", coords={"y": y})
+    wave = xr.ones_like(n) * 0.8
+    geometry = xr.Dataset(
+        {key: xr.ones_like(n) for key in ("J", "dx", "dy", "dz", "g_22")}
+    )
+    dn = -parallel_flux(n, v, wave, geometry).divergence
+    dnv = -parallel_flux(n, v, wave, geometry, momentum=True).divergence
+    kinetic = v * dnv - 0.5 * v**2 * dn
+    heating = numerical_parallel_heating(n, v, wave, geometry)
+    divergence = parallel_kinetic_flux(n, v, wave, geometry).divergence
+    assert_allclose(
+        (kinetic + heating + divergence).isel(y=slice(2, -2)),
+        numerical_heating_defect(n, v, wave, geometry).isel(y=slice(2, -2)),
+        atol=2e-16,
+    )
+    assert (
+        float(numerical_heating_defect(n, v, wave, geometry).isel(y=slice(2, -2)).sum())
+        > 1e-4
+    )
+
+
+def test_flux_report_explicitly_incomplete_for_unsupported_metrics(dataset):
+    from energy_analysis.report import flux_report
+
+    report = flux_report(open_run(dataset))
+    assert not report["flux_audit"]["complete"]
+    assert "requires saved g_22" in report["flux_audit"]["reason"]
+
+
+def test_open_rectangle_is_not_misclassified_as_tokamak(dataset):
+    metadata = dataset.attrs["metadata"]
+    metadata.update(ixseps1=0, ixseps2=0, jyseps1_1=-1, jyseps2_2=0)
+    run = open_run(dataset)
+    assert run.myg == 0
+    metadata["ixseps1"] = 4
+    with pytest.raises(AuditError, match="Tokamak boundary masks"):
+        open_run(dataset)
+
+
+def test_sparse_dirichlet_solve_before_transport_boundary_change(dataset):
+    from energy_analysis.fluxes import solve_polarisation
+
+    dataset["g13"] *= 0
+    run = open_run(dataset)
+    nx = dataset.sizes["x"] - 4
+    xphase = np.pi * (dataset.x - 2 + 0.5) / nx
+    phi = xr.ones_like(dataset.phi) * np.sin(xphase) * np.cos(2 * np.pi * dataset.z / 8)
+    rhs = perpendicular_operator(1.75, phi, dataset).divergence
+    solved = solve_polarisation(run, rhs, False, True)
+    xr.testing.assert_allclose(run.interior(solved), run.interior(phi), atol=2e-14)
+    # The transport potential is Neumann, although the inverse used Dirichlet.
+    xr.testing.assert_allclose(solved.isel(x=1, drop=True), solved.isel(x=2, drop=True))
+
+
+def test_flux_velocity_requires_saved_electron_closure(dataset):
+    from energy_analysis.fluxes import species_velocity
+
+    dataset.options["e:type"] = "quasineutral, evolve_pressure, zero_current"
+    run = open_run(dataset.drop_vars("NVe"))
+    electron = next(s for s in run.species if s.name == "e")
+    with pytest.raises(AuditError, match="flowing species e"):
+        species_velocity(run, electron)
+
+
+def test_sparse_solve_handles_auxiliary_geometry_coordinates(dataset):
+    from energy_analysis.fluxes import solve_polarisation
+
+    dataset["g13"] *= 0
+    dataset = dataset.set_coords("dx")
+    run = open_run(dataset)
+    potential = xr.ones_like(dataset.phi) * np.cos(
+        2 * np.pi * (dataset.x - 2) / 8 + 2 * np.pi * dataset.z / 8
+    )
+    rhs = perpendicular_operator(1.75, potential, dataset).divergence
+    solved = solve_polarisation(run, rhs, True, True)
+    # Reindexing the physical solve must not create conflicting NaN dx guards.
+    merged = xr.Dataset({"solved": solved, "original": potential})
+    xr.testing.assert_allclose(merged.dx, dataset.dx)
+
+
+def test_current_face_flux_is_not_labelled_as_energy_power(dataset):
+    from energy_analysis import flux_power
+
+    run = open_run(dataset)
+    flux = xr.Dataset(
+        {"DivJpol": xr.zeros_like(dataset.phi).assign_attrs(quantity="current")}
+    )
+    with pytest.raises(AuditError, match="energy-flux family"):
+        flux_power(run, flux, "DivJpol")

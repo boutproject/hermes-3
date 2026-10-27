@@ -88,6 +88,6 @@ def polarisation_energy_coefficient(run):
     )
     result.attrs = {
         "units_type": "hermes",
-        "provenance": "reconstructed coefficient; flux unavailable",
+        "provenance": "reconstructed multispecies energy coefficient",
     }
     return result

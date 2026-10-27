@@ -11,10 +11,9 @@ all Python inspection, implementation, analysis and testing.
 The first deliverable is an energy inventory and a cumulative balance that work
 with `diagnose=false`. Subsequent deliverables reconstruct fluxes and sources,
 compare them with optional diagnostics, and provide a more detailed account of
-energy transfer. Stages one and two are now implemented, including the inventory
-package, operator tests and diagnostic on/off equilibrium and driven conservation
-tests; see [the module README](../../tools/energy_analysis/README.md). General
-flux/source budgets and broader geometry tests below remain planned.
+energy transfer. Stages one through three are now implemented, including the inventory
+package, operator tests, diagnostic pairs, closed conservation tests and
+independent slab flux/source/boundary audits; see [the module README](../../tools/energy_analysis/README.md). Conduction, reaction, broader geometry and tokamak budgets remain planned.
 
 ## Starting points verified in this checkout
 
@@ -446,11 +445,35 @@ analysis. Keep generated results and fixtures separate from checked-in inputs.
    The restart-hook initial-phi discrepancy is fixed and covered by unit tests.
    The periodic radial ExB seam remains a tracked transport-fidelity finding;
    it does not break these global closed-domain balances.
-3. **Flux and source budgets.** Add ExB/Reynolds/electrical, parallel and
+3. **Flux and source budgets (implemented for uniform orthogonal slabs).** Add ExB/Reynolds/electrical, parallel and
    polarisation reconstruction in that order, followed by controlled sources
    and boundary cases. Acceptance: discrete Gauss checks, diagnostic field and
    integrated comparisons, and species current summation all pass for supported
    schemes. Missing terms produce an incomplete report rather than a false pass.
+   Separate `2D-ion-energy-fluxes`, `-heating`, `-sources`, `-parallel` and
+   `-boundary` directories now own input, README, criteria and runners. The
+   module reconstructs MC ExB/parallel transport, Reynolds/electrical and
+   weighted polarisation fluxes, an independent sparse FV `ddt(Phi)` inverse,
+   and prescribed thermal/particle/momentum source conversion. Diagnostic
+   field/integral, ion RHS identity, species charge face/current, Gauss and
+   two-subvolume checks run with enabled/off/stripped diagnostics. The open
+   boundary input is a simple rectangle with imposed ion velocity, not a sheath.
+   No production outputs were added; the controlled-source component is test-only
+   and retains scalar SI rates in saved options.
+
+   Flux coverage is explicitly limited to uniform orthogonal identity slabs,
+   unfiltered FFT Z, C2 parallel work and the saved MC limiter. Unsupported
+   sources remain unavailable without an explicit provenance-bearing manifest.
+   Independent Kperp/forward operators retain their nonuniform/g13 coverage.
+
+   Three findings remain named: XPPM's closed periodic radial seam, BOUT Reynolds
+   FV omission of Z when MYG=0, and excess parallel numerical heating from its
+   wave-speed coefficient. The electron parallel test matches diagnostics and
+   independently predicts the last defect. Its report preserves the raw plasma
+   drift and marks source-free conservation false; a separate defect-accounted
+   residual gate checks reconstruction without loosening the conservation limit.
+   Open electron momentum, sheath/conduction/reaction operators and general
+   kinetic ExB fluxes need additional discrete contracts in subsequent stages.
 4. **Broader integration.** Add the six-rank COMPASS tokamak boundary test,
    MPI and resolution/tolerance sweeps, metric-3D and shifted geometry. Extend
    default audit outputs only where reconstruction has an identified gap.

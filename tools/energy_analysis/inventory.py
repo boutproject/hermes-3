@@ -103,7 +103,7 @@ def energy_inventory(run, *, densities=None):
         }
     result.attrs = {
         "source": run.source,
-        "coverage": "energy inventory; flux/source reconstruction not yet implemented",
+        "coverage": "energy inventory; source/boundary powers require explicit reconstruction",
     }
     return result
 

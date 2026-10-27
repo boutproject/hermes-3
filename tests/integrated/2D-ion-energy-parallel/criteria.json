@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "duration_normalised": 2,
+  "cadences_normalised": [
+    0.2,
+    0.1,
+    0.05
+  ],
+  "sources": {
+    "thermal": {
+      "e": 0,
+      "d+": 0
+    },
+    "density": {
+      "e": 0,
+      "d+": 0
+    },
+    "momentum": {
+      "e": 0,
+      "d+": 0
+    },
+    "provenance": "prescribed SI constants; validated input and component whitelist"
+  },
+  "minimum_signals": {
+    "ddt(NVe)": 1e-05,
+    "electron_kinetic_rhs": 1e-05
+  },
+  "tolerances": {
+    "partition_absolute": 1e-09,
+    "forward_absolute": 1e-09,
+    "diagnostic_absolute": 1e-10,
+    "gauss_absolute": 1e-10,
+    "balance_relative": 1e-06,
+    "regional_balance_relative": 2e-06,
+    "history_relative": 1e-09,
+    "history_absolute": 1e-10,
+    "heating_defect_relative": 1e-08,
+    "maximum_sampling_relative": 1e-06,
+    "maximum_sampling_refinement_ratio": 0.5
+  },
+  "case": {
+    "name": "parallel",
+    "components": {
+      "e": "evolve_density, evolve_momentum, evolve_pressure",
+      "d+": "quasineutral"
+    },
+    "diagnostic_components": [
+      "e",
+      "evolve_vorticity_ion_energy"
+    ]
+  }
+}

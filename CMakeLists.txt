@@ -293,6 +293,7 @@ if(EXISTS ${CMAKE_SOURCE_DIR}/tests)
 endif()
 
 if(HERMES_TESTS)
+  target_compile_definitions(${PROJECT_NAME} PRIVATE HERMES_TEST_ENERGY_SOURCES)
   enable_testing()
 
   if(BOUT_ENABLE_METRIC_3D)
@@ -426,7 +427,7 @@ if(HERMES_TESTS)
                                WORKING_DIRECTORY "${ENERGY_TEST_DEST}")
     endfunction()
     if(HERMES_COPY_TESTS_TO_BUILD)
-      foreach(ENERGY_SHARED_FILE ion_energy_balance.py
+      foreach(ENERGY_SHARED_FILE ion_energy_balance.py ion_energy_flux_test.py
                                  ion-energy-analysis-plan.md)
         configure_file(
           "${CMAKE_CURRENT_SOURCE_DIR}/tests/integrated/${ENERGY_SHARED_FILE}"
@@ -452,6 +453,11 @@ if(HERMES_TESTS)
     hermes_add_ion_energy_test(2D-ion-energy-equilibrium)
     hermes_add_ion_energy_test(2D-ion-energy-curvature)
     hermes_add_ion_energy_test(2D-ion-energy-multispecies)
+    hermes_add_ion_energy_test(2D-ion-energy-fluxes)
+    hermes_add_ion_energy_test(2D-ion-energy-heating)
+    hermes_add_ion_energy_test(2D-ion-energy-sources)
+    hermes_add_ion_energy_test(2D-ion-energy-parallel)
+    hermes_add_ion_energy_test(2D-ion-energy-boundary)
     add_test(
       NAME energy-analysis-python
       COMMAND

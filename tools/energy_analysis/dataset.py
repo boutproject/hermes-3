@@ -186,10 +186,18 @@ def open_run(source, *, species=None, chunks=None):
                 f"Unknown normalisation for {name}; use xhermes annotated fields"
             )
     metadata = ds.attrs.get("metadata", {})
-    if metadata.get("topology") or metadata.get(
-        "ixseps1", ds.sizes["x"]
-    ) < metadata.get("nx", ds.sizes["x"]):
-        raise AuditError("Tokamak boundary masks are not implemented in stage one")
+    rectangle = (
+        metadata.get("ixseps1") == 0
+        and metadata.get("ixseps2") == 0
+        and metadata.get("jyseps1_1") == -1
+        and metadata.get("jyseps2_2") == metadata.get("ny", 0) - 1
+        and not metadata.get("topology")
+    )
+    if not rectangle and (
+        metadata.get("topology")
+        or metadata.get("ixseps1", ds.sizes["x"]) < metadata.get("nx", ds.sizes["x"])
+    ):
+        raise AuditError("Tokamak boundary masks are not implemented")
     options = ds.attrs.get("options")
     if options is None:
         raise AuditError("Model/boundary reconstruction requires bd.options")

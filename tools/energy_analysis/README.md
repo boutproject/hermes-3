@@ -1,4 +1,4 @@
-# Energy inventory and closed-slab balance analysis
+# Independent ion-energy inventory and power balance analysis
 
 Independent inventory auditing for `evolve_vorticity_ion_energy`, multiple ions
 and a common ion temperature. Calculations use the C++ finite-volume face and
@@ -67,9 +67,10 @@ spaced, then uses cumulative trapezoidal integration. It returns cumulative and
 interval residuals, the reference energy and supplied power provenance. The
 first interval residual is undefined (NaN, represented as null in JSON).
 It requires explicit source and outward powers in watts for a complete residual;
-`reservoir` selects an inventory field and defaults to `plasma_saved`. General
-CLI reports only inventories and an incomplete balance until these
-contributions are supplied. The equilibrium test uses analytically zero powers
+`reservoir` selects an inventory field and defaults to `plasma_saved`. The default CLI reports inventories and an incomplete balance. `--fluxes`
+adds supported snapshot fluxes, and `--sources FILE` supplies an explicit SI
+source manifest for complete supported balances. Missing sources or unsupported
+geometry leave coverage explicitly incomplete. The equilibrium test uses analytically zero powers
 and verifies its uniform, source-free, no-flow assumptions.
 
 `electron_curvature_work` reconstructs `-Pe*Curlb_B.z*DDZ(phi)` from snapshots,
@@ -80,7 +81,7 @@ rechunks complete Z lines while retaining lazy time/Y calculations. Use
 `integrated_power` to convert a normalised energy RHS density to watts.
 `polarisation_energy_coefficient` independently reconstructs multispecies
 `E_adv`, including kinetic energy and the actual mass-density denominator;
-its flux reconstruction is still pending.
+`reconstruct_fluxes` applies this coefficient to the common polarisation flux.
 
 ## Integrated tests
 
@@ -106,8 +107,8 @@ results with input hashes, run logs, exit status and machine-readable assertions
 `cadence_comparison` requires nested saved times at the same duration and
 estimates both fine trapezoidal sampling error and the remaining residual by
 second-order extrapolation. A third cadence checks the smooth-power assumption.
-General source, open-boundary and flux reconstruction remain in the
-[delivery plan](../../tests/integrated/ion-energy-analysis-plan.md).
+Broader geometry, open electron momentum, sheath, conduction and reaction
+coverage remain in the [delivery plan](../../tests/integrated/ion-energy-analysis-plan.md).
 The original [2D-energy](../../tests/integrated/2D-energy/README.md) remains the
 separate `vorticity`/`evolve_pressure` interchange test.
 
@@ -120,3 +121,103 @@ for each component instance. C++ regressions cover fresh startup and multiple
 instances, and the tightly solved integrated cases pass all records. Potential
 recovery still has a finite iteration tolerance, so diagnostic comparisons use
 explicit tolerances rather than assuming exact equality.
+
+## Stage-three flux and source audits
+
+Five independent directories provide the next budget tests:
+
+| Test and CTest name | Physical coverage |
+| --- | --- |
+| [2D-ion-energy-fluxes](../../tests/integrated/2D-ion-energy-fluxes/README.md) | Driven unequal-ion ExB/Reynolds/electric/polarisation fluxes, sparse solve, species partition, regional Gauss budgets |
+| [2D-ion-energy-heating](../../tests/integrated/2D-ion-energy-heating/README.md) | Known electron pressure source with thermal 3/2 conversion |
+| [2D-ion-energy-sources](../../tests/integrated/2D-ion-energy-sources/README.md) | Analytic particle injection/removal, momentum forcing and thermal deposition |
+| [2D-ion-energy-parallel](../../tests/integrated/2D-ion-energy-parallel/README.md) | Evolved electron inertia, pressure work, parallel MC transport and a quantified numerical-heating defect |
+| [2D-ion-energy-boundary](../../tests/integrated/2D-ion-energy-boundary/README.md) | Open rectangular Y, imposed ion velocity, enthalpy/kinetic and electric boundary powers |
+
+The new runners share `ion_energy_flux_test.py` and use the same input/log/report
+contract as the closed tests. Supported operators live in `transport.py` and
+`fluxes.py`. The current complete flux path requires saved uniform orthogonal
+metrics (`g13=g23=g_23=0`), simple periodic or all-open rectangular Y topology,
+identity transform, unfiltered FFT Z, C2 parallel work derivatives and MC
+parallel limiting. It rejects unsupported components and dissipation explicitly.
+This restriction does not narrow the nonuniform/nonorthogonal inventory and
+Kperp operator support. Flux reconstruction additionally needs saved `g_22`,
+`g23`, `g_23`, and any flowing electron closure momentum/velocity.
+
+```python
+from energy_analysis import (
+    open_run,
+    PrescribedSources,
+    reconstruct_fluxes,
+    reconstruct_sources,
+    compare_flux_diagnostics,
+    flux_power,
+)
+
+run = open_run("RUN_DIRECTORY")
+# Fill from known external rates; each species, including e, needs an entry.
+zero = {s.name: 0 for s in run.species}
+sources = PrescribedSources(zero, zero, zero, "validated source-free input")
+fluxes = reconstruct_fluxes(run, sources=sources)
+checks = compare_flux_diagnostics(run, fluxes)
+ion_parallel_outward_W = flux_power(run, fluxes, "DivEparallel")
+```
+
+`PrescribedSources` carries thermal [W/m³], density [m⁻³/s] and momentum
+[N/m³] rates plus provenance. Scalar rates or labelled fields on normalised
+run coordinates are accepted; all species require explicit entries. Total ion
+source power includes thermal plus `v*Sm - A*v²*Sn/2`. Polarisation sources are
+internal transport and are excluded. The source fixture uses a small component
+compiled only with `HERMES_TESTS`, exposing scalar SI settings and no extra
+production arrays. General spatial sources cannot be inferred from resolved
+`<Field3D>` options; provide their known definitions rather than assuming zero.
+
+Returned `*_flux_x/y/z` fields are **already integrated over a cell face**, in
+normalised units, oriented towards increasing coordinate and indexed by the
+lower-side cell. `flux_power` converts net outward faces to W, including explicit
+contiguous subvolume slices such as `selection={"x": slice(2, 10)}`. No extra
+area factor is applied. Energy faces are labelled `quantity=energy`;
+`net_face_flux` returns normalised net currents or species fluxes, which
+`flux_power` rejects to prevent labelling a current as watts. The spectral electrical Z divergence has an exact face
+antiderivative with an arbitrary periodic constant-flux gauge; selected-volume
+balances are independent of that gauge. Outer guard results are undefined.
+
+The polarisation inverse is independently assembled as a sparse finite-volume
+matrix. It uses a gauge for periodic X, or homogeneous half-face Dirichlet for
+nonperiodic X; subsequent transport guards follow BOUT's Neumann rule. It is
+lazy across time/Y, with complete local X-Z solve planes. Diagnostic comparison
+removes the free inversion gauge and reports both field and integrated errors.
+The MC operators weight the common flux after limiting, so species charge
+fluxes sum even with spatially varying composition.
+
+For compact CLI reports:
+
+```sh
+PYTHONPATH=tools .venv/bin/python -m energy_analysis RUN_DIRECTORY --fluxes --json flux-report.json
+PYTHONPATH=tools .venv/bin/python -m energy_analysis RUN_DIRECTORY --sources prescribed-sources.json --json balance-report.json
+```
+
+The source JSON has `thermal`, `density`, `momentum` dictionaries keyed by every
+species and a `provenance` string, matching `PrescribedSources`. `flux_report`
+keeps scalar ion/plasma histories, Gauss errors and diagnostic comparisons.
+Unsupported electron kinetic ExB/open-boundary contributions leave the plasma
+balance incomplete. A complete balance describes term coverage, not a claim
+that its residual is zero.
+
+## Tracked formulation/discretisation findings
+
+- XPPM closes the periodic radial seam when `bndry_flux=false`; current
+  reconstruction matches it. Global conservation does not validate seam fidelity.
+- BOUT's Reynolds `Div_a_Grad_perp` skips its Z term when `MYG=0`; the new
+  driven-flux input retains Y guards and exercises it. Reconstruction matches
+  the implemented omission for replaying older singleton-Y inputs.
+- BOUT's parallel numerical viscous heating uses twice the required wave-speed
+  coefficient relative to the split particle/momentum flux. The new electron
+  case retains its raw nonconserving plasma residual and independently predicts
+  the excess power with `numerical_heating_defect`. A separate `1e-8` relative
+  defect-accounted gate validates the reconstruction, while the report explicitly
+  marks raw plasma conservation false. The BOUT implementation is unchanged.
+
+The last finding means the electron parallel case is a regression/audit of a
+known defect. Its README explains the coefficient identity and the meaning of
+its pass criteria; it is not a source-free conservation gate.

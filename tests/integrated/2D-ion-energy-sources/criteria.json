@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "duration_normalised": 120,
+  "cadences_normalised": [
+    6,
+    3,
+    1.5
+  ],
+  "sources": {
+    "thermal": {
+      "e": 0,
+      "d+": 10000.0,
+      "impurity": 5000.0
+    },
+    "density": {
+      "e": 0,
+      "d+": 6.7e+22,
+      "impurity": -3.35e+22
+    },
+    "momentum": {
+      "e": 0,
+      "d+": 1,
+      "impurity": -0.5
+    },
+    "provenance": "prescribed SI constants; validated input and component whitelist"
+  },
+  "minimum_signals": {
+    "Eion_src": 1e-05
+  },
+  "tolerances": {
+    "partition_absolute": 1e-09,
+    "forward_absolute": 1e-09,
+    "diagnostic_absolute": 1e-10,
+    "gauss_absolute": 1e-10,
+    "balance_relative": 1e-06,
+    "regional_balance_relative": 2e-06,
+    "history_relative": 1e-09,
+    "history_absolute": 1e-10,
+    "maximum_sampling_relative": 1e-06,
+    "maximum_sampling_refinement_ratio": 0.5
+  },
+  "case": {
+    "name": "sources",
+    "components": {
+      "e": "quasineutral, evolve_pressure, zero_current",
+      "d+": "evolve_density, evolve_momentum, test_energy_sources",
+      "impurity": "evolve_density, evolve_momentum, test_energy_sources"
+    },
+    "diagnostic_components": [
+      "e",
+      "d+",
+      "impurity",
+      "evolve_vorticity_ion_energy"
+    ]
+  }
+}
