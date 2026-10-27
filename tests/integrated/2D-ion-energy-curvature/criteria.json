@@ -19,35 +19,26 @@
   },
   "tolerances": {
     "partition_absolute_normalised": 1e-10,
-    "forward_absolute_normalised": 1e-9,
+    "forward_absolute_normalised": 1e-09,
     "diagnostic_absolute_normalised": 1e-10,
     "plasma_relative_residual": 1e-10,
-    "electron_relative_residual": 5e-9,
-    "history_relative": 1e-9,
+    "electron_relative_residual": 5e-09,
+    "history_relative": 1e-09,
     "history_absolute_normalised": 1e-11,
-    "minimum_exchange_relative": 0.000002,
-    "minimum_perpendicular_relative": 0.00001,
+    "minimum_exchange_relative": 2e-06,
+    "minimum_perpendicular_relative": 1e-05,
     "maximum_refinement_error_ratio": 0.45
   },
-  "cases": [
-    {
-      "name": "curvature",
-      "species": [
-        "e",
-        "h+"
-      ],
-      "diagnostic_components": ["e", "evolve_vorticity_ion_energy"],
-      "minimum_parallel_relative": 0
-    },
-    {
-      "name": "two-ion",
-      "species": [
-        "e",
-        "d+",
-        "impurity"
-      ],
-      "diagnostic_components": ["e", "d+", "impurity", "evolve_vorticity_ion_energy"],
-      "minimum_parallel_relative": 0.001
-    }
-  ]
+  "case": {
+    "name": "curvature",
+    "species": [
+      "e",
+      "h+"
+    ],
+    "diagnostic_components": [
+      "e",
+      "evolve_vorticity_ion_energy"
+    ],
+    "minimum_parallel_relative": 0
+  }
 }

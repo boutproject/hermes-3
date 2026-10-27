@@ -401,30 +401,46 @@ if(HERMES_TESTS)
       "${CMAKE_CURRENT_SOURCE_DIR}/.venv/bin/python"
       CACHE FILEPATH "Python interpreter for energy inventory analysis")
   if(EXISTS "${HERMES_ENERGY_PYTHON}" AND NOT BOUT_ENABLE_METRIC_3D)
-    set(ENERGY_TEST_SRC
-        "${CMAKE_CURRENT_SOURCE_DIR}/tests/integrated/2D-energy")
-    set(ENERGY_TEST_DEST "${ENERGY_TEST_SRC}")
+    # Each ion-energy case owns its inputs, criteria, README and entry point.
+    # The driven cases share the audit implementation, not their test identity.
+    function(hermes_add_ion_energy_test TESTNAME)
+      set(ENERGY_TEST_SRC
+          "${CMAKE_CURRENT_SOURCE_DIR}/tests/integrated/${TESTNAME}")
+      set(ENERGY_TEST_DEST "${ENERGY_TEST_SRC}")
+      if(HERMES_COPY_TESTS_TO_BUILD)
+        set(ENERGY_TEST_DEST
+            "${CMAKE_CURRENT_BINARY_DIR}/tests/integrated/${TESTNAME}")
+        foreach(ENERGY_FILE runtest README.md data/BOUT.inp criteria.json
+                            analysis.py reference/BOUT.inp)
+          if(EXISTS "${ENERGY_TEST_SRC}/${ENERGY_FILE}")
+            configure_file("${ENERGY_TEST_SRC}/${ENERGY_FILE}"
+                           "${ENERGY_TEST_DEST}/${ENERGY_FILE}" COPYONLY)
+          endif()
+        endforeach()
+      endif()
+      add_test(NAME ${TESTNAME}
+               COMMAND "${HERMES_ENERGY_PYTHON}" "${ENERGY_TEST_DEST}/runtest"
+                       --exe $<TARGET_FILE:${PROJECT_NAME}>)
+      set_tests_properties(
+        ${TESTNAME} PROPERTIES LABELS "integration;energy" TIMEOUT 300
+                               WORKING_DIRECTORY "${ENERGY_TEST_DEST}")
+    endfunction()
     if(HERMES_COPY_TESTS_TO_BUILD)
-      set(ENERGY_TEST_DEST
-          "${CMAKE_CURRENT_BINARY_DIR}/tests/integrated/2D-energy")
-      configure_file("${ENERGY_TEST_SRC}/runtest-inventory"
-                     "${ENERGY_TEST_DEST}/runtest-inventory" COPYONLY)
-      configure_file("${ENERGY_TEST_SRC}/runtest-balance"
-                     "${ENERGY_TEST_DEST}/runtest-balance" COPYONLY)
-      configure_file("${ENERGY_TEST_SRC}/balance-cases.json"
-                     "${ENERGY_TEST_DEST}/balance-cases.json" COPYONLY)
-      foreach(ENERGY_CASE curvature two-ion)
+      foreach(ENERGY_SHARED_FILE ion_energy_balance.py
+                                 ion-energy-analysis-plan.md)
         configure_file(
-          "${ENERGY_TEST_SRC}/balance-${ENERGY_CASE}/BOUT.inp"
-          "${ENERGY_TEST_DEST}/balance-${ENERGY_CASE}/BOUT.inp" COPYONLY)
+          "${CMAKE_CURRENT_SOURCE_DIR}/tests/integrated/${ENERGY_SHARED_FILE}"
+          "${CMAKE_CURRENT_BINARY_DIR}/tests/integrated/${ENERGY_SHARED_FILE}"
+          COPYONLY)
       endforeach()
       configure_file(
-        "${ENERGY_TEST_SRC}/inventory-equilibrium/BOUT.inp"
-        "${ENERGY_TEST_DEST}/inventory-equilibrium/BOUT.inp" COPYONLY)
-      configure_file("${ENERGY_TEST_SRC}/analysis.py"
-                     "${ENERGY_TEST_DEST}/analysis.py" COPYONLY)
+        "${CMAKE_CURRENT_SOURCE_DIR}/tests/integrated/2D-energy/README.md"
+        "${CMAKE_CURRENT_BINARY_DIR}/tests/integrated/2D-energy/README.md"
+        COPYONLY)
       file(GLOB ENERGY_ANALYSIS_SOURCES CONFIGURE_DEPENDS
            "${CMAKE_CURRENT_SOURCE_DIR}/tools/energy_analysis/*.py")
+      list(APPEND ENERGY_ANALYSIS_SOURCES
+           "${CMAKE_CURRENT_SOURCE_DIR}/tools/energy_analysis/README.md")
       foreach(ENERGY_SOURCE IN LISTS ENERGY_ANALYSIS_SOURCES)
         get_filename_component(ENERGY_FILENAME "${ENERGY_SOURCE}" NAME)
         configure_file(
@@ -433,20 +449,9 @@ if(HERMES_TESTS)
           COPYONLY)
       endforeach()
     endif()
-    add_test(
-      NAME 2D-energy-inventory
-      COMMAND "${HERMES_ENERGY_PYTHON}" "${ENERGY_TEST_DEST}/runtest-inventory"
-              --exe $<TARGET_FILE:${PROJECT_NAME}>)
-    set_tests_properties(
-      2D-energy-inventory PROPERTIES LABELS "integration;energy" TIMEOUT 300
-                                     WORKING_DIRECTORY "${ENERGY_TEST_DEST}")
-    add_test(
-      NAME 2D-energy-balance
-      COMMAND "${HERMES_ENERGY_PYTHON}" "${ENERGY_TEST_DEST}/runtest-balance"
-              --exe $<TARGET_FILE:${PROJECT_NAME}> --profile ci)
-    set_tests_properties(
-      2D-energy-balance PROPERTIES LABELS "integration;energy" TIMEOUT 600
-                                   WORKING_DIRECTORY "${ENERGY_TEST_DEST}")
+    hermes_add_ion_energy_test(2D-ion-energy-equilibrium)
+    hermes_add_ion_energy_test(2D-ion-energy-curvature)
+    hermes_add_ion_energy_test(2D-ion-energy-multispecies)
     add_test(
       NAME energy-analysis-python
       COMMAND

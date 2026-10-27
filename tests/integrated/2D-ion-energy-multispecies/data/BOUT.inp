@@ -1,4 +1,4 @@
-# Closed source-free slab; output cadence is overridden by runtest-balance.
+# Closed source-free slab; output cadence is overridden by runtest.
 periodicX = true
 MYG = 2
 nout = 40

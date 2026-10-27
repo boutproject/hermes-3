@@ -1,4 +1,4 @@
-"""Run closed curvature/two-ion balances, diagnostics pairs and cadence refinement."""
+"""Shared audits for the independently runnable total-ion-energy slab tests."""
 
 import argparse
 import hashlib
@@ -14,7 +14,7 @@ import numpy as np
 import xarray as xr
 from boutdata.data import BoutOptionsFile
 
-ROOT = Path(__file__).resolve().parents[3]
+ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools"))
 
 from energy_analysis import (
@@ -344,8 +344,10 @@ def execute(executable, folder, fixture, case, cadence, duration, diagnose, time
     require(process.returncode == 0, f"Simulation failed: {folder / 'run.log'}")
 
 
-def main():
-    parser = argparse.ArgumentParser(description=__doc__)
+def main(inputs):
+    parser = argparse.ArgumentParser(
+        description=f"Run the {inputs.name} energy-balance test."
+    )
     parser.add_argument("--exe", type=Path)
     parser.add_argument("--output-root", type=Path)
     parser.add_argument("--timeout", type=int, default=120)
@@ -355,10 +357,9 @@ def main():
     executable = args.exe or next((p for p in candidates if p.is_file()), None)
     require(executable is not None, "Specify the built Hermes executable with --exe")
     executable = executable.resolve()
-    output = Path(tempfile.mkdtemp(prefix="ion-energy-balance-", dir=args.output_root))
+    output = Path(tempfile.mkdtemp(prefix=inputs.name + "-", dir=args.output_root))
     print(f"Results: {output}", flush=True)
-    inputs = Path(__file__).parent
-    manifest = json.loads((inputs / "balance-cases.json").read_text())
+    manifest = json.loads((inputs / "criteria.json").read_text())
     tol = manifest["tolerances"]
     summary = {
         "profile": args.profile,
@@ -367,148 +368,135 @@ def main():
         "passed": False,
     }
     write_json(output / "result.json", summary)
-    for case in manifest["cases"]:
-        fixture = inputs / ("balance-" + case["name"]) / "BOUT.inp"
-        validate_input(fixture, case)
-        cadences = manifest["cadences_normalised"]
-        if args.profile == "smoke":
-            cadences = cadences[-2:]
-        runs, budgets, reports, inventories = {}, {}, {}, {}
-        for cadence, diagnose in [
-            *((c, True) for c in cadences),
-            (cadences[-1], False),
-        ]:
-            label = f"{case['name']}-dt{cadence}-diagnose-{'on' if diagnose else 'off'}"
-            folder = output / label
-            print(f"Running {label}", flush=True)
-            execute(
-                executable,
-                folder,
-                fixture,
-                case,
-                cadence,
-                manifest["duration_normalised"],
-                diagnose,
-                args.timeout,
-            )
-            run = open_run(folder)
-            # These bounded fixtures fit in memory; reusable operators stay lazy.
-            run.data = run.data.load()
-            report, inventory, budget = audit(run, manifest, case, diagnose)
-            write_json(folder / "energy-report.json", report)
-            require(
-                report["passed"],
-                f"Failed assertions {[k for k, v in report['assertions'].items() if not v]}: {folder / 'energy-report.json'}",
-            )
-            runs[cadence, diagnose], reports[cadence, diagnose] = run, report
-            inventories[cadence, diagnose], budgets[cadence, diagnose] = (
-                inventory,
-                budget,
-            )
-        fine = cadences[-1]
-        enabled, disabled = runs[fine, True], runs[fine, False]
-        for name in (
-            "Pe",
-            "Eion",
-            "Tion",
-            "phi",
-            "Vort",
-            *["N" + s.name for s in enabled.species],
-            *[
-                "NV" + s.name
-                for s in enabled.species
-                if "evolve_momentum" in s.components
-            ],
-        ):
-            xr.testing.assert_allclose(
-                enabled.data[name],
-                disabled.data[name],
-                rtol=tol["history_relative"],
-                atol=tol["history_absolute_normalised"],
-            )
-        xr.testing.assert_allclose(
-            inventories[fine, True],
-            inventories[fine, False],
-            rtol=tol["history_relative"],
-            atol=1e-14,
+    case = manifest["case"]
+    fixture = inputs / "data/BOUT.inp"
+    validate_input(fixture, case)
+    cadences = manifest["cadences_normalised"]
+    if args.profile == "smoke":
+        cadences = cadences[-2:]
+    runs, budgets, reports, inventories = {}, {}, {}, {}
+    for cadence, diagnose in [
+        *((c, True) for c in cadences),
+        (cadences[-1], False),
+    ]:
+        label = f"{case['name']}-dt{cadence}-diagnose-{'on' if diagnose else 'off'}"
+        folder = output / label
+        print(f"Running {label}", flush=True)
+        execute(
+            executable,
+            folder,
+            fixture,
+            case,
+            cadence,
+            manifest["duration_normalised"],
+            diagnose,
+            args.timeout,
         )
-        essential = {
-            "Eion",
-            "Pe",
-            "Tion",
-            "phi",
-            "Vort",
-            *["N" + s.name for s in enabled.species],
-            *[
-                "NV" + s.name
-                for s in enabled.species
-                if "evolve_momentum" in s.components
-            ],
-        }
-        stripped = enabled.data.drop_vars(
-            [
-                name
-                for name in enabled.data.data_vars
-                if "t" in enabled.data[name].dims and name not in essential
-            ]
-        )
-        stripped_run = open_run(stripped)
-        xr.testing.assert_allclose(
-            energy_inventory(stripped_run), inventories[fine, True]
-        )
-        xr.testing.assert_allclose(
-            integrated_power(stripped_run, electron_curvature_work(stripped_run)),
-            integrated_power(enabled, electron_curvature_work(enabled)),
-        )
-        refinement = [
-            cadence_comparison(budgets[c, True], budgets[f, True])
-            for c, f in pairwise(cadences)
-        ]
-        checks = {"diagnostics_independent": True, "optional_fields_stripped": True}
-        for c, f, comparison in zip(
-            cadences[:-1], cadences[1:], refinement, strict=True
-        ):
-            coarse, finer = reports[c, True]["metrics"], reports[f, True]["metrics"]
-            # Independent runs must match physical histories at shared times.
-            stride = comparison["refinement_ratio"]
-            xr.testing.assert_allclose(
-                inventories[c, True],
-                inventories[f, True].isel(t=slice(None, None, stride)),
-                rtol=1e-7,
-                atol=1e-12,
-            )
-            checks[f"cadence_convergence_{c}_to_{f}"] = (
-                finer["electron_max_residual_over_plasma_energy"]
-                < tol["maximum_refinement_error_ratio"]
-                * coarse["electron_max_residual_over_plasma_energy"]
-            )
-        summary["cases"][case["name"]] = {
-            "assertions": checks,
-            "cadence_refinement": refinement,
-            "runs": [
-                str(output / f"{case['name']}-dt{c}-diagnose-{'on' if d else 'off'}")
-                for c, d in reports
-            ],
-            "metrics": {
-                f"dt{c}-{'on' if d else 'off'}": r["metrics"]
-                for (c, d), r in reports.items()
-            },
-        }
-        write_json(output / "result.json", summary)
+        run = open_run(folder)
+        # These bounded fixtures fit in memory; reusable operators stay lazy.
+        run.data = run.data.load()
+        report, inventory, budget = audit(run, manifest, case, diagnose)
+        write_json(folder / "energy-report.json", report)
         require(
-            all(checks.values()), f"Cadence comparison failed: {output / 'result.json'}"
+            report["passed"],
+            f"Failed assertions {[k for k, v in report['assertions'].items() if not v]}: {folder / 'energy-report.json'}",
         )
+        runs[cadence, diagnose], reports[cadence, diagnose] = run, report
+        inventories[cadence, diagnose], budgets[cadence, diagnose] = (
+            inventory,
+            budget,
+        )
+    fine = cadences[-1]
+    enabled, disabled = runs[fine, True], runs[fine, False]
+    for name in (
+        "Pe",
+        "Eion",
+        "Tion",
+        "phi",
+        "Vort",
+        *["N" + s.name for s in enabled.species],
+        *["NV" + s.name for s in enabled.species if "evolve_momentum" in s.components],
+    ):
+        xr.testing.assert_allclose(
+            enabled.data[name],
+            disabled.data[name],
+            rtol=tol["history_relative"],
+            atol=tol["history_absolute_normalised"],
+        )
+    xr.testing.assert_allclose(
+        inventories[fine, True],
+        inventories[fine, False],
+        rtol=tol["history_relative"],
+        atol=1e-14,
+    )
+    essential = {
+        "Eion",
+        "Pe",
+        "Tion",
+        "phi",
+        "Vort",
+        *["N" + s.name for s in enabled.species],
+        *["NV" + s.name for s in enabled.species if "evolve_momentum" in s.components],
+    }
+    stripped = enabled.data.drop_vars(
+        [
+            name
+            for name in enabled.data.data_vars
+            if "t" in enabled.data[name].dims and name not in essential
+        ]
+    )
+    stripped_run = open_run(stripped)
+    xr.testing.assert_allclose(energy_inventory(stripped_run), inventories[fine, True])
+    xr.testing.assert_allclose(
+        integrated_power(stripped_run, electron_curvature_work(stripped_run)),
+        integrated_power(enabled, electron_curvature_work(enabled)),
+    )
+    refinement = [
+        cadence_comparison(budgets[c, True], budgets[f, True])
+        for c, f in pairwise(cadences)
+    ]
+    checks = {"diagnostics_independent": True, "optional_fields_stripped": True}
+    for c, f, comparison in zip(cadences[:-1], cadences[1:], refinement, strict=True):
+        coarse, finer = reports[c, True]["metrics"], reports[f, True]["metrics"]
+        # Independent runs must match physical histories at shared times.
+        stride = comparison["refinement_ratio"]
+        xr.testing.assert_allclose(
+            inventories[c, True],
+            inventories[f, True].isel(t=slice(None, None, stride)),
+            rtol=1e-7,
+            atol=1e-12,
+        )
+        checks[f"cadence_convergence_{c}_to_{f}"] = (
+            finer["electron_max_residual_over_plasma_energy"]
+            < tol["maximum_refinement_error_ratio"]
+            * coarse["electron_max_residual_over_plasma_energy"]
+        )
+    summary["cases"][case["name"]] = {
+        "assertions": checks,
+        "cadence_refinement": refinement,
+        "runs": [
+            str(output / f"{case['name']}-dt{c}-diagnose-{'on' if d else 'off'}")
+            for c, d in reports
+        ],
+        "metrics": {
+            f"dt{c}-{'on' if d else 'off'}": r["metrics"]
+            for (c, d), r in reports.items()
+        },
+    }
+    write_json(output / "result.json", summary)
+    require(
+        all(checks.values()), f"Cadence comparison failed: {output / 'result.json'}"
+    )
     summary["passed"] = True
     write_json(output / "result.json", summary)
-    print(
-        "Closed energy balances passed (curvature, two ions, diagnostics pairs and cadence refinement)"
-    )
+    print(f"{inputs.name} passed (diagnostics pairs and cadence refinement)")
     return 0
 
 
-if __name__ == "__main__":
+def run_test(inputs):
+    """Entry point for a test directory containing data/BOUT.inp and criteria.json."""
     try:
-        raise SystemExit(main())
+        return main(inputs)
     except (AuditError, AssertionError) as error:
         print(f"Energy integration test failed: {error}", file=sys.stderr)
-        raise SystemExit(1)
+        return 1

@@ -1,22 +1,5 @@
 # 2D energy test
 
-The planned reusable analysis module and total ion energy integrated tests are
-described in [energy-analysis-plan.md](energy-analysis-plan.md).
-
-The first implemented inventory test runs a uniform two-ion equilibrium with
-diagnostics enabled and disabled, and strips optional fields from the enabled
-output to check diagnostic independence:
-
-```sh
-# From the repository root, using the editable xhermes environment
-.venv/bin/python tests/integrated/2D-energy/runtest-inventory --exe build/hermes-3
-```
-
-It is registered with CTest as `2D-energy-inventory`; the original `runtest`
-below retains the pressure-model checks. See
-[the module README](../../../tools/energy_analysis/README.md) for analysis
-commands and supported data contracts.
-
 Evolves vorticity, electron density, and electron and ion pressure in a 2D
 (32 x 32) X-Z box with magnetic curvature. Includes kinematic viscosity and the
 ion polarisation compression term. There is no parallel dynamics (`ny = 1`,
@@ -128,7 +111,7 @@ less than that of the ions.
 
 The following terms are present in this test as configured and are not expected
 to conserve energy exactly. Measuring them is the purpose of the energy budget
-diagnostics (see the plan in `energy-budget-plan.md`).
+diagnostics; the current runner checks only pressure-change signs.
 
 1. **Simplified Reynolds stress.** `exb_advection_simplified` defaults to `true`,
    which advects $\omega$ with $\mathbf{v}_E$ only. With
@@ -165,35 +148,14 @@ It is planned to replace that check with quantitative criteria:
 3. The electron thermal energy falls and the ion thermal energy rises (retained).
 4. Ion entropy increases (monitored, not asserted).
 
-The test is very low resolution, so it does not check convergence. A companion
-test, `2D-energy-budget`, runs a resolution and option matrix to measure each
-non-conservative term.
+The test is very low resolution, so it does not check convergence.
 
-## Ion total energy variant
+## Separate total-ion-energy tests
 
-`data-Eion` uses `evolve_vorticity_ion_energy` to evolve the aggregate ion
-energy and recover a common ion temperature. Electrons use `evolve_pressure`.
-All `energy_source` fields supply thermal energy; the ion component adds the
-kinetic energy changes associated with external particle and momentum sources.
-The electron thermal source receives ExB compression work
-`-Jdia_e dot Grad(phi)`. Parallel electron electrical work belongs to the
-electron momentum equation.
+This test uses `vorticity`, `evolve_pressure` for both species, and
+`polarisation_drift`. Tests of the aggregate `evolve_vorticity_ion_energy`
+formulation have their own inputs, runners and power-balance explanations:
 
-For several ions, the polarisation current is distributed by the actual mass
-fractions `A_s n_s / sum(A_s n_s)`. The resulting particle and momentum
-advection is included in the species sources, and its energy transport is
-included once in the aggregate energy flux.
-
-Potential recovery uses the Laplacian solver as an approximate inverse and
-iterates on the residual of `Div_a_Grad_perp_XZ(c, phi + psi)`. This finite-volume
-operator and the perpendicular kinetic energy use the same face fluxes,
-including `g13`. `phi_max_iterations` defaults to 100; convergence checks both
-potential changes and the forward vorticity residual, with relative tolerance
-`phi_rtol` and absolute residual tolerance `vort_atol` (normalised units).
-Failure to converge raises an exception.
-
-The unit tests check integration by parts, including radial boundary work,
-operator symmetry on a nonuniform mesh, and a Fourier mode with nonzero `g13`.
-They also check the finite-volume inversion, species polarisation transport,
-and electron thermal-source convention. These checks do not establish global
-energy conservation for the full model.
+- [Uniform equilibrium](../2D-ion-energy-equilibrium/README.md).
+- [Curvature exchange](../2D-ion-energy-curvature/README.md).
+- [Unequal-mass/charge ion mixture](../2D-ion-energy-multispecies/README.md).

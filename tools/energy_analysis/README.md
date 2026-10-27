@@ -8,18 +8,20 @@ Use the workspace `.venv` with editable xhermes:
 
 ```sh
 uv pip install --python .venv/bin/python -e external/xhermes -r tools/energy_analysis/requirements.txt
-.venv/bin/python tests/integrated/2D-energy/analysis.py RUN_DIRECTORY --json energy-report.json
+.venv/bin/python tests/integrated/2D-ion-energy-curvature/analysis.py RUN_DIRECTORY --json energy-report.json
 .venv/bin/python -m pytest -q tests/python external/xhermes/tests/test_energy_loading.py
-.venv/bin/python tests/integrated/2D-energy/runtest-inventory --exe build/hermes-3
-.venv/bin/python tests/integrated/2D-energy/runtest-balance --exe build/hermes-3 --profile ci
+.venv/bin/python tests/integrated/2D-ion-energy-equilibrium/runtest --exe build/hermes-3
+.venv/bin/python tests/integrated/2D-ion-energy-curvature/runtest --exe build/hermes-3
+.venv/bin/python tests/integrated/2D-ion-energy-multispecies/runtest --exe build/hermes-3
 ```
 
 The runner creates a new temporary directory and prints its location. It keeps
 inputs, simulation logs, exit status and JSON reports. Use `--output-root` to
 select an existing parent directory. Source-tree and build-tree execution are
 supported; CTest uses `HERMES_ENERGY_PYTHON` (default `.venv/bin/python`) and
-registers `2D-energy-inventory`, `2D-energy-balance` and `energy-analysis-python`. MPI must be able to
-initialise its local transport even for the single-process equilibrium test.
+registers each ion-energy directory as a separate CTest, plus
+`energy-analysis-python`. MPI must be able to initialise its local transport
+even for the single-process equilibrium test.
 
 For Python use, add `tools` to the import path and call:
 
@@ -70,16 +72,6 @@ CLI reports only inventories and an incomplete balance until these
 contributions are supplied. The equilibrium test uses analytically zero powers
 and verifies its uniform, source-free, no-flow assumptions.
 
-Stage two adds `balance-curvature` and `balance-two-ion`, with fixed duration
-120 in normalised time and actual runs at output intervals 12, 6 and 3. Both
-have periodic X/Z, periodic core Y connections, identity transformation and
-Y-uniform fields. The mixture has unequal masses/charges, varying composition
-and opposite ion flows. Inputs prescribe zero pressure/density sources; a
-component whitelist excludes unaccounted heating/momentum sources. Saved
-topology, periodic X halos, Y uniformity and disabled dissipation are checked
-before supplying zero external and outward powers. Detailed flux fidelity is
-left to stage three.
-
 `electron_curvature_work` reconstructs `-Pe*Curlb_B.z*DDZ(phi)` from snapshots,
 using scalar analytic curvature, saved normalisations and uniform saved `dz`.
 It supports explicit, unfiltered FFT DDZ; it rejects grid-file curvature and
@@ -90,38 +82,34 @@ rechunks complete Z lines while retaining lazy time/Y calculations. Use
 `E_adv`, including kinetic energy and the actual mass-density denominator;
 its flux reconstruction is still pending.
 
-The runner checks electron thermal change against integrated reconstructed
-curvature work, and plasma change against the known closed/source-free budget.
-Enabled runs also compare `electron_exb_work` pointwise, `phi_Div_Je` after
-integration, kinetic/pressure diagnostics, zero external sources and zero
-integrated energy-flux divergences. The finest cadence has an actual diagnostics
-on/off pair; their state and inventory histories must agree. Removing all
-optional time-dependent outputs from the enabled dataset must preserve both
-inventories and exchange reconstruction.
+## Integrated tests
 
-Each run retains `execution.json`, the input SHA-256, `run.log` and
-`energy-report.json` with histories in joules, powers in watts, coverage and
-named pass/fail assertions. The top-level `result.json` records cadence
-comparisons and pair assertions. `--profile smoke` uses intervals 6 and 3 (six
-runs); `ci` uses all three (eight runs). The separate equilibrium test remains
-part of CTest. `cadence_comparison` requires nested saved times at the same
-duration and estimates the finer trapezoid error; a third cadence checks its
-smooth-power assumption.
+Each total-ion-energy test owns a `data/BOUT.inp`, `README.md` and executable
+`runtest`. The driven tests additionally own `criteria.json` with fixed
+acceptance limits, cadence settings and source/boundary provenance. Their
+shared audit code is in `tests/integrated/ion_energy_balance.py`.
 
-The initial convergence study found electron residuals, divided by the plasma
-reference energy, of `3.34e-9, 8.37e-10, 2.09e-10` for the curvature case and
-`1.80e-9, 4.50e-10, 1.12e-10` for the mixture. The factor of about four per
-halving identifies sampling error. Plasma drift was below `4e-16`, partition
-error below `2e-15` normalised and forward vorticity error below `4e-11`.
-The fixed manifest tolerances allow solver/roundoff margins; the minimum
-exchange and flow signals are much larger than the balance limits.
+| Test and CTest name | Coverage |
+| --- | --- |
+| [2D-ion-energy-equilibrium](../../tests/integrated/2D-ion-energy-equilibrium/README.md) | Uniform two-ion inventory, zero flow energy, diagnostics on/off |
+| [2D-ion-energy-curvature](../../tests/integrated/2D-ion-energy-curvature/README.md) | Closed curvature exchange, cumulative/interval balances, cadence refinement |
+| [2D-ion-energy-multispecies](../../tests/integrated/2D-ion-energy-multispecies/README.md) | Unequal masses/charges, varying composition, parallel energy and E_adv |
 
-Tracked finding **periodic radial ExB seam**: the current XPPM operator uses
-`firstX/lastX` with `bndry_flux=false`, suppressing transport across the radial
-periodic seam. It remains globally conservative in these cases. These tests
-establish energy conservation and exchange; they do not establish correct
-periodic-interface transport. Open boundaries, general source accounting,
-parallel fluxes, MPI interface fidelity and tokamak auditing remain later work.
+The individual READMEs explain each physical setup and power balance, exercised
+terms, fixed tolerances, reports and limitations. The two driven `runtest`
+scripts default to the `ci` profile: three actual cadence runs with diagnostics
+on and an off run at the finest cadence. `--profile smoke` uses two cadences
+and the off run. Both compare histories and strip optional outputs to verify
+independent inventory and exchange reconstruction. Each test creates isolated
+results with input hashes, run logs, exit status and machine-readable assertions.
+
+`cadence_comparison` requires nested saved times at the same duration and
+estimates both fine trapezoidal sampling error and the remaining residual by
+second-order extrapolation. A third cadence checks the smooth-power assumption.
+General source, open-boundary and flux reconstruction remain in the
+[delivery plan](../../tests/integrated/ion-energy-analysis-plan.md).
+The original [2D-energy](../../tests/integrated/2D-energy/README.md) remains the
+separate `vorticity`/`evolve_pressure` interchange test.
 
 Reports include per-record partition errors, diagnostic availability, forward
 vorticity residuals, interpreter/import paths and revision provenance. Initial

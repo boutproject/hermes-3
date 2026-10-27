@@ -1,6 +1,6 @@
 # Integrated tests and reusable energy analysis
 
-Develop `analysis.py` into a thin entry point for a reusable Python package,
+Develop `2D-ion-energy-curvature/analysis.py` into a thin entry point for a reusable Python package,
 proposed at `tools/energy_analysis/`. Use xhermes for loading and xarray for
 labelled calculations. Start with the total ion energy model, common ion
 temperature and slab geometry. Keep the pressure-based `data` case as a separate
@@ -13,14 +13,16 @@ with `diagnose=false`. Subsequent deliverables reconstruct fluxes and sources,
 compare them with optional diagnostics, and provide a more detailed account of
 energy transfer. Stages one and two are now implemented, including the inventory
 package, operator tests and diagnostic on/off equilibrium and driven conservation
-tests; see [the module README](../../../tools/energy_analysis/README.md). General
+tests; see [the module README](../../tools/energy_analysis/README.md). General
 flux/source budgets and broader geometry tests below remain planned.
 
 ## Starting points verified in this checkout
 
-- `2D-energy/runtest` currently runs `data`, which evolves ion pressure. It does
-  not run `data-Eion`. Its pressure-sign assertions do not establish an energy
-  balance.
+- `2D-energy/runtest` runs the pressure-model interchange input `data`.
+  Its pressure-sign assertions do not establish a quantitative energy balance.
+  The total-ion-energy equilibrium, curvature and multispecies tests now have
+  separate `2D-ion-energy-*` directories, inputs, READMEs and `runtest` scripts.
+  The older `data-Eion` input is retained as `2D-ion-energy-curvature/reference`.
 - The original `analysis.py` opened `data-Eion`, printed volume integrals and required
   `ddt(Eion)` and `ddt(Pe)`. It therefore fails when those diagnostics are absent.
 - The previous short runtime checks covered slab, electron momentum, ion
@@ -391,8 +393,8 @@ Proposed package responsibilities:
 Representative public functions are `open_run`, `calculate_kperp`,
 `energy_inventory`, `reconstruct_fluxes`, `energy_balance` and
 `compare_diagnostics`. Return labelled datasets with units and provenance,
-not printed arrays or figures as the only result. The existing `analysis.py`
-becomes a small wrapper that accepts a path and report options; importing the
+not printed arrays or figures as the only result. The curvature test's `analysis.py`
+is a small wrapper that accepts a path and report options; importing the
 package performs no file loading or analysis.
 
 Keep xarray calculations lazy where possible. Stream time records and Y planes
@@ -434,12 +436,13 @@ analysis. Keep generated results and fixtures separate from checked-in inputs.
    intended, boundary/source coverage is explicit, and cadence refinement
    separates sampling error from model residuals. Irregular or invalid time
    axes must fail the regular-output precondition.
-   The `runtest-balance` CI profile runs curvature and unequal-mass/charge
-   mixtures at intervals 12, 6 and 3 over duration 120, plus finest-cadence
+   The separate curvature and multispecies `runtest` CI profiles run at
+   intervals 12, 6 and 3 over duration 120, plus finest-cadence
    diagnostics-off pairs. Reconstructed FFT curvature work closes the electron
    budget without diagnostics; plasma drift is below `4e-16` of reference
    energy, and electron residuals fall by about four per cadence halving.
-   Fixed tolerances and source/boundary provenance are in `balance-cases.json`.
+   Fixed tolerances and source/boundary provenance are in each driven test's
+   `criteria.json`; the audit implementation is shared in `ion_energy_balance.py`.
    The restart-hook initial-phi discrepancy is fixed and covered by unit tests.
    The periodic radial ExB seam remains a tracked transport-fidelity finding;
    it does not break these global closed-domain balances.

@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 """Run isolated diagnostics on/off equilibrium cases and audit inventories."""
 
 import argparse
@@ -48,7 +50,7 @@ def main():
         folder = output / label
         folder.mkdir()
         shutil.copyfile(
-            Path(__file__).parent / "inventory-equilibrium/BOUT.inp",
+            Path(__file__).parent / "data/BOUT.inp",
             folder / "BOUT.inp",
         )
         value = str(diagnose).lower()
