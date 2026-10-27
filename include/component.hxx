@@ -46,13 +46,17 @@ struct SpeciesInformation {
 
   SpeciesInformation(const std::initializer_list<std::string> species) {
     for (const auto& sp : species) {
-      // FIXME: All ions are currently grouped as positive ions
       // FIXME: SpeciesParser has no concept of ebeam
-      const SpeciesType type = SpeciesParser::get_type(sp);
+      const SpeciesParser parsed_species(sp);
+      const SpeciesType type = SpeciesParser::get_type(parsed_species);
       if (type == SpeciesType::electron) {
         electrons.push_back(sp);
       } else if (isIonSpeciesType(type)) {
-        positive_ions.push_back(sp);
+        if (parsed_species.get_charge() < 0) {
+          negative_ions.push_back(sp);
+        } else {
+          positive_ions.push_back(sp);
+        }
       } else if (isNeutralSpeciesType(type)) {
         neutrals.push_back(sp);
       } else {

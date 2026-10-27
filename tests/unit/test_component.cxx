@@ -30,13 +30,15 @@ struct ComponentTest : public FakeMeshFixture {
 
 /// Check that SpeciesInformation classifies various species correctly.
 TEST(SpeciesInformationTest, ComponentLevelSpeciesClassification) {
-  const SpeciesInformation species{"e", "d+", "d2+", "d", "d2"};
+  const SpeciesInformation species{"e", "d+", "d2+", "d-", "d", "d2"};
   // Special case of electrons
   EXPECT_EQ(species.electrons, (std::vector<std::string>{"e"}));
   // Atoms and molecules => neutrals
   EXPECT_EQ(species.neutrals, (std::vector<std::string>{"d", "d2"}));
   // Atomic and molecular +ve ions => +ve ions
   EXPECT_EQ(species.positive_ions, (std::vector<std::string>{"d+", "d2+"}));
+  // -ve ions
+  EXPECT_EQ(species.negative_ions, (std::vector<std::string>{"d-"}));
 }
 
 namespace {
