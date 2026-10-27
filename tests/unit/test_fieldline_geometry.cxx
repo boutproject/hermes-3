@@ -313,11 +313,11 @@ TEST_F(FieldlineGeometryTest, GridFileInputsOverrideExpressions) {
                                                   {"toroidal_magnetic_field", Btor}}});
 
   // This in order of the input file [lambda_int, fieldline_radius, poloidal_magnetic_field, compute_Btor_from_R, toroidal_magnetic_field, diagnose]
-  Options options = makeOptions("0.01", "2.0", "0.5", false, "1.0", true); 
+  Options options = makeOptions("0.01", "2.0", "0.5", false, "1.0", true);
   FieldlineGeometry component("test", options, nullptr);
 
   Options outputs = {{"rho_s0", 1.0}, {"Bnorm", 1.0}};
-  component.outputVars(outputs); // send values to outputs 
+  component.outputVars(outputs); // send values to outputs
 
   // Assert that input values match output values
 
