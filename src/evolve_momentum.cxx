@@ -26,6 +26,48 @@
 
 using bout::globals::mesh;
 
+Field3D Div_par_fvv_new(const Field3D& f_in, const Field3D& v_in,
+                        const Field3D& wave_speed_in) {
+  Mesh* mesh = f_in.getMesh();
+  Coordinates* coord = f_in.getCoordinates();
+
+  const auto B = coord->Bxy();
+  const auto B_up = coord->Bxy().yup();
+  const auto B_down = coord->Bxy().ydown();
+
+  const auto f_up = f_in.yup();
+  const auto f_down = f_in.ydown();
+
+  const auto v_up = v_in.yup();
+  const auto v_down = v_in.ydown();
+
+  const auto g_22 = coord->g_22();
+  const auto dy = coord->dy();
+
+  Field3D result{emptyFrom(f_in)};
+  BOUT_FOR(i, f_in.getRegion("RGN_NOBNDRY")) {
+
+    const auto iyp = i.yp();
+    const auto iym = i.ym();
+
+    //Maximum local wave speed
+    const BoutReal amax =
+        BOUTMAX(wave_speed_in[i], fabs(v_in[i]), fabs(v_up[iyp]), fabs(v_down[iym]));
+
+    result[i] =
+        B[i]
+        * ((f_up[iyp] * v_up[iyp] * v_up[iyp] / B_up[iyp])
+           - (f_down[iym] * v_down[iym] * v_down[iym] / B_down[iym])
+           // Penalty terms. This implementation is very dissipative.
+           // Note: This version adds a viscosity that damps gradients of velocity
+           + amax * (f_in[i] + f_up[iyp]) * (v_in[i] - v_up[iyp]) / (B[i] + B_up[iyp])
+           + amax * (f_in[i] + f_down[iym]) * (v_in[i] - v_down[iym])
+                 / (B[i] + B_down[iym]))
+        / (2 * dy[i] * sqrt(g_22[i]));
+  }
+  return result;
+}
+
 EvolveMomentum::EvolveMomentum(std::string name, Options& alloptions, Solver* solver)
     : NamedComponent(name, {readOnly("species:{name}:AA"),
                             readOnly("species:{name}:density", Regions::Interior),
@@ -213,9 +255,7 @@ void EvolveMomentum::finally(const Options& state) {
   //    otherwise energy conservation is affected
   //  - using the same operator as in density and pressure equations doesn't work
   if (use_div_par_fvv) {
-    ddt(NV) -= AA
-               * FV::Div_par_fvv<hermes::Limiter>(Nlim, V, fastest_wave,
-                                                  fix_momentum_boundary_flux);
+    ddt(NV) -= AA * Div_par_fvv_new(Nlim, V, fastest_wave);
   } else {
     ddt(NV) -= Div_par(NV * V);
   }

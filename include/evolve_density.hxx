@@ -83,10 +83,11 @@ private:
   BoutReal source_normalisation; ///< Normalisation factor [m^-3/s]
   BoutReal time_normalisation;   ///< Normalisation factor [s]
   FieldGeneratorPtr source_prefactor_function;
-
+  BoutReal n_lowsource;
+  BoutReal lowsource_scale;
   /// Modifies the `source` member variable
   void updateSource(BoutReal time);
-
+  BoutReal adapt_source;
   bool diagnose;                ///< Output additional diagnostics?
   Field3D flow_xlow, flow_ylow; ///< Particle flow diagnostics
 

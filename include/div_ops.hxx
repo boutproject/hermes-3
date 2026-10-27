@@ -58,6 +58,12 @@ Field3D Div_n_bxGrad_f_B_XPPM(const Field3D& n, const Field3D& f, bool bndry_flu
 Field3D Div_n_g_bxGrad_f_B_XZ(const Field3D& n, const Field3D& g, const Field3D& f,
                               bool bndry_flux = true);
 
+Field3D low_sourceterm(const Field3D& f, const BoutReal lowvalue,
+                       const BoutReal scalefactor, const bool exponential = false);
+
+Field3D adaptive_sourceterm(const Field3D& thisfield, const Field3D& sourceterm,
+                            const BoutReal maximum, const BoutReal overshoot);
+
 Field3D Div_Perp_Lap_FV_Index(const Field3D& a, const Field3D& f);
 
 Field3D Div_Z_FV_Index(const Field3D& a, const Field3D& f);

@@ -107,10 +107,17 @@ EvolveDensity::EvolveDensity(std::string name, Options& alloptions, Solver* solv
   const BoutReal Nnorm = units["inv_meters_cubed"];
   const BoutReal Omega_ci = 1. / units["seconds"].as<BoutReal>();
 
+  n_lowsource = options["n_lowsource"].withDefault(-1.0) / Nnorm;
+  lowsource_scale = options["lowsource_scale"].withDefault(1e-6) * Omega_ci;
+
   auto& n_options = alloptions[std::string("N") + name];
   source_time_dependent = n_options["source_time_dependent"]
                               .doc("Use a time-dependent source?")
                               .withDefault<bool>(false);
+
+  adapt_source =
+      n_options["adapt_source"].doc("Adaptive source for density").withDefault(-1.0)
+      / (Nnorm);
 
   source_only_in_core = n_options["source_only_in_core"]
                             .doc("Zero the source outside the closed field-line region?")
@@ -251,6 +258,8 @@ void EvolveDensity::transform_impl(GuardedOptions& state) {
         source_prefactor_function->generate(bout::generator::Context().set(
             "x", 0, "y", 0, "z", 0, "t", time * time_normalisation));
     final_source = source * source_prefactor;
+  } else if (adapt_source > 0.0) {
+    final_source = adaptive_sourceterm(N, source, adapt_source, 0.05);
   } else {
     final_source = source;
   }
@@ -301,6 +310,11 @@ void EvolveDensity::finally(const Options& state) {
       //       so that upwinding is handled correctly
       ddt(N) -= Div_n_g_bxGrad_f_B_XZ(N, V, -Apar_flutter);
     }
+  }
+
+  if (n_lowsource > 0.0) {
+    Field3D lowsource_term = low_sourceterm(N, n_lowsource, lowsource_scale, false);
+    ddt(N) += lowsource_term;
   }
 
   if (low_n_diffuse) {

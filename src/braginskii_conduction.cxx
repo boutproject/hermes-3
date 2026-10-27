@@ -116,6 +116,15 @@ BraginskiiConduction::BraginskiiConduction(const std::string& name, Options& all
 
   conduction_method = alloptions["conduction_method"].withDefault(conduction_method);
 
+  const Options& units = alloptions["units"];
+  const BoutReal Nnorm = units["inv_meters_cubed"];
+  const BoutReal Tnorm = units["eV"];
+  const BoutReal Omega_ci = 1. / units["seconds"].as<BoutReal>();
+  const BoutReal Lnorm = units["meters"];
+
+  Lpar_based = alloptions[name]["Lpar_based"].withDefault<bool>(false);
+  Lpar = alloptions[name]["Lpar"].withDefault<BoutReal>(1.0) / Lnorm;
+
   use_petsc_operator =
       alloptions["use_petsc_operator"]
           .doc("Use Petsc for parallel heat conduction. Grids need the weights.")
@@ -271,8 +280,13 @@ void BraginskiiConduction::transform_impl(GuardedOptions& state) {
     //
     // Note: Coefficient is slightly different for electrons (3.16) and ions (3.9)
     kappa_par = kappa_coefficient * Pfloor * tau / AA;
+    if ((kappa_limit_alpha > 0.0) && (Lpar_based)) {
 
-    if (kappa_limit_alpha > 0.0) {
+      Field3D denom = 1.0 + kappa_par / (kappa_limit_alpha * sqrt(T / AA) * N * Lpar);
+
+      kappa_par = kappa_par / denom;
+
+    } else if (kappa_limit_alpha > 0.0) {
       /*
        * Flux limiter, as used in SOLPS.
        *

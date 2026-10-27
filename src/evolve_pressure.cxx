@@ -124,6 +124,9 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
   const BoutReal Tnorm = units["eV"];
   const BoutReal Omega_ci = 1. / units["seconds"].as<BoutReal>();
 
+  T_lowsource = options["T_lowsource"].withDefault(-1.0) / Tnorm;
+  lowsource_scale = options["lowsource_scale"].withDefault(1e-6) * Omega_ci;
+
   auto& p_options = alloptions[std::string("P") + name];
   source_normalisation =
       SI::qe * Nnorm * Tnorm * Omega_ci; // [Pa/s] or [W/m^3] if converted to energy
@@ -143,6 +146,12 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
   source_time_dependent = p_options["source_time_dependent"]
                               .doc("Use a time-dependent source?")
                               .withDefault<bool>(false);
+
+  adapt_source =
+      p_options["adapt_source"]
+          .doc("Adaptive source to pin temperature to value, given as electronvolt")
+          .withDefault<BoutReal>(-1.0)
+      / (Tnorm);
 
   // If time dependent, parse the function with respect to time from the input file
   if (source_time_dependent) {
@@ -380,6 +389,11 @@ void EvolvePressure::finally(const Options& state) {
     ddt(P) -= hyper_z_T * D4DZ4_Index(T);
   }
 
+  if (T_lowsource > 0.0) {
+    Field3D TE_lowsource = low_sourceterm(T, T_lowsource, lowsource_scale, false);
+    ddt(P) += TE_lowsource;
+  }
+
   //////////////////////
   // Other sources
 
@@ -391,6 +405,8 @@ void EvolvePressure::finally(const Options& state) {
         source_prefactor_function->generate(bout::generator::Context().set(
             "x", 0, "y", 0, "z", 0, "t", time * time_normalisation));
     final_source = source * source_prefactor;
+  } else if (adapt_source > 0.0) {
+    final_source = adaptive_sourceterm(T, source, adapt_source, 0.05);
   } else {
     final_source = source;
   }

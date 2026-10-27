@@ -70,6 +70,9 @@ private:
       petsc_parallel; ///< Petsc parallel operator object used for conduction
 #endif
 
+  bool Lpar_based;
+  BoutReal Lpar;
+
   /// Calculate conduction of energy for each species where this has been turned on.
   ///
   /// Uses

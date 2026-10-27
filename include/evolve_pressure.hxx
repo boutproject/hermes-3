@@ -90,6 +90,10 @@ private:
   Field3D source, final_source; ///< External pressure source
   Field3D Sp;                   ///< Total pressure source
   FieldGeneratorPtr source_prefactor_function;
+  BoutReal adapt_source;
+
+  BoutReal T_lowsource;
+  BoutReal lowsource_scale;
 
   BoutReal hyper_z;   ///< Hyper-diffusion
   BoutReal hyper_z_T; ///< 4th-order dissipation in T

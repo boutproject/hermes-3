@@ -436,6 +436,14 @@ Field3D Div_n_bxGrad_f_B_XPPM(const Field3D& n, const Field3D& f, bool bndry_flu
   return result;
 }
 
+Field3D adaptive_sourceterm(const Field3D& thisfield, const Field3D& sourceterm,
+                            const BoutReal maximum, const BoutReal overshoot) {
+  BoutReal k = 5.0 / overshoot;
+  BoutReal x0 = maximum + overshoot / 2.0;
+
+  return (1.0 - (1.0 / (1.0 + exp(-k * (thisfield - x0))))) * sourceterm;
+}
+
 Field3D Div_Perp_Lap_FV_Index(const Field3D& as, const Field3D& fs) {
 
   Field3D result = 0.0;
@@ -498,6 +506,21 @@ Field3D Div_Perp_Lap_FV_Index(const Field3D& as, const Field3D& fs) {
     }
   }
 
+  return result;
+}
+
+Field3D low_sourceterm(const Field3D& f, const BoutReal lowvalue,
+                       const BoutReal scalefactor, const bool exponential) {
+  Field3D result = 0.0;
+  BOUT_FOR(i, f.getRegion("RGN_NOY")) {
+    BoutReal diff = f[i] - lowvalue;
+
+    if (diff < 0.0 && !exponential) {
+      result[i] = -diff / scalefactor;
+    } else if (diff < 0.0) {
+      result[i] = exp(-diff / scalefactor) - 1;
+    }
+  }
   return result;
 }
 
