@@ -6,7 +6,46 @@ Outer guard results are undefined (NaN); callers must select physical cells.
 Z is periodic. X requires at least one saved guard on each side.
 """
 
+import numpy as np
 import xarray as xr
+
+from .dataset import AuditError
+
+
+def spectral_ddz(field, dz):
+    """Periodic FFT first derivative using the saved coordinate spacing.
+
+    BOUT's FFT first derivative has zero response at the even-grid Nyquist
+    mode. Z must be uniform; complete Z lines are rechunked while other
+    dimensions remain lazy. This is distinct from the finite-volume Kperp.
+    """
+    if "z" not in field.dims:
+        raise AuditError("FFT derivative requires a named z dimension")
+    spacing = np.asarray(dz)
+    if (
+        not np.isfinite(spacing).all()
+        or np.any(spacing <= 0)
+        or not np.allclose(spacing, spacing.flat[0], rtol=1e-12, atol=0)
+    ):
+        raise AuditError("FFT derivative requires uniform positive saved dz")
+    n = field.sizes["z"]
+    wave = 2 * np.pi * np.fft.rfftfreq(n, d=float(spacing.flat[0]))
+    if n % 2 == 0:
+        wave[-1] = 0
+
+    def derivative(values):
+        return np.fft.irfft(1j * wave * np.fft.rfft(values, axis=-1), n=n, axis=-1)
+
+    if field.chunks is not None:
+        field = field.chunk({"z": -1})
+    return xr.apply_ufunc(
+        derivative,
+        field,
+        input_core_dims=[["z"]],
+        output_core_dims=[["z"]],
+        dask="parallelized",
+        output_dtypes=[float],
+    ).transpose(*field.dims)
 
 
 def perpendicular_operator(

@@ -77,10 +77,11 @@ struct EvolveVorticityIonEnergy : public NamedComponent<EvolveVorticityIonEnergy
     // NOTE: This is a hack because we know that the loaded restart file
     //       is passed into restartVars in PhysicsModel::postInit
     // The restart value should be used in init() rather than here
-    static bool first = true;
-    if (first and state.isSet("phi")) {
-      first = false;
-      phi = state["phi"].as<Field3D>();
+    if (restore_phi_on_restart) {
+      restore_phi_on_restart = false;
+      if (state.isSet("phi")) {
+        phi = state["phi"].as<Field3D>();
+      }
     }
 
     // Save the potential
@@ -93,8 +94,9 @@ struct EvolveVorticityIonEnergy : public NamedComponent<EvolveVorticityIonEnergy
   static constexpr auto type = "evolve_vorticity_ion_energy";
 
 private:
-  Field3D Vort; ///< Evolving vorticity
-  Field3D Eion; ///< Evolving ion energy
+  bool restore_phi_on_restart{true}; ///< Read restart phi only on the first hook call
+  Field3D Vort;                      ///< Evolving vorticity
+  Field3D Eion;                      ///< Evolving ion energy
 
   Field3D ion_KE_parallel; ///< Parallel ion kinetic energy K_||i
   Field3D ion_KE_perp;     ///< Perpendicular ion kinetic energy K⊥

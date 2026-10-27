@@ -11,10 +11,10 @@ all Python inspection, implementation, analysis and testing.
 The first deliverable is an energy inventory and a cumulative balance that work
 with `diagnose=false`. Subsequent deliverables reconstruct fluxes and sources,
 compare them with optional diagnostics, and provide a more detailed account of
-energy transfer. Stage one is now implemented, including the inventory package,
-operator tests and a diagnostic on/off equilibrium test; see
-[the module README](../../../tools/energy_analysis/README.md). The flux and
-broader conservation tests below remain planned.
+energy transfer. Stages one and two are now implemented, including the inventory
+package, operator tests and diagnostic on/off equilibrium and driven conservation
+tests; see [the module README](../../../tools/energy_analysis/README.md). General
+flux/source budgets and broader geometry tests below remain planned.
 
 ## Starting points verified in this checkout
 
@@ -428,12 +428,21 @@ analysis. Keep generated results and fixtures separate from checked-in inputs.
    identities pass, enabled diagnostics agree within recovery/roundoff error,
    options expressions are handled through `bd.options`, and optional
    diagnostics can be removed without breaking inventory analysis.
-2. **First conservation tests.** Check in equilibrium, curvature and two-ion
+2. **First conservation tests (implemented).** Check in equilibrium, curvature and two-ion
    cases; run actual diagnostic on/off pairs. Add cumulative balances and JSON
    assertions. Acceptance: inventories agree, exercised terms are nonzero where
    intended, boundary/source coverage is explicit, and cadence refinement
    separates sampling error from model residuals. Irregular or invalid time
    axes must fail the regular-output precondition.
+   The `runtest-balance` CI profile runs curvature and unequal-mass/charge
+   mixtures at intervals 12, 6 and 3 over duration 120, plus finest-cadence
+   diagnostics-off pairs. Reconstructed FFT curvature work closes the electron
+   budget without diagnostics; plasma drift is below `4e-16` of reference
+   energy, and electron residuals fall by about four per cadence halving.
+   Fixed tolerances and source/boundary provenance are in `balance-cases.json`.
+   The restart-hook initial-phi discrepancy is fixed and covered by unit tests.
+   The periodic radial ExB seam remains a tracked transport-fidelity finding;
+   it does not break these global closed-domain balances.
 3. **Flux and source budgets.** Add ExB/Reynolds/electrical, parallel and
    polarisation reconstruction in that order, followed by controlled sources
    and boundary cases. Acceptance: discrete Gauss checks, diagnostic field and

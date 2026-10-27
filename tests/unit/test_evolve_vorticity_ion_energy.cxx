@@ -59,6 +59,49 @@ protected:
   }
 };
 
+TEST_F(EvolveVorticityIonEnergyTest, FreshStartRestartHookPreservesRecoveredPotential) {
+  FakeSolver solver;
+  auto options = makeOptions();
+  EvolveVorticityIonEnergy component("test", options, &solver);
+  declareSpecies(component);
+  // postInit saves the unsolved potential before the initial RHS evaluation.
+  Options restart;
+  component.restartVars(restart);
+  const BoutReal k = 2 * PI / nz;
+  const Field3D energy =
+      makeField<Field3D>([&](const Ind3D& i) { return 3.0 + 0.2 * cos(k * i.z()); });
+  solver.setState({{"Vort", Field3D{0.0}}, {"Eion", energy}});
+  auto state = makeState();
+  component.transform(state);
+  const Field3D recovered = copy(diagnostics(component)["phi"].as<Field3D>());
+  EXPECT_GT(max(abs(recovered), false), 1e-3);
+  // The initial output hook must save, rather than restore, this solution.
+  component.restartVars(restart);
+  EXPECT_TRUE(
+      IsFieldEqual(restart["phi"].as<Field3D>(), recovered, "RGN_NOBNDRY", 1e-12));
+  EXPECT_TRUE(IsFieldEqual(diagnostics(component)["phi"].as<Field3D>(), recovered,
+                           "RGN_NOBNDRY", 1e-12));
+}
+
+TEST_F(EvolveVorticityIonEnergyTest, RestartRestorationIsIndependentForEachInstance) {
+  auto options = makeOptions();
+  FakeSolver first_solver;
+  EvolveVorticityIonEnergy first("test", options, &first_solver);
+  Options first_restart{{"phi", Field3D{2.0}}};
+  first.restartVars(first_restart);
+  first_restart["phi"] = Field3D{7.0};
+  first.restartVars(first_restart);
+  EXPECT_TRUE(
+      IsFieldEqual(first_restart["phi"].as<Field3D>(), 2.0, "RGN_NOBNDRY", 1e-12));
+
+  FakeSolver second_solver;
+  EvolveVorticityIonEnergy second("test", options, &second_solver);
+  Options second_restart{{"phi", Field3D{3.0}}};
+  second.restartVars(second_restart);
+  EXPECT_TRUE(
+      IsFieldEqual(second_restart["phi"].as<Field3D>(), 3.0, "RGN_NOBNDRY", 1e-12));
+}
+
 TEST_F(EvolveVorticityIonEnergyTest, CommonTemperatureUsesMassToChargePressurePotential) {
   FakeSolver solver;
   auto options = makeOptions();

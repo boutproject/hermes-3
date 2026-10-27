@@ -409,6 +409,15 @@ if(HERMES_TESTS)
           "${CMAKE_CURRENT_BINARY_DIR}/tests/integrated/2D-energy")
       configure_file("${ENERGY_TEST_SRC}/runtest-inventory"
                      "${ENERGY_TEST_DEST}/runtest-inventory" COPYONLY)
+      configure_file("${ENERGY_TEST_SRC}/runtest-balance"
+                     "${ENERGY_TEST_DEST}/runtest-balance" COPYONLY)
+      configure_file("${ENERGY_TEST_SRC}/balance-cases.json"
+                     "${ENERGY_TEST_DEST}/balance-cases.json" COPYONLY)
+      foreach(ENERGY_CASE curvature two-ion)
+        configure_file(
+          "${ENERGY_TEST_SRC}/balance-${ENERGY_CASE}/BOUT.inp"
+          "${ENERGY_TEST_DEST}/balance-${ENERGY_CASE}/BOUT.inp" COPYONLY)
+      endforeach()
       configure_file(
         "${ENERGY_TEST_SRC}/inventory-equilibrium/BOUT.inp"
         "${ENERGY_TEST_DEST}/inventory-equilibrium/BOUT.inp" COPYONLY)
@@ -431,6 +440,13 @@ if(HERMES_TESTS)
     set_tests_properties(
       2D-energy-inventory PROPERTIES LABELS "integration;energy" TIMEOUT 300
                                      WORKING_DIRECTORY "${ENERGY_TEST_DEST}")
+    add_test(
+      NAME 2D-energy-balance
+      COMMAND "${HERMES_ENERGY_PYTHON}" "${ENERGY_TEST_DEST}/runtest-balance"
+              --exe $<TARGET_FILE:${PROJECT_NAME}> --profile ci)
+    set_tests_properties(
+      2D-energy-balance PROPERTIES LABELS "integration;energy" TIMEOUT 600
+                                   WORKING_DIRECTORY "${ENERGY_TEST_DEST}")
     add_test(
       NAME energy-analysis-python
       COMMAND

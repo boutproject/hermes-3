@@ -6,13 +6,18 @@ import xarray as xr
 from boutdata.data import BoutOptions
 from energy_analysis import (
     AuditError,
+    cadence_comparison,
     compare_diagnostics,
+    electron_curvature_work,
     energy_balance,
     energy_densities,
     energy_inventory,
+    integrated_power,
     open_run,
     perpendicular_operator,
+    polarisation_energy_coefficient,
     regular_timestep,
+    spectral_ddz,
 )
 from numpy.testing import assert_allclose
 
@@ -266,9 +271,11 @@ def test_cumulative_balance_regular_time_and_coverage(dataset):
     zero = q * 0
     zero.attrs["units"] = "W"
     inventory["plasma_saved"] = 3 + 2 * inventory.t
+    inventory.plasma_saved.attrs["units"] = "J"
     balance = energy_balance(inventory, source_power=q, outward_power=zero)
     assert balance.attrs["complete"]
     assert_allclose(balance.residual, 0, atol=3e-16)
+    assert_allclose(balance.interval_residual.isel(t=slice(1, None)), 0, atol=5e-16)
     partial = energy_balance(inventory)
     assert not partial.attrs["complete"] and "residual" not in partial
     with pytest.raises(AuditError, match="expressed in W"):
@@ -311,3 +318,98 @@ def test_nonfinite_guard_cannot_silently_pass(dataset):
     dataset.phi.loc[{"x": 1}] = np.nan
     inventory = energy_inventory(open_run(dataset))
     assert bool(np.isnan(inventory.ion_perpendicular).all())
+
+
+def test_spectral_ddz_modes_nyquist_and_chunks():
+    z = 2 * np.pi * np.arange(16) / 16
+    field = xr.DataArray(np.sin(3 * z) + 0.2 * (-1.0) ** np.arange(16), dims="z")
+    assert_allclose(spectral_ddz(field, 2 * np.pi / 16), 3 * np.cos(3 * z), atol=2e-14)
+    xr.testing.assert_allclose(
+        spectral_ddz(field.chunk({"z": 5}), 2 * np.pi / 16).compute(),
+        spectral_ddz(field, 2 * np.pi / 16),
+    )
+    assert_allclose(spectral_ddz(field.isel(z=slice(0, 1)), 1), 0)
+    with pytest.raises(AuditError, match="uniform positive"):
+        spectral_ddz(field, [1, 2])
+
+
+def test_curvature_work_units_and_diagnostic_independence(dataset):
+    options = dataset.options
+    for key, value in {"bxcvx": 0, "bxcvy": 0, "bxcvz": 2}.items():
+        options["mesh:" + key] = value
+    options["mesh:ddz:first"] = "FFT"
+    options["mesh:ddz:fft_filter"] = 0
+    dataset["dz"] = xr.ones_like(dataset.dz) * (2 * np.pi / 8)
+    dataset.dz.attrs["units_type"] = "hermes"
+    z = 2 * np.pi * dataset.z / 8
+    dataset["phi"] = xr.ones_like(dataset.phi) * np.sin(z)
+    dataset.phi.attrs["units_type"] = "hermes"
+    dataset["Pe"] = xr.ones_like(dataset.Pe) * np.cos(z)
+    dataset.Pe.attrs["units_type"] = "hermes"
+    run = open_run(dataset)
+    work = electron_curvature_work(run)
+    assert_allclose(
+        work, -4 * run.length_scale**2 * xr.ones_like(work) * np.cos(z) ** 2, atol=1e-18
+    )
+    power = integrated_power(run, work)
+    assert power.attrs["units"] == "W"
+    assert_allclose(
+        power,
+        run.integrate(work) * run.energy_scale * run.length_scale**3 * run.frequency,
+    )
+    assert_allclose(power.t, dataset.t / run.frequency)
+    options["mesh:ddz:fft_filter"] = 0.1
+    with pytest.raises(AuditError, match="unfiltered"):
+        electron_curvature_work(run)
+    options["mesh:ddz:fft_filter"] = 0
+    options["mesh:bxcvx"] = 1
+    with pytest.raises(AuditError, match="Z-only"):
+        electron_curvature_work(run)
+
+
+def test_multispecies_polarisation_energy_coefficient(dataset):
+    run = open_run(dataset)
+    result = polarisation_energy_coefficient(run)
+    rho = 2 * 0.5 + 3 * 0.25
+    kinetic = (2 * 0.1**2 / (2 * 2 * 0.5) + (3 / 2) * 0.05**2 / (2 * 3 * 0.25)) / rho
+    assert_allclose(result.parallel_kinetic, kinetic)
+    assert_allclose(result.enthalpy, 2.5 * (2 * 0.5 + 3 / 2 * 0.25) / rho)
+    assert_allclose(result.total, result.enthalpy + result.parallel_kinetic)
+    # Actual mass density, rather than the Boussinesq reference, controls weights.
+    dataset["Nimpurity"] *= 1.5
+    changed = polarisation_energy_coefficient(open_run(dataset))
+    assert float(changed.enthalpy.max()) != float(result.enthalpy.max())
+
+
+def test_cadence_refinement_distinguishes_quadrature_error():
+    def budget(dt):
+        time = np.arange(0, 1 + dt / 2, dt)
+        inventory = xr.Dataset(
+            {"electron_thermal": ("t", 2 + time**3 / 3)}, coords={"t": time}
+        )
+        inventory.electron_thermal.attrs["units"] = "J"
+        power = xr.DataArray(
+            time**2, dims="t", coords={"t": time}, attrs={"units": "W"}
+        )
+        zero = xr.zeros_like(power).assign_attrs(units="W")
+        return energy_balance(
+            inventory,
+            reservoir="electron_thermal",
+            source_power=power,
+            outward_power=zero,
+        )
+
+    coarse, fine = budget(0.25), budget(0.125)
+    comparison = cadence_comparison(coarse, fine)
+    assert comparison["refinement_ratio"] == 2
+    assert_allclose(
+        comparison["fine_max_residual_J"], comparison["coarse_max_residual_J"] / 4
+    )
+    assert_allclose(
+        comparison["estimated_fine_sampling_error_J"], comparison["fine_max_residual_J"]
+    )
+    assert comparison["estimated_cadence_independent_max_residual_J"] < 1e-15
+    with pytest.raises(AuditError, match="nested saved times"):
+        cadence_comparison(coarse, fine.isel(t=slice(1, None)))
+    with pytest.raises(AuditError, match="integer refinement"):
+        cadence_comparison(coarse, coarse)
