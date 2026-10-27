@@ -4,8 +4,12 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cmath>
+#include <map>
+#include <string>
+#include <vector>
 
-#include "species_parser.hxx"
+#include "bout/field3d.hxx"
 #include "bout/traits.hxx"
 
 inline BoutReal floor(BoutReal value, BoutReal min) { return std::max(value, min); }
@@ -119,29 +123,6 @@ inline std::string identifySpeciesElement(const std::string& species) {
   }
 
   return uncharged;
-}
-
-/// True for atomic or molecular ions of either charge sign.
-inline bool isIonSpeciesType(SpeciesType type) {
-  return type == SpeciesType::ion or type == SpeciesType::molecular_ion;
-}
-
-inline bool isNeutralSpeciesType(SpeciesType type) {
-  return type == SpeciesType::neutral or type == SpeciesType::molecule;
-}
-
-/// Identify species name string as electron, atomic/molecular ion, atom or molecule
-inline SpeciesType identifySpeciesType(const std::string& species) {
-  if (species == "e") {
-    return SpeciesType::electron;
-  } else if ((species == "i") or species.find_first_of("+-") != std::string::npos) {
-    return identifySpeciesMultiplicity(species) > 1 ? SpeciesType::molecular_ion
-                                                    : SpeciesType::ion;
-  } else if (identifySpeciesMultiplicity(species) > 1) {
-    return SpeciesType::molecule;
-  }
-  // Not electron, ion or molecules -> neutral
-  return SpeciesType::neutral;
 }
 
 template <typename T, typename = bout::utils::EnableIfField<T>>

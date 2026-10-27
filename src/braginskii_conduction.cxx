@@ -23,6 +23,7 @@
 #include "../include/div_ops.hxx"
 #include "../include/hermes_utils.hxx"
 #include "../include/permissions.hxx"
+#include "species_parser.hxx"
 
 using bout::globals::mesh;
 
@@ -54,7 +55,7 @@ BraginskiiConduction::BraginskiiConduction(const std::string& name, Options& all
                              .withDefault<bool>(false);
 
     BoutReal default_kappa; // default conductivity, changes depending on species
-    switch (identifySpeciesType(name)) {
+    switch (SpeciesParser::get_type(name)) {
     case SpeciesType::ion:
     case SpeciesType::molecular_ion:
       default_kappa = 3.9;
@@ -99,7 +100,7 @@ BraginskiiConduction::BraginskiiConduction(const std::string& name, Options& all
   std::vector<std::string> species;
   for (const auto& [sp, mode] : all_conduction_collisions_mode) {
     species.push_back(sp);
-    if (mode == "braginskii" and !isNeutralSpeciesType(identifySpeciesType(sp))) {
+    if (mode == "braginskii" and !isNeutralSpeciesType(SpeciesParser::get_type(sp))) {
       setPermissions(readIfSet(
           fmt::format("species:{}:collision_frequencies:{}_{}_coll", sp, sp, sp)));
     } else if (mode == "multispecies") {
@@ -107,7 +108,7 @@ BraginskiiConduction::BraginskiiConduction(const std::string& name, Options& all
                                            sp, sp, "{all_species}")));
       setPermissions(readIfSet(fmt::format("species:{}:collision_frequencies:{}_{}_cx",
                                            sp, sp, "{all_species}")));
-    } else if (mode == "AFN" and isNeutralSpeciesType(identifySpeciesType(sp))) {
+    } else if (mode == "AFN" and isNeutralSpeciesType(SpeciesParser::get_type(sp))) {
       setPermissions(readIfSet(fmt::format("species:{}:collision_frequencies:{}_{}_cx",
                                            sp, sp, "{positive_ions}")));
       setPermissions(readIfSet(fmt::format("species:{}:collision_frequencies:{}_{}_iz",
@@ -152,7 +153,7 @@ void BraginskiiConduction::transform_impl(GuardedOptions& state) {
     // Braginskii mode: plasma - self collisions and ei, neutrals - CX, IZ
     if (all_collision_names.count(name) == 0) { /// Calculate only once - at the beginning
       std::vector<std::string> collision_names;
-      const auto species_type = identifySpeciesType(species.name());
+      const auto species_type = SpeciesParser::get_type(species.name());
 
       if (conduction_collisions_mode == "braginskii") {
         for (const auto& collision : species["collision_frequencies"].getChildren()) {

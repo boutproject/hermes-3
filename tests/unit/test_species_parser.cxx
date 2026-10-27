@@ -21,6 +21,26 @@ TEST_F(SpeciesParserTest, GetTypeFromString) {
   EXPECT_EQ(SpeciesParser::get_type("d2+"), SpeciesType::molecular_ion);
   EXPECT_EQ(SpeciesParser::get_type("d"), SpeciesType::neutral);
   EXPECT_EQ(SpeciesParser::get_type("d2"), SpeciesType::molecule);
+  // Recognise legacy generic ion name
+  EXPECT_EQ(SpeciesParser::get_type("i"), SpeciesType::ion);
+}
+
+/// @brief Check species type predicates work as expected.
+TEST_F(SpeciesParserTest, TypePredicates) {
+  // Test cases
+  const struct {
+    const char* name;
+    bool is_ion;
+    bool is_neutral;
+  } test_cases[] = {{"e", false, false}, {"e-", false, false}, {"i", true, false},
+                    {"d+", true, false}, {"d2+", true, false}, {"d2-", true, false},
+                    {"d", false, true},  {"d2", false, true}};
+  // Check that predicates return the expected result for each test case.
+  for (const auto& test_case : test_cases) {
+    SpeciesType type = SpeciesParser::get_type(test_case.name);
+    EXPECT_EQ(isIonSpeciesType(type), test_case.is_ion);
+    EXPECT_EQ(isNeutralSpeciesType(type), test_case.is_neutral);
+  }
 }
 
 /// @brief Check that constructor throws for a variety of invalid strings

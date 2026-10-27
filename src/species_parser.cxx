@@ -49,6 +49,9 @@ SpeciesType SpeciesParser::get_type(const std::string& species_str) {
 SpeciesType SpeciesParser::get_type(const SpeciesParser& species) {
   if (species.get_element() == "e") {
     return SpeciesType::electron;
+  } else if (species.get_str() == "i") {
+    // (Recognise legacy generic ion name, which has no explicit charge suffix)
+    return SpeciesType::ion;
   } else if (species.is_molecule()) {
     if (species.get_charge() == 0) {
       return SpeciesType::molecule;

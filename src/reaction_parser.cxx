@@ -1,6 +1,7 @@
 #include <algorithm>
 
 #include "hermes_utils.hxx"
+#include "species_parser.hxx"
 
 #include "reaction_parser.hxx"
 
@@ -89,26 +90,26 @@ ReactionParser::get_species(std::vector<std::string> species_names,
     // are involved in a reaction.
     std::copy_if(species_names.begin(), species_names.end(),
                  std::back_inserter(filtered_species_names), [](std::string sp_name) {
-                   return identifySpeciesType(sp_name) == SpeciesType::electron;
+                   return SpeciesParser::get_type(sp_name) == SpeciesType::electron;
                  });
     break;
   case species_filter::heavy:
     // Filter out electrons ('e')
     std::copy_if(species_names.begin(), species_names.end(),
                  std::back_inserter(filtered_species_names), [](std::string sp_name) {
-                   return identifySpeciesType(sp_name) != SpeciesType::electron;
+                   return SpeciesParser::get_type(sp_name) != SpeciesType::electron;
                  });
     break;
   case species_filter::ion:
     std::copy_if(species_names.begin(), species_names.end(),
                  std::back_inserter(filtered_species_names), [](std::string sp_name) {
-                   return isIonSpeciesType(identifySpeciesType(sp_name));
+                   return isIonSpeciesType(SpeciesParser::get_type(sp_name));
                  });
     break;
   case species_filter::neutral:
     std::copy_if(species_names.begin(), species_names.end(),
                  std::back_inserter(filtered_species_names), [](std::string sp_name) {
-                   return isNeutralSpeciesType(identifySpeciesType(sp_name));
+                   return isNeutralSpeciesType(SpeciesParser::get_type(sp_name));
                  });
     break;
   case species_filter::produced: {
