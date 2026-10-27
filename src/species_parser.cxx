@@ -73,7 +73,7 @@ SpeciesType SpeciesParser::get_type() const {
   }
   // Monatomic neutral species => atom
   if (get_charge() == 0) {
-    return SpeciesType::neutral;
+    return SpeciesType::atom;
   }
   // Monatomic species with non-zero charge => ion
   return SpeciesType::ion;

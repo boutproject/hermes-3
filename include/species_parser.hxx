@@ -7,16 +7,16 @@
 #include "bout/bout_enum_class.hxx"
 
 /// Enum used to categorise different species
-BOUT_ENUM_CLASS(SpeciesType, electron, ion, molecular_ion, neutral, molecule);
+BOUT_ENUM_CLASS(SpeciesType, electron, ion, molecular_ion, atom, molecule);
 
 /// True for atomic or molecular ions of either charge sign.
 inline bool isIonSpeciesType(SpeciesType type) {
   return type == SpeciesType::ion or type == SpeciesType::molecular_ion;
 }
 
-/// True for neutral atoms or molecules.
+/// True for (neutral) atoms or molecules.
 inline bool isNeutralSpeciesType(SpeciesType type) {
-  return type == SpeciesType::neutral or type == SpeciesType::molecule;
+  return type == SpeciesType::atom or type == SpeciesType::molecule;
 }
 
 /**

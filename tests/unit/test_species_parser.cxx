@@ -19,7 +19,7 @@ TEST_F(SpeciesParserTest, GetTypeFromString) {
   EXPECT_EQ(SpeciesParser::get_type("e"), SpeciesType::electron);
   EXPECT_EQ(SpeciesParser::get_type("d+"), SpeciesType::ion);
   EXPECT_EQ(SpeciesParser::get_type("d2+"), SpeciesType::molecular_ion);
-  EXPECT_EQ(SpeciesParser::get_type("d"), SpeciesType::neutral);
+  EXPECT_EQ(SpeciesParser::get_type("d"), SpeciesType::atom);
   EXPECT_EQ(SpeciesParser::get_type("d2"), SpeciesType::molecule);
   // Recognise legacy generic ion name
   EXPECT_EQ(SpeciesParser::get_type("i"), SpeciesType::ion);

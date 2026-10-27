@@ -220,7 +220,7 @@ void LowNSources::append_species_by_type(const SpeciesParser& species, SpeciesTy
 
   if (type == SpeciesType::ion) {
     set_unique_species_or_throw(element_group.ion, species_str, element_str, "ion");
-  } else if (type == SpeciesType::neutral) {
+  } else if (type == SpeciesType::atom) {
     set_unique_species_or_throw(element_group.neutral, species_str, element_str,
                                 "neutral");
   } else if (type == SpeciesType::molecule) {

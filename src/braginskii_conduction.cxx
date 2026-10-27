@@ -66,7 +66,7 @@ BraginskiiConduction::BraginskiiConduction(const std::string& name, Options& all
       // the Braginskii prefactor of 3.16 needs to be divided by sqrt(2) to be consistent.
       default_kappa = 3.16 / sqrt(2);
       break;
-    case SpeciesType::neutral:
+    case SpeciesType::atom:
     case SpeciesType::molecule:
       default_kappa = 2.5;
       break;
