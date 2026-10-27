@@ -410,6 +410,7 @@ if(HERMES_TESTS)
   hermes_add_integrated_test(1D-conduction-fci REQUIRES BOUT_ENABLE_METRIC_3D)
   hermes_add_integrated_test(2D-blob-fci REQUIRES BOUT_ENABLE_METRIC_3D)
   hermes_add_integrated_test(2D-vorticity-inversion-fci REQUIRES
+                             BOUT_ENABLE_METRIC_3D)
   hermes_add_integrated_test(1D-golden-answer-fci REQUIRES
                              BOUT_ENABLE_METRIC_3D)
 
