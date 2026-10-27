@@ -43,26 +43,40 @@ std::string construct_species_str(std::string base_species, int charge) {
 } // namespace
 
 SpeciesType SpeciesParser::get_type(const std::string& species_str) {
-  return get_type(SpeciesParser(species_str));
+  return SpeciesParser(species_str).get_type();
 }
 
-SpeciesType SpeciesParser::get_type(const SpeciesParser& species) {
-  if (species.get_element() == "e") {
+/**
+ * @brief Map the parsed species to a SpeciesType.
+ *
+ * @details Recognise special-case strings like "i" and "e"; othewise use the
+ * charge and molecular status extracted from the species string to determine type.
+ *
+ * @return SpeciesType
+ */
+SpeciesType SpeciesParser::get_type() const {
+  // (Recognise 'e' as an electron)
+  if (get_element() == "e") {
     return SpeciesType::electron;
-  } else if (species.get_str() == "i") {
-    // (Recognise legacy generic ion name, which has no explicit charge suffix)
-    return SpeciesType::ion;
-  } else if (species.is_molecule()) {
-    if (species.get_charge() == 0) {
-      return SpeciesType::molecule;
-    } else {
-      return SpeciesType::molecular_ion;
-    }
-  } else if (species.get_charge() == 0) {
-    return SpeciesType::neutral;
-  } else {
+  }
+
+  // (Recognise legacy generic ion name, which has no explicit charge suffix)
+  if (get_str() == "i") {
     return SpeciesType::ion;
   }
+  // Molecules and molecular ions
+  if (is_molecule()) {
+    if (get_charge() == 0) {
+      return SpeciesType::molecule;
+    }
+    return SpeciesType::molecular_ion;
+  }
+  // Monatomic neutral species => atom
+  if (get_charge() == 0) {
+    return SpeciesType::neutral;
+  }
+  // Monatomic species with non-zero charge => ion
+  return SpeciesType::ion;
 }
 
 ///

@@ -48,7 +48,7 @@ struct SpeciesInformation {
     for (const auto& sp : species) {
       // FIXME: SpeciesParser has no concept of ebeam
       const SpeciesParser parsed_species(sp);
-      const SpeciesType type = SpeciesParser::get_type(parsed_species);
+      const SpeciesType type = parsed_species.get_type();
       if (type == SpeciesType::electron) {
         electrons.push_back(sp);
       } else if (isIonSpeciesType(type)) {

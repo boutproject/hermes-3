@@ -37,7 +37,9 @@ TEST_F(SpeciesParserTest, TypePredicates) {
                     {"d", false, true},  {"d2", false, true}};
   // Check that predicates return the expected result for each test case.
   for (const auto& test_case : test_cases) {
-    SpeciesType type = SpeciesParser::get_type(test_case.name);
+    const SpeciesParser species(test_case.name);
+    const SpeciesType type = species.get_type();
+    EXPECT_EQ(type, SpeciesParser::get_type(test_case.name)) << test_case.name;
     EXPECT_EQ(isIonSpeciesType(type), test_case.is_ion);
     EXPECT_EQ(isNeutralSpeciesType(type), test_case.is_neutral);
   }

@@ -27,7 +27,6 @@ class SpeciesParser {
 
 public:
   static SpeciesType get_type(const std::string& species_str);
-  static SpeciesType get_type(const SpeciesParser& species);
   /**
    * @brief Construct a new SpeciesParser object by extracting the base species and charge
    * from a species string.
@@ -48,6 +47,7 @@ public:
   int get_charge() const { return this->charge; }
   std::string get_base_species() const { return this->base_species; }
   std::string get_str() const { return this->species_str; }
+  SpeciesType get_type() const;
 
   /**
    * @brief Get an appropriate long name for the base species (e.g. "hydrogen" for "h").

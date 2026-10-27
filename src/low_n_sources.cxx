@@ -177,7 +177,7 @@ LowNSources::LowNSources(const std::string& name, Options& options)
     }
     species_with_mass.push_back(component_name);
     SpeciesParser species(component_name);
-    append_species_by_type(species, SpeciesParser::get_type(species));
+    append_species_by_type(species, species.get_type());
     this->all_species.push_back(component_name);
   }
 
