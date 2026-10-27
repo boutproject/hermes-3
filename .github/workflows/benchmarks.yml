@@ -112,7 +112,7 @@ jobs:
         if: always()
         run: cp benchmarks.log .asv/results/
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: asv-benchmark-results-${{ runner.os }}

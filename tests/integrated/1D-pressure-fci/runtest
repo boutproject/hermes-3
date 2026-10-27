@@ -2,10 +2,12 @@
 
 # Python script to run and analyse MMS test
 
-from boututils.run_wrapper import shell, launch_safe
-from boutdata.collect import collect
+import sys
 from pathlib import Path
-from numpy import sqrt, max, abs, mean, array, log
+
+from boutdata.collect import collect
+from boututils.run_wrapper import launch_safe, shell
+from numpy import abs, array, log, max, mean, sqrt
 
 gridpath = "../../../grids/MMS_slab_y/"
 
@@ -52,7 +54,7 @@ for ny in nylist:
         results[var]["l2"].append(l2)
         results[var]["inf"].append(linf)
 
-        print("Error norm %s: l-2 %f l-inf %f" % (var, l2, linf))
+        print(f"Error norm {var}: l-2 {l2:f} l-inf {linf:f}")
 
 # Calculate grid spacing
 dy = 1.0 / array(nylist)
@@ -62,7 +64,7 @@ success = True
 for var in varnames:
     l2 = results[var]["l2"]
     order = log(l2[-1] / l2[-2]) / log(dy[-1] / dy[-2])
-    print("Convergence order %s = %f" % (var, order))
+    print(f"Convergence order {var} = {order:f}")
 
     if order < 1.8:
         success = False
@@ -78,9 +80,7 @@ try:
 
         plt.plot(dy, l2, "-o", label=r"$l_2$ (" + var + ")")
         plt.plot(dy, inf, "-x", label=r"$l_\infty$ (" + var + ")")
-        plt.plot(
-            dy, l2[-1] * (dy / dy[-1]) ** order, "--", label="Order %.1f" % (order)
-        )
+        plt.plot(dy, l2[-1] * (dy / dy[-1]) ** order, "--", label=f"Order {order:.1f}")
 
     plt.legend(loc="upper left")
     plt.grid()
@@ -104,7 +104,7 @@ except:  # noqa
 
 if success:
     print(" => Test passed")
-    exit(0)
+    sys.exit(0)
 else:
     print(" => Test failed")
-    exit(1)
+    sys.exit(1)

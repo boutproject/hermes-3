@@ -64,6 +64,10 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
                   .doc("Damp P - N*T? Active when P < 0 or N < density_floor")
                   .withDefault<bool>(false);
 
+  dissipative = options["dissipative"]
+                    .doc("Lax flux in the parallel advection in Fci?")
+                    .withDefault<bool>(mesh->isFci());
+
   if (evolve_log) {
     // Evolve logarithm of pressure
     solver->add(logP, std::string("logP") + name);
@@ -165,6 +169,10 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
   numerical_viscous_heating = options["numerical_viscous_heating"]
                                   .doc("Include heating due to numerical viscosity?")
                                   .withDefault<bool>(false);
+
+  if (mesh->isFci() && numerical_viscous_heating) {
+    throw BoutException("Div_par_fvv_heating is not correctly implemented for Fci!");
+  }
 
   if (numerical_viscous_heating) {
     fix_momentum_boundary_flux =
@@ -287,7 +295,8 @@ void EvolvePressure::finally(const Options& state) {
 
     if (p_div_v) {
       // Use the P * Div(V) form
-      ddt(P) -= FV::Div_par_mod<hermes::Limiter>(P, V, fastest_wave, flow_ylow_advection);
+      ddt(P) -= FV::Div_par_mod<hermes::Limiter>(P, V, fastest_wave, flow_ylow_advection,
+                                                 true, dissipative);
 
       // Work done. This balances energetically a term in the momentum equation
       E_PdivV = -Pfloor * Div_par(V.asField3DParallel());
@@ -298,9 +307,9 @@ void EvolvePressure::finally(const Options& state) {
       // Note: A mixed form has been tried (on 1D neon example)
       //       -(4/3)*FV::Div_par(P,V) + (1/3)*(V * Grad_par(P) - P * Div_par(V))
       //       Caused heating of charged species near sheath like p_div_v
-      ddt(P) -=
-          (5. / 3)
-          * FV::Div_par_mod<hermes::Limiter>(P, V, fastest_wave, flow_ylow_advection);
+      ddt(P) -= (5. / 3)
+                * FV::Div_par_mod<hermes::Limiter>(
+                    P, V, fastest_wave, flow_ylow_advection, true, dissipative);
       E_VgradP = V * Grad_par(P.asField3DParallel());
       ddt(P) += (2. / 3) * E_VgradP;
     }

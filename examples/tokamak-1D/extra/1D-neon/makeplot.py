@@ -1,7 +1,6 @@
-from boutdata import collect
 import matplotlib.pyplot as plt
 import numpy as np
-import os
+from boutdata import collect
 
 Nnorm = collect("Nnorm")
 Tnorm = collect("Tnorm")
@@ -33,8 +32,8 @@ T = [
     for name, n in zip(species, N)
 ]
 
-n_max = max([np.amax(n) for n in N]) * Nnorm
-t_max = max([np.amax(t) for t in T]) * Tnorm
+n_max = max(np.amax(n) for n in N) * Nnorm
+t_max = max(np.amax(t) for t in T) * Tnorm
 
 for i in range(N[0].shape[0]):
     fig, ax1 = plt.subplots(figsize=(10, 5))

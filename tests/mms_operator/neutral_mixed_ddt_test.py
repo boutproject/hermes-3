@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
+import sys
+
+from boutdata.mms import Div_par, Grad_par, x, y
 from job_functions import run_neutral_mixed_manufactured_solutions_test
-from boutdata.mms import x, y, z, Div_par, Grad_par
 from perpendicular_laplacian import (
     Div_a_Grad_perp_f,
     Div_par_k_Grad_par_f,
     GeneralMetric,
 )
-from sympy import sin, cos, log
+from sympy import log, sin
 
 # specify symbolic inputs
 # contravariant metric coeffs
@@ -201,6 +203,6 @@ print(output_message_2)
 print(output_message_3)
 
 if global_success:
-    exit(0)
+    sys.exit(0)
 else:
-    exit(1)
+    sys.exit(1)

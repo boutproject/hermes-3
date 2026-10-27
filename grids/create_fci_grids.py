@@ -99,7 +99,7 @@ def create_grid(folder, nx, ny, nz, BC=False, inp_Ly=None):
     )
 
     maps = zoidberg.make_maps(rectangle, magnetic_field, nslice=1)
-
+    zoidberg.weights.modify_maps(maps, partial_boundaries=False)
     if BC:
         maps["forward_xt_prime"][:, -1, :] = nx - 1
         maps["backward_xt_prime"][:, 0, :] = nx - 1

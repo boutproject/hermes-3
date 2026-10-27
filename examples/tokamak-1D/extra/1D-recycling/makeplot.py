@@ -1,7 +1,8 @@
-from boutdata import collect
+import os
+
 import matplotlib.pyplot as plt
 import numpy as np
-import os
+from boutdata import collect
 
 Nnorm = collect("Nnorm")
 Tnorm = collect("Tnorm")

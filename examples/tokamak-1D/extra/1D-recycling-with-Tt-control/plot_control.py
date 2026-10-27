@@ -1,6 +1,7 @@
-import xhermes
 from pathlib import Path
+
 import matplotlib.pyplot as plt
+import xhermes
 from boutdata.data import BoutOptionsFile
 
 # Look in the folder where this script is located for the simulation data

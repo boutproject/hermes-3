@@ -1,5 +1,5 @@
 from pathlib import Path
-import tcvx21
+
 from tcvx21.record_c.record_writer_m import RecordWriter
 
 
@@ -149,10 +149,10 @@ def write_x21_dataset(hermes_data: dict, output_file: Path):
     }
 
     # Add Hermes-3 data
-    for dname, diagnostic in result.items():
+    for diagnostic in result.values():
         observables = diagnostic["observables"]
         location = diagnostic["hermes_location"]
-        for oname, observable in observables.items():
+        for observable in observables.values():
             hermes_obs = hermes_data[observable["hermes_name"]][location]
             observable["units"] = hermes_obs["units"]
             observable["values"] = hermes_obs["mean"]

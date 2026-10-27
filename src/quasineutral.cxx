@@ -55,8 +55,8 @@ void Quasineutral::transform_impl(GuardedOptions& state) {
   // Calculate density required. Floor so that density is >= 0
   density = floor(Field3D{rho / (-charge)}, 0.0);
 
-  if (bout::globals::mesh->isFci()) {
-    bout::globals::mesh->communicate(density);
+  if (density.isFci()) {
+    density.getMesh()->communicate(density);
     density.applyParallelBoundary("parallel_neumann_o2");
   }
 

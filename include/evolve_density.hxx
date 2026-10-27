@@ -23,6 +23,7 @@ struct EvolveDensity : public NamedComponent<EvolveDensity> {
   ///   - hyper_z        Hyper-diffusion in Z. Default off.
   ///   - evolve_log     Evolve logarithm of density? Default false.
   ///   - diagnose       Output additional diagnostics?
+  ///   - dissipative    Add dissipation for parallel advection in Fci
   ///
   /// - N<name>   e.g. "Ne", "Nd+"
   ///   - source    Source of particles [/m^3/s]
@@ -70,9 +71,9 @@ private:
   BoutReal pressure_floor; ///< When non-zero pressure is needed
   bool low_p_diffuse_perp; ///< Add artificial cross-field diffusion at low pressure?
   BoutReal hyper_z;        ///< Hyper-diffusion in Z
-
-  bool evolve_log; ///< Evolve logarithm of density?
-  Field3D logN;    ///< Logarithm of density (if evolving)
+  bool dissipative;        ///< Dissipative Lax-flux for Fci
+  bool evolve_log;         ///< Evolve logarithm of density?
+  Field3D logN;            ///< Logarithm of density (if evolving)
 
   Field3D source, final_source; ///< External input source
   Field3D Sn;                   ///< Total density source
