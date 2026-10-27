@@ -395,6 +395,58 @@ if(HERMES_TESTS)
                              BOUT_ENABLE_METRIC_3D)
   hermes_add_integrated_test(2D-production CONFLICTS BOUT_ENABLE_METRIC_3D)
   hermes_add_integrated_test(2D-energy CONFLICTS BOUT_ENABLE_METRIC_3D)
+  # Inventory audits use the same editable Python environment as standalone
+  # postprocessing. A different build environment can set this cache path.
+  set(HERMES_ENERGY_PYTHON
+      "${CMAKE_CURRENT_SOURCE_DIR}/.venv/bin/python"
+      CACHE FILEPATH "Python interpreter for energy inventory analysis")
+  if(EXISTS "${HERMES_ENERGY_PYTHON}" AND NOT BOUT_ENABLE_METRIC_3D)
+    set(ENERGY_TEST_SRC
+        "${CMAKE_CURRENT_SOURCE_DIR}/tests/integrated/2D-energy")
+    set(ENERGY_TEST_DEST "${ENERGY_TEST_SRC}")
+    if(HERMES_COPY_TESTS_TO_BUILD)
+      set(ENERGY_TEST_DEST
+          "${CMAKE_CURRENT_BINARY_DIR}/tests/integrated/2D-energy")
+      configure_file("${ENERGY_TEST_SRC}/runtest-inventory"
+                     "${ENERGY_TEST_DEST}/runtest-inventory" COPYONLY)
+      configure_file(
+        "${ENERGY_TEST_SRC}/inventory-equilibrium/BOUT.inp"
+        "${ENERGY_TEST_DEST}/inventory-equilibrium/BOUT.inp" COPYONLY)
+      configure_file("${ENERGY_TEST_SRC}/analysis.py"
+                     "${ENERGY_TEST_DEST}/analysis.py" COPYONLY)
+      file(GLOB ENERGY_ANALYSIS_SOURCES CONFIGURE_DEPENDS
+           "${CMAKE_CURRENT_SOURCE_DIR}/tools/energy_analysis/*.py")
+      foreach(ENERGY_SOURCE IN LISTS ENERGY_ANALYSIS_SOURCES)
+        get_filename_component(ENERGY_FILENAME "${ENERGY_SOURCE}" NAME)
+        configure_file(
+          "${ENERGY_SOURCE}"
+          "${CMAKE_CURRENT_BINARY_DIR}/tools/energy_analysis/${ENERGY_FILENAME}"
+          COPYONLY)
+      endforeach()
+    endif()
+    add_test(
+      NAME 2D-energy-inventory
+      COMMAND "${HERMES_ENERGY_PYTHON}" "${ENERGY_TEST_DEST}/runtest-inventory"
+              --exe $<TARGET_FILE:${PROJECT_NAME}>)
+    set_tests_properties(
+      2D-energy-inventory PROPERTIES LABELS "integration;energy" TIMEOUT 300
+                                     WORKING_DIRECTORY "${ENERGY_TEST_DEST}")
+    add_test(
+      NAME energy-analysis-python
+      COMMAND
+        "${HERMES_ENERGY_PYTHON}" -m pytest -q
+        "${CMAKE_CURRENT_SOURCE_DIR}/tests/python"
+        "${CMAKE_CURRENT_SOURCE_DIR}/external/xhermes/tests/test_energy_loading.py"
+    )
+    set_tests_properties(
+      energy-analysis-python
+      PROPERTIES LABELS "unit;energy" WORKING_DIRECTORY
+                 "${CMAKE_CURRENT_SOURCE_DIR}" TIMEOUT 120)
+  else()
+    message(
+      STATUS
+        "Energy inventory tests need the workspace .venv and standard metrics")
+  endif()
   hermes_add_integrated_test(2D-recycling CONFLICTS BOUT_ENABLE_METRIC_3D)
   hermes_add_integrated_test(examples CONFLICTS BOUT_ENABLE_METRIC_3D)
   hermes_add_integrated_test(component-order CONFLICTS BOUT_ENABLE_METRIC_3D)

@@ -1,48 +1,12 @@
-import xhermes
+"""Thin CLI for reusable total ion energy inventory analysis."""
 
-path = "data-Eion"
+import sys
+from pathlib import Path
 
-bd = xhermes.open(path)
-
-cell_volume = bd["J"] * bd["dx"] * bd["dy"] * bd["dz"]
-spatial_dims = [d for d in bd.dims if d != "t"]
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "tools"))
 
 
-def volume_integrate(value):
-    return (value * cell_volume).sum(dim=spatial_dims)
+if __name__ == "__main__":
+    from energy_analysis.__main__ import main
 
-
-if "Eion" in bd:
-    total_Eion = volume_integrate(bd["Eion"])
-
-Eelectron = (3.0 / 2) * bd["Pe"]
-total_Eelectron = volume_integrate(Eelectron)
-
-for term in [
-    "DivEExB",
-    "DivEReynolds",
-    "DivEelectric",
-    "DivEparallel",
-    "DivEpol",
-    "phi_Div_Je",
-    "electron_exb_work",
-    "Eion_src",
-    "Eion",
-    "ion_KE_perp",
-    "ion_KE_parallel",
-    "ddt(Eion)",
-]:
-    if term in bd:
-        total = volume_integrate(bd[term]).values
-        print(f"{term} =  {total}")
-
-for term in ["Pe", "ddt(Pe)"]:
-    if term in bd:
-        total = (3.0 / 2) * volume_integrate(bd[term]).values
-        print(f"3/2 * {term} =  {total}")
-
-
-ddt_energy = volume_integrate(bd["ddt(Eion)"]) + (3.0 / 2) * volume_integrate(
-    bd["ddt(Pe)"]
-)
-print(f"ddt(Eion + Eelectron) = {ddt_energy.values}")
+    raise SystemExit(main())

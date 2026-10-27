@@ -1,5 +1,22 @@
 # 2D energy test
 
+The planned reusable analysis module and total ion energy integrated tests are
+described in [energy-analysis-plan.md](energy-analysis-plan.md).
+
+The first implemented inventory test runs a uniform two-ion equilibrium with
+diagnostics enabled and disabled, and strips optional fields from the enabled
+output to check diagnostic independence:
+
+```sh
+# From the repository root, using the editable xhermes environment
+.venv/bin/python tests/integrated/2D-energy/runtest-inventory --exe build/hermes-3
+```
+
+It is registered with CTest as `2D-energy-inventory`; the original `runtest`
+below retains the pressure-model checks. See
+[the module README](../../../tools/energy_analysis/README.md) for analysis
+commands and supported data contracts.
+
 Evolves vorticity, electron density, and electron and ion pressure in a 2D
 (32 x 32) X-Z box with magnetic curvature. Includes kinematic viscosity and the
 ion polarisation compression term. There is no parallel dynamics (`ny = 1`,
