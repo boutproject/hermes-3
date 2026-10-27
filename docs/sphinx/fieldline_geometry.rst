@@ -69,7 +69,7 @@ An example of a 1D grid file is shown below:
 Example
 ^^^^^^^
 
-This writes a grid file with the same mesh as ``examples/tokamak-1D/1D-threshold`` and a simple analytic geometry:
+This writes a grid file with the same mesh as ``examples/tokamak-1D/1D-threshold`` and a simple analytic geometry, however the process for using profiles taken from a higher fidelity simulation is the same:
 
 .. code-block:: python
 
