@@ -105,20 +105,6 @@ def fv_xz(
     )
 
 
-def bout_perp(coefficient, potential, geometry, *, mxg=2, myg=2):
-    """BOUT Reynolds FV operator for orthogonal slabs.
-
-    Unlike FV_XZ this operator omits Z when MYG=0 in the current BOUT source.
-    The checked slab metrics have g13=g23=g_23=0.
-    """
-    result = fv_xz(coefficient, potential, geometry, mxg=mxg)
-    if myg == 0:
-        result = flux_dataset(
-            {"x": result.flux_x, "z": xr.zeros_like(result.flux_z)}, geometry
-        )
-    return result
-
-
 def arakawa(f, g, dx, dz):
     xp, xm = lambda v: neighbor(v, "x"), lambda v: neighbor(v, "x", -1)
     zp, zm = lambda v: neighbor(v, "z"), lambda v: neighbor(v, "z", -1)

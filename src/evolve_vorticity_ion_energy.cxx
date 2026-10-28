@@ -73,15 +73,11 @@ void forAllIons(const Options& allspecies, Function func) {
   }
 }
 
-struct PerpFaceFluxes {
-  BoutReal xp, xm, zp, zm;
-};
-
 // Each mixed term comes from the same corner bilinear form. In particular,
 // averaging transverse derivatives independently at faces would not give a
 // symmetric operator on a nonuniform mesh.
-PerpFaceFluxes perpendicularFaceFluxes(const Field3D& a, const Field3D& f,
-                                       const Ind3D& i) {
+bout::ion_energy::PerpendicularFaceFluxes
+geometricPerpendicularFaceFluxes(const Field3D& a, const Field3D& f, const Ind3D& i) {
   const auto* coord = f.getCoordinates();
   const auto& J = coord->J();
   const auto& g11 = coord->g11();
@@ -125,21 +121,27 @@ PerpFaceFluxes perpendicularFaceFluxes(const Field3D& a, const Field3D& f,
 } // namespace
 
 namespace bout::ion_energy {
+PerpendicularFaceFluxes perpendicularFaceFluxes(const Field3D& a, const Field3D& f,
+                                                const Ind3D& i, bool bndry_flux) {
+  auto flux = geometricPerpendicularFaceFluxes(a, f, i);
+  if (!bndry_flux && !f.getMesh()->periodicX) {
+    if (f.getMesh()->firstX() && i.x() == f.getMesh()->xstart) {
+      flux.xm = 0.0;
+    }
+    if (f.getMesh()->lastX() && i.x() == f.getMesh()->xend) {
+      flux.xp = 0.0;
+    }
+  }
+  return flux;
+}
+
 Field3D Div_a_Grad_perp_XZ(const Field3D& a, const Field3D& f, bool bndry_flux) {
   ASSERT0(a.getLocation() == f.getLocation());
   Field3D result{zeroFrom(f)};
   const auto* coord = f.getCoordinates();
   BOUT_FOR(i, result.getRegion("RGN_NOBNDRY")) {
-    auto flux = perpendicularFaceFluxes(a, f, i);
+    const auto flux = perpendicularFaceFluxes(a, f, i, bndry_flux);
     // A zero X derivative alone does not eliminate the g13 normal flux.
-    if (!bndry_flux && !f.getMesh()->periodicX) {
-      if (f.getMesh()->firstX() && i.x() == f.getMesh()->xstart) {
-        flux.xm = 0.0;
-      }
-      if (f.getMesh()->lastX() && i.x() == f.getMesh()->xend) {
-        flux.xp = 0.0;
-      }
-    }
     result[i] = (flux.xp - flux.xm + flux.zp - flux.zm)
                 / (coord->J()[i] * coord->dx()[i] * coord->dz()[i]);
   }
@@ -165,30 +167,64 @@ using bout::ion_energy::Div_a_Grad_perp_XZ;
 
 EvolveVorticityIonEnergy::EvolveVorticityIonEnergy(std::string name, Options& alloptions,
                                                    Solver* solver)
-    : NamedComponent(name,
-                     {readOnly("species:{all_species}:charge"),
-                      readIfSet("species:{charged}:velocity"),
-                      readIfSet("species:{charged}:momentum"),
+    : NamedComponent(name, {readOnly("species:{all_species}:charge"),
+                            readIfSet("species:{charged}:velocity", Regions::Interior),
+                            readIfSet("species:{charged}:momentum", Regions::Interior),
 
-                      // Electron inputs
-                      readOnly("species:e:pressure"), readIfSet("species:e:AA"),
-                      // Electron outputs
-                      readWrite("species:e:energy_source"),
-                      // Ion inputs
-                      readOnly("species:{ions}:density"), readOnly("species:{ions}:AA"),
-                      // Ion outputs
-                      readWrite("species:{ions}:pressure"),
-                      readWrite("species:{ions}:temperature"),
-                      readWrite("species:{ions}:density_source"),
-                      readWrite("species:{ions}:momentum_source"),
-                      // Fields
-                      readWrite("fields:vorticity"), readWrite("fields:phi")}) {
+                            // Electron inputs
+                            readOnly("species:e:pressure", Regions::Interior),
+                            readIfSet("species:e:AA"),
+                            // Electron outputs
+                            readWrite("species:e:energy_source"),
+                            // Ion inputs
+                            readOnly("species:{ions}:density", Regions::Interior),
+                            readOnly("species:{ions}:AA"),
+                            // Ion outputs
+                            readWrite("species:{ions}:pressure"),
+                            readWrite("species:{ions}:temperature"),
+                            readWrite("species:{ions}:density_source"),
+                            readWrite("species:{ions}:momentum_source"),
+                            // Fields
+                            readWrite("fields:vorticity"), readWrite("fields:phi")}) {
 
   auto& options = alloptions[name];
+
+  phi_boundary_relax = options["phi_boundary_relax"]
+                           .doc("Relax x boundaries of phi towards Neumann?")
+                           .withDefault<bool>(false);
+  if (phi_boundary_relax) {
+    if (mesh->xstart < 2) {
+      throw BoutException("phi_boundary_relax requires two radial guard cells");
+    }
+    auto& evolve_boundary = Options::root()["Vort"]["evolve_bndry"];
+    if (evolve_boundary.isSet() && !evolve_boundary.as<bool>()) {
+      throw BoutException("phi_boundary_relax requires Vort:evolve_bndry=true");
+    }
+    // Set an effective value, rather than a different default from Solver::add.
+    evolve_boundary.force(true, "evolve_vorticity_ion_energy");
+    phi_boundary_timescale = options["phi_boundary_timescale"]
+                                 .doc("Timescale for phi boundary relaxation [seconds]")
+                                 .withDefault(1e-4)
+                             / get<BoutReal>(alloptions["units"]["seconds"]);
+    if (!std::isfinite(phi_boundary_timescale) || phi_boundary_timescale <= 0.0) {
+      throw BoutException("phi_boundary_timescale must be finite and positive");
+    }
+    // Own a no-op boundary configuration before moving the original Vort
+    // boundary operators into the physical-vorticity field. Swap only the
+    // FieldData metadata: solver pointers to Vort and ddt(Vort) stay valid.
+    const std::string storage_name = name + "_boundary_storage";
+    Options::root()[storage_name]["bndry_all"].force(std::string{"none"});
+    vorticity.setBoundary(storage_name);
+  }
 
   // Evolve the vorticity and ion energy in time
   solver->add(Vort, "Vort");
   solver->add(Eion, "Eion");
+  if (phi_boundary_relax) {
+    swap(static_cast<FieldData&>(Vort), static_cast<FieldData&>(vorticity));
+    ddt(Vort).copyBoundary(Vort);
+    initialiseBoundaryState();
+  }
 
   const Options& units = alloptions["units"];
   const BoutReal Nnorm = units["inv_meters_cubed"];
@@ -226,25 +262,11 @@ EvolveVorticityIonEnergy::EvolveVorticityIonEnergy(std::string name, Options& al
   phiSolver = Laplacian::create(&options["laplacian"]);
   phiSolver->setCoefC(boussinesq_coeff);
 
-  phi_boundary_relax = options["phi_boundary_relax"]
-                           .doc("Relax x boundaries of phi towards Neumann?")
-                           .withDefault<bool>(false);
-
   if (phi_boundary_relax) {
-    // Set the last update time to -1, so it will reset
-    // the first time RHS function is called
-    phi_boundary_last_update = -1.;
-
     phi_core_averagey = options["phi_core_averagey"]
                             .doc("Average phi core boundary in Y?")
                             .withDefault<bool>(false)
                         and mesh->periodicY(mesh->xstart);
-
-    phi_boundary_timescale = options["phi_boundary_timescale"]
-                                 .doc("Timescale for phi boundary relaxation [seconds]")
-                                 .withDefault(1e-4)
-                             / get<BoutReal>(alloptions["units"]["seconds"]);
-    // Normalise to internal time units
 
     phiSolver->setInnerBoundaryFlags(INVERT_SET);
     phiSolver->setOuterBoundaryFlags(INVERT_SET);
@@ -300,6 +322,13 @@ EvolveVorticityIonEnergy::EvolveVorticityIonEnergy(std::string name, Options& al
 
 void EvolveVorticityIonEnergy::transform_impl(GuardedOptions& state) {
   mesh->communicate(Vort, Eion);
+  vorticity = copy(Vort);
+  if (phi_boundary_relax) {
+    // Assignment preserves vorticity's independently owned boundary rules.
+    vorticity.applyBoundary();
+    mesh->communicate(vorticity);
+    applyPotentialBoundary();
+  }
 
   auto allspecies = state["species"];
   auto electrons = allspecies["e"];
@@ -338,6 +367,12 @@ void EvolveVorticityIonEnergy::transform_impl(GuardedOptions& state) {
   // Use the same density floor as the temperature recovery.
   const Field3D pressure_weight =
       mass_charge_density / (average_atomic_mass * Ni_sum_floor);
+  if (phi_boundary_relax) {
+    // Start from this stage's energy rather than a previous pressure iterate.
+    // Pressure guards must be consistent before the first Phi correction.
+    Pi_sum = floor((2. / 3) * (Eion - ion_KE_parallel), 0.0);
+    applyPressureBoundary(Pi_sum);
+  }
   psi = pressure_weight * Pi_sum;
   const BoutReal vort_tolerance = vort_atol + phi_rtol * max(abs(Vort), true);
 
@@ -354,9 +389,11 @@ void EvolveVorticityIonEnergy::transform_impl(GuardedOptions& state) {
     // with c = rho_0 / B^2 and psi = sum_s(A_s p_s / (Abar Z_s))
 
     mesh->communicate(phi, psi);
+    applyPotentialBoundary();
     // The spectral solver is only an approximate inverse. Defect correction
     // converges to the same finite-volume operator used for kinetic energy.
     phi = correctPotential(Vort, phi + psi) - psi;
+    applyPotentialBoundary();
 
     // With the Boussinesq approximation the perpendicular flow velocity is
     // v⊥0 = b × ∇Φ / B = v_E + v∗
@@ -372,6 +409,7 @@ void EvolveVorticityIonEnergy::transform_impl(GuardedOptions& state) {
     applyPressureBoundary(Pi_sum);
     psi = pressure_weight * Pi_sum;
     mesh->communicate(phi, psi);
+    applyPotentialBoundary();
 
     phi_err = max((abs(phi - phi_last)) / (abs(phi) + phi_atol), true);
     const BoutReal psi_err = max(abs(psi - psi_last) / (abs(psi) + phi_atol), true);
@@ -392,6 +430,7 @@ void EvolveVorticityIonEnergy::transform_impl(GuardedOptions& state) {
     }
   } while (true);
   mesh->communicate(phi, Pi_sum, psi);
+  applyPotentialBoundary();
 
   // Free parallel boundaries, as in the vorticity component. The spectral
   // inverse does not supply these, but electron compression uses Grad(phi).
@@ -413,9 +452,10 @@ void EvolveVorticityIonEnergy::transform_impl(GuardedOptions& state) {
     }
     phi = fromFieldAligned(phi_fa);
   }
+  applyPotentialBoundary();
 
   auto fields = state["fields"];
-  set(fields["vorticity"], Vort);
+  set(fields["vorticity"], vorticity);
   set(fields["phi"], phi);
 
   //////////////////////////////////////////////////////////
@@ -443,12 +483,13 @@ void EvolveVorticityIonEnergy::transform_impl(GuardedOptions& state) {
   mesh->communicate(vEdotGradPsi, DelpPhi_2B2);
 
   // Divergence of Reynolds stress term DivJReynolds = -Div(G)
-  DivJReynolds = -Div_n_bxGrad_f_B_XPPM(0.5 * Vort, phi, false, poloidal_flows)
-                 - FV::Div_a_Grad_perp(Field3D{0.5 * boussinesq_coeff}, vEdotGradPsi)
+  // Use the same X-Z face operator as potential recovery and polarisation.
+  DivJReynolds = -Div_n_bxGrad_f_B_XPPM(0.5 * vorticity, phi, false, poloidal_flows)
+                 - Div_a_Grad_perp_XZ(Field3D{0.5 * boussinesq_coeff}, vEdotGradPsi)
                  - Div_n_bxGrad_f_B_XPPM(DelpPhi_2B2, phi + psi, false, poloidal_flows);
 
-  // Divergence of Reynolds stress enegy flux
-  DivEReynolds = FV::Div_a_Grad_perp(0.5 * boussinesq_coeff * vEdotGradPsi, phi + psi);
+  // Divergence of Reynolds stress energy flux
+  DivEReynolds = Div_a_Grad_perp_XZ(0.5 * boussinesq_coeff * vEdotGradPsi, phi + psi);
 
   //////////////////////////////////////////////////////////
   // Diamagnetic drift
@@ -469,7 +510,7 @@ void EvolveVorticityIonEnergy::transform_impl(GuardedOptions& state) {
   Field3D Jpar_e; // Electron current
   if (electrons.isSet("momentum")) {
     // Note: Using NV rather than N*V so that the cell boundary flux is correct
-    const Field3D NV = get<Field3D>(electrons["momentum"]);
+    const Field3D NV = GET_NOBOUNDARY(Field3D, electrons["momentum"]);
     const BoutReal A = get<BoutReal>(electrons["AA"]);
     Jpar_e = (-1. / A) * NV;
   } else {
@@ -481,7 +522,7 @@ void EvolveVorticityIonEnergy::transform_impl(GuardedOptions& state) {
     if (!species.isSet("momentum")) {
       return;
     }
-    const Field3D NV = get<Field3D>(species["momentum"]);
+    const Field3D NV = GET_NOBOUNDARY(Field3D, species["momentum"]);
     const BoutReal A = get<BoutReal>(species["AA"]);
     const BoutReal Z = get<BoutReal>(species["charge"]);
 
@@ -507,16 +548,16 @@ void EvolveVorticityIonEnergy::transform_impl(GuardedOptions& state) {
   //////////////////////////////////////////////////////////
   // Polarisation drift
 
-  // Solve for Div( c Grad_perp dPhi/dt ) = dVort/dt
-  // Note: Check case where boundaries are relaxed
+  // Auxiliary current-continuity potential. Its homogeneous boundary is
+  // independent of the relaxing phi boundary and does not require ddt(psi).
   const Field3D dVortdt = DivJReynolds + DivJdia;
   const BoutReal dVort_tolerance = vort_atol + phi_rtol * max(abs(dVortdt), true);
   for (int step = 0; step < phi_max_iterations; ++step) {
-    mesh->communicate(dPhidt);
-    dPhidt = correctPotential(dVortdt, dPhidt);
-    mesh->communicate(dPhidt);
+    mesh->communicate(chi);
+    chi = correctPotential(dVortdt, chi);
+    mesh->communicate(chi);
     const BoutReal residual =
-        max(abs(dVortdt - Div_a_Grad_perp_XZ(boussinesq_coeff, dPhidt)), true);
+        max(abs(dVortdt - Div_a_Grad_perp_XZ(boussinesq_coeff, chi)), true);
     if (residual <= dVort_tolerance) {
       break;
     }
@@ -529,17 +570,20 @@ void EvolveVorticityIonEnergy::transform_impl(GuardedOptions& state) {
 
   // Set Neumann boundaries; divPol also suppresses the g13 radial flux.
   // Solving for dPhidt with two Neumann boundaries is ill conditioned
-  dPhidt.applyBoundary("neumann_o2");
-  mesh->communicate(dPhidt);
+  if (!phi_boundary_relax) {
+    chi.applyBoundary("neumann_o2");
+  }
+  mesh->communicate(chi);
 
-  // Divergence of a scalar times the total polarisation current, Jpol.
+  // Closed polarisation transport, distinct from the full current solve.
   const auto divPol = [&](const Field3D& weight) -> Field3D {
     return
         // Potential flow part of polarisation drift
-        -Div_a_Grad_perp_XZ(weight * boussinesq_coeff, dPhidt, false)
+        -Div_a_Grad_perp_XZ(weight * boussinesq_coeff, chi, false)
         // Reynolds stress part of the polarisation drift
         // Note: The stream functions are negated so that upwinding works correctly
-        + Div_n_bxGrad_f_B_XPPM(0.5 * Vort, -phi, false, poloidal_flows, false, &weight)
+        + Div_n_bxGrad_f_B_XPPM(0.5 * vorticity, -phi, false, poloidal_flows, false,
+                                &weight)
         - Div_a_Grad_perp_XZ(weight * 0.5 * boussinesq_coeff, vEdotGradPsi, false)
         + Div_n_bxGrad_f_B_XPPM(DelpPhi_2B2, -(phi + psi), false, poloidal_flows, false,
                                 &weight);
@@ -580,7 +624,15 @@ void EvolveVorticityIonEnergy::finally(const Options& state) {
   //////////////////////////////////////////////////////////
   // Vorticity equation
 
-  ddt(Vort) = DivJReynolds + DivJdia;
+  if (phi_boundary_relax) {
+    ddt(Vort) = 0.0;
+    BOUT_FOR(i, Vort.getRegion("RGN_NOBNDRY")) {
+      ddt(Vort)[i] = DivJReynolds[i] + DivJdia[i];
+    }
+    boundaryRHS();
+  } else {
+    ddt(Vort) = DivJReynolds + DivJdia;
+  }
 
   //////////////////////////////////////////////////////////
   // Ion energy equation
@@ -636,6 +688,9 @@ void EvolveVorticityIonEnergy::outputVars(Options& state) {
                   {"species", "all ions"},
                   {"source", "evolve_vorticity_ion_energy"}});
 
+  if (phi_boundary_relax) {
+    set(state["Vort"], vorticity);
+  }
   state["Vort"].setAttributes({{"time_dimension", "t"},
                                {"units", "C m^-3"},
                                {"conversion", SI::qe * Nnorm},
@@ -654,12 +709,17 @@ void EvolveVorticityIonEnergy::outputVars(Options& state) {
     set_with_attrs(state["DivJpol"], DivJpol,
                    {{"time_dimension", "t"},
                     {"units", "A m^-3"},
+                    {"long_name", "Closed polarisation transport current divergence"},
                     {"conversion", SI::qe * Nnorm * Omega_ci}});
     set_with_attrs(state["ion_pressure_potential"], psi,
                    {{"time_dimension", "t"}, {"units", "V"}, {"conversion", Tnorm}});
-    set_with_attrs(
-        state["ddt(Phi)"], dPhidt,
-        {{"time_dimension", "t"}, {"units", "V s^-1"}, {"conversion", Tnorm * Omega_ci}});
+    set_with_attrs(state["ddt(Phi)"], chi,
+                   {{"time_dimension", "t"},
+                    {"units", "V s^-1"},
+                    {"conversion", Tnorm * Omega_ci},
+                    {"long_name", "Auxiliary polarisation current potential"},
+                    {"description",
+                     "L(chi)=physical ddt(Vort); approximate, not exact ddt(phi+psi)"}});
     set_with_attrs(state["ion_KE_parallel"], ion_KE_parallel,
                    {{"time_dimension", "t"}, {"units", "J m^-3"}, {"conversion", Pnorm}});
     set_with_attrs(state["ion_KE_perp"], ion_KE_perp,
@@ -692,6 +752,128 @@ void EvolveVorticityIonEnergy::outputVars(Options& state) {
         state["Eion_src"], Eion_src,
         {{"time_dimension", "t"}, {"units", "W m^-3"}, {"conversion", Pnorm * Omega_ci}});
   }
+}
+
+void EvolveVorticityIonEnergy::initialiseBoundaryState() {
+  BOUT_FOR(i, Vort.getRegion("RGN_BNDRY")) { Vort[i] = 0.0; }
+  if (mesh->periodicX) {
+    return;
+  }
+  const auto initialise = [&](int interior, int guard, int begin, int end) {
+    for (int y = mesh->ystart; y <= mesh->yend; ++y) {
+      BoutReal midpoint = 0.0;
+      for (int z = 0; z < mesh->LocalNz; ++z) {
+        midpoint += 0.5 * (phi(guard, y, z) + phi(interior, y, z));
+      }
+      midpoint /= mesh->LocalNz;
+      for (int x = begin; x < end; ++x) {
+        for (int z = 0; z < mesh->LocalNz; ++z) {
+          Vort(x, y, z) = midpoint;
+        }
+      }
+    }
+  };
+  if (mesh->firstX()) {
+    initialise(mesh->xstart, mesh->xstart - 1, 0, mesh->xstart);
+  }
+  if (mesh->lastX()) {
+    initialise(mesh->xend, mesh->xend + 1, mesh->xend + 1, mesh->LocalNx);
+  }
+}
+
+void EvolveVorticityIonEnergy::applyPotentialBoundary() {
+  if (!phi_boundary_relax || mesh->periodicX) {
+    return;
+  }
+  const auto apply = [&](int interior, int guard, int begin, int end) {
+    for (int y = mesh->ystart; y <= mesh->yend; ++y) {
+      BoutReal midpoint = 0.0;
+      for (int z = 0; z < mesh->LocalNz; ++z) {
+        midpoint += Vort(guard, y, z);
+      }
+      midpoint /= mesh->LocalNz;
+      for (int z = 0; z < mesh->LocalNz; ++z) {
+        phi(guard, y, z) = 2.0 * midpoint - phi(interior, y, z);
+        for (int x = begin; x < end; ++x) {
+          phi(x, y, z) = phi(guard, y, z);
+        }
+      }
+    }
+  };
+  if (mesh->firstX()) {
+    apply(mesh->xstart, mesh->xstart - 1, 0, mesh->xstart - 1);
+  }
+  if (mesh->lastX()) {
+    apply(mesh->xend, mesh->xend + 1, mesh->xend + 2, mesh->LocalNx);
+  }
+}
+
+void EvolveVorticityIonEnergy::boundaryRHS() {
+  if (mesh->periodicX) {
+    return;
+  }
+  BoutReal core_average = 0.0;
+  if (mesh->firstX() && phi_core_averagey) {
+    BoutReal local[2]{
+        0.0, static_cast<BoutReal>((mesh->yend - mesh->ystart + 1) * mesh->LocalNz)};
+    for (int y = mesh->ystart; y <= mesh->yend; ++y) {
+      for (int z = 0; z < mesh->LocalNz; ++z) {
+        local[0] += phi(mesh->xstart, y, z);
+      }
+    }
+    BoutReal global[2];
+    MPI_Allreduce(local, global, 2, MPI_DOUBLE, MPI_SUM, mesh->getYcomm(0));
+    core_average = global[0] / global[1];
+  }
+  const auto relax = [&](int interior, int begin, int end, bool average_y) {
+    for (int y = mesh->ystart; y <= mesh->yend; ++y) {
+      BoutReal target = core_average;
+      if (!average_y) {
+        target = 0.0;
+        for (int z = 0; z < mesh->LocalNz; ++z) {
+          target += phi(interior, y, z);
+        }
+        target /= mesh->LocalNz;
+      }
+      for (int x = begin; x < end; ++x) {
+        for (int z = 0; z < mesh->LocalNz; ++z) {
+          ddt(Vort)(x, y, z) = (target - Vort(x, y, z)) / phi_boundary_timescale;
+        }
+      }
+    }
+  };
+  if (mesh->firstX()) {
+    relax(mesh->xstart, 0, mesh->xstart, phi_core_averagey);
+  }
+  if (mesh->lastX()) {
+    relax(mesh->xend, mesh->xend + 1, mesh->LocalNx, false);
+  }
+}
+
+void EvolveVorticityIonEnergy::restartVars(Options& state) {
+  // The first call is the postInit hook, after solver variables were loaded.
+  if (restore_phi_on_restart) {
+    restore_phi_on_restart = false;
+    if (state.isSet("phi")) {
+      phi = state["phi"].as<Field3D>();
+    }
+    if (phi_boundary_relax) {
+      const int version = state["ion_energy_boundary_state_version"].withDefault(0);
+      if (version < 0 || version > 1) {
+        throw BoutException("Unsupported ion energy boundary state version {}", version);
+      }
+      if (version == 0) {
+        initialiseBoundaryState();
+      }
+    }
+  }
+  if (phi_boundary_relax) {
+    set_with_attrs(state["ion_energy_boundary_state_version"], 1,
+                   {{"description", "Restart Vort physical radial boundary cells store "
+                                    "phi midpoints in normalised potential units"}});
+  }
+  set_with_attrs(state["phi"], phi,
+                 {{"long_name", "plasma potential"}, {"source", "vorticity"}});
 }
 
 void EvolveVorticityIonEnergy::applyPressureBoundary(Field3D& P) const {

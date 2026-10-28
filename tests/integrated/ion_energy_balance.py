@@ -303,9 +303,30 @@ def audit(run, manifest, case, diagnose):
     return report, inventory, electron
 
 
-def execute(executable, folder, fixture, case, cadence, duration, diagnose, timeout):
+def execute(
+    executable,
+    folder,
+    fixture,
+    case,
+    cadence,
+    duration,
+    diagnose,
+    timeout,
+    *,
+    ranks=1,
+    overrides=(),
+    checkpoint=None,
+    files=(),
+):
     folder.mkdir()
     shutil.copyfile(fixture, folder / "BOUT.inp")
+    for path in files:
+        shutil.copyfile(path, folder / path.name)
+    if checkpoint is not None:
+        restarts = list(checkpoint.glob("BOUT.restart.*"))
+        require(bool(restarts), f"No restart files in {checkpoint}")
+        for restart in restarts:
+            shutil.copyfile(restart, folder / restart.name)
     count = round(duration / cadence)
     require(
         np.isclose(count * cadence, duration),
@@ -321,10 +342,25 @@ def execute(executable, folder, fixture, case, cadence, duration, diagnose, time
             f"{s}:diagnose={str(diagnose).lower()}"
             for s in case["diagnostic_components"]
         ],
+        *overrides,
+        *(["restart=true", "append=false"] if checkpoint is not None else []),
     ]
+    if ranks > 1:
+        import os
+        import shlex
+
+        command = [
+            *shlex.split(os.environ.get("MPIEXEC", "mpiexec")),
+            "-n",
+            str(ranks),
+            *command,
+        ]
     execution = {
         "command": command,
         "input_sha256": hashlib.sha256(fixture.read_bytes()).hexdigest(),
+        "files_sha256": {
+            path.name: hashlib.sha256(path.read_bytes()).hexdigest() for path in files
+        },
     }
     with (folder / "run.log").open("w") as log:
         try:

@@ -35,9 +35,9 @@ shrink by at least a factor of two.
 
 Hermes XPPM suppresses the radial periodic seam with `bndry_flux=false` because
 it tests `firstX/lastX`. Reconstruction matches that behaviour; the case checks
-energy budgets without claiming correct transport across that seam. BOUT's
-Reynolds finite-volume operator omits its Z term when `MYG=0`; this case uses
-`MYG=2` and exercises that term. Flux reconstruction currently requires uniform
+energy budgets without claiming correct transport across that seam. Reynolds
+transport uses the same X-Z face operator as potential recovery and polarisation,
+including Z fluxes when `MYG=0`. Flux reconstruction currently requires uniform
 orthogonal slab metrics. The separate Kperp/forward operator tests include
 nonuniform metrics and `g13`; full nonorthogonal transport is a later stage.
 

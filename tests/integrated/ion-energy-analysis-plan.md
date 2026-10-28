@@ -275,6 +275,16 @@ actually match the intended geometry.
 
 ### Tokamak boundary stress test
 
+The implementation and testing plan for relaxing radial potential boundaries is
+in [Relaxing potential boundaries in the total ion energy model](ion-energy-phi-boundary-relax-plan.md).
+It retains polarisation current in the vorticity equation while closing normal
+polarisation particle, momentum, enthalpy, parallel kinetic energy and electrical
+work fluxes. It uses the agreed auxiliary polarisation potential and recommends
+solver-managed phi boundary state stored in Vort's physical boundary cells,
+with a separate physical-vorticity field for stencils and normal output. Add
+its separate slab test before exercising relaxation in the tokamak/sheath case
+below.
+
 Use the checked-in `examples/tokamak-2D/compass-36x48.grd.nc` for a small
 axisymmetric total ion energy case (`MZ=1`), with electrons evolved using
 `evolve_pressure` and a common ion temperature. Use the existing tokamak
@@ -466,15 +476,28 @@ analysis. Keep generated results and fixtures separate from checked-in inputs.
    sources remain unavailable without an explicit provenance-bearing manifest.
    Independent Kperp/forward operators retain their nonuniform/g13 coverage.
 
-   Three findings remain named: XPPM's closed periodic radial seam, BOUT Reynolds
-   FV omission of Z when MYG=0, and excess parallel numerical heating from its
-   wave-speed coefficient. The electron parallel test matches diagnostics and
-   independently predicts the last defect. Its report preserves the raw plasma
+   Reynolds current and energy fluxes now use the same X-Z face operator as
+   potential recovery and polarisation, including Z fluxes when MYG=0.
+   XPPM's closed periodic radial seam remains tracked. The electron parallel
+   test still tracks excess numerical heating from the old BOUT wave-speed
+   coefficient; its reconstruction and criteria need updating for the BOUT
+   operator fix. Its report preserves the raw plasma
    drift and marks source-free conservation false; a separate defect-accounted
    residual gate checks reconstruction without loosening the conservation limit.
    Open electron momentum, sheath/conduction/reaction operators and general
    kinetic ExB fluxes need additional discrete contracts in subsequent stages.
-4. **Broader integration.** Add the six-rank COMPASS tokamak boundary test,
+4. **Broader integration (boundary relaxation subset implemented).** The separate
+   `2D-ion-energy-relax-boundary` test covers solver-managed potential midpoints,
+   full auxiliary-current reconstruction, closed polarisation faces, X/Y MPI
+   decomposition and checkpoint/restart. `tokamak-ion-energy-relax-boundary`
+   uses the existing COMPASS grid on six ranks, checks independent inventories,
+   relaxation, simple-sheath source assembly and parallel ion boundary power,
+   and requires core/private-flux/processor face cancellation. Diagnostics
+   independently cross-check the closed X-Z transport driven by saved chi.
+   General tokamak electrical/diamagnetic powers, the independent shifted
+   auxiliary-current RHS and the complete electron budget remain outside
+   coverage and are explicitly marked incomplete. No new default volume
+   outputs were needed. Continue with the broader
    MPI and resolution/tolerance sweeps, metric-3D and shifted geometry. Extend
    default audit outputs only where reconstruction has an identified gap.
    Acceptance: tokamak global and regional balances account for physical

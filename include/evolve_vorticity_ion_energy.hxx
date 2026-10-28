@@ -15,6 +15,12 @@
 #include <string>
 
 namespace bout::ion_energy {
+struct PerpendicularFaceFluxes {
+  BoutReal xp, xm, zp, zm;
+};
+/// Integrated fluxes on the four faces of a physical cell, including g13.
+PerpendicularFaceFluxes perpendicularFaceFluxes(const Field3D& a, const Field3D& f,
+                                                const Ind3D& i, bool bndry_flux = true);
 /// Conservative X-Z operator, including the cross metric g13.
 Field3D Div_a_Grad_perp_XZ(const Field3D& a, const Field3D& f, bool bndry_flux = true);
 /// Face-based energy density consistent with Div_a_Grad_perp_XZ.
@@ -72,22 +78,7 @@ struct EvolveVorticityIonEnergy : public NamedComponent<EvolveVorticityIonEnergy
   void finally(const Options& state) override;
 
   // Save and restore potential phi
-  void restartVars(Options& state) override {
-
-    // NOTE: This is a hack because we know that the loaded restart file
-    //       is passed into restartVars in PhysicsModel::postInit
-    // The restart value should be used in init() rather than here
-    if (restore_phi_on_restart) {
-      restore_phi_on_restart = false;
-      if (state.isSet("phi")) {
-        phi = state["phi"].as<Field3D>();
-      }
-    }
-
-    // Save the potential
-    set_with_attrs(state["phi"], phi,
-                   {{"long_name", "plasma potential"}, {"source", "vorticity"}});
-  }
+  void restartVars(Options& state) override;
 
   void outputVars(Options& state) override;
 
@@ -95,7 +86,8 @@ struct EvolveVorticityIonEnergy : public NamedComponent<EvolveVorticityIonEnergy
 
 private:
   bool restore_phi_on_restart{true}; ///< Read restart phi only on the first hook call
-  Field3D Vort;                      ///< Evolving vorticity
+  Field3D Vort;                      ///< Solver vorticity; radial boundaries store phi
+  Field3D vorticity{0.0};            ///< Physical vorticity, including ordinary guards
   Field3D Eion;                      ///< Evolving ion energy
 
   Field3D ion_KE_parallel; ///< Parallel ion kinetic energy K_||i
@@ -106,18 +98,17 @@ private:
   bool neumann_boundary_average_z; ///< Set pressure constant in Z, Neumann in X
   BoutReal density_floor;          ///< Used to calculate Ti
 
-  Field3D phi{0.0};    ///< Electrostatic potential ϕ
-  Field3D dPhidt{0.0}; ///< Generalised potential time derivative ∂tΦ
-  Field3D Pi_sum;      ///< Total ion pressure
-  Field3D psi;         ///< Pressure potential Σ A_s p_s / (Abar Z_s)
-  Field3D Ti;          ///< Common ion temperature
+  Field3D phi{0.0}; ///< Electrostatic potential ϕ
+  Field3D chi{0.0}; ///< Auxiliary current potential, L(chi) = physical ∂tVort
+  Field3D Pi_sum;   ///< Total ion pressure
+  Field3D psi;      ///< Pressure potential Σ A_s p_s / (Abar Z_s)
+  Field3D Ti;       ///< Common ion temperature
   Coordinates::FieldMetric boussinesq_coeff; ///< c = mass / B^2
   std::unique_ptr<Laplacian> phiSolver;      ///< Laplacian solver in X-Z
 
-  bool phi_boundary_relax;           ///< Relax boundary to zero-gradient
-  BoutReal phi_boundary_timescale;   ///< Relaxation timescale [normalised]
-  BoutReal phi_boundary_last_update; ///< Time when last updated
-  bool phi_core_averagey;            ///< Average phi core boundary in Y?
+  bool phi_boundary_relax;         ///< Relax boundary to zero-gradient
+  BoutReal phi_boundary_timescale; ///< Relaxation timescale [normalised]
+  bool phi_core_averagey;          ///< Average phi core boundary in Y?
 
   int phi_max_iterations; ///< Maximum number of Vort,E -> phi, Pi iterations
   BoutReal phi_atol;      ///< Absolute tolerance on phi
@@ -133,7 +124,7 @@ private:
   // Divergence of currents
   Field3D DivJdia;      ///< Divergence of diamagnetic current
   Field3D DivJReynolds; ///< Divergence of Reynolds stress current
-  Field3D DivJpol;      ///< Divergence of the total polarisation current used in fluxes
+  Field3D DivJpol;      ///< Polarisation transport divergence with closed physical faces
 
   // Divergence of energy fluxes
   Field3D DivEExB;      ///< Divergence of ExB energy flux
@@ -163,6 +154,13 @@ private:
   ///     - temperature
   ///
   void transform_impl(GuardedOptions& state) override;
+
+  /// Initialise encoded boundary midpoints from phi, including old restarts.
+  void initialiseBoundaryState();
+  /// Reimpose phi midpoints from the solver's boundary state during recovery.
+  void applyPotentialBoundary();
+  /// Relax encoded midpoints towards averages of the current recovered phi.
+  void boundaryRHS();
 
   /// Apply a boundary condition to given pressure field `P`
   void applyPressureBoundary(Field3D& P) const;

@@ -427,8 +427,11 @@ if(HERMES_TESTS)
                                WORKING_DIRECTORY "${ENERGY_TEST_DEST}")
     endfunction()
     if(HERMES_COPY_TESTS_TO_BUILD)
-      foreach(ENERGY_SHARED_FILE ion_energy_balance.py ion_energy_flux_test.py
-                                 ion-energy-analysis-plan.md)
+      foreach(
+        ENERGY_SHARED_FILE
+        ion_energy_balance.py ion_energy_flux_test.py
+        ion_energy_tokamak_test.py ion-energy-analysis-plan.md
+        ion-energy-phi-boundary-relax-plan.md)
         configure_file(
           "${CMAKE_CURRENT_SOURCE_DIR}/tests/integrated/${ENERGY_SHARED_FILE}"
           "${CMAKE_CURRENT_BINARY_DIR}/tests/integrated/${ENERGY_SHARED_FILE}"
@@ -458,6 +461,16 @@ if(HERMES_TESTS)
     hermes_add_ion_energy_test(2D-ion-energy-sources)
     hermes_add_ion_energy_test(2D-ion-energy-parallel)
     hermes_add_ion_energy_test(2D-ion-energy-boundary)
+    hermes_add_ion_energy_test(2D-ion-energy-relax-boundary)
+    hermes_add_ion_energy_test(tokamak-ion-energy-relax-boundary)
+    if(HERMES_COPY_TESTS_TO_BUILD)
+      configure_file(
+        "${CMAKE_CURRENT_SOURCE_DIR}/examples/tokamak-2D/compass-36x48.grd.nc"
+        "${CMAKE_CURRENT_BINARY_DIR}/tests/integrated/tokamak-ion-energy-relax-boundary/data/compass-36x48.grd.nc"
+        COPYONLY)
+    endif()
+    set_tests_properties(tokamak-ion-energy-relax-boundary PROPERTIES PROCESSORS
+                                                                      6)
     add_test(
       NAME energy-analysis-python
       COMMAND

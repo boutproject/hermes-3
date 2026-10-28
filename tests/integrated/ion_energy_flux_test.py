@@ -23,6 +23,7 @@ from energy_analysis import (
 )
 from energy_analysis.fluxes import (
     PrescribedSources,
+    boundary_relaxation,
     compare_flux_diagnostics,
     flux_power,
     net_face_flux,
@@ -31,7 +32,7 @@ from energy_analysis.fluxes import (
     species_velocity,
 )
 from energy_analysis.report import inventory_report
-from energy_analysis.transport import central_parallel
+from energy_analysis.transport import central_parallel, fv_xz
 from ion_energy_balance import execute, histories, require, write_json
 
 ENERGY_FAMILIES = ("DivEExB", "DivEReynolds", "DivEelectric", "DivEparallel", "DivEpol")
@@ -89,6 +90,65 @@ def audit(run, manifest, diagnose):
         "forward": report["forward_max_absolute_error_normalised"]
         < tol["forward_absolute"],
     }
+    boundary_report = None
+    if manifest["case"]["name"] == "relax-boundary":
+        boundary = boundary_relaxation(run).compute()
+        values = boundary.phi_boundary.transpose("t", "boundary", "y").values
+        rates = boundary.phi_boundary_rate.transpose("t", "boundary", "y").values
+        dt = np.diff(run.data.t.values)[:, None, None]
+        deposited = np.concatenate(
+            [
+                np.zeros_like(values[:1]),
+                np.cumsum(dt * (rates[1:] + rates[:-1]) / 2, axis=0),
+            ]
+        )
+        ode_error = float(np.max(abs(values - values[0] - deposited)))
+        assertions["boundary_ode"] = ode_error < tol["boundary_ode_absolute"]
+        face_indices = [run.mxg - 1, run.data.sizes["x"] - run.mxg - 1]
+        for name in flux:
+            if name.endswith("_flux_x") and name.startswith(
+                ("DivEpol", "DivJpol", "particle_pol_", "momentum_pol_")
+            ):
+                assertions["closed_" + name] = (
+                    float(abs(flux[name].isel(x=face_indices)).max()) == 0
+                )
+        full_current = fv_xz(
+            run.scalar_option("average_atomic_mass") / run.data.Bxy**2,
+            flux["ddt(Phi)"],
+            run.data,
+        )
+        current_signal = float(abs(full_current.flux_x.isel(x=face_indices)).max())
+        relaxation_signal = float(
+            abs(boundary.phi_boundary - boundary.phi_boundary.isel(t=0)).max()
+        )
+        assertions["nonzero_boundary_current"] = (
+            current_signal > manifest["minimum_signals"]["boundary_current"]
+        )
+        assertions["nonzero_boundary_relaxation"] = (
+            relaxation_signal > manifest["minimum_signals"]["boundary_relaxation"]
+        )
+        assertions["auxiliary_full_residual"] = (
+            float(abs(run.interior(full_current.divergence - flux["ddt(Vort)"])).max())
+            < tol["forward_absolute"]
+        )
+        assertions["polarisation_energy_split"] = (
+            float(
+                abs(
+                    run.interior(
+                        flux.DivEpol
+                        - flux.DivEpol_enthalpy
+                        - flux.DivEpol_parallel_kinetic
+                        - flux.DivEpol_electric
+                    )
+                ).max()
+            )
+            < tol["diagnostic_absolute"]
+        )
+        boundary_report = {
+            "ode_max_error_normalised": ode_error,
+            "relaxation_signal_normalised": relaxation_signal,
+            "full_boundary_current_signal_normalised": current_signal,
+        }
     if diagnose:
         for name in (
             *ENERGY_FAMILIES,
@@ -209,6 +269,8 @@ def audit(run, manifest, diagnose):
     )
     signals = {}
     for name, minimum in manifest["minimum_signals"].items():
+        if name.startswith("boundary_"):
+            continue
         signals[name] = float(abs(run.interior(flux[name])).max())
         assertions["nonzero_" + name] = signals[name] > minimum
     if manifest["case"]["name"] == "parallel":
@@ -366,6 +428,7 @@ def audit(run, manifest, diagnose):
         atol=1e-16,
     )
     report.update(
+        boundary_relaxation=boundary_report,
         assertions=assertions,
         passed=all(assertions.values()),
         flux_coverage=flux.attrs,
@@ -397,6 +460,7 @@ def main(inputs):
     executable = args.exe or ROOT / "build/hermes-3"
     require(executable.is_file(), "Specify the built executable with --exe")
     manifest = json.loads((inputs / "criteria.json").read_text())
+    tol = manifest["tolerances"]
     fixture = inputs / "data/BOUT.inp"
     validate_fixture(fixture, manifest)
     output = Path(tempfile.mkdtemp(prefix=inputs.name + "-", dir=args.output_root))
@@ -503,6 +567,130 @@ def main(inputs):
     require(
         all(cadence_checks.values()), f"Cadence audit failed: {output / 'result.json'}"
     )
+    if manifest["case"]["name"] == "relax-boundary":
+        for label, overrides in (
+            ("mpi-x", ("NXPE=2",)),
+            ("mpi-y-core-average", ("NXPE=1", "MYG=2", "mesh:ny=4")),
+        ):
+            folder = output / label
+            print(f"Running {label}", flush=True)
+            execute(
+                executable.resolve(),
+                folder,
+                fixture,
+                manifest["case"],
+                fine,
+                manifest["duration_normalised"],
+                True,
+                args.timeout,
+                ranks=2,
+                overrides=overrides,
+            )
+            parallel = open_run(folder)
+            parallel.data = parallel.data.load()
+            parallel_report, _, _, _ = audit(parallel, manifest, True)
+            write_json(folder / "energy-report.json", parallel_report)
+            require(parallel_report["passed"], f"MPI boundary audit failed: {folder}")
+            for name in essential:
+                # Both fixtures are Y-uniform. Compare physical fields after
+                # removing Y halos and reducing the different Y resolutions.
+                xr.testing.assert_allclose(
+                    enabled.interior(enabled.data[name]).mean("y"),
+                    parallel.interior(parallel.data[name]).mean("y"),
+                    rtol=tol["history_relative"],
+                    atol=tol["history_absolute"],
+                )
+            summary["runs"].append(str(folder))
+        for label, overrides in (
+            ("solver-refined", ("solver:atol=1e-12", "solver:rtol=1e-10")),
+            (
+                "faster-relaxation",
+                ("evolve_vorticity_ion_energy:phi_boundary_timescale=5e-7",),
+            ),
+        ):
+            folder = output / label
+            print(f"Running {label}", flush=True)
+            execute(
+                executable.resolve(),
+                folder,
+                fixture,
+                manifest["case"],
+                fine,
+                manifest["duration_normalised"],
+                True,
+                args.timeout,
+                overrides=overrides,
+            )
+            refined = open_run(folder)
+            refined.data = refined.data.load()
+            refined_report, _, _, _ = audit(refined, manifest, True)
+            write_json(folder / "energy-report.json", refined_report)
+            require(
+                refined_report["passed"],
+                f"Relaxation/solver refinement audit failed: {folder}",
+            )
+            if label == "solver-refined":
+                summary["solver_history_errors"] = {}
+                for name in essential:
+                    error = float(abs(enabled.data[name] - refined.data[name]).max())
+                    summary["solver_history_errors"][name] = error
+                    require(
+                        error
+                        < tol["solver_accuracy_absolute"]
+                        + tol["solver_accuracy_relative"]
+                        * float(abs(enabled.data[name]).max()),
+                        f"Solver refinement changed {name} by {error} normalised units",
+                    )
+            else:
+                xr.testing.assert_allclose(
+                    boundary_relaxation(refined).phi_boundary_rate.isel(t=0),
+                    2 * boundary_relaxation(enabled).phi_boundary_rate.isel(t=0),
+                )
+            summary["runs"].append(str(folder))
+        half = manifest["duration_normalised"] / 2
+        checkpoint = output / "checkpoint"
+        print("Running checkpoint/restart comparison", flush=True)
+        execute(
+            executable.resolve(),
+            checkpoint,
+            fixture,
+            manifest["case"],
+            fine,
+            half,
+            True,
+            args.timeout,
+        )
+        resumed = output / "resumed"
+        execute(
+            executable.resolve(),
+            resumed,
+            fixture,
+            manifest["case"],
+            fine,
+            half,
+            True,
+            args.timeout,
+            checkpoint=checkpoint,
+        )
+        resumed_run = open_run(resumed)
+        resumed_run.data = resumed_run.data.load()
+        restart_report, _, _, _ = audit(resumed_run, manifest, True)
+        write_json(resumed / "energy-report.json", restart_report)
+        require(restart_report["passed"], f"Restart boundary audit failed: {resumed}")
+        for name in essential:
+            xr.testing.assert_allclose(
+                enabled.data[name].sel(t=resumed_run.data.t),
+                resumed_run.data[name],
+                rtol=tol["restart_relative"],
+                atol=tol["restart_absolute"],
+            )
+        summary.update(
+            mpi_decompositions=["x", "y"],
+            restart_independent=True,
+            solver_accuracy_refined=True,
+            relaxation_timescales_s=[1e-6, 5e-7],
+        )
+        summary["runs"].extend([str(checkpoint), str(resumed)])
     summary.update(
         cadence_refinement=refinement,
         diagnostics_independent=True,

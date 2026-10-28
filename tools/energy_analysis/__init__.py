@@ -4,6 +4,7 @@ from .balance import cadence_comparison, energy_balance, regular_timestep
 from .dataset import AuditError, EnergyRun, Species, open_run
 from .fluxes import (
     PrescribedSources,
+    boundary_relaxation,
     compare_flux_diagnostics,
     flux_power,
     net_face_flux,
@@ -23,6 +24,7 @@ __all__ = [
     "EnergyRun",
     "PrescribedSources",
     "Species",
+    "boundary_relaxation",
     "cadence_comparison",
     "calculate_kperp",
     "compare_diagnostics",

@@ -184,11 +184,36 @@ balances are independent of that gauge. Outer guard results are undefined.
 
 The polarisation inverse is independently assembled as a sparse finite-volume
 matrix. It uses a gauge for periodic X, or homogeneous half-face Dirichlet for
-nonperiodic X; subsequent transport guards follow BOUT's Neumann rule. It is
+nonperiodic X. With `phi_boundary_relax=true`, the auxiliary χ retains
+homogeneous midpoint Dirichlet guards; fixed-boundary runs retain the legacy
+post-solve Neumann overwrite. It is
 lazy across time/Y, with complete local X-Z solve planes. Diagnostic comparison
 removes the free inversion gauge and reports both field and integrated errors.
 The MC operators weight the common flux after limiting, so species charge
 fluxes sum even with spatially varying composition.
+
+`boundary_relaxation(run)` reconstructs radial potential midpoints, adjacent
+Z-averaged targets and normalised rates from saved phi guards and `bd.options`.
+Core Y averages exclude guards. The separately reconstructed
+`DivEpol_enthalpy`, `DivEpol_parallel_kinetic` and `DivEpol_electric` face families
+expose each energy contribution's physical-face closure. Particle and momentum
+polarisation faces use the same mask. Full-current inversion permits normal
+current; closed transport deliberately omits it at physical boundaries.
+
+The diagnostic named `ddt(Phi)` contains an auxiliary current potential solving
+`L(chi)=physical ddt(Vort)`, rather than the exact derivative of `phi+psi`.
+Saved-output finite differences of `phi+psi` should not be compared as exact
+χ diagnostics. Ordinary output `Vort` contains physical vorticity. New restart
+files carry a version marker: their solver `Vort` physical radial boundary
+cells encode normalised phi midpoints, which must not receive vorticity unit
+conversion. Legacy restarts initialise those midpoints once from saved phi.
+
+The separate `2D-ion-energy-relax-boundary` test checks diagnostics on/off and
+stripping, output refinement, X/Y MPI decompositions and restart behaviour.
+`tokamak-ion-energy-relax-boundary` uses six COMPASS ranks and a bounded raw-rank
+audit of inventories, relaxation, sheath sources, parallel boundary power and
+topology interfaces. It explicitly reports incomplete general tokamak power
+coverage; the public slab flux reconstruction still rejects shifted topology.
 
 For compact CLI reports:
 
@@ -208,15 +233,17 @@ that its residual is zero.
 
 - XPPM closes the periodic radial seam when `bndry_flux=false`; current
   reconstruction matches it. Global conservation does not validate seam fidelity.
-- BOUT's Reynolds `Div_a_Grad_perp` skips its Z term when `MYG=0`; the new
-  driven-flux input retains Y guards and exercises it. Reconstruction matches
-  the implemented omission for replaying older singleton-Y inputs.
-- BOUT's parallel numerical viscous heating uses twice the required wave-speed
-  coefficient relative to the split particle/momentum flux. The new electron
+- Reynolds current and energy fluxes use `Div_a_Grad_perp_XZ`, consistently
+  with potential recovery, kinetic energy and polarisation transport.
+  Reconstruction includes Z fluxes independently of the Y guard width.
+- The parallel reconstruction and electron regression still track the former
+  BOUT numerical viscous heating defect: twice the required wave-speed
+  coefficient relative to the split particle/momentum flux. The electron
   case retains its raw nonconserving plasma residual and independently predicts
   the excess power with `numerical_heating_defect`. A separate `1e-8` relative
   defect-accounted gate validates the reconstruction, while the report explicitly
-  marks raw plasma conservation false. The BOUT implementation is unchanged.
+  marks raw plasma conservation false. BOUT's operator is now corrected;
+  this reconstruction and regression still need updating.
 
 The last finding means the electron parallel case is a regression/audit of a
 known defect. Its README explains the coefficient identity and the meaning of

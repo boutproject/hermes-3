@@ -569,6 +569,83 @@ def test_sparse_dirichlet_solve_before_transport_boundary_change(dataset):
     xr.testing.assert_allclose(solved.isel(x=1, drop=True), solved.isel(x=2, drop=True))
 
 
+def test_relaxation_auxiliary_solve_retains_full_current_boundary(dataset):
+    from energy_analysis.fluxes import solve_polarisation
+    from energy_analysis.transport import fv_xz
+
+    dataset["g13"] *= 0
+    dataset.options["evolve_vorticity_ion_energy:phi_boundary_relax"] = "true"
+    run = open_run(dataset)
+    nx = dataset.sizes["x"] - 4
+    potential = (
+        xr.ones_like(dataset.phi)
+        * np.sin(np.pi * (dataset.x - 2 + 0.5) / nx)
+        * np.cos(2 * np.pi * dataset.z / 8)
+    )
+    rhs = perpendicular_operator(1.75, potential, dataset).divergence
+    solved = solve_polarisation(run, rhs, False, True)
+    xr.testing.assert_allclose(
+        run.interior(solved), run.interior(potential), atol=2e-14
+    )
+    xr.testing.assert_allclose(
+        solved.isel(x=1, drop=True), -solved.isel(x=2, drop=True)
+    )
+    full = fv_xz(1.75, solved, dataset)
+    xr.testing.assert_allclose(
+        run.interior(full.divergence), run.interior(rhs), atol=2e-14
+    )
+    assert float(abs(full.flux_x.isel(x=[1, -3])).max()) > 1e-3
+    for weight in (1.0, 0.7, -0.2, 2.5, 0.03, 0.4):
+        closed = fv_xz(weight, solved, dataset, boundary_flux=False)
+        assert_allclose(closed.flux_x.isel(x=[1, -3]), 0)
+
+
+def test_boundary_relaxation_core_mean_excludes_y_guards(dataset):
+    from energy_analysis.fluxes import boundary_relaxation
+
+    ds = dataset.isel(y=0, drop=True).expand_dims(y=np.arange(8)).copy()
+    for name in ("g13", "g23", "g_23"):
+        ds[name] = xr.zeros_like(ds.J)
+    ds["g_22"] = xr.ones_like(ds.J)
+    opts = ds.options
+    opts["mesh:paralleltransform:type"] = "identity"
+    opts["mesh:ddz:first"] = "FFT"
+    opts["mesh:ddz:fft_filter"] = 0
+    opts["mesh:bxcvz"] = 0
+    opts["periodicX"] = "false"
+    opts["evolve_vorticity_ion_energy:poloidal_flows"] = "false"
+    opts["evolve_vorticity_ion_energy:phi_boundary_relax"] = "true"
+    opts["evolve_vorticity_ion_energy:phi_core_averagey"] = "true"
+    opts["evolve_vorticity_ion_energy:phi_boundary_timescale"] = "2e-6"
+    for name in ("e", "d+", "impurity"):
+        opts[name]["use_div_par_fvv"] = "true"
+    ds.attrs["metadata"].update(
+        MYG=2,
+        keep_yboundaries=True,
+        nx=12,
+        ny=4,
+        ixseps1=12,
+        jyseps1_1=-1,
+        jyseps2_2=3,
+        HERMES_SLOPE_LIMITER="MC",
+    )
+    interior = xr.where((ds.y >= 2) & (ds.y < 6), 1 + 0.1 * ds.y, 999)
+    ds["phi"] = xr.ones_like(ds.phi) * interior
+    for guard, cell in ((1, 2), (-2, -3)):
+        ds.phi[{"x": guard}] = 0.4 - ds.phi.isel(x=cell)
+    ds.phi.attrs = dataset.phi.attrs
+    run = open_run(ds)
+    boundary = boundary_relaxation(run)
+    assert_allclose(boundary.phi_boundary, 0.2)
+    assert_allclose(boundary.phi_boundary_target.sel(boundary="inner"), 1.35)
+    assert_allclose(boundary.phi_boundary_rate.sel(boundary="inner"), (1.35 - 0.2) / 2)
+    assert_allclose(
+        boundary.phi_boundary_target.sel(boundary="outer"),
+        xr.ones_like(boundary.phi_boundary_target.sel(boundary="outer"))
+        * (1 + 0.1 * boundary.y),
+    )
+
+
 def test_flux_velocity_requires_saved_electron_closure(dataset):
     from energy_analysis.fluxes import species_velocity
 

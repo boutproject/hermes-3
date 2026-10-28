@@ -20,7 +20,6 @@ from .transfers import (
 )
 from .transport import (
     arakawa,
-    bout_perp,
     central_parallel,
     flux_dataset,
     fv_xz,
@@ -146,12 +145,8 @@ def slab_contract(run):
     for key in ("viscosity", "hyper_z"):
         if run.scalar_option(key, 0) > 0:
             raise AuditError(f"Unaccounted ion-energy {key}")
-    if options[run.model].get_bool("phi_boundary_relax") or options[run.model].get_bool(
-        "poloidal_flows"
-    ):
-        raise AuditError(
-            "Potential relaxation/poloidal flow reconstruction is unavailable"
-        )
+    if options[run.model].get_bool("poloidal_flows"):
+        raise AuditError("Poloidal flow reconstruction is unavailable")
     allowed = {
         "evolve_density",
         "evolve_pressure",
@@ -238,9 +233,10 @@ def fill_transport_guards(field, run, periodic_x, periodic_y):
 def solve_polarisation(run, rhs, periodic_x, periodic_y):
     """Independent sparse FV solve, gauge-fixed for periodic X.
 
-    Nonperiodic X uses homogeneous Dirichlet at half-cell faces (default
-    Laplace flags). The returned transport field has Neumann radial guards,
-    as in the component; its post-boundary forward residual can differ.
+    Nonperiodic X uses homogeneous Dirichlet at half-cell faces. Relaxation
+    retains this auxiliary-current boundary; fixed-boundary runs reproduce
+    the legacy post-solve Neumann overwrite. This is an auxiliary chi, not an
+    exact temporal derivative of the recovered Phi.
     """
     from scipy.sparse import coo_matrix
     from scipy.sparse.linalg import splu
@@ -316,7 +312,66 @@ def solve_polarisation(run, rhs, periodic_x, periodic_y):
     # Reindex introduces only undefined guard placeholders; communication or
     # the known Neumann rule fills them lazily. No full-time 4D allocation.
     result = solved.reindex(x=rhs.x, y=rhs.y).transpose(*rhs.dims)
-    return fill_transport_guards(result, run, periodic_x, periodic_y)
+    result = fill_transport_guards(result, run, periodic_x, periodic_y)
+    if (
+        not periodic_x
+        and "phi_boundary_relax" in section
+        and section.get_bool("phi_boundary_relax")
+    ):
+        result[{"x": run.mxg - 1}] = -result.isel(x=run.mxg)
+        result[{"x": -run.mxg}] = -result.isel(x=-run.mxg - 1)
+        for i in range(run.mxg - 1):
+            result[{"x": i}] = result.isel(x=run.mxg - 1)
+            result[{"x": -i - 1}] = result.isel(x=-run.mxg)
+    return result
+
+
+def boundary_relaxation(run):
+    """Reconstruct solver-managed radial phi midpoints and their normalised RHS.
+
+    Uses ordinary saved phi guards, never the mixed-unit restart Vort field.
+    The supported rectangular slab has either a closed Y connection everywhere
+    or open Y everywhere; core averaging uses only physical Y/Z samples.
+    """
+    periodic_x, periodic_y = slab_contract(run)
+    if periodic_x or not run.data.options[run.model].get_bool("phi_boundary_relax"):
+        raise AuditError(
+            "Boundary relaxation requires nonperiodic X and phi_boundary_relax"
+        )
+    tau = run.scalar_option("phi_boundary_timescale") * run.frequency
+    if not np.isfinite(tau) or tau <= 0:
+        raise AuditError("Boundary relaxation requires a finite positive timescale")
+    phi = run.data.phi.isel(y=slice(run.myg, run.data.sizes["y"] - run.myg))
+    states, targets = [], []
+    for side, interior, guard in (
+        ("inner", run.mxg, run.mxg - 1),
+        ("outer", -run.mxg - 1, -run.mxg),
+    ):
+        interior_value = phi.isel(x=interior, drop=True)
+        midpoint = (interior_value + phi.isel(x=guard, drop=True)) / 2
+        if float(abs(midpoint - midpoint.mean("z")).max()) > 1e-9:
+            raise AuditError("Relaxing phi boundary midpoint must be uniform in Z")
+        target = interior_value.mean("z")
+        if (
+            side == "inner"
+            and periodic_y
+            and run.data.options[run.model].get_bool("phi_core_averagey")
+        ):
+            target = xr.ones_like(target) * target.mean("y")
+        states.append(midpoint.mean("z").expand_dims(boundary=[side]))
+        targets.append(target.expand_dims(boundary=[side]))
+    state, target = xr.concat(states, "boundary"), xr.concat(targets, "boundary")
+    return xr.Dataset(
+        {
+            "phi_boundary": state,
+            "phi_boundary_target": target,
+            "phi_boundary_rate": (target - state) / tau,
+        },
+        attrs={
+            "units_type": "hermes",
+            "provenance": "reconstructed phi guards and relaxation ODE",
+        },
+    )
 
 
 def reconstruct_fluxes(run, *, sources=None):
@@ -354,7 +409,7 @@ def reconstruct_fluxes(run, *, sources=None):
 
     reynolds = combine(
         (-1, xppm(0.5 * ds.Vort, phi, ds)),
-        (-1, bout_perp(0.5 * c, bracket, ds, myg=run.myg)),
+        (-1, fv_xz(0.5 * c, bracket, ds, periodic_x=periodic_x)),
         (-1, xppm(delp, Phi, ds)),
     )
     curl = (
@@ -386,8 +441,12 @@ def reconstruct_fluxes(run, *, sources=None):
         )
 
     families["DivEExB"] = xppm(1.5 * pi + densities.ion_parallel, phi, ds)
-    families["DivEReynolds"] = bout_perp(0.5 * c * bracket, Phi, ds, myg=run.myg)
-    families["DivEpol"] = pol(polarisation_energy_coefficient(run).total)
+    families["DivEReynolds"] = fv_xz(0.5 * c * bracket, Phi, ds, periodic_x=periodic_x)
+    advected = polarisation_energy_coefficient(run)
+    families["DivEpol"] = pol(advected.total)
+    families["DivEpol_enthalpy"] = pol(advected.enthalpy)
+    families["DivEpol_parallel_kinetic"] = pol(advected.parallel_kinetic)
+    families["DivEpol_electric"] = pol(phi)
     families["DivJpol"] = pol(xr.ones_like(phi))
     families["DivJReynolds"] = reynolds
     result = {
@@ -589,7 +648,13 @@ def reconstruct_fluxes(run, *, sources=None):
         "geometry_coverage": "uniform orthogonal identity slab",
         "periodic_x": periodic_x,
         "periodic_y": periodic_y,
-        "limitations": "XPPM closes the periodic radial seam when bndry_flux=false; BOUT Reynolds FV omits Z when MYG=0",
+        "limitations": "XPPM closes the periodic radial seam when bndry_flux=false",
+        "polarisation_potential": "auxiliary current-continuity chi",
+        "polarisation_boundary": (
+            "homogeneous midpoint Dirichlet"
+            if ds.options[run.model].get_bool("phi_boundary_relax") and not periodic_x
+            else "legacy post-solve Neumann / periodic communication"
+        ),
     }
     return output
 
