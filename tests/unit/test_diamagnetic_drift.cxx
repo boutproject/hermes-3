@@ -3,7 +3,9 @@
 
 #include <bout/bout_types.hxx>
 #include <bout/boutexception.hxx>
+#include <bout/constants.hxx>
 #include <bout/coordinates.hxx>
+#include <bout/deriv_store.hxx>
 
 #include "fake_mesh.hxx"
 #include "fake_mesh_fixture.hxx"
@@ -11,6 +13,7 @@
 
 #include "../../include/diamagnetic_drift.hxx"
 
+#include <cmath>
 #include <memory>
 
 /// Global mesh
@@ -26,6 +29,24 @@ using namespace bout::globals;
 // Reuse the "standard" fixture for FakeMesh
 using DiamagneticDriftTest = FakeMeshFixture;
 using WideDiamagneticDriftTest = FakeMeshFixture_tmpl<5, 5, 7>;
+// FV::Div_f_v needs two x guards for its reconstruction stencil.
+using RadialDiamagneticDriftTest = FakeMeshFixture_tmpl<8, 5, 7, false, 2>;
+
+class C4DiamagneticDriftTest : public RadialDiamagneticDriftTest {
+public:
+  C4DiamagneticDriftTest() { setFirstDerivatives("C4"); }
+  ~C4DiamagneticDriftTest() override { setFirstDerivatives("C2"); }
+
+private:
+  void setFirstDerivatives(const std::string& method) {
+    Options defaults;
+    for (const auto* direction : {"ddx", "ddy", "ddz"}) {
+      defaults[direction]["first"] = method;
+    }
+    DerivativeStore<Field3D>::getInstance().initialise(&defaults);
+    DerivativeStore<Field2D>::getInstance().initialise(&defaults);
+  }
+};
 
 namespace {
 
@@ -34,6 +55,18 @@ Options diamagneticOptions() {
   options["units"]["Tesla"] = 1.0;
   options["units"]["meters"] = 1.0;
   return options;
+}
+
+Options diamagneticState(const Field3D& quantity, BoutReal temperature = 1.0,
+                         BoutReal charge = 1.0) {
+  Options state;
+  auto& species = state["species"]["d+"];
+  species["charge"] = charge;
+  species["temperature"] = temperature;
+  species["density"] = quantity;
+  species["pressure"] = quantity;
+  species["momentum"] = quantity;
+  return state;
 }
 
 void setCurvature(BoutReal bx = 1.0, BoutReal by = 0.0, BoutReal bz = 0.0) {
@@ -235,7 +268,7 @@ TEST_F(DiamagneticDriftTest, TransformWritesOnlyPresentOutputs) {
                            "RGN_NOBNDRY"));
 }
 
-TEST_F(WideDiamagneticDriftTest, TransformAveragesInnermostCoreRing) {
+TEST_F(RadialDiamagneticDriftTest, TransformAveragesInnermostCoreRing) {
   setCurvature();
 
   auto* coords = mesh->getCoordinates();
@@ -245,60 +278,64 @@ TEST_F(WideDiamagneticDriftTest, TransformAveragesInnermostCoreRing) {
   J(mesh->xstart, mesh->yend) = 3.0;
   coords->setJ(J);
 
-  Options options = diamagneticOptions();
-  options["diamagnetic_drift"]["form"] = "gradient";
-  DiamagneticDrift component("diamagnetic_drift", options, nullptr);
+  for (const auto* form : {"gradient", "divergence"}) {
+    SCOPED_TRACE(form);
+    Options options = diamagneticOptions();
+    options["diamagnetic_drift"]["form"] = form;
+    DiamagneticDrift component("diamagnetic_drift", options, nullptr);
 
-  Field3D quantity = makeField<Field3D>([](Ind3D& i) {
-    const BoutReal slope =
-        i.y() == mesh->ystart ? 1.0 : (i.y() == mesh->ystart + 1 ? 2.0 : 4.0);
-    return 0.5 * i.x() * slope;
-  });
-  Options state;
-  auto& species = state["species"]["d+"];
-  species["charge"] = 1.0;
-  species["temperature"] = 1.0;
-  species["density"] = quantity;
-  species["pressure"] = quantity;
-  species["momentum"] = quantity;
+    Field3D quantity = makeField<Field3D>([](Ind3D& i) {
+      const BoutReal slope =
+          i.y() == mesh->ystart ? 1.0 : (i.y() == mesh->ystart + 1 ? 2.0 : 4.0);
+      return 0.5 * i.x() * slope;
+    });
+    Options state;
+    auto& species = state["species"]["d+"];
+    species["charge"] = 1.0;
+    species["temperature"] = 1.0;
+    species["density"] = quantity;
+    species["pressure"] = quantity;
+    species["momentum"] = quantity;
 
-  Options closed_state = state.copy();
-  Options closed_options = diamagneticOptions();
-  closed_options["diamagnetic_drift"]["form"] = "gradient";
-  closed_options["diamagnetic_drift"]["radial_boundary"] = "closed";
-  DiamagneticDrift closed_component("diamagnetic_drift", closed_options, nullptr);
-  closed_component.declareAllSpecies({"d+"});
-  closed_component.transform(closed_state);
+    Options closed_state = state.copy();
+    Options closed_options = diamagneticOptions();
+    closed_options["diamagnetic_drift"]["form"] = form;
+    closed_options["diamagnetic_drift"]["radial_boundary"] = "closed";
+    DiamagneticDrift closed_component("diamagnetic_drift", closed_options, nullptr);
+    closed_component.declareAllSpecies({"d+"});
+    closed_component.transform(closed_state);
 
-  component.declareAllSpecies({"d+"});
-  component.transform(state);
+    component.declareAllSpecies({"d+"});
+    component.transform(state);
 
-  for (const auto* source : {"density_source", "energy_source", "momentum_source"}) {
-    SCOPED_TRACE(source);
-    const auto averaged = get<Field3D>(species[source]);
-    const auto closed = get<Field3D>(closed_state["species"]["d+"][source]);
-    EXPECT_NE(closed(mesh->xstart, mesh->ystart, mesh->zstart),
-              closed(mesh->xstart, mesh->yend, mesh->zstart));
+    for (const auto* source : {"density_source", "energy_source", "momentum_source"}) {
+      SCOPED_TRACE(source);
+      const auto averaged = get<Field3D>(species[source]);
+      const auto closed = get<Field3D>(closed_state["species"]["d+"][source]);
+      EXPECT_NE(closed(mesh->xstart, mesh->ystart, mesh->zstart),
+                closed(mesh->xstart, mesh->yend, mesh->zstart));
 
-    // Compare against the unaveraged closed source using the unequal cell volumes.
-    BoutReal ring_integral = 0.0;
-    BoutReal ring_volume = 0.0;
-    const auto cell_volume = coords->cell_volume();
-    for (int jy = mesh->ystart; jy <= mesh->yend; ++jy) {
-      for (int jz = mesh->zstart; jz <= mesh->zend; ++jz) {
-        ring_integral += cell_volume(mesh->xstart, jy, jz) * closed(mesh->xstart, jy, jz);
-        ring_volume += cell_volume(mesh->xstart, jy, jz);
+      // Compare against the unaveraged closed source using the unequal cell volumes.
+      BoutReal ring_integral = 0.0;
+      BoutReal ring_volume = 0.0;
+      const auto cell_volume = coords->cell_volume();
+      for (int jy = mesh->ystart; jy <= mesh->yend; ++jy) {
+        for (int jz = mesh->zstart; jz <= mesh->zend; ++jz) {
+          ring_integral +=
+              cell_volume(mesh->xstart, jy, jz) * closed(mesh->xstart, jy, jz);
+          ring_volume += cell_volume(mesh->xstart, jy, jz);
+        }
       }
-    }
-    const BoutReal expected_average = ring_integral / ring_volume;
-    for (int jy = mesh->ystart; jy <= mesh->yend; ++jy) {
-      for (int jz = mesh->zstart; jz <= mesh->zend; ++jz) {
-        EXPECT_NEAR(averaged(mesh->xstart, jy, jz), expected_average, 1e-12);
-        EXPECT_DOUBLE_EQ(averaged(mesh->xstart + 1, jy, jz),
-                         closed(mesh->xstart + 1, jy, jz));
+      const BoutReal expected_average = ring_integral / ring_volume;
+      for (int jy = mesh->ystart; jy <= mesh->yend; ++jy) {
+        for (int jz = mesh->zstart; jz <= mesh->zend; ++jz) {
+          EXPECT_NEAR(averaged(mesh->xstart, jy, jz), expected_average, 1e-12);
+          EXPECT_DOUBLE_EQ(averaged(mesh->xstart + 1, jy, jz),
+                           closed(mesh->xstart + 1, jy, jz));
+        }
       }
+      EXPECT_NEAR(volumeIntegral(averaged), volumeIntegral(closed), 1e-12);
     }
-    EXPECT_NEAR(volumeIntegral(averaged), volumeIntegral(closed), 1e-12);
   }
 }
 
@@ -366,4 +403,110 @@ TEST_F(WideDiamagneticDriftTest, GradientFormOpenIsConservativeWhenBoundaryValue
 
   const auto source = get<Field3D>(state["species"]["d+"]["density_source"]);
   ASSERT_NEAR(volumeIntegral(source), 0.0, 1e-12);
+}
+
+TEST_F(RadialDiamagneticDriftTest, RadialBoundaryModesConserveClosedSources) {
+  // Constant curvature and J give an exactly divergence-free discrete curvature.
+  setCurvature(1.0, 0.0, 0.0);
+  const auto quantity = makeField<Field3D>(
+      [](Ind3D& i) { return 1.0 + 0.2 * i.x() * i.x() + 0.05 * i.y() + 0.01 * i.z(); });
+
+  for (const auto* form : {"gradient", "divergence"}) {
+    for (const auto* boundary : {"open", "closed", "closed_average"}) {
+      SCOPED_TRACE(std::string(form) + ", " + boundary);
+      Options options = diamagneticOptions();
+      options["diamagnetic_drift"]["form"] = form;
+      options["diamagnetic_drift"]["radial_boundary"] = boundary;
+      DiamagneticDrift component("diamagnetic_drift", options, nullptr);
+      auto state = diamagneticState(quantity);
+      component.declareAllSpecies({"d+"});
+      component.transform(state);
+
+      for (const auto* name : {"density_source", "energy_source", "momentum_source"}) {
+        SCOPED_TRACE(name);
+        const auto source = get<Field3D>(state["species"]["d+"][name]);
+        // The radial variation produces a nonzero source away from either wall.
+        EXPECT_NE(source(mesh->xstart + 1, mesh->ystart, mesh->zstart), 0.0);
+        if (std::string(boundary) == "open") {
+          EXPECT_GT(std::abs(volumeIntegral(source)), 1e-6);
+        } else {
+          EXPECT_NEAR(volumeIntegral(source), 0.0, 1e-12);
+        }
+      }
+    }
+  }
+}
+
+TEST_F(WideDiamagneticDriftTest, GradientClosureUsesGuardMetricsAndCurvature) {
+  setCurvature(1.0, 0.0, 0.0);
+  auto* coords = mesh->getCoordinates();
+  Coordinates::FieldMetric J{2.0};
+  Coordinates::FieldMetric Bxy{2.0};
+  for (int jy = 0; jy < mesh->LocalNy; ++jy) {
+    for (int jz = 0; jz < mesh->LocalNz; ++jz) {
+      J(mesh->xstart - 1, jy, jz) = 6.0;
+      J(mesh->xend + 1, jy, jz) = 10.0;
+      Bxy(mesh->xstart - 1, jy, jz) = 4.0;
+      Bxy(mesh->xend + 1, jy, jz) = 8.0;
+    }
+  }
+  coords->setJ(J);
+  coords->setBxy(Bxy);
+  coords->setDx(3.0);
+
+  // Normalisation gives C.x = 1 inside, 1/2 in the inner guard and 1/4
+  // in the outer guard. With g = -3, F_L = -7.5 and F_R = -6.75.
+  for (const auto* boundary : {"open", "closed", "closed_average"}) {
+    SCOPED_TRACE(boundary);
+    Options options = diamagneticOptions();
+    options["diamagnetic_drift"]["form"] = "gradient";
+    options["diamagnetic_drift"]["radial_boundary"] = boundary;
+    DiamagneticDrift component("diamagnetic_drift", options, nullptr);
+    auto state = diamagneticState(Field3D{3.0}, 2.0, -2.0);
+    component.declareAllSpecies({"d+"});
+    component.transform(state);
+
+    for (const auto* name : {"density_source", "energy_source", "momentum_source"}) {
+      SCOPED_TRACE(name);
+      const auto source = get<Field3D>(state["species"]["d+"][name]);
+      const BoutReal factor = std::string(name) == "energy_source" ? 2.5 : 1.0;
+      const bool open = std::string(boundary) == "open";
+      for (int jy = mesh->ystart; jy <= mesh->yend; ++jy) {
+        for (int jz = mesh->zstart; jz <= mesh->zend; ++jz) {
+          EXPECT_DOUBLE_EQ(source(mesh->xstart, jy, jz), open ? 0.0 : 1.25 * factor);
+          EXPECT_DOUBLE_EQ(source(mesh->xstart + 1, jy, jz), 0.0);
+          EXPECT_DOUBLE_EQ(source(mesh->xend, jy, jz), open ? 0.0 : -1.125 * factor);
+        }
+      }
+    }
+  }
+}
+
+TEST_F(C4DiamagneticDriftTest, GradientAlwaysUsesC2WithC4Defaults) {
+  setCurvature(1.0, 1.0, 1.0);
+  Options options = diamagneticOptions();
+  options["diamagnetic_drift"]["form"] = "gradient";
+  options["diamagnetic_drift"]["radial_boundary"] = "open";
+  DiamagneticDrift component("diamagnetic_drift", options, nullptr);
+  const BoutReal wave_number = TWOPI / mesh->LocalNz;
+  const auto quantity = makeField<Field3D>([wave_number](Ind3D& i) {
+    return i.x() * i.x() * i.x() + i.y() * i.y() * i.y() + std::sin(wave_number * i.z());
+  });
+  auto state = diamagneticState(quantity);
+  component.declareAllSpecies({"d+"});
+  component.transform(state);
+
+  for (const auto* name : {"density_source", "energy_source", "momentum_source"}) {
+    SCOPED_TRACE(name);
+    const auto source = get<Field3D>(state["species"]["d+"][name]);
+    const BoutReal factor = std::string(name) == "energy_source" ? 2.5 : 1.0;
+    BOUT_FOR_SERIAL(i, source.getRegion("RGN_NOBNDRY")) {
+      // C2 differentiates x^3 as 3*x^2 + 1, rather than C4's exact 3*x^2.
+      const BoutReal expected =
+          -2.0 * factor
+          * (3.0 * i.x() * i.x() + 1.0 + 3.0 * i.y() * i.y() + 1.0
+             + std::sin(wave_number) * std::cos(wave_number * i.z()));
+      EXPECT_NEAR(source[i], expected, 1e-12);
+    }
+  }
 }

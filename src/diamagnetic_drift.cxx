@@ -1,6 +1,7 @@
 #include <bout/bout_types.hxx>
 #include <bout/boutcomm.hxx>
 #include <bout/boutexception.hxx>
+#include <bout/derivs.hxx>
 #include <bout/field2d.hxx>
 #include <bout/field3d.hxx>
 #include <bout/fv_ops.hxx>
@@ -162,7 +163,45 @@ Field3D DiamagneticDrift::calculateGradientForm(const Field3D& quantity,
         "DiamagneticDrift::calculateGradientForm requires a non-zero charge");
   }
 
-  return factor * Curlb_B * Grad(quantity * temperature / charge);
+  const Field3D g = quantity * temperature / charge;
+  Field3D sink =
+      factor
+      * (Curlb_B.x * DDX(g, CELL_DEFAULT, "C2") + Curlb_B.y * DDY(g, CELL_DEFAULT, "C2")
+         + Curlb_B.z * DDZ(g, CELL_DEFAULT, "C2"));
+
+  if (radial_boundary != DiamagneticBoundary::open) {
+    const auto* coords = quantity.getCoordinates();
+    const auto& J = coords->J();
+    const auto& dx = coords->dx();
+    const Coordinates::FieldMetric a = J * Curlb_B.x;
+
+    // C2 has the implied face flux F = (a_left*g_right + a_right*g_left)/2.
+    // Remove the boundary faces while retaining the cell-centred residual.
+    if (mesh->firstX()) {
+      const int jx = mesh->xstart;
+      for (int jy = mesh->ystart; jy <= mesh->yend; ++jy) {
+        for (int jz = mesh->zstart; jz <= mesh->zend; ++jz) {
+          const BoutReal flux =
+              0.5
+              * (a(jx - 1, jy, jz) * g(jx, jy, jz) + a(jx, jy, jz) * g(jx - 1, jy, jz));
+          sink(jx, jy, jz) += factor * flux / (J(jx, jy, jz) * dx(jx, jy, jz));
+        }
+      }
+    }
+    if (mesh->lastX()) {
+      const int jx = mesh->xend;
+      for (int jy = mesh->ystart; jy <= mesh->yend; ++jy) {
+        for (int jz = mesh->zstart; jz <= mesh->zend; ++jz) {
+          const BoutReal flux =
+              0.5
+              * (a(jx, jy, jz) * g(jx + 1, jy, jz) + a(jx + 1, jy, jz) * g(jx, jy, jz));
+          sink(jx, jy, jz) -= factor * flux / (J(jx, jy, jz) * dx(jx, jy, jz));
+        }
+      }
+    }
+  }
+
+  return sink;
 }
 
 void DiamagneticDrift::addDiamagneticSources(GuardedOptions& species) {
