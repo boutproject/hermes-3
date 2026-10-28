@@ -24,8 +24,7 @@ struct DiamagneticDrift : public NamedComponent<DiamagneticDrift> {
 
   static constexpr auto type = "diamagnetic_drift";
 
-  // The following functions are public for unit testing
-
+private:
   /// Calculate the diamagnetic sink for a single evolved quantity
   /// using divergence form:
   ///
@@ -49,7 +48,6 @@ struct DiamagneticDrift : public NamedComponent<DiamagneticDrift> {
   /// Modifies the input field in-place.
   void coreAverage(Field3D& f);
 
-private:
   VectorMetric Curlb_B;
   DiamagneticForm form;                ///< Form of the diamagnetic sink
   DiamagneticBoundary radial_boundary; ///< Treatment of radial boundary faces

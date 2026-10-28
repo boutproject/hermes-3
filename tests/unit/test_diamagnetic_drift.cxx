@@ -10,7 +10,6 @@
 #include "test_extras.hxx" // FakeMesh
 
 #include "../../include/diamagnetic_drift.hxx"
-#include "../../include/guarded_options.hxx"
 
 #include <memory>
 
@@ -184,7 +183,7 @@ TEST_F(DiamagneticDriftTest, DeprecatedBoundaryFluxConflictsWithRadialBoundary) 
   }
 }
 
-TEST_F(DiamagneticDriftTest, AddDiamagneticSourcesSkipsSpeciesWithoutRequiredInputs) {
+TEST_F(DiamagneticDriftTest, TransformSkipsSpeciesWithoutRequiredInputs) {
   setCurvature();
   Options options = diamagneticOptions();
   options["diamagnetic_drift"]["radial_boundary"] = "closed";
@@ -196,25 +195,15 @@ TEST_F(DiamagneticDriftTest, AddDiamagneticSourcesSkipsSpeciesWithoutRequiredInp
        {{"missing_temperature", {{"charge", 1.0}, {"density", 1.0}}},
         {"missing_charge", {{"temperature", 1.0}, {"density", 1.0}}},
         {"zero_charge", {{"charge", 0.0}, {"temperature", 1.0}, {"density", 1.0}}}}}};
-  Permissions permissions{{readOnly("species"),
-                           readWrite("species:missing_temperature:density_source"),
-                           readWrite("species:missing_charge:density_source"),
-                           readWrite("species:zero_charge:density_source")}};
-  GuardedOptions guarded_state{&state, &permissions};
-
-  auto missing_temperature = guarded_state["species"]["missing_temperature"];
-  component.addDiamagneticSources(missing_temperature);
-  auto missing_charge = guarded_state["species"]["missing_charge"];
-  component.addDiamagneticSources(missing_charge);
-  auto zero_charge = guarded_state["species"]["zero_charge"];
-  component.addDiamagneticSources(zero_charge);
+  component.declareAllSpecies({"missing_temperature", "missing_charge", "zero_charge"});
+  component.transform(state);
 
   ASSERT_FALSE(state["species"]["missing_temperature"].isSet("density_source"));
   ASSERT_FALSE(state["species"]["missing_charge"].isSet("density_source"));
   ASSERT_FALSE(state["species"]["zero_charge"].isSet("density_source"));
 }
 
-TEST_F(DiamagneticDriftTest, AddDiamagneticSourcesWritesOnlyPresentOutputs) {
+TEST_F(DiamagneticDriftTest, TransformWritesOnlyPresentOutputs) {
   setCurvature();
   Options options = diamagneticOptions();
   options["diamagnetic_drift"]["radial_boundary"] = "closed";
@@ -227,15 +216,8 @@ TEST_F(DiamagneticDriftTest, AddDiamagneticSourcesWritesOnlyPresentOutputs) {
        {{"d+",
          {{"charge", 1.0}, {"temperature", 1.0}, {"density", 1.0}, {"momentum", 1.0}}},
         {"e", {{"charge", -1.0}, {"temperature", 1.0}, {"pressure", 1.0}}}}}};
-  Permissions permissions{{readOnly("species"), readWrite("species:d+:density_source"),
-                           readWrite("species:d+:momentum_source"),
-                           readWrite("species:e:energy_source")}};
-  GuardedOptions guarded_state{&state, &permissions};
-
-  auto d_ion = guarded_state["species"]["d+"];
-  component.addDiamagneticSources(d_ion);
-  auto electron = guarded_state["species"]["e"];
-  component.addDiamagneticSources(electron);
+  component.declareAllSpecies({"d+", "e"});
+  component.transform(state);
 
   ASSERT_TRUE(state["species"]["d+"].isSet("density_source"));
   ASSERT_TRUE(state["species"]["d+"].isSet("momentum_source"));
@@ -244,20 +226,16 @@ TEST_F(DiamagneticDriftTest, AddDiamagneticSourcesWritesOnlyPresentOutputs) {
   ASSERT_FALSE(state["species"]["e"].isSet("density_source"));
   ASSERT_TRUE(state["species"]["e"].isSet("energy_source"));
   ASSERT_FALSE(state["species"]["e"].isSet("momentum_source"));
+
+  ASSERT_TRUE(IsFieldEqual(get<Field3D>(state["species"]["d+"]["density_source"]), 0.0,
+                           "RGN_NOBNDRY"));
+  ASSERT_TRUE(IsFieldEqual(get<Field3D>(state["species"]["d+"]["momentum_source"]), 0.0,
+                           "RGN_NOBNDRY"));
+  ASSERT_TRUE(IsFieldEqual(get<Field3D>(state["species"]["e"]["energy_source"]), 0.0,
+                           "RGN_NOBNDRY"));
 }
 
-TEST_F(DiamagneticDriftTest, CoreAverageRequiresAverageCore) {
-  setCurvature();
-  Options options = diamagneticOptions();
-  options["diamagnetic_drift"]["radial_boundary"] = "closed";
-
-  DiamagneticDrift component("diamagnetic_drift", options, nullptr);
-
-  Field3D field{0.0};
-  EXPECT_THROW(component.coreAverage(field), BoutException);
-}
-
-TEST_F(DiamagneticDriftTest, CoreAverageAveragesInnermostCoreRing) {
+TEST_F(WideDiamagneticDriftTest, TransformAveragesInnermostCoreRing) {
   setCurvature();
 
   auto* coords = mesh->getCoordinates();
@@ -268,27 +246,59 @@ TEST_F(DiamagneticDriftTest, CoreAverageAveragesInnermostCoreRing) {
   coords->setJ(J);
 
   Options options = diamagneticOptions();
+  options["diamagnetic_drift"]["form"] = "gradient";
   DiamagneticDrift component("diamagnetic_drift", options, nullptr);
 
-  Field3D field{0.0};
-  field = 0.0;
-  for (int jy = mesh->ystart; jy <= mesh->yend; ++jy) {
-    const BoutReal ring_value =
-        jy == mesh->ystart ? 1.0 : (jy == mesh->ystart + 1 ? 2.0 : 4.0);
-    for (int jz = mesh->zstart; jz <= mesh->zend; ++jz) {
-      field(mesh->xstart, jy, jz) = ring_value;
-      field(mesh->xstart + 1, jy, jz) = 9.0;
-    }
-  }
+  Field3D quantity = makeField<Field3D>([](Ind3D& i) {
+    const BoutReal slope =
+        i.y() == mesh->ystart ? 1.0 : (i.y() == mesh->ystart + 1 ? 2.0 : 4.0);
+    return 0.5 * i.x() * slope;
+  });
+  Options state;
+  auto& species = state["species"]["d+"];
+  species["charge"] = 1.0;
+  species["temperature"] = 1.0;
+  species["density"] = quantity;
+  species["pressure"] = quantity;
+  species["momentum"] = quantity;
 
-  component.coreAverage(field);
+  Options closed_state = state.copy();
+  Options closed_options = diamagneticOptions();
+  closed_options["diamagnetic_drift"]["form"] = "gradient";
+  closed_options["diamagnetic_drift"]["radial_boundary"] = "closed";
+  DiamagneticDrift closed_component("diamagnetic_drift", closed_options, nullptr);
+  closed_component.declareAllSpecies({"d+"});
+  closed_component.transform(closed_state);
 
-  const BoutReal expected_average = (1.0 * 1.0 + 2.0 * 2.0 + 3.0 * 4.0) / 6.0;
-  for (int jy = mesh->ystart; jy <= mesh->yend; ++jy) {
-    for (int jz = mesh->zstart; jz <= mesh->zend; ++jz) {
-      ASSERT_DOUBLE_EQ(field(mesh->xstart, jy, jz), expected_average);
-      ASSERT_DOUBLE_EQ(field(mesh->xstart + 1, jy, jz), 9.0);
+  component.declareAllSpecies({"d+"});
+  component.transform(state);
+
+  for (const auto* source : {"density_source", "energy_source", "momentum_source"}) {
+    SCOPED_TRACE(source);
+    const auto averaged = get<Field3D>(species[source]);
+    const auto closed = get<Field3D>(closed_state["species"]["d+"][source]);
+    EXPECT_NE(closed(mesh->xstart, mesh->ystart, mesh->zstart),
+              closed(mesh->xstart, mesh->yend, mesh->zstart));
+
+    // Compare against the unaveraged closed source using the unequal cell volumes.
+    BoutReal ring_integral = 0.0;
+    BoutReal ring_volume = 0.0;
+    const auto cell_volume = coords->cell_volume();
+    for (int jy = mesh->ystart; jy <= mesh->yend; ++jy) {
+      for (int jz = mesh->zstart; jz <= mesh->zend; ++jz) {
+        ring_integral += cell_volume(mesh->xstart, jy, jz) * closed(mesh->xstart, jy, jz);
+        ring_volume += cell_volume(mesh->xstart, jy, jz);
+      }
     }
+    const BoutReal expected_average = ring_integral / ring_volume;
+    for (int jy = mesh->ystart; jy <= mesh->yend; ++jy) {
+      for (int jz = mesh->zstart; jz <= mesh->zend; ++jz) {
+        EXPECT_NEAR(averaged(mesh->xstart, jy, jz), expected_average, 1e-12);
+        EXPECT_DOUBLE_EQ(averaged(mesh->xstart + 1, jy, jz),
+                         closed(mesh->xstart + 1, jy, jz));
+      }
+    }
+    EXPECT_NEAR(volumeIntegral(averaged), volumeIntegral(closed), 1e-12);
   }
 }
 
@@ -318,19 +328,28 @@ TEST_F(DiamagneticDriftTest, DivergenceFormIsConservativeWithoutBoundaryFluxes) 
   });
   Field3D temperature{1.0};
 
-  Field3D sink = component.calculateDivergenceForm(quantity, temperature, 1.0);
+  Options state;
+  state["species"]["d+"]["charge"] = 1.0;
+  state["species"]["d+"]["temperature"] = temperature;
+  state["species"]["d+"]["density"] = quantity;
+  component.declareAllSpecies({"d+"});
+  component.transform(state);
 
-  ASSERT_NEAR(volumeIntegral(sink), 0.0, 1e-12);
+  const auto source = get<Field3D>(state["species"]["d+"]["density_source"]);
+  ASSERT_NEAR(volumeIntegral(source), 0.0, 1e-12);
 }
 
-TEST_F(WideDiamagneticDriftTest, GradientFormIsConservativeWithConstantBoundaryProduct) {
+TEST_F(WideDiamagneticDriftTest, GradientFormOpenIsConservativeWhenBoundaryValueUniform) {
   setCurvature(0.0, 1.0, 0.0);
   Options options = diamagneticOptions();
-  options["diamagnetic_drift"]["radial_boundary"] = "closed";
+  options["diamagnetic_drift"]["radial_boundary"] = "open";
   options["diamagnetic_drift"]["form"] = "gradient";
 
   DiamagneticDrift component("diamagnetic_drift", options, nullptr);
 
+  // With open radial boundaries, the gradient form's implied core flux vanishes
+  // only when g = quantity * temperature / charge is uniform around the ring in
+  // both the x guard cell and the first interior cell.
   Field3D quantity = makeField<Field3D>([](Ind3D& i) {
     const bool on_boundary = i.x() <= mesh->xstart || i.x() >= mesh->xend
                              || i.y() <= mesh->ystart || i.y() >= mesh->yend;
@@ -338,7 +357,13 @@ TEST_F(WideDiamagneticDriftTest, GradientFormIsConservativeWithConstantBoundaryP
   });
   Field3D temperature{1.0};
 
-  Field3D sink = component.calculateGradientForm(quantity, temperature, 1.0);
+  Options state;
+  state["species"]["d+"]["charge"] = 1.0;
+  state["species"]["d+"]["temperature"] = temperature;
+  state["species"]["d+"]["density"] = quantity;
+  component.declareAllSpecies({"d+"});
+  component.transform(state);
 
-  ASSERT_NEAR(volumeIntegral(sink), 0.0, 1e-12);
+  const auto source = get<Field3D>(state["species"]["d+"]["density_source"]);
+  ASSERT_NEAR(volumeIntegral(source), 0.0, 1e-12);
 }
