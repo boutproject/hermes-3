@@ -1431,7 +1431,8 @@ void NeutralMixed::precon([[maybe_unused]] const Options& state, BoutReal gamma)
     return;
   }
 
-  const std::string bndry = "neumann"; // Previously Dirichlet was used here, but Neumann performs better
+  const std::string bndry =
+      "neumann"; // Previously Dirichlet was used here, but Neumann performs better
   const BoutReal schur_factor = neutral_conduction ? 10. / 3 : 5. / 3;
 
   // First matrix

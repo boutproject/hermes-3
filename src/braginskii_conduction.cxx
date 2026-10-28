@@ -291,7 +291,6 @@ void BraginskiiConduction::transform_impl(GuardedOptions& state) {
 
       // This results in a harmonic average of the heat fluxes
       kappa_par /= (1. + abs(q_SH / softFloor(q_fl, 1e-10)));
-
     }
 
     // Values of kappa on cell boundaries are needed for fluxes. Not all collision
