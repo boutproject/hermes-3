@@ -99,10 +99,95 @@ TEST_F(DiamagneticDriftTest, CreateComponent) {
   DiamagneticDrift component("test", options, nullptr);
 }
 
+TEST_F(DiamagneticDriftTest, DefaultOptions) {
+  setCurvature();
+  Options options = diamagneticOptions();
+  DiamagneticDrift component("test", options, nullptr);
+
+  EXPECT_EQ(options["test"]["form"].as<DiamagneticForm>(), DiamagneticForm::divergence);
+  EXPECT_EQ(options["test"]["radial_boundary"].as<DiamagneticBoundary>(),
+            DiamagneticBoundary::closed_average);
+}
+
+TEST_F(DiamagneticDriftTest, AcceptsEveryFormAndRadialBoundary) {
+  setCurvature();
+  for (const auto form : {DiamagneticForm::gradient, DiamagneticForm::divergence}) {
+    for (const auto boundary : {DiamagneticBoundary::open, DiamagneticBoundary::closed,
+                                DiamagneticBoundary::closed_average}) {
+      SCOPED_TRACE(toString(form) + ", " + toString(boundary));
+      Options options = diamagneticOptions();
+      options["test"]["form"] = toString(form);
+      options["test"]["radial_boundary"] = toString(boundary);
+
+      EXPECT_NO_THROW(DiamagneticDrift("test", options, nullptr));
+      EXPECT_EQ(options["test"]["form"].as<DiamagneticForm>(), form);
+      EXPECT_EQ(options["test"]["radial_boundary"].as<DiamagneticBoundary>(), boundary);
+    }
+  }
+}
+
+TEST_F(DiamagneticDriftTest, RejectsInvalidOptions) {
+  setCurvature();
+  for (const auto* key : {"form", "radial_boundary"}) {
+    SCOPED_TRACE(key);
+    Options options = diamagneticOptions();
+    options["test"][key] = "invalid";
+    EXPECT_THROW(DiamagneticDrift("test", options, nullptr), BoutException);
+  }
+}
+
+TEST_F(DiamagneticDriftTest, RemovedDiamagFormExplainsMigration) {
+  setCurvature();
+  for (const BoutReal value : {0.0, 1.0, 0.5}) {
+    SCOPED_TRACE(value);
+    Options options = diamagneticOptions();
+    options["test"]["diamag_form"] = value;
+    try {
+      DiamagneticDrift component("test", options, nullptr);
+      FAIL() << "diamag_form must be rejected";
+    } catch (const BoutException& error) {
+      const std::string message = error.what();
+      EXPECT_NE(message.find("diamag_form = 1 with form = divergence"),
+                std::string::npos);
+      EXPECT_NE(message.find("diamag_form = 0 with form = gradient"), std::string::npos);
+      EXPECT_NE(message.find("Spatially varying blends were removed"), std::string::npos);
+      EXPECT_NE(message.find("not conservative"), std::string::npos);
+    }
+  }
+}
+
+TEST_F(DiamagneticDriftTest, DeprecatedBoundaryFluxMapsToRadialBoundary) {
+  setCurvature();
+  for (const bool allow_flux : {false, true}) {
+    SCOPED_TRACE(allow_flux);
+    Options options = diamagneticOptions();
+    options["test"]["bndry_flux"] = allow_flux;
+    DiamagneticDrift component("test", options, nullptr);
+
+    EXPECT_EQ(options["test"]["radial_boundary"].as<DiamagneticBoundary>(),
+              allow_flux ? DiamagneticBoundary::open : DiamagneticBoundary::closed);
+    EXPECT_EQ(options["test"]["form"].as<DiamagneticForm>(), DiamagneticForm::divergence);
+  }
+}
+
+TEST_F(DiamagneticDriftTest, DeprecatedBoundaryFluxConflictsWithRadialBoundary) {
+  setCurvature();
+  for (const bool allow_flux : {false, true}) {
+    for (const auto* boundary : {"open", "closed", "closed_average"}) {
+      SCOPED_TRACE(boundary);
+      SCOPED_TRACE(allow_flux);
+      Options options = diamagneticOptions();
+      options["test"]["bndry_flux"] = allow_flux;
+      options["test"]["radial_boundary"] = boundary;
+      EXPECT_THROW(DiamagneticDrift("test", options, nullptr), BoutException);
+    }
+  }
+}
+
 TEST_F(DiamagneticDriftTest, AddDiamagneticSourcesSkipsSpeciesWithoutRequiredInputs) {
   setCurvature();
   Options options = diamagneticOptions();
-  options["diamagnetic_drift"]["average_core"] = false;
+  options["diamagnetic_drift"]["radial_boundary"] = "closed";
 
   DiamagneticDrift component("diamagnetic_drift", options, nullptr);
 
@@ -132,8 +217,8 @@ TEST_F(DiamagneticDriftTest, AddDiamagneticSourcesSkipsSpeciesWithoutRequiredInp
 TEST_F(DiamagneticDriftTest, AddDiamagneticSourcesWritesOnlyPresentOutputs) {
   setCurvature();
   Options options = diamagneticOptions();
-  options["diamagnetic_drift"]["average_core"] = false;
-  options["diamagnetic_drift"]["divergence_form"] = false;
+  options["diamagnetic_drift"]["radial_boundary"] = "closed";
+  options["diamagnetic_drift"]["form"] = "gradient";
 
   DiamagneticDrift component("diamagnetic_drift", options, nullptr);
 
@@ -164,7 +249,7 @@ TEST_F(DiamagneticDriftTest, AddDiamagneticSourcesWritesOnlyPresentOutputs) {
 TEST_F(DiamagneticDriftTest, CoreAverageRequiresAverageCore) {
   setCurvature();
   Options options = diamagneticOptions();
-  options["diamagnetic_drift"]["average_core"] = false;
+  options["diamagnetic_drift"]["radial_boundary"] = "closed";
 
   DiamagneticDrift component("diamagnetic_drift", options, nullptr);
 
@@ -222,9 +307,8 @@ TEST_F(DiamagneticDriftTest, DivergenceFormIsConservativeWithoutBoundaryFluxes) 
 
   setCurvature(0.0, 1.0, 0.0);
   Options options = diamagneticOptions();
-  options["diamagnetic_drift"]["average_core"] = false;
-  options["diamagnetic_drift"]["divergence_form"] = true;
-  options["diamagnetic_drift"]["bndry_flux"] = false;
+  options["diamagnetic_drift"]["radial_boundary"] = "closed";
+  options["diamagnetic_drift"]["form"] = "divergence";
 
   DiamagneticDrift component("diamagnetic_drift", options, nullptr);
 
@@ -242,8 +326,8 @@ TEST_F(DiamagneticDriftTest, DivergenceFormIsConservativeWithoutBoundaryFluxes) 
 TEST_F(WideDiamagneticDriftTest, GradientFormIsConservativeWithConstantBoundaryProduct) {
   setCurvature(0.0, 1.0, 0.0);
   Options options = diamagneticOptions();
-  options["diamagnetic_drift"]["average_core"] = false;
-  options["diamagnetic_drift"]["divergence_form"] = false;
+  options["diamagnetic_drift"]["radial_boundary"] = "closed";
+  options["diamagnetic_drift"]["form"] = "gradient";
 
   DiamagneticDrift component("diamagnetic_drift", options, nullptr);
 

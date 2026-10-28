@@ -1,4 +1,5 @@
 #include <bout/bout_types.hxx>
+#include <bout/boutcomm.hxx>
 #include <bout/boutexception.hxx>
 #include <bout/field2d.hxx>
 #include <bout/field3d.hxx>
@@ -28,21 +29,54 @@ DiamagneticDrift::DiamagneticDrift(std::string name, Options& alloptions,
   // Get options for this component
   auto& options = alloptions[name];
 
-  bndry_flux = options["bndry_flux"]
-                   .doc("Allow fluxes through boundary?")
-                   .withDefault<bool>(false);
+  if (options.isSet("diamag_form")) {
+    throw BoutException(
+        "Diamagnetic drift: diamag_form has been removed. Replace diamag_form = 1 "
+        "with form = divergence, or diamag_form = 0 with form = gradient. "
+        "Spatially varying blends were removed because they are not conservative.");
+  }
 
-  divergence_form = options["divergence_form"]
-                        .doc("Use divergence form of diamagnetic drift?")
-                        .withDefault<bool>(true);
+  if (options.isSet("bndry_flux")) {
+    if (options.isSet("radial_boundary")) {
+      throw BoutException(
+          "Diamagnetic drift: bndry_flux and radial_boundary cannot both be set. "
+          "Use radial_boundary only.");
+    }
+    const auto boundary = options["bndry_flux"].as<bool>() ? DiamagneticBoundary::open
+                                                           : DiamagneticBoundary::closed;
+    options["radial_boundary"].assign(toString(boundary), "bndry_flux");
+    if (BoutComm::rank() == 0) {
+      output_warn.write("Diamagnetic drift: bndry_flux is deprecated; use "
+                        "radial_boundary = {} instead.\n",
+                        toString(boundary));
+    }
+  }
 
-  average_core =
-      options["average_core"].doc("Average around core boundary?").withDefault<bool>(true)
-      and
-      // Only average if on core boundary
-      mesh->periodicY(mesh->xstart) and mesh->firstX();
+  form = options["form"]
+             .doc("Form of the diamagnetic sink: divergence or gradient. "
+                  "radial_boundary applies to x boundaries only; sheath (y) "
+                  "faces are always closed.")
+             .withDefault(DiamagneticForm::divergence);
 
-  if (average_core) {
+  radial_boundary = options["radial_boundary"]
+                        .doc("Treatment of x boundaries only: open, closed, or "
+                             "closed_average (average the innermost core ring). "
+                             "Sheath (y) faces are always closed.")
+                        .withDefault(DiamagneticBoundary::closed_average);
+
+  average_core_active = radial_boundary == DiamagneticBoundary::closed_average
+                        and mesh->periodicY(mesh->xstart) and mesh->firstX();
+
+  if (BoutComm::rank() == 0) {
+    output_info.write("Diamagnetic drift: form = {}, radial_boundary = {}.\n",
+                      toString(form), toString(radial_boundary));
+    if (radial_boundary == DiamagneticBoundary::closed_average and !average_core_active) {
+      output_info.write("Diamagnetic drift: closed_average acts as closed here "
+                        "because this processor is not on the core ring.\n");
+    }
+  }
+
+  if (average_core_active) {
     const auto* coords = mesh->getCoordinates();
     this->cell_volume = coords->dx() * coords->dy() * coords->dz() * coords->J();
     BoutReal local_core_volume = 0.0;
@@ -117,7 +151,7 @@ Field3D DiamagneticDrift::calculateDivergenceForm(const Field3D& quantity,
   }
 
   const Vector3D vD = (temperature / charge) * Curlb_B;
-  return factor * FV::Div_f_v(quantity, vD, bndry_flux);
+  return factor * FV::Div_f_v(quantity, vD, radial_boundary == DiamagneticBoundary::open);
 }
 
 Field3D DiamagneticDrift::calculateGradientForm(const Field3D& quantity,
@@ -143,13 +177,13 @@ void DiamagneticDrift::addDiamagneticSources(GuardedOptions& species) {
   const auto temperature = GET_VALUE(Field3D, species["temperature"]);
 
   if (IS_SET(species["density"])) {
-    Field3D sink = divergence_form
+    Field3D sink = form == DiamagneticForm::divergence
                        ? calculateDivergenceForm(GET_VALUE(Field3D, species["density"]),
                                                  temperature, charge)
                        : calculateGradientForm(GET_VALUE(Field3D, species["density"]),
                                                temperature, charge);
 
-    if (average_core) {
+    if (average_core_active) {
       coreAverage(sink);
     }
 
@@ -157,13 +191,13 @@ void DiamagneticDrift::addDiamagneticSources(GuardedOptions& species) {
   }
 
   if (IS_SET(species["pressure"])) {
-    Field3D sink = divergence_form
+    Field3D sink = form == DiamagneticForm::divergence
                        ? calculateDivergenceForm(get<Field3D>(species["pressure"]),
                                                  temperature, charge, 5. / 2)
                        : calculateGradientForm(get<Field3D>(species["pressure"]),
                                                temperature, charge, 5. / 2);
 
-    if (average_core) {
+    if (average_core_active) {
       coreAverage(sink);
     }
 
@@ -171,13 +205,13 @@ void DiamagneticDrift::addDiamagneticSources(GuardedOptions& species) {
   }
 
   if (IS_SET(species["momentum"])) {
-    Field3D sink = divergence_form
+    Field3D sink = form == DiamagneticForm::divergence
                        ? calculateDivergenceForm(get<Field3D>(species["momentum"]),
                                                  temperature, charge)
                        : calculateGradientForm(get<Field3D>(species["momentum"]),
                                                temperature, charge);
 
-    if (average_core) {
+    if (average_core_active) {
       coreAverage(sink);
     }
 
@@ -186,8 +220,9 @@ void DiamagneticDrift::addDiamagneticSources(GuardedOptions& species) {
 }
 
 void DiamagneticDrift::coreAverage(Field3D& f) {
-  if (!average_core) {
-    throw BoutException("DiamagneticDrift::coreAverage requires average_core=true");
+  if (!average_core_active) {
+    throw BoutException("DiamagneticDrift::coreAverage requires closed_average "
+                        "on the core boundary");
   }
 
   BoutReal local_sum = 0.0;
