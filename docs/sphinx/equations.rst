@@ -1552,6 +1552,228 @@ of viscosity could in some cases lead to cooling.
 .. doxygenstruct:: Vorticity
    :members:
 
+.. _sec-evolve_vorticity_ion_energy:
+
+evolve_vorticity_ion_energy
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Evolves vorticity ``Vort`` and total ion energy density ``Eion`` together,
+including ion thermal energy and parallel and perpendicular kinetic
+energy. All charged ion species share a common temperature ``Tion``;
+their pressures are calculated from their densities and this temperature.
+The perpendicular kinetic energy includes the ion diamagnetic drift, so
+recovering temperature also requires recovering the electrostatic
+potential ``phi``.
+
+Use :ref:`sec-evolve_density` and :ref:`sec-evolve_momentum` for each ion
+species, and :ref:`sec-evolve_pressure` for electrons. Ion pressure is
+supplied by this component, so omit independent ion pressure evolution.
+For example, a deuterium--helium mixture with zero parallel current can
+be configured as:
+
+.. code-block:: ini
+
+   [hermes]
+   components = e, d+, he++, evolve_vorticity_ion_energy
+
+   [e]
+   type = quasineutral, evolve_pressure, zero_current
+   charge = -1
+   AA = 1 / 1836
+
+   [d+]
+   type = evolve_density, evolve_momentum
+   charge = 1
+   AA = 2
+
+   [he++]
+   type = evolve_density, evolve_momentum
+   charge = 2
+   AA = 4
+
+   [evolve_vorticity_ion_energy]
+   average_atomic_mass = 2.0
+
+The equations below use normalised quantities, with ion atomic mass
+:math:`A_s`, charge number :math:`Z_s`, and a fixed Boussinesq reference
+mass :math:`\overline{A}` set by ``average_atomic_mass``. Sums over
+:math:`s` include charged ions only. Define
+
+.. math::
+
+   \begin{aligned}
+   p_s &= n_s T_i, & P_i &= \sum_s p_s, \\
+   K_{\parallel s} &= \frac{1}{2} A_s n_s V_{\parallel s}^2,
+      & K_\parallel &= \sum_s K_{\parallel s}, \\
+   \psi &= \frac{1}{\overline{A}}\sum_s\frac{A_s}{Z_s}p_s,
+      & \Phi &= \phi + \psi, \\
+   c &= \frac{\overline{A}}{B^2},
+      & \mathcal{L}(f) &= \nabla\cdot(c\nabla_\perp f).
+   \end{aligned}
+
+The evolved quantities and temperature recovery are
+
+.. math::
+
+   \begin{aligned}
+   \Omega &= \mathcal{L}(\Phi), \\
+   E_i &= \frac{3}{2}P_i + K_\parallel + K_\perp,
+      & K_\perp &= \frac{1}{2}c|\nabla_\perp\Phi|^2, \\
+   T_i &= \frac{2(E_i-K_\parallel-K_\perp)}{3\sum_s n_s}.
+   \end{aligned}
+
+In the implementation, the recovered thermal pressure is clipped to be
+non-negative and the total ion density in the temperature denominator is
+soft-floored using ``density_floor``. Potential and pressure are recovered
+iteratively, applying their boundary conditions separately. The Laplacian
+solver supplies approximate corrections; convergence is checked against
+the finite-volume vorticity operator, as well as changes in both
+:math:`\phi` and :math:`\psi`.
+
+The forward operator is ``bout::ion_energy::Div_a_Grad_perp_XZ``. Its
+X--Z face fluxes and the discrete :math:`K_\perp` share the same
+discretisation, including the cross metric :math:`g^{13}`, so that they
+obey discrete integration by parts with boundary work. For an energy
+audit, use this discrete kinetic energy rather than spectral Z
+derivatives, even when the approximate Laplacian solver uses Fourier
+modes in Z.
+
+The time evolution is
+
+.. math::
+
+   \begin{aligned}
+   \frac{\partial\Omega}{\partial t}
+      &= -\nabla\cdot\mathbf{G}
+         + \nabla\cdot(\mathbf{J}_{\mathrm{dia},i}
+                       +\mathbf{J}_{\mathrm{dia},e}), \\
+   \frac{\partial E_i}{\partial t}
+      &= -\nabla\cdot(\mathbf{Q}_{E\times B}+\mathbf{Q}_{\mathrm{R}}
+                     +\mathbf{Q}_{\mathrm{electric}}+\mathbf{Q}_\parallel
+                     +\mathbf{Q}_{\mathrm{pol}})
+         -\phi\nabla\cdot\mathbf{J}_e + S_i.
+   \end{aligned}
+
+Here :math:`-\mathbf{G}` is the Reynolds stress current, using the full
+Boussinesq expression described in :ref:`sec-vorticity` with
+:math:`\hat{p}=\psi` and :math:`\overline{n}=1`.
+The energy fluxes are
+
+.. math::
+
+   \begin{aligned}
+   \mathbf{Q}_{E\times B}
+      &= \left(\frac{3}{2}P_i+K_\parallel\right)\mathbf{v}_{E\times B}, \\
+   \mathbf{Q}_{\mathrm{R}}
+      &= \frac{c}{2}(\mathbf{v}_{E\times B}\cdot\nabla\psi)\nabla_\perp\Phi, \\
+   \mathbf{Q}_{\mathrm{electric}}
+      &= \phi(\mathbf{J}_{\mathrm{dia},i}+\mathbf{J}_{\parallel,i}), \\
+   \mathbf{Q}_\parallel
+      &= \mathbf{b}\sum_s\left(\frac{5}{2}p_s+K_{\parallel s}\right)V_{\parallel s}, \\
+   \mathbf{Q}_{\mathrm{pol}} &= E_{\mathrm{adv}}\mathbf{J}_{\mathrm{pol}}, \\
+   E_{\mathrm{adv}}
+      &= \phi+\sum_s\frac{A_s}{Z_s\rho}
+                     \left(\frac{5}{2}p_s+K_{\parallel s}\right),
+      & \rho &= \sum_s A_s n_s.
+   \end{aligned}
+
+Parallel energy fluxes use each species' velocity and completed sheath
+boundary values. The electron current in the exchange term is
+:math:`\mathbf{J}_e=\mathbf{J}_{\mathrm{dia},e}+\mathbf{J}_{\parallel,e}`.
+Electron thermal energy receives
+:math:`-\mathbf{J}_{\mathrm{dia},e}\cdot\nabla\phi`; parallel electrical
+work is accounted for by the electron momentum equation.
+
+Polarisation transport uses an auxiliary potential :math:`\chi`, solving
+:math:`\mathcal{L}(\chi)=\partial_t\Omega`, to approximate
+:math:`\mathbf{J}_{\mathrm{pol}}=-c\nabla_\perp\chi-\mathbf{G}`.
+Each ion species receives polarisation particle and momentum fluxes
+
+.. math::
+
+   \boldsymbol{\Gamma}_{\mathrm{pol},s}
+      = \frac{A_s n_s}{Z_s\rho}\mathbf{J}_{\mathrm{pol}},
+   \qquad
+   \mathbf{F}_{\mathrm{pol},s}
+      = A_s V_{\parallel s}\boldsymbol{\Gamma}_{\mathrm{pol},s}.
+
+These weights use the local mixture mass density, with a floor of
+:math:`\overline{A}` times ``density_floor``. Shared, limited face fluxes
+preserve the species partition of the polarisation current.
+
+All species ``energy_source`` fields supply thermal energy. Ion particle
+and momentum sources also change parallel kinetic energy, giving
+
+.. math::
+
+   S_i = \sum_s\left(S_{E,s}+V_{\parallel s}S_{M,s}
+                     -\frac{1}{2}A_s V_{\parallel s}^2 S_{n,s}\right).
+
+Here :math:`S_{M,s}` is the source of momentum
+:math:`A_s n_s V_{\parallel s}`. The internal polarisation transport
+sources are excluded from this conversion because their energy flux is
+already included in :math:`\mathbf{Q}_{\mathrm{pol}}`.
+
+Setting ``phi_boundary_relax = true`` relaxes the radial boundary
+midpoint potential :math:`\phi_b` towards the Z average of the adjacent
+interior potential:
+
+.. math::
+
+   \frac{d\phi_b}{dt}
+      = \frac{\langle\phi_{\mathrm{interior}}\rangle_Z-\phi_b}{\tau}.
+
+The positive, finite timescale :math:`\tau` is set by
+``phi_boundary_timescale`` in seconds (default ``1e-4``). The boundary
+state is integrated by the time solver and saved in restarts. This mode
+requires two radial guard cells and automatically enables
+``Vort:evolve_bndry``; explicitly disabling it is an error.
+``phi_core_averagey = true`` additionally averages the inner boundary
+target over physical Y cells on closed core field lines.
+
+The full polarisation current is retained in the vorticity/current solve.
+Normal polarisation transport of particles, momentum, enthalpy, parallel
+kinetic energy and electrical work is closed at physical radial faces,
+including cross-metric fluxes. This lets imposed sources and sheath
+boundary conditions determine the corresponding boundary fluxes.
+In relaxation mode :math:`\chi` has homogeneous midpoint Dirichlet
+boundaries. Normal output ``Vort`` remains physical vorticity; restart
+files also store the potential boundary state.
+
+Other options in ``[evolve_vorticity_ion_energy]`` are:
+
+- ``average_atomic_mass``: Fixed Boussinesq reference atomic mass
+  (default ``2.0``). Species transport weights still use the local mixture.
+- ``poloidal_flows``: Include X--Y :math:`E\times B` flows
+  (default ``false``).
+- ``density_floor``: Normalised total ion density floor (default ``1e-7``).
+- ``neumann_boundary_average_z``: Set radial ion-pressure boundary values
+  to the Z average of the adjacent interior values (default ``false``,
+  which applies Neumann pressure boundaries).
+- ``phi_max_iterations``: Maximum number of potential recovery or
+  auxiliary-current iterations (default ``100``). Failure to converge
+  raises an error.
+- ``phi_atol`` and ``phi_rtol``: Absolute and relative convergence
+  tolerances for both potential and pressure potential
+  (defaults ``1.0`` eV and ``1e-3``).
+- ``vort_atol``: Absolute tolerance for the normalised forward vorticity
+  residual (default ``1e-10``); ``phi_rtol`` supplies its relative tolerance.
+- ``laplacian``: Subsection containing options for the approximate
+  Laplacian solver.
+- ``diagnose``: Save additional energy and flux diagnostics (default ``false``).
+
+The default outputs are ``Eion``, ``Tion``, ``Vort`` and ``phi``.
+With ``diagnose = true``, the component also saves ``ion_KE_parallel``,
+``ion_KE_perp``, ``ion_pressure_potential``, ``ddt(Eion)``, the flux
+divergences ``DivEExB``, ``DivEReynolds``, ``DivEelectric``, ``DivEparallel``
+and ``DivEpol``, and the exchange/source terms ``phi_Div_Je``,
+``electron_exb_work`` and ``Eion_src``. ``DivJpol`` is the divergence of
+the closed polarisation transport current. The diagnostic ``ddt(Phi)``
+contains the auxiliary :math:`\chi`, which approximates the polarisation
+current rather than the exact time derivative of :math:`\phi+\psi`.
+
+The implementation is in ``src/evolve_vorticity_ion_energy.cxx``.
+
 relax_potential
 ~~~~~~~~~~~~~~~
 
