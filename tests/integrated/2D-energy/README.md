@@ -159,3 +159,10 @@ formulation have their own inputs, runners and power-balance explanations:
 - [Uniform equilibrium](../2D-ion-energy-equilibrium/README.md).
 - [Curvature exchange](../2D-ion-energy-curvature/README.md).
 - [Unequal-mass/charge ion mixture](../2D-ion-energy-multispecies/README.md).
+
+## Publication resolution study
+
+The separate [publication runner](publication-study.md) compares matched
+pressure and total-ion-energy runs across configurable spatial resolutions.
+It produces state images, energy traces, convergence figures and numeric tables
+for fixed or solver-managed relaxing potential boundaries.

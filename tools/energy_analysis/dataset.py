@@ -31,6 +31,7 @@ class EnergyRun:
     length_scale: float
     frequency: float
     source: str = "dataset"
+    formulation: str = "total_energy"
 
     def interior(self, value):
         selection = {}
@@ -157,11 +158,34 @@ def open_run(source, *, species=None, chunks=None):
             chunks={"t": 1, "y": 1} if chunks is None else chunks,
         )
     ds = _normalised_view(ds)
+    options = ds.attrs.get("options")
+    if options is None:
+        raise AuditError("Model/boundary reconstruction requires bd.options")
+    components = [
+        c.strip() for c in str(options["hermes:components"]).strip(" ()\t").split(",")
+    ]
+    models = [
+        (c, str(options[c]["type"]) if c in options and "type" in options[c] else c)
+        for c in components
+    ]
+    models = [
+        (c, kind)
+        for c, kind in models
+        if kind in ("vorticity", "evolve_vorticity_ion_energy")
+    ]
+    if len(models) != 1:
+        raise AuditError(
+            "Expected one vorticity or evolve_vorticity_ion_energy component"
+        )
+    formulation = "pressure" if models[0][1] == "vorticity" else "total_energy"
+    manifest = _manifest(ds, species)
+    pressure_fields = tuple(
+        "P" + s.name for s in manifest if s.name != "e" and abs(s.charge) > 1e-5
+    )
     required = (
         "t",
-        "Eion",
         "Pe",
-        "Tion",
+        *(pressure_fields if formulation == "pressure" else ("Eion", "Tion")),
         "phi",
         "Vort",
         "J",
@@ -198,21 +222,6 @@ def open_run(source, *, species=None, chunks=None):
         or metadata.get("ixseps1", ds.sizes["x"]) < metadata.get("nx", ds.sizes["x"])
     ):
         raise AuditError("Tokamak boundary masks are not implemented")
-    options = ds.attrs.get("options")
-    if options is None:
-        raise AuditError("Model/boundary reconstruction requires bd.options")
-    components = [
-        c.strip()
-        for c in str(options["hermes"]["components"]).strip(" ()\t").split(",")
-    ]
-    models = [
-        c
-        for c in components
-        if (str(options[c]["type"]) if c in options and "type" in options[c] else c)
-        == "evolve_vorticity_ion_energy"
-    ]
-    if len(models) != 1:
-        raise AuditError("Expected one evolve_vorticity_ion_energy component")
     if (
         "mesh:paralleltransform:type" in options
         and str(options["mesh:paralleltransform:type"]) != "identity"
@@ -227,19 +236,19 @@ def open_run(source, *, species=None, chunks=None):
     for key in ("rho_s0", "Omega_ci", "Nnorm", "Tnorm"):
         if key not in metadata or not np.isfinite(metadata[key]) or metadata[key] <= 0:
             raise AuditError(f"Missing/invalid normalisation {key}")
-    manifest = _manifest(ds, species)
     from scipy.constants import elementary_charge
 
     run = EnergyRun(
         ds,
         manifest,
-        models[0],
+        models[0][0],
         mxg,
         myg,
         elementary_charge * metadata["Nnorm"] * metadata["Tnorm"],
         metadata["rho_s0"],
         metadata["Omega_ci"],
         path,
+        formulation,
     )
     for name in required[1:]:
         if not bool(np.isfinite(run.interior(ds[name])).all().compute()):

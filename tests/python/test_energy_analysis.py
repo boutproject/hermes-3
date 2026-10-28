@@ -681,3 +681,27 @@ def test_current_face_flux_is_not_labelled_as_energy_power(dataset):
     )
     with pytest.raises(AuditError, match="energy-flux family"):
         flux_power(run, flux, "DivJpol")
+
+
+def test_pressure_adapter_has_native_and_common_but_no_saved_ion_energy(dataset):
+    ds = dataset.drop_vars(["Eion", "Tion"]).copy(deep=True)
+    ds["g13"] = xr.zeros_like(ds.g13)
+    ds.g13.attrs = {"units_type": "hermes"}
+    options = ds.options
+    options["hermes:components"] = "e, d+, impurity, vorticity, polarisation_drift"
+    options["vorticity:average_atomic_mass"] = "7/4"
+    options["vorticity:diamagnetic_polarisation"] = "true"
+    for name in ("d+", "impurity"):
+        ds["P" + name] = ds["N" + name].copy()
+    ds["Pe"] = ds.Pe * (1 + 0.1 * np.sin(2 * np.pi * ds.z / 8))
+    ds.Pe.attrs = {"units_type": "hermes"}
+    run = open_run(ds)
+    densities = energy_densities(run)
+    assert run.formulation == "pressure"
+    assert "ion_saved" not in densities
+    assert "plasma_saved" not in densities
+    # Electron gradients change the native pressure potential, but not the
+    # common ion-only FV estimator.
+    assert float(abs(run.interior(densities.ion_perpendicular)).max()) < 1e-14
+    assert float(abs(run.interior(densities.ion_perpendicular_native)).max()) > 0
+    assert "plasma_native" in energy_inventory(run)

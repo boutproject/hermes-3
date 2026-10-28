@@ -1549,6 +1549,14 @@ to write:
 The last term is not in general positive definite, so this simple form
 of viscosity could in some cases lead to cooling.
 
+Setting ``phi_boundary_relax = true`` evolves the radial midpoint potential
+as solver boundary state, relaxing towards the Z average of the adjacent
+interior potential on ``phi_boundary_timescale`` (seconds). This mode requires
+two radial guard cells, enables ``Vort:evolve_bndry``, and saves the boundary
+state in restarts. The physical vorticity stencil and diagnostics retain their
+own boundary conditions. Legacy restarts containing ``phi`` are migrated on
+load; an explicitly disabled boundary evolution flag is an error.
+
 .. doxygenstruct:: Vorticity
    :members:
 

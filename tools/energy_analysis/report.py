@@ -29,7 +29,11 @@ def inventory_report(run):
     densities = energy_densities(run)
     inventory = energy_inventory(run, densities=densities).compute()
     dt = regular_timestep(inventory.t)
-    partition = run.interior(densities.ion_reconstructed - run.data.Eion)
+    partition = (
+        run.interior(densities.ion_reconstructed - run.data.Eion)
+        if run.formulation == "total_energy"
+        else None
+    )
     forward = run.interior(densities.vorticity_reconstructed - run.data.Vort)
     import xhermes
 
@@ -56,20 +60,22 @@ def inventory_report(run):
         "time_s": inventory.t.values.tolist(),
         "time_spacing_s": dt,
         "inventory_J": {name: inventory[name].values.tolist() for name in inventory},
-        "partition_max_absolute_error_normalised": float(
-            abs(partition).max().compute()
-        ),
+        "partition_max_absolute_error_normalised": float(abs(partition).max().compute())
+        if partition is not None
+        else None,
         "partition_error_by_time_normalised": abs(partition)
         .max(["x", "y", "z"])
         .compute()
-        .values.tolist(),
+        .values.tolist()
+        if partition is not None
+        else None,
         "forward_max_absolute_error_normalised": float(abs(forward).max().compute()),
         "forward_error_by_time_normalised": abs(forward)
         .max(["x", "y", "z"])
         .compute()
         .values.tolist(),
         "diagnostics": compare_diagnostics(run, densities=densities),
-        "balance": dict(energy_balance(inventory).attrs),
+        "balance": dict(energy_balance(inventory, reservoir="plasma_native").attrs),
     }
     if not all(np.isfinite(inventory[name]).all() for name in inventory):
         from .dataset import AuditError
@@ -113,14 +119,23 @@ def flux_report(run, *, sources=None):
             "provenance": "unavailable",
         }
         return report
-    families = ("DivEExB", "DivEReynolds", "DivEelectric", "DivEparallel", "DivEpol")
+    families = (
+        "DivEExB",
+        "DivEReynolds",
+        "DivEelectric",
+        "DivEparallel",
+        "DivEpol",
+        "DivEviscous",
+    )
     boundary = sum(flux_power(run, fluxes, n) for n in families).assign_attrs(
         units="W", provenance="reconstructed ion face powers"
     )
     source = (
         integrated_power(
             run,
-            (fluxes.Eion_src - fluxes.phi_Div_Je).assign_attrs(
+            (
+                fluxes.Eion_src - fluxes.phi_Div_Je - fluxes.electron_viscous_heating
+            ).assign_attrs(
                 units_type="hermes",
                 provenance="prescribed external sources plus reconstructed electron exchange",
             ),

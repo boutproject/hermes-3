@@ -5,6 +5,7 @@ from .dataset import AuditError, EnergyRun, Species, open_run
 from .fluxes import (
     PrescribedSources,
     boundary_relaxation,
+    closed_slab_outward_power,
     compare_flux_diagnostics,
     flux_power,
     net_face_flux,
@@ -27,6 +28,7 @@ __all__ = [
     "boundary_relaxation",
     "cadence_comparison",
     "calculate_kperp",
+    "closed_slab_outward_power",
     "compare_diagnostics",
     "compare_flux_diagnostics",
     "electron_curvature_work",

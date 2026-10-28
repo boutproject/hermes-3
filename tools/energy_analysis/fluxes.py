@@ -142,7 +142,7 @@ def slab_contract(run):
             raise AuditError("Parallel work reconstruction requires C2 DDY")
     if str(meta.get("HERMES_SLOPE_LIMITER", "")) != "MC":
         raise AuditError("Parallel flux reconstruction requires saved MC limiter")
-    for key in ("viscosity", "hyper_z"):
+    for key in ("hyper_z",):
         if run.scalar_option(key, 0) > 0:
             raise AuditError(f"Unaccounted ion-energy {key}")
     if options[run.model].get_bool("poloidal_flows"):
@@ -249,7 +249,9 @@ def solve_polarisation(run, rhs, periodic_x, periodic_y):
         "laplacian:outer_boundary_flags",
         "laplacian:global_flags",
     ):
-        if key in section and section.evaluate_scalar(key) != 0:
+        if key in section and section.evaluate_scalar(key) not in (
+            (0, 16) if key.endswith("boundary_flags") else (0,)
+        ):
             raise AuditError(
                 "Polarisation solve supports only default Laplace boundary flags"
             )
@@ -381,6 +383,10 @@ def reconstruct_fluxes(run, *, sources=None):
     full RHS identities are explicitly unavailable. Unknown schemes raise
     AuditError; audit_report converts that to incomplete coverage.
     """
+    if run.formulation != "total_energy":
+        raise AuditError(
+            "Legacy polarisation and full Phi boundary-state power coverage is incomplete"
+        )
     periodic_x, periodic_y = slab_contract(run)
     ds = run.data
     densities = energy_densities(run)
@@ -418,7 +424,24 @@ def reconstruct_fluxes(run, *, sources=None):
     # electron_curvature_work validates scalar, Z-only curvature and DDZ settings.
     work = electron_curvature_work(run)
     dia = spectral_ddz((ds.Pe + pi) * curl, ds.dz)
-    dphi = solve_polarisation(run, reynolds.divergence + dia, periodic_x, periodic_y)
+    nu = run.scalar_option("viscosity", 0) / (run.length_scale**2 * run.frequency)
+    viscosity = xr.ones_like(phi) * nu
+    if not periodic_x:
+        viscosity[{"x": run.mxg - 1}] = -nu
+        viscosity[{"x": -run.mxg}] = -nu
+    vort_visc = fill_transport_guards(ds.Vort, run, periodic_x, periodic_y)
+    viscous = fv_xz(viscosity, vort_visc, ds, periodic_x=periodic_x)
+    families["DivJviscous"] = viscous
+    families["DivEviscous"] = flux_dataset(
+        {d: (Phi + neighbor(Phi, d)) / 2 * viscous["flux_" + d] for d in ("x", "z")}, ds
+    )
+    viscous_heat = Phi * viscous.divergence - families["DivEviscous"].divergence
+    e = next(s for s in run.species if s.name == "e")
+    mass_density = sum(s.mass * ds["N" + s.name] for s in run.species)
+    electron_heat = viscous_heat * e.mass * ds.Ne / mass_density
+    dphi = solve_polarisation(
+        run, reynolds.divergence + dia + viscous.divergence, periodic_x, periodic_y
+    )
 
     def pol(weight):
         return combine(
@@ -451,7 +474,9 @@ def reconstruct_fluxes(run, *, sources=None):
     families["DivJReynolds"] = reynolds
     result = {
         "ddt(Phi)": dphi,
-        "ddt(Vort)": reynolds.divergence + dia,
+        "ddt(Vort)": reynolds.divergence + dia + viscous.divergence,
+        "kinematic_viscous_heating": viscous_heat,
+        "electron_viscous_heating": electron_heat,
         "electron_exb_work": work,
         "arakawa": bracket,
     }
@@ -561,9 +586,11 @@ def reconstruct_fluxes(run, *, sources=None):
                     "DivEpol",
                     "DivEparallel",
                     "DivEelectric",
+                    "DivEviscous",
                 )
             )
             - result["phi_Div_Je"]
+            - electron_heat
             + source_fields.Eion_src
         )
         e = next(s for s in run.species if s.name == "e")
@@ -586,6 +613,7 @@ def reconstruct_fluxes(run, *, sources=None):
             - families["electron_parallel_thermal"].divergence
             + ve * central_parallel(ds.Pe, ds)
             + work
+            + electron_heat
             + source_fields.thermal_e
             + heating
         )
@@ -746,6 +774,8 @@ def compare_flux_diagnostics(run, fluxes):
             error -= error.isel(x=slice(run.mxg, -run.mxg)).mean(
                 ("x", "z")
             )  # inversion gauge is free on each Y plane
+        if not bool(np.isfinite(run.interior(error)).all().compute()):
+            raise AuditError(f"Nonfinite physical diagnostic comparison for {name}")
         absolute = float(abs(run.interior(error)).max().compute())
         scale = float(abs(run.interior(run.data[name])).max().compute())
         result[name] = {
@@ -769,4 +799,71 @@ def compare_flux_diagnostics(run, fluxes):
         "ddt(Eion)",
     ):
         result.setdefault(name, {"available": False})
+    return result
+
+
+def closed_slab_outward_power(run, *, densities=None):
+    """Global SI face powers without solving for an interior auxiliary flow.
+
+    In this explicitly closed singleton-Y contract, polarisation and electron
+    thermal radial faces are suppressed and Z is periodic. Their net outward
+    power is exactly zero by the implemented face rules. Reynolds energy faces
+    remain open and are reconstructed. This function does not provide regional
+    divergences or claim that the locally nonzero closed transports vanish.
+    """
+    if run.formulation != "total_energy":
+        raise AuditError("Closed slab boundary audit requires total ion energy")
+    periodic_x, periodic_y = slab_contract(run)
+    if run.data.sizes["y"] != 1 or run.myg:
+        raise AuditError("Fast boundary audit requires singleton Y without guards")
+    if any(bool((species_velocity(run, s) != 0).any().compute()) for s in run.species):
+        raise AuditError("Closed slab boundary audit requires zero parallel flow")
+    for species in run.species:
+        if run.data.options[species.name].get_bool("bndry_flux"):
+            raise AuditError(
+                "Closed slab boundary audit requires closed species ExB faces"
+            )
+    ds = run.data
+    densities = energy_densities(run) if densities is None else densities
+    Phi = ds.phi + densities.pressure_potential
+    c = run.scalar_option("average_atomic_mass") / ds.Bxy**2
+    bracket = fill_transport_guards(
+        arakawa(ds.phi, densities.pressure_potential, ds.dx, ds.dz),
+        run,
+        periodic_x,
+        periodic_y,
+    )
+    reynolds = fv_xz(0.5 * c * bracket, Phi, ds, periodic_x=periodic_x)
+    nu = run.scalar_option("viscosity", 0) / (run.length_scale**2 * run.frequency)
+    viscosity = xr.ones_like(ds.phi) * nu
+    if not periodic_x:
+        viscosity[{"x": run.mxg - 1}] = -nu
+        viscosity[{"x": -run.mxg}] = -nu
+    vort = fill_transport_guards(ds.Vort, run, periodic_x, periodic_y)
+    current = fv_xz(viscosity, vort, ds, periodic_x=periodic_x)
+    viscous = flux_dataset(
+        {d: (Phi + neighbor(Phi, d)) / 2 * current["flux_" + d] for d in ("x", "z")}, ds
+    )
+    powers = {}
+    scale = run.energy_scale * run.length_scale**3 * run.frequency
+    for name, family in (("Reynolds", reynolds), ("viscous", viscous)):
+        faces = xr.Dataset(
+            {
+                "family": family.divergence,
+                **{"family_flux_" + d: family["flux_" + d] for d in ("x", "z")},
+            },
+            attrs={"periodic_y": periodic_y},
+        )
+        powers[name + "_outward"] = net_face_flux(run, faces, "family") * scale
+    powers["outward"] = sum(powers.values())
+    result = xr.Dataset(powers).assign_coords(t=ds.t / run.frequency)
+    for name in result:
+        result[name].attrs = {
+            "units": "W",
+            "provenance": "reconstructed global closed-slab faces",
+        }
+    result.attrs = {
+        "coverage": "global outward power; closed species ExB/polarisation faces, no parallel flow, periodic Z",
+        "local_transport_coverage": False,
+    }
     return result

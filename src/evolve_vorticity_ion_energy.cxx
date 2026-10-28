@@ -579,6 +579,27 @@ void EvolveVorticityIonEnergy::transform_impl(GuardedOptions& state) {
 
   // Auxiliary current-continuity potential. Its homogeneous boundary is
   // independent of the relaxing phi boundary and does not require ddt(psi).
+  // Fixed-boundary transport applies Neumann guards after this solve. Restore
+  // the homogeneous midpoint boundary on every RHS call, so those transport
+  // guards do not become a history-dependent boundary for the next solve.
+  if (!mesh->periodicX) {
+    const auto homogeneous = [&](int interior, int guard, int begin, int end) {
+      for (int y = mesh->ystart; y <= mesh->yend; ++y) {
+        for (int z = 0; z < mesh->LocalNz; ++z) {
+          chi(guard, y, z) = -chi(interior, y, z);
+          for (int x = begin; x < end; ++x) {
+            chi(x, y, z) = chi(guard, y, z);
+          }
+        }
+      }
+    };
+    if (mesh->firstX()) {
+      homogeneous(mesh->xstart, mesh->xstart - 1, 0, mesh->xstart - 1);
+    }
+    if (mesh->lastX()) {
+      homogeneous(mesh->xend, mesh->xend + 1, mesh->xend + 2, mesh->LocalNx);
+    }
+  }
   const Field3D dVortdt = DivJReynolds + DivJdia + DivJviscous;
   const BoutReal dVort_tolerance = vort_atol + phi_rtol * max(abs(dVortdt), true);
   for (int step = 0; step < phi_max_iterations; ++step) {

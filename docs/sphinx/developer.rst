@@ -1389,6 +1389,163 @@ and core/pfr boundaries. If the test fails, it will print the degree of error at
 The test file can be used to generate the test data if `gen_data` is set to `True` in the beginning
 of the script.
 
+.. _subsec-2d-energy-comparison:
+
+2D-energy (energy comparison and resolution scan)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``tests/integrated/2D-energy/publication_scan.py`` compares the ion pressure
+formulation (``vorticity``, ``polarisation_drift`` and ``evolve_pressure``)
+with ``evolve_vorticity_ion_energy`` at several spatial resolutions. Both
+formulations evolve hydrogen density and electron pressure, with quasineutral
+electrons and no parallel dynamics. The original ``2D-energy/runtest`` remains
+a separate pressure-formulation regression.
+
+The physical problem is interchange relaxation in a 5 cm by 5 cm X-Z slab,
+with constant magnetic curvature corresponding to :math:`R=1.5` m and
+:math:`B=0.35` T. Both species start with uniform density
+:math:`n=2\times10^{18}` m\ :sup:`-3` and the same sinusoidal pressure
+perturbation. Curvature drives perpendicular flows by converting thermal
+energy into kinetic energy; kinematic viscosity returns kinetic energy to heat.
+There are no prescribed sources, conduction or sheath losses. Each resolution
+starts from the same sampled physical density, pressures and potential; initial
+vorticity is constructed using the respective formulation's forward operator.
+
+From the repository root, run the four-resolution comparison with both fixed
+and solver-managed relaxing radial potential boundaries:
+
+.. code-block:: bash
+
+   .venv/bin/python tests/integrated/2D-energy/publication_scan.py \
+     --exe build/hermes-3 --phi-boundary both --accuracy-pilot
+
+The default physical grids are :math:`32^2`, :math:`64^2`, :math:`128^2` and
+:math:`256^2` cells, with fixed guard widths and a common physical box. The
+duration is 20000 normalised time units and the viscosity is 1 m\ :sup:`2`/s.
+``--levels``, ``--base-nx``, ``--base-nz`` and ``--refinement`` change the grid
+sequence; ``--end-time`` and ``--outputs`` change the duration and cadence.
+``--phi-boundary fixed`` or ``relax`` selects a single boundary policy.
+The relaxing boundary timescale, set by ``--phi-boundary-timescale``, is in
+seconds and does not change with resolution. All runs must share the same
+regular saved times, including zero and the final time.
+
+The analysis reconstructs ion and electron thermal energies and perpendicular
+kinetic energy from ordinary state outputs, including when ``diagnose=false``.
+Energies are in joules for the represented box. Component histories use the
+same finite-volume kinetic-energy estimator in both formulations. Native
+discrete energy uses saved ``Eion`` plus electron thermal energy for the
+total-energy model, and the quadratic energy of the finite-difference-X,
+spectral-Z inversion operator for the pressure model. The native and common
+estimates are reported separately, together with raw energy drift and the
+boundary-accounted residual where power coverage is complete. The pressure
+model's corrected residual is unavailable because its legacy polarisation
+exchanges and full time-dependent generalised-potential boundary work are not
+yet covered. Its polarisation transport and viscous heating discretisation
+also differ from the total-energy formulation, so this comparison changes more
+than the evolved variable.
+
+In the energy figures, **shared FV energy** (previously labelled "common") is
+the sum of ion and electron thermal energy and the same finite-volume
+perpendicular kinetic-energy estimate in both formulations. **Model energy**
+(previously "native") uses each formulation's own discrete energy: saved
+``Eion`` plus electron thermal energy for the total-energy model, or thermal
+energy plus the quadratic energy of the legacy inversion operator for the
+pressure model. The pressure model also includes its signed electron-pressure
+contribution to the generalised potential. Thus these are two energy estimates
+of the same saved state, rather than two additional energy reservoirs.
+Their relative-change panels each show
+
+.. math::
+
+   \frac{E(t)-E(0)}{E(0)},
+
+using that estimate's initial energy. The final panel is the absolute
+difference :math:`E_{\rm shared}-E_{\rm model}` in joules. It measures the
+choice of kinetic-energy discretisation and pressure potential, rather than
+boundary power. For total-energy runs the shared reconstruction and saved
+energy agree to roundoff in this comparison.
+
+The thin **boundary balance residual** curve (previously "corrected residual")
+accounts for the time-integrated outward power:
+
+.. math::
+
+   R(t) = E_{\rm model}(t)-E_{\rm model}(0)
+          + \int_0^t P_{\rm outward}(t')\,dt'.
+
+There are no prescribed sources in this setup. Positive
+:math:`P_{\rm outward}` removes energy; negative power supplies energy to the
+represented box. The plotted thin curve is :math:`R(t)/E_{\rm model}(0)`.
+It tests the discrete energy balance after boundary transfer is included;
+finite output cadence and solver tolerances can leave a small residual.
+
+The initial total-energy rise is supplied by the radial Reynolds energy flux
+(``DivEReynolds``), which remains open in the implemented boundary conditions.
+Fixed midpoint :math:`\phi=0` and closed particle advection do not set the
+normal Reynolds energy flux to zero: its face flux also depends on
+:math:`\Phi=\phi+\psi` and its normal gradient. The independently reconstructed
+outward power is negative during the rise. Viscous radial power is zero here.
+Thus this comparison has a boundary energy channel even with fixed potential;
+the boundary balance residual accounts for that channel without changing the
+raw energy histories. The corresponding pressure-model boundary audit is
+incomplete, so no pressure residual is plotted.
+
+The runner produces state and energy PDF figures for each boundary policy.
+Energy tables are printed and saved as CSV and JSON; ``--latex`` also writes
+LaTeX tables. Inputs, raw outputs, logs and a manifest are retained for
+``--resume`` or ``--analyse-only``. See
+``tests/integrated/2D-energy/publication-study.md`` for the complete interface.
+
+The PNG examples below show the viscous comparison on :math:`16^2` and
+:math:`32^2` grids, with fixed potential boundaries, 100 output intervals
+and a duration of :math:`10^4` normalised time units. Snapshots are at 0,
+2500, 5000 and 10000. To reproduce this configuration, including the
+corresponding relaxing-boundary runs:
+
+.. code-block:: bash
+
+   .venv/bin/python tests/integrated/2D-energy/publication_scan.py \
+     --exe build/hermes-3 --levels 2 --base-nx 16 --base-nz 16 \
+     --phi-boundary both --end-time 10000 --outputs 100
+
+.. figure:: figs/2D-energy-comparison-state.png
+   :name: energy-comparison-state
+   :alt: Ion pressure at four shared times, with the pressure formulation above the total-ion-energy formulation.
+   :width: 100%
+
+   Ion pressure on the finest comparison grid, with common colour limits and
+   physical X-Z coordinates for both formulations. The initial perturbation
+   is rearranged and becomes nearly independent of Z by the final time.
+
+.. figure:: figs/2D-energy-comparison-energy.png
+   :name: energy-comparison-energy
+   :alt: Thermal and kinetic energy changes, shared and model energy drift, boundary balance residual and estimator difference on two grids.
+   :width: 100%
+
+   Energy components and discrepancies. Parallel kinetic energy is zero in
+   this slab. The kinetic-energy peak and subsequent decay accompany the
+   recovery of ion thermal energy. Solid traces are the finest grid
+   (:math:`32^2` here); dashed traces are :math:`16^2`. The thin boundary balance
+   residual is shown only for the total-energy model; the pressure model
+   retains its raw drift. The initial total-energy increase is supplied by
+   radial Reynolds energy flux.
+
+2D-energy-publication-smoke
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``tests/integrated/2D-energy-publication-smoke`` checks the publication study
+runner on two small grids, with both pressure and total-ion-energy formulations
+and fixed or solver-managed relaxing potential boundaries. It validates matched
+time-zero physical fields, regular shared output times, energy inventories and
+PDF/table generation, then repeats analysis from retained outputs. The smoke
+case is inviscid and short; publication resolution and temporal accuracy scans
+are explicit longer runs in ``tests/integrated/2D-energy/publication_scan.py``.
+
+The ``VorticityBoundaryTest`` unit tests check packing/unpacking the relaxing
+potential boundary state, repeated and earlier RHS evaluations, physical
+vorticity guards, the normalised boundary relaxation law, and migration of
+legacy restart files independently for each component instance.
+
 2D-recycling
 ~~~~~~~~~~~~~~
 

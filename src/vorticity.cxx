@@ -93,9 +93,32 @@ Vector3D Grad_perp_XZ(const Field3D& f) {
 Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver)
     : NamedComponent(name, {readWrite("fields:vorticity"), readWrite("fields:phi")}) {
 
-  solver->add(Vort, "Vort");
-
   auto& options = alloptions[name];
+  phi = 0.0;
+  phi_boundary_relax = options["phi_boundary_relax"]
+                           .doc("Relax x boundaries of phi towards Neumann?")
+                           .withDefault<bool>(false);
+  if (phi_boundary_relax) {
+    if (mesh->xstart < 2) {
+      throw BoutException("phi_boundary_relax requires two radial guard cells");
+    }
+    auto& evolve_boundary = Options::root()["Vort"]["evolve_bndry"];
+    if (evolve_boundary.isSet() && !evolve_boundary.as<bool>()) {
+      throw BoutException("phi_boundary_relax requires Vort:evolve_bndry=true");
+    }
+    evolve_boundary.force(true, "vorticity");
+    const std::string storage_name = name + "_boundary_storage";
+    Options::root()[storage_name]["bndry_all"].force(std::string{"none"});
+    Vort.setBoundary(storage_name);
+  }
+  solver->add(solver_vorticity, "Vort");
+  if (phi_boundary_relax) {
+    swap(static_cast<FieldData&>(solver_vorticity), static_cast<FieldData&>(Vort));
+    ddt(solver_vorticity).copyBoundary(solver_vorticity);
+    initialiseBoundaryState();
+  } else {
+    Vort.copyBoundary(solver_vorticity);
+  }
   // Normalisations
   const Options& units = alloptions["units"];
   const BoutReal Omega_ci = 1. / units["seconds"].as<BoutReal>();
@@ -165,10 +188,6 @@ Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver)
                         .doc("Parallel dissipation of potential [Recommended]")
                         .withDefault<bool>(true);
 
-  phi_boundary_relax = options["phi_boundary_relax"]
-                           .doc("Relax x boundaries of phi towards Neumann?")
-                           .withDefault<bool>(false);
-
   phi_sheath_dissipation = options["phi_sheath_dissipation"]
                                .doc("Add dissipation when phi < 0.0 at the sheath")
                                .withDefault<bool>(false);
@@ -197,10 +216,6 @@ Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver)
   phiSolver->setCoefC(average_atomic_mass / SQ(coord->Bxy()));
 
   if (phi_boundary_relax) {
-    // Set the last update time to -1, so it will reset
-    // the first time RHS function is called
-    phi_boundary_last_update = -1.;
-
     phi_core_averagey = options["phi_core_averagey"]
                             .doc("Average phi core boundary in Y?")
                             .withDefault<bool>(false)
@@ -210,7 +225,9 @@ Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver)
                                  .doc("Timescale for phi boundary relaxation [seconds]")
                                  .withDefault(1e-4)
                              / get<BoutReal>(alloptions["units"]["seconds"]);
-    // Normalise to internal time units
+    if (!std::isfinite(phi_boundary_timescale) || phi_boundary_timescale <= 0.0) {
+      throw BoutException("phi_boundary_timescale must be finite and positive");
+    }
 
     phiSolver->setInnerBoundaryFlags(INVERT_SET);
     phiSolver->setOuterBoundaryFlags(INVERT_SET);
@@ -272,9 +289,7 @@ Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver)
     // FIXME: Only read if pressure also set
     setPermissions(readIfSet("species:{charged}:AA"));
   }
-  if (phi_boundary_relax) {
-    setPermissions(readOnly("time"));
-  } else {
+  if (!phi_boundary_relax) {
     if (sheath_boundary) {
       setPermissions(readOnly("species:e:AA"));
     }
@@ -343,7 +358,9 @@ Field3D Vorticity::calculateDivJdia(Field3D phi, GuardedOptions allspecies) {
 
     // Note: We need boundary conditions on P, so apply the same
     //       free boundary condition as sheath_boundary.
-    if (P.hasParallelSlices()) {
+    if (mesh->ystart == 0 || mesh->ystart == mesh->yend) {
+      // No parallel derivatives in a singleton-Y slab.
+    } else if (P.hasParallelSlices()) {
       Field3D& P_ydown = P.ydown();
       Field3D& P_yup = P.yup();
       for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
@@ -391,6 +408,9 @@ Field3D Vorticity::calculateDivJdia(Field3D phi, GuardedOptions allspecies) {
 
 void Vorticity::transform_impl(GuardedOptions& state) {
 
+  Vort = copy(solver_vorticity);
+  Vort.applyBoundary();
+  mesh->communicate(Vort);
   phi.name = "phi";
   auto fields = state["fields"];
 
@@ -404,94 +424,7 @@ void Vorticity::transform_impl(GuardedOptions& state) {
   }
 
   if (phi_boundary_relax) {
-    // Update the boundary regions by relaxing towards zero gradient
-    // on a given timescale.
-
-    const BoutReal time = get<BoutReal>(state["time"]);
-
-    if (phi_boundary_last_update < 0.0) {
-      // First time this has been called.
-      phi_boundary_last_update = time;
-
-    } else if (time > phi_boundary_last_update) {
-      // Only update if time has advanced
-      // Uses an exponential decay of the weighting of the value in the boundary
-      // so that the solution is well behaved for arbitrary steps
-      const BoutReal weight =
-          exp(-(time - phi_boundary_last_update) / phi_boundary_timescale);
-      phi_boundary_last_update = time;
-
-      if (mesh->firstX()) {
-        BoutReal phivalue = 0.0;
-        if (phi_core_averagey) {
-          BoutReal philocal = 0.0;
-          for (int j = mesh->ystart; j <= mesh->yend; j++) {
-            for (int k = 0; k < mesh->LocalNz; k++) {
-              philocal += phi(mesh->xstart, j, k);
-            }
-          }
-          MPI_Comm comm_inner = mesh->getYcomm(0);
-          int np;
-          MPI_Comm_size(comm_inner, &np);
-          MPI_Allreduce(&philocal, &phivalue, 1, MPI_DOUBLE, MPI_SUM, comm_inner);
-          phivalue /= (np * mesh->LocalNz * mesh->LocalNy);
-        }
-
-        for (int j = mesh->ystart; j <= mesh->yend; j++) {
-          if (!phi_core_averagey) {
-            phivalue = 0.0; // Calculate phi boundary for each Y index separately
-            for (int k = 0; k < mesh->LocalNz; k++) {
-              phivalue += phi(mesh->xstart, j, k);
-            }
-            phivalue /= mesh->LocalNz; // Average in Z of point next to boundary
-          }
-
-          // Old value of phi at boundary
-          const BoutReal oldvalue =
-              0.5 * (phi(mesh->xstart - 1, j, 0) + phi(mesh->xstart, j, 0));
-
-          // New value of phi at boundary, relaxing towards phivalue
-          const BoutReal newvalue = (weight * oldvalue) + ((1. - weight) * phivalue);
-
-          // Set phi at the boundary to this value
-          for (int k = 0; k < mesh->LocalNz; k++) {
-            phi(mesh->xstart - 1, j, k) = 2. * newvalue - phi(mesh->xstart, j, k);
-
-            // Note: This seems to make a difference, but don't know why.
-            // Without this, get convergence failures with no apparent instability
-            // (all fields apparently smooth, well behaved)
-            phi(mesh->xstart - 2, j, k) = phi(mesh->xstart - 1, j, k);
-          }
-        }
-      }
-
-      if (mesh->lastX()) {
-        for (int j = mesh->ystart; j <= mesh->yend; j++) {
-          BoutReal phivalue = 0.0;
-          for (int k = 0; k < mesh->LocalNz; k++) {
-            phivalue += phi(mesh->xend, j, k);
-          }
-          phivalue /= mesh->LocalNz; // Average in Z of point next to boundary
-
-          // Old value of phi at boundary
-          const BoutReal oldvalue =
-              0.5 * (phi(mesh->xend + 1, j, 0) + phi(mesh->xend, j, 0));
-
-          // New value of phi at boundary, relaxing towards phivalue
-          const BoutReal newvalue = (weight * oldvalue) + ((1. - weight) * phivalue);
-
-          // Set phi at the boundary to this value
-          for (int k = 0; k < mesh->LocalNz; k++) {
-            phi(mesh->xend + 1, j, k) = 2. * newvalue - phi(mesh->xend, j, k);
-
-            // Note: This seems to make a difference, but don't know why.
-            // Without this, get convergence failures with no apparent instability
-            // (all fields apparently smooth, well behaved)
-            phi(mesh->xend + 2, j, k) = phi(mesh->xend + 1, j, k);
-          }
-        }
-      }
-    }
+    applyPotentialBoundary();
   } else {
     // phi_boundary_relax = false
     //
@@ -635,7 +568,9 @@ void Vorticity::transform_impl(GuardedOptions& state) {
 
   // Note: The below calculation requires phi derivatives at the Y boundaries
   //       Setting to free boundaries
-  if (phi.hasParallelSlices()) {
+  if (mesh->ystart == 0 || mesh->ystart == mesh->yend) {
+    // No Y boundary extrapolation is needed.
+  } else if (phi.hasParallelSlices()) {
     Field3D& phi_ydown = phi.ydown();
     Field3D& phi_yup = phi.yup();
     for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
@@ -924,6 +859,14 @@ void Vorticity::finally(const Options& state) {
       }
     }
   }
+  ddt(solver_vorticity) = copy(ddt(Vort));
+  if (phi_boundary_relax) {
+    // Boundary entries have potential units, never physical vorticity units.
+    BOUT_FOR(i, solver_vorticity.getRegion("RGN_BNDRY")) {
+      ddt(solver_vorticity)[i] = 0.0;
+    }
+    boundaryRHS();
+  }
 }
 
 void Vorticity::outputVars(Options& state) {
@@ -933,6 +876,7 @@ void Vorticity::outputVars(Options& state) {
   auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
   auto Lnorm = get<BoutReal>(state["rho_s0"]);
 
+  set(state["Vort"], Vort);
   state["Vort"].setAttributes({{"time_dimension", "t"},
                                {"units", "C m^-3"},
                                {"conversion", SI::qe * Nnorm},
@@ -974,7 +918,7 @@ void Vorticity::outputVars(Options& state) {
     if (include_viscosity) {
       set_with_attrs(state["kinematic_viscosity"], viscosity,
                      {{"time_dimension", "t"},
-                      {"units", "m^-2 / s"},
+                      {"units", "m^2 / s"},
                       {"conversion", Lnorm * Lnorm * Omega_ci},
                       {"long_name", "Kinematic viscosity"},
                       {"source", "vorticity"}});
@@ -986,4 +930,127 @@ void Vorticity::outputVars(Options& state) {
                       {"source", "vorticity"}});
     }
   }
+}
+
+void Vorticity::initialiseBoundaryState() {
+  BOUT_FOR(i, solver_vorticity.getRegion("RGN_BNDRY")) { solver_vorticity[i] = 0.0; }
+  if (mesh->periodicX) {
+    return;
+  }
+  const auto initialise = [&](int interior, int guard, int begin, int end) {
+    for (int y = mesh->ystart; y <= mesh->yend; ++y) {
+      BoutReal midpoint = 0.0;
+      for (int z = 0; z < mesh->LocalNz; ++z) {
+        midpoint += 0.5 * (phi(guard, y, z) + phi(interior, y, z));
+      }
+      midpoint /= mesh->LocalNz;
+      for (int x = begin; x < end; ++x) {
+        for (int z = 0; z < mesh->LocalNz; ++z) {
+          solver_vorticity(x, y, z) = midpoint;
+        }
+      }
+    }
+  };
+  if (mesh->firstX()) {
+    initialise(mesh->xstart, mesh->xstart - 1, 0, mesh->xstart);
+  }
+  if (mesh->lastX()) {
+    initialise(mesh->xend, mesh->xend + 1, mesh->xend + 1, mesh->LocalNx);
+  }
+}
+
+void Vorticity::applyPotentialBoundary() {
+  if (!phi_boundary_relax || mesh->periodicX) {
+    return;
+  }
+  const auto apply = [&](int interior, int guard, int begin, int end) {
+    for (int y = mesh->ystart; y <= mesh->yend; ++y) {
+      BoutReal midpoint = 0.0;
+      for (int z = 0; z < mesh->LocalNz; ++z) {
+        midpoint += solver_vorticity(guard, y, z);
+      }
+      midpoint /= mesh->LocalNz;
+      for (int z = 0; z < mesh->LocalNz; ++z) {
+        phi(guard, y, z) = 2.0 * midpoint - phi(interior, y, z);
+        for (int x = begin; x < end; ++x) {
+          phi(x, y, z) = phi(guard, y, z);
+        }
+      }
+    }
+  };
+  if (mesh->firstX()) {
+    apply(mesh->xstart, mesh->xstart - 1, 0, mesh->xstart - 1);
+  }
+  if (mesh->lastX()) {
+    apply(mesh->xend, mesh->xend + 1, mesh->xend + 2, mesh->LocalNx);
+  }
+}
+
+void Vorticity::boundaryRHS() {
+  if (mesh->periodicX) {
+    return;
+  }
+  BoutReal core_average = 0.0;
+  if (mesh->firstX() && phi_core_averagey) {
+    BoutReal local[2]{
+        0.0, static_cast<BoutReal>((mesh->yend - mesh->ystart + 1) * mesh->LocalNz)};
+    for (int y = mesh->ystart; y <= mesh->yend; ++y) {
+      for (int z = 0; z < mesh->LocalNz; ++z) {
+        local[0] += phi(mesh->xstart, y, z);
+      }
+    }
+    BoutReal global[2];
+    MPI_Allreduce(local, global, 2, MPI_DOUBLE, MPI_SUM, mesh->getYcomm(0));
+    core_average = global[0] / global[1];
+  }
+  const auto relax = [&](int interior, int begin, int end, bool average_y) {
+    for (int y = mesh->ystart; y <= mesh->yend; ++y) {
+      BoutReal target = core_average;
+      if (!average_y) {
+        target = 0.0;
+        for (int z = 0; z < mesh->LocalNz; ++z) {
+          target += phi(interior, y, z);
+        }
+        target /= mesh->LocalNz;
+      }
+      for (int x = begin; x < end; ++x) {
+        for (int z = 0; z < mesh->LocalNz; ++z) {
+          ddt(solver_vorticity)(x, y, z) =
+              (target - solver_vorticity(x, y, z)) / phi_boundary_timescale;
+        }
+      }
+    }
+  };
+  if (mesh->firstX()) {
+    relax(mesh->xstart, 0, mesh->xstart, phi_core_averagey);
+  }
+  if (mesh->lastX()) {
+    relax(mesh->xend, mesh->xend + 1, mesh->LocalNx, false);
+  }
+}
+
+void Vorticity::restartVars(Options& state) {
+  // The first call is the postInit hook, after solver variables were loaded.
+  if (restore_phi_on_restart) {
+    restore_phi_on_restart = false;
+    if (state.isSet("phi")) {
+      phi = state["phi"].as<Field3D>();
+    }
+    if (phi_boundary_relax) {
+      const int version = state["vorticity_boundary_state_version"].withDefault(0);
+      if (version < 0 || version > 1) {
+        throw BoutException("Unsupported vorticity boundary state version {}", version);
+      }
+      if (version == 0) {
+        initialiseBoundaryState();
+      }
+    }
+  }
+  if (phi_boundary_relax) {
+    set_with_attrs(state["vorticity_boundary_state_version"], 1,
+                   {{"description", "Restart Vort physical radial boundary cells store "
+                                    "phi midpoints in normalised potential units"}});
+  }
+  set_with_attrs(state["phi"], phi,
+                 {{"long_name", "plasma potential"}, {"source", "vorticity"}});
 }

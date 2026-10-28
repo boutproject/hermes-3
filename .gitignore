@@ -41,3 +41,6 @@ docker/docker-compose.override.yaml
 # Python-related directories
 *venv/
 dist/
+
+# Retained publication scans (raw data, PDFs, tables and manifests)
+/tests/integrated/2D-energy/publication-results/

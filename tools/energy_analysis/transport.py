@@ -14,7 +14,7 @@ from .operators import perpendicular_operator
 
 
 def neighbor(field, dim, direction=1):
-    if dim not in field.dims:
+    if dim not in field.dims or (dim == "y" and field.sizes[dim] == 1):
         return field
     if dim == "z":
         return field.roll(z=-direction, roll_coords=False)

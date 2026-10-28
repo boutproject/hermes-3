@@ -248,3 +248,32 @@ that its residual is zero.
 The last finding means the electron parallel case is a regression/audit of a
 known defect. Its README explains the coefficient identity and the meaning of
 its pass criteria; it is not a source-free conservation gate.
+
+## Pressure adapter and publication studies
+
+`open_run` also accepts a slab using `vorticity` and saved species pressures.
+`EnergyRun.formulation` identifies `pressure` or `total_energy`. Pressure runs
+expose `ion_native` and `plasma_native` without inventing a saved `Eion`.
+`ion_perpendicular` and `plasma_reconstructed` use a common ion-only pressure
+potential and the FV estimator. Pressure native energy uses its actual signed
+species pressure potential and the FD-X/spectral-Z quadratic form, including
+radial boundary terms and the Z Nyquist mode. The pressure adapter currently
+requires uniform orthogonal metrics for this native estimator.
+
+`pressure.legacy_viscous_work` reconstructs the legacy corner-gradient heating
+and its native kinetic work, exposing the heating mismatch. A corrected pressure
+residual remains unavailable until legacy polarisation exchanges and full
+`Phi` boundary-state work are covered. `reconstruct_fluxes` now includes scalar
+kinematic viscosity for the total-energy slab, its face-weighted energy flux
+and the compensating ion/electron heating transfer.
+
+The [publication runner](../../tests/integrated/2D-energy/publication-study.md)
+provides matched startup, streaming inventories, configurable resolution and
+boundary matrices, conservative coordinate-aware restriction, PDF figures,
+scalar tables and temporal/cadence pilots.
+
+`closed_slab_outward_power` evaluates global outward power in the explicitly
+closed singleton-Y, zero-parallel-flow contract without solving for interior
+polarisation transport. It reconstructs Reynolds/viscous energy faces and uses
+the implemented closure of the other normal faces; locally nonzero transport
+remains available through the full reconstruction.

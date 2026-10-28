@@ -47,15 +47,30 @@ def energy_densities(run):
     ds = run.data
     ions = [s for s in run.species if s.name != "e" and abs(s.charge) > 1e-5]
     abar = run.scalar_option("average_atomic_mass")
-    psi = sum(s.mass / s.charge * ds["N" + s.name] * ds.Tion for s in ions) / abar
+    pressures = {
+        s.name: ds["P" + s.name]
+        if run.formulation == "pressure"
+        else ds["N" + s.name] * ds.Tion
+        for s in ions
+    }
+    psi = sum(s.mass / s.charge * pressures[s.name] for s in ions) / abar
+    common_psi = psi
+    if run.formulation == "pressure" and run.data.options[run.model].get_bool(
+        "diamagnetic_polarisation"
+    ):
+        electron = next(s for s in run.species if s.name == "e")
+        psi = psi + electron.mass / electron.charge * ds.Pe / abar
+    elif run.formulation == "pressure":
+        psi = xr.zeros_like(ds.phi)
     coefficient = abar / ds.Bxy**2
-    operators = perpendicular_operator(coefficient, ds.phi + psi, ds, mxg=run.mxg)
+    operators = perpendicular_operator(
+        coefficient, ds.phi + common_psi, ds, mxg=run.mxg
+    )
     ion_parallel = sum(_kinetic(run, s) for s in ions)
-    ion_thermal = 1.5 * sum(ds["N" + s.name] * ds.Tion for s in ions)
+    ion_thermal = 1.5 * sum(pressures.values())
     electron = next(s for s in run.species if s.name == "e")
     result = xr.Dataset(
         {
-            "ion_saved": ds.Eion,
             "ion_thermal": ion_thermal,
             "ion_parallel": ion_parallel,
             "ion_perpendicular": operators.kperp,
@@ -68,9 +83,24 @@ def energy_densities(run):
             "vorticity_reconstructed": operators.divergence,
         }
     )
-    result["plasma_saved"] = (
-        result.ion_saved + result.electron_thermal + result.electron_parallel
+    if run.formulation == "pressure":
+        from .pressure import legacy_operator
+
+        native = legacy_operator(coefficient, ds.phi + psi, ds, mxg=run.mxg)
+        result["ion_native"] = ion_thermal + ion_parallel + native.kperp
+        result["ion_perpendicular_native"] = native.kperp
+        result["vorticity_reconstructed"] = native.divergence
+    else:
+        result["ion_saved"] = ds.Eion
+        result["ion_native"] = ds.Eion
+        result["ion_perpendicular_native"] = operators.kperp
+    result["plasma_native"] = (
+        result.ion_native + result.electron_thermal + result.electron_parallel
     )
+    if run.formulation == "total_energy":
+        result["plasma_saved"] = (
+            result.ion_saved + result.electron_thermal + result.electron_parallel
+        )
     result["plasma_reconstructed"] = (
         result.ion_reconstructed + result.electron_thermal + result.electron_parallel
     )

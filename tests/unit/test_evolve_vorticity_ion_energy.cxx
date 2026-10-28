@@ -1072,3 +1072,33 @@ TEST_F(EvolveVorticityIonEnergyTest, VaryingSpeciesFractionsPreservePolarisation
   // spatially varying fractions would activate different slope limiters.
   EXPECT_TRUE(IsFieldEqual(charge_source, Field3D{-divJpol}, "RGN_NOBNDRY", 1e-12));
 }
+
+TEST_F(EvolveVorticityIonEnergyTest, FixedAuxiliaryBoundaryIsIndependentOfRHSHistories) {
+  FakeSolver solver;
+  auto options = makeOptions();
+  options["test"]["viscosity"] = 0.3;
+  options["test"]["phi_rtol"].force(1e-12);
+  options["test"]["phi_atol"] = 1e-3;
+  options["test"]["vort_atol"] = 1e-13;
+  options["test"]["phi_max_iterations"].force(200);
+  EvolveVorticityIonEnergy component("test", options, &solver);
+  declareSpecies(component);
+  Field3D vort = makeField<Field3D>(
+      [&](const Ind3D& i) { return 0.002 * sin(2 * PI * i.z() / nz); });
+  solver.setState({{"Vort", vort}, {"Eion", Field3D{4.0}}});
+  auto state = makeState();
+  component.transform(state);
+  component.finally(state);
+  const auto reference = copy(diagnostics(component)["ddt(Phi)"].as<Field3D>());
+  const auto rhs = copy(solver.getTimeDerivs()["Eion"].as<Field3D>());
+  for (BoutReal time : {5.0, 5.0, 1.0}) {
+    state = makeState();
+    state["time"] = time;
+    component.transform(state);
+    component.finally(state);
+    EXPECT_TRUE(IsFieldEqual(reference, diagnostics(component)["ddt(Phi)"].as<Field3D>(),
+                             "RGN_NOBNDRY", 1e-10));
+    EXPECT_TRUE(IsFieldEqual(rhs, solver.getTimeDerivs()["Eion"].as<Field3D>(),
+                             "RGN_NOBNDRY", 1e-10));
+  }
+}

@@ -64,22 +64,8 @@ struct Vorticity : public NamedComponent<Vorticity> {
 
   void outputVars(Options& state) override;
 
-  // Save and restore potential phi
-  void restartVars(Options& state) override {
-
-    // NOTE: This is a hack because we know that the loaded restart file
-    //       is passed into restartVars in PhysicsModel::postInit
-    // The restart value should be used in init() rather than here
-    static bool first = true;
-    if (first and state.isSet("phi")) {
-      first = false;
-      phi = state["phi"].as<Field3D>();
-    }
-
-    // Save the potential
-    set_with_attrs(state["phi"], phi,
-                   {{"long_name", "plasma potential"}, {"source", "vorticity"}});
-  }
+  // Save/restore phi and migrate legacy relaxation restarts.
+  void restartVars(Options& state) override;
 
   // The following are public functions for unit testing
 
@@ -94,7 +80,12 @@ struct Vorticity : public NamedComponent<Vorticity> {
   static constexpr auto type = "vorticity";
 
 private:
-  Field3D Vort; // Evolving vorticity
+  Field3D solver_vorticity; // Radial guards store phi midpoints when relaxing
+  Field3D Vort;             // Physical vorticity and its stencil/RHS
+  void initialiseBoundaryState();
+  void applyPotentialBoundary();
+  void boundaryRHS();
+  bool restore_phi_on_restart{true};
 
   Field3D phi;                          // Electrostatic potential
   std::unique_ptr<Laplacian> phiSolver; // Laplacian solver in X-Z
@@ -119,10 +110,9 @@ private:
   bool phi_sheath_dissipation; ///< Dissipation at the sheath if phi < 0
   bool damp_core_vorticity;    ///< Damp axisymmetric component of vorticity
 
-  bool phi_boundary_relax;           ///< Relax boundary to zero-gradient
-  BoutReal phi_boundary_timescale;   ///< Relaxation timescale [normalised]
-  BoutReal phi_boundary_last_update; ///< Time when last updated
-  bool phi_core_averagey;            ///< Average phi core boundary in Y?
+  bool phi_boundary_relax;         ///< Relax boundary to zero-gradient
+  BoutReal phi_boundary_timescale; ///< Relaxation timescale [normalised]
+  bool phi_core_averagey;          ///< Average phi core boundary in Y?
 
   bool split_n0;                        // Split phi into n=0 and n!=0 components
   std::unique_ptr<LaplaceXY> laplacexy; // Laplacian solver in X-Y (n=0)

@@ -1,0 +1,61 @@
+#!/usr/bin/env python3
+"""Bounded publication-runner regression; expensive scans remain opt-in."""
+
+import argparse
+import importlib.util
+import json
+import tempfile
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+ROOT = HERE.parents[2]
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--exe", type=Path, default=ROOT / "build/hermes-3")
+    parser.add_argument("--output-root", type=Path)
+    args = parser.parse_args()
+    output = args.output_root or Path(
+        tempfile.mkdtemp(prefix="hermes-publication-smoke-")
+    )
+    source = HERE.parent / "2D-energy/publication_scan.py"
+    spec = importlib.util.spec_from_file_location("publication_scan", source)
+    runner = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(runner)
+    runner.main(
+        [
+            "--smoke",
+            "--exe",
+            str(args.exe),
+            "--output-root",
+            str(output),
+            "--timeout",
+            "90",
+        ]
+    )
+    study = max(output.glob("interchange-*"))
+    for row in json.loads((study / "energy-table.json").read_text()):
+        assert row["volume_m3"] > 0
+        if row["formulation"] == "total_energy":
+            assert row["complete"]
+            assert row["max_relative_drift"] < 1e-7
+            assert row["partition_max_error_normalised"] < 1e-8
+        else:
+            assert not row["complete"]
+            assert row["final_corrected_residual_J"] is None
+    for boundary in ("fixed", "relax"):
+        for product in ("state", "energy", "global-convergence", "local-error"):
+            file = study / f"{product}-{boundary}.pdf"
+            assert file.read_bytes().startswith(b"%PDF")
+    # Reanalysis also verifies that the retained manifest alone selects grids,
+    # boundaries and times, without starting another simulation.
+    runner.main(["--analyse-only", str(study)])
+    statuses = {file: file.read_bytes() for file in study.glob("*/status.json")}
+    runner.main(["--smoke", "--exe", str(args.exe), "--resume", str(study)])
+    assert all(file.read_bytes() == value for file, value in statuses.items())
+    print(f"Publication smoke passed; retained results: {study}")
+
+
+if __name__ == "__main__":
+    main()

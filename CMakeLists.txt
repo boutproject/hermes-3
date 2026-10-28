@@ -453,6 +453,40 @@ if(HERMES_TESTS)
           COPYONLY)
       endforeach()
     endif()
+    if(HERMES_COPY_TESTS_TO_BUILD)
+      foreach(PUBLICATION_FILE publication_scan.py publication-input.inp
+                               publication-study.md)
+        configure_file(
+          "${CMAKE_CURRENT_SOURCE_DIR}/tests/integrated/2D-energy/${PUBLICATION_FILE}"
+          "${CMAKE_CURRENT_BINARY_DIR}/tests/integrated/2D-energy/${PUBLICATION_FILE}"
+          COPYONLY)
+      endforeach()
+      file(
+        WRITE
+        "${CMAKE_CURRENT_BINARY_DIR}/tests/integrated/2D-energy/source-root.txt"
+        "${CMAKE_CURRENT_SOURCE_DIR}\n")
+      foreach(PUBLICATION_FILE runtest README.md)
+        configure_file(
+          "${CMAKE_CURRENT_SOURCE_DIR}/tests/integrated/2D-energy-publication-smoke/${PUBLICATION_FILE}"
+          "${CMAKE_CURRENT_BINARY_DIR}/tests/integrated/2D-energy-publication-smoke/${PUBLICATION_FILE}"
+          COPYONLY)
+      endforeach()
+      set(PUBLICATION_SMOKE_DIR
+          "${CMAKE_CURRENT_BINARY_DIR}/tests/integrated/2D-energy-publication-smoke"
+      )
+    else()
+      set(PUBLICATION_SMOKE_DIR
+          "${CMAKE_CURRENT_SOURCE_DIR}/tests/integrated/2D-energy-publication-smoke"
+      )
+    endif()
+    add_test(
+      NAME 2D-energy-publication-smoke
+      COMMAND "${HERMES_ENERGY_PYTHON}" "${PUBLICATION_SMOKE_DIR}/runtest"
+              --exe $<TARGET_FILE:${PROJECT_NAME}>)
+    set_tests_properties(
+      2D-energy-publication-smoke
+      PROPERTIES LABELS "integration;energy" TIMEOUT 300 WORKING_DIRECTORY
+                 "${PUBLICATION_SMOKE_DIR}")
     hermes_add_ion_energy_test(2D-ion-energy-equilibrium)
     hermes_add_ion_energy_test(2D-ion-energy-curvature)
     hermes_add_ion_energy_test(2D-ion-energy-multispecies)

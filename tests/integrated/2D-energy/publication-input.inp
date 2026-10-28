@@ -1,0 +1,135 @@
+# Shared physical setup. publication_scan.py supplies the substituted values and
+# builds matched time-zero restarts using each formulation's forward operator.
+NXPE = ${nproc}
+MYG = 0
+MXG = 2
+periodicX = false
+ZMAX = mesh:Lpol / (2*pi*mesh:Rxy)
+restart = true
+append = false
+dump_on_restart = true
+
+[mesh]
+nx = ${mesh_nx}
+ny = 1
+nz = ${nz}
+Lrad = 0.05
+Lpol = 0.05
+Bpxy = 0.35
+Rxy = 1.5
+dx = Lrad * Rxy * Bpxy / (nx - 4)
+dz = Lpol / Rxy / nz
+hthe = 1
+Bxy = Bpxy
+bxcvx = 0
+bxcvy = 0
+bxcvz = 1/Rxy^2
+# Explicit SI metric pairs avoid assumptions about B normalisation during
+# metric recalculation; both formulations normalise these identically.
+g11 = (Rxy*Bpxy)^2
+g22 = 1/hthe^2
+g33 = Bxy^2/g11
+g12 = 0
+g13 = 0
+g23 = 0
+g_11 = 1/g11
+g_22 = (Bxy*hthe/Bpxy)^2
+g_33 = Rxy^2
+g_12 = 0
+g_13 = 0
+g_23 = 0
+J = hthe/Bpxy
+
+[mesh:paralleltransform]
+type = identity
+
+[mesh:ddz]
+first = FFT
+fft_filter = 0
+
+[solver]
+type = cvode
+nout = ${outputs}
+output_step = ${output_step}
+atol = ${atol}
+rtol = ${rtol}
+max_timestep = ${max_timestep}
+mxstep = 100000
+
+[hermes]
+components = e, h+, ${components}
+recalculate_metric = false
+normalise_metric = true
+Nnorm = 2e18
+Bnorm = mesh:Bxy
+Tnorm = 5
+
+[e]
+type = quasineutral, evolve_pressure
+charge = -1
+AA = 1/1836
+bndry_flux = false
+poloidal_flows = false
+thermal_conduction = false
+density_floor = 1e-7
+low_p_diffuse_perp = false
+low_T_diffuse_perp = false
+damp_p_nt = false
+p_div_v = false
+hyper_z = -1
+evolve_log = false
+diagnose = ${diagnose}
+
+[h+]
+type = ${ion_components}
+charge = 1
+AA = 1
+bndry_flux = false
+poloidal_flows = false
+density_floor = 1e-7
+low_n_diffuse = false
+low_n_diffuse_perp = false
+hyper_z = -1
+evolve_log = false
+diagnose = ${diagnose}
+${ion_pressure_options}
+
+[Nh+]
+function = 1
+source = 0
+bndry_all = neumann
+
+[Pe]
+function = 1 + 0.1*sin(2*pi*x-z)
+source = 0
+bndry_all = neumann
+
+[Ph+]
+function = Pe:function
+source = 0
+bndry_all = neumann
+
+[Vort]
+function = 0
+bndry_all = neumann
+
+[Eion]
+function = 1.5*Pe:function
+bndry_all = neumann
+
+[${model}]
+average_atomic_mass = 1
+poloidal_flows = false
+viscosity = ${viscosity}
+phi_boundary_relax = ${relax}
+phi_boundary_timescale = ${tau}
+phi_core_averagey = false
+diagnose = ${diagnose}
+${model_options}
+
+[${model}:laplacian]
+type = cyclic
+inner_boundary_flags = 16
+outer_boundary_flags = 16
+
+${polarisation_options}
