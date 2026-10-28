@@ -297,10 +297,11 @@ TEST_F(LowNSourcesTest, NoSrcsAboveThreshold) {
   set_state(state, 10 * nth, 10 * nth, 10 * nth);
   component.transform(state);
 
-  // Check that all density source terms are zero
+  // Source fields should be unset if the low-n sources didn't trigger.
   for (const auto& species : {atom_species, ion_species, mol_species}) {
-    EXPECT_TRUE(IsFieldEqual(get<Field3D>(state["species"][species]["density_source"]),
-                             0.0, "RGN_NOBNDRY"));
+    for (const auto& source : {"density_source", "momentum_source", "energy_source"}) {
+      EXPECT_FALSE(state["species"][species].isSet(source));
+    }
   }
 }
 

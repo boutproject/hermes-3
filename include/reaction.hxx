@@ -279,7 +279,7 @@ private:
   void transform_impl(GuardedOptions& state) override final;
 
   /**
-   * @brief Reset the temporary values of the diagnostics stored in the state.
+   * @brief Reset diagnostics in the state and the cached data used for output.
    *
    * @param state
    */

@@ -282,11 +282,18 @@ void Reaction::transform_impl(GuardedOptions& state) {
 
   RateData rate_calc_results = this->get_rate(state);
 
-  // Update reactant species collision frequencies
-  for (const auto& reactant_name : this->reactant_names) {
-    update_source<add<Field3D>>(state, reactant_name,
-                                ReactionDiagnosticType::collision_freq,
-                                rate_calc_results.coll_freq(reactant_name));
+  // Collision frequency updates. Skip if RateHelper didn't set any (e.g. for pseudo-reactions).
+  if (!rate_calc_results.collision_frequencies.empty()) {
+    for (const auto& reactant_name : this->reactant_names) {
+      update_source<add<Field3D>>(state, reactant_name,
+                                  ReactionDiagnosticType::collision_freq,
+                                  rate_calc_results.coll_freq(reactant_name));
+    }
+  }
+
+  // Skip all source and diagnostic updates if the (rank-local) rate is zero everywhere.
+  if (rate_calc_results.is_zero) {
+    return;
   }
 
   // Subclasses perform any additional transform tasks
@@ -357,6 +364,7 @@ void Reaction::zero_diagnostics(GuardedOptions& state) {
   if (this->diagnose) {
     for (auto& [key, diag] : diagnostics) {
       set<Field3D>(state[diag.get_name()], 0.0);
+      diag.set_data(getNonFinal<Field3D>(state[diag.get_name()]));
     }
   }
 }

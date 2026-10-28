@@ -1,5 +1,6 @@
 #include "low_n_sources.hxx"
 
+#include <algorithm>
 #include <string>
 
 #include <bout/boutexception.hxx>
@@ -439,14 +440,10 @@ RateData PseudoReaction::get_rate_standard(GuardedOptions& state) {
   const Field3D& n_target = n_target_opt.GetRef<Field3D>();
   auto region = n_target.getRegion("RGN_NOBNDRY");
 
-  // Initialise return object
-  RateData result(this->reactant_names);
+  // Initialise return object. Pass an empty vector of reactants to avoid constructing unnecessary
+  // collisions frequency fields, which aren't set by pseudo-reactions.
+  RateData result({});
   result.rate = zeroFrom(n_target);
-
-  // Collision frequencies aren't used in PseudoReaction; set them to zero
-  for (auto& coll_freq : result.collision_frequencies) {
-    coll_freq = zeroFrom(n_target);
-  }
 
   // Set rate such that the source term will restore the target species to its threshold density over delta_t = [timescale]
   //   (deficit = source = 0  when n_target > n_thresh)
@@ -489,6 +486,9 @@ RateData PseudoReaction::get_rate_standard(GuardedOptions& state) {
     }
   }
 
+  // Set flag if all (rank-local) rates are zero so that Reaction transform can skip source term construction
+  result.is_zero = std::all_of(region.begin(), region.end(),
+                               [&](const auto& i) { return result.rate[i] == 0.0; });
   return result;
 }
 
