@@ -60,8 +60,13 @@ CXReaction::CXReaction(std::string name, Options& alloptions)
   setPermissions(readOnly("species:{reactant}:{react_vals}"));
   setPermissions(readOnly("species:{sp}:{read_vals}"));
   setPermissions(readWrite("species:{sp}:{writevals}"));
-  setPermissions(readWrite("species:{r1}:collision_frequencies:{r1}_{r2}_cx"));
-  setPermissions(readWrite("species:{r2}:collision_frequencies:{r2}_{r1}_cx"));
+
+  // Register labels for reaction collision frequencies (set during transform_impl)
+  // Only the former is used elsewhere in the code; both are registered for completeness
+  std::string r1_r2_reaction_lbl = fmt::format("{:s}_{:s}_cx", this->r1, this->r2);
+  std::string r2_r1_reaction_lbl = fmt::format("{:s}_{:s}_cx", this->r2, this->r1);
+  add_coll_freq(this->r1, r1_r2_reaction_lbl, this->r1);
+  add_coll_freq(this->r2, r2_r1_reaction_lbl, this->r2);
 
   std::vector<std::string> writevals = {"momentum_source", "energy_source"};
   if (this->r1 != this->p2) {
@@ -75,7 +80,7 @@ CXReaction::CXReaction(std::string name, Options& alloptions)
   substitutePermissions("r1", {this->r1});
   substitutePermissions("r2", {this->r2});
 
-  if (diagnose) {
+  if (this->diagnose) {
     // Set up diagnostics to be written to dump file
     DiagnosticTransformerType default_transformer = identity;
     std::string r1_long_name = SpeciesParser(this->r1).long_name();
@@ -135,12 +140,13 @@ CXReaction::CXReaction(std::string name, Options& alloptions)
                      "energy transfer");
     }
 
-    // Collision frequency added for both symmetric and asymmetric CX, keyed by r1
+    // Collision frequency diagnostics for both symmetric and asymmetric CX, keyed by r1
     add_diagnostic(this->r1, fmt::format("K{:s}{:s}_cx", this->r1, this->r2),
                    fmt::format("Collision frequency of CX of {:s} and {:s} producing "
                                "{:s} and {:s}. Note Kab != Kba",
                                this->r1, this->p1, this->r2, this->p2),
-                   ReactionDiagnosticType::collision_freq, standard_name, identity);
+                   ReactionDiagnosticType::reaction_collision_freq, standard_name,
+                   identity);
   }
 }
 
@@ -215,17 +221,6 @@ void CXReaction::transform_additional(GuardedOptions& state, const RateData& rat
   auto r2_vel = get<Field3D>(r2s["velocity"]);
   auto p2_vel = get<Field3D>(p2s["velocity"]);
   add(p2s["energy_source"], 0.5 * r2_AA * rate_data.rate * SQ(p2_vel - r2_vel));
-
-  // Set 'collision_frequencies' values
-  std::string r1_coll_freq_key =
-      fmt::format("collision_frequencies:{:s}_{:s}_cx", this->r1, this->r2);
-  update_source<set>(state, this->r1, ReactionDiagnosticType::collision_freq,
-                     r1_coll_freq_key, rate_data.coll_freq(this->r1));
-
-  std::string r2_coll_freq_key =
-      fmt::format("collision_frequencies:{:s}_{:s}_cx", this->r2, this->r1);
-  update_source<set>(state, this->r2, ReactionDiagnosticType::collision_freq,
-                     r2_coll_freq_key, rate_data.coll_freq(this->r2));
 }
 
 } // namespace hermes

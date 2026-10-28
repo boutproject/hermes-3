@@ -22,7 +22,7 @@ protected:
   // Default values for test diagnostics
   std::string default_name{"test_diag"};
   std::string default_long_name{"Test Diagnostic"};
-  ReactionDiagnosticType default_type{ReactionDiagnosticType::collision_freq};
+  ReactionDiagnosticType default_type{ReactionDiagnosticType::species_collision_freq};
   std::string default_source{"test_source"};
   std::string default_standard_name{"test standard name"};
   DiagnosticTransformerType default_transformer{identity};

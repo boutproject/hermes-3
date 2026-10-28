@@ -1,0 +1,21 @@
+{
+    "info": {
+        "fit_type": "T",
+        "ref": "Amjuel H.2 3.2.3",
+        "reaction_lbl": "p + H2 -> H + H2+",
+        "notes": "H2/H+ charge exchange. Effective ion conversion rate (charge exchange on H2) v eff = v H2(v=0) + v=114 v H2(v) pH2(v) Same vibrational distribution (as function of T_e) as above. Therefore: single parameter fit vs. T_e, since vibrational distribution does not depend upon density, E_0 is fixed (0.1 eV) and Tp = Te = T."
+    },
+    "coeffs": [
+        [
+            -2.163099643422E+01,
+            3.206843053514E+00,
+            -3.369939911269E+00,
+            1.290238400703E+00,
+            -3.988189754178E-01,
+            1.462287796966E-01,
+            -3.524154596754E-02,
+            4.146324082808E-03,
+            -1.846022446828E-04
+        ]
+    ]
+}

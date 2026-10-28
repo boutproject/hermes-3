@@ -73,6 +73,8 @@ set(HERMES_SOURCES
     src/component.cxx
     src/component_scheduler.cxx
     src/cx_reaction.cxx
+    src/elastic_collisions.cxx
+    src/hydrogen_molecule_reactions.cxx
     src/ionisation.cxx
     src/izn_rec_reaction.cxx
     src/div_ops.cxx
@@ -104,6 +106,7 @@ set(HERMES_SOURCES
     src/binormal_stpm.cxx
     src/recycling.cxx
     src/adas_reaction.cxx
+    src/molecular_reactions.cxx
     src/noflow_boundary.cxx
     src/neutral_parallel_diffusion.cxx
     src/neutral_boundary.cxx
@@ -140,6 +143,7 @@ set(HERMES_SOURCES
     include/component_scheduler.hxx
     include/diamagnetic_drift.hxx
     include/div_ops.hxx
+    include/elastic_collisions.hxx
     include/electromagnetic.hxx
     include/electron_force_balance.hxx
     include/evolve_density.hxx
@@ -153,10 +157,12 @@ set(HERMES_SOURCES
     include/guarded_options.hxx
     include/neutral_full_velocity.hxx
     include/hermes_utils.hxx
+    include/hydrogen_molecule_reactions.hxx
     include/solkit_hydrogen_charge_exchange.hxx
     include/integrate.hxx
     include/ionisation.hxx
     include/izn_rec_reaction.hxx
+    include/molecular_reactions.hxx
     include/neutral_boundary.hxx
     include/neutral_mixed.hxx
     include/neutral_parallel_diffusion.hxx
@@ -377,6 +383,7 @@ if(HERMES_TESTS)
 
   hermes_add_integrated_test(1D-density CONFLICTS BOUT_ENABLE_METRIC_3D)
   hermes_add_integrated_test(1D-fluid CONFLICTS BOUT_ENABLE_METRIC_3D)
+  # hermes_add_integrated_test(1D-kotov CONFLICTS BOUT_ENABLE_METRIC_3D)
   hermes_add_integrated_test(1D-recycling CONFLICTS BOUT_ENABLE_METRIC_3D)
   hermes_add_integrated_test(1D-recycling-dthe CONFLICTS BOUT_ENABLE_METRIC_3D)
   hermes_add_integrated_test(diffusion CONFLICTS BOUT_ENABLE_METRIC_3D)

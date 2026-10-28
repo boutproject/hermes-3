@@ -9,7 +9,7 @@ class SpeciesParserTest : public ::testing::Test {};
 /// @brief Check parsing of a neutral species with a prefix > 1
 TEST_F(SpeciesParserTest, ParseNeutral) {
   SpeciesParser parser("2he");
-  EXPECT_EQ(parser.get_element(), "he");
+  EXPECT_EQ(parser.get_base_species(), "he");
   EXPECT_EQ(parser.get_charge(), 0);
   // Species string should not include the prefix number and should be lower case
   EXPECT_EQ(parser.get_str(), "he");
@@ -18,17 +18,17 @@ TEST_F(SpeciesParserTest, ParseNeutral) {
 /// @brief Check parsing of various positively charged species.
 TEST_F(SpeciesParserTest, ParsePositivelyCharged) {
   SpeciesParser parser1("h+");
-  EXPECT_EQ(parser1.get_element(), "h");
+  EXPECT_EQ(parser1.get_base_species(), "h");
   EXPECT_EQ(parser1.get_charge(), 1);
   EXPECT_EQ(parser1.get_str(), "h+");
 
   SpeciesParser parser2("He+2");
-  EXPECT_EQ(parser2.get_element(), "he");
+  EXPECT_EQ(parser2.get_base_species(), "he");
   EXPECT_EQ(parser2.get_charge(), 2);
   EXPECT_EQ(parser2.get_str(), "he+2");
 
   SpeciesParser parser3("ne+8");
-  EXPECT_EQ(parser3.get_element(), "ne");
+  EXPECT_EQ(parser3.get_base_species(), "ne");
   EXPECT_EQ(parser3.get_charge(), 8);
   EXPECT_EQ(parser3.get_str(), "ne+8");
 }
@@ -37,17 +37,17 @@ TEST_F(SpeciesParserTest, ParsePositivelyCharged) {
 TEST_F(SpeciesParserTest, ParseNegativelyCharged) {
 
   SpeciesParser parser1("He-1");
-  EXPECT_EQ(parser1.get_element(), "he");
+  EXPECT_EQ(parser1.get_base_species(), "he");
   EXPECT_EQ(parser1.get_charge(), -1);
   EXPECT_EQ(parser1.get_str(), "he-");
 
   SpeciesParser parser2("li-2");
-  EXPECT_EQ(parser2.get_element(), "li");
+  EXPECT_EQ(parser2.get_base_species(), "li");
   EXPECT_EQ(parser2.get_charge(), -2);
   EXPECT_EQ(parser2.get_str(), "li-2");
 
   SpeciesParser parser3("ne-5");
-  EXPECT_EQ(parser3.get_element(), "ne");
+  EXPECT_EQ(parser3.get_base_species(), "ne");
   EXPECT_EQ(parser3.get_charge(), -5);
   EXPECT_EQ(parser3.get_str(), "ne-5");
 }
@@ -57,13 +57,13 @@ TEST_F(SpeciesParserTest, ParseElectron) {
   // "e" parsed as electron
   SpeciesParser parser1("e");
   EXPECT_EQ(parser1.get_charge(), -1);
-  EXPECT_EQ(parser1.get_element(), "e");
+  EXPECT_EQ(parser1.get_base_species(), "e");
   EXPECT_EQ(parser1.get_str(), "e");
 
   // "e-" parsed as electron
   SpeciesParser parser2("e-");
   EXPECT_EQ(parser2.get_charge(), -1);
-  EXPECT_EQ(parser2.get_element(), "e");
+  EXPECT_EQ(parser2.get_base_species(), "e");
   EXPECT_EQ(parser2.get_str(), "e");
 
   // Charges other than -1 throw for electrons
@@ -85,7 +85,7 @@ TEST_F(SpeciesParserTest, LongNames) {
   SpeciesParser parser5("t");
   ASSERT_EQ(parser5.long_name(), "tritium");
 
-  // Species without preset long names should return the element name
+  // Species without preset long names should return the base species name
   SpeciesParser parser6("li");
   ASSERT_EQ(parser6.long_name(), "li");
 }
@@ -94,7 +94,7 @@ TEST_F(SpeciesParserTest, LongNames) {
 TEST_F(SpeciesParserTest, IoniseNeutral) {
   SpeciesParser neutral("h");
   SpeciesParser ionised = neutral.ionised();
-  EXPECT_EQ(ionised.get_element(), "h");
+  EXPECT_EQ(ionised.get_base_species(), "h");
   EXPECT_EQ(ionised.get_charge(), 1);
   EXPECT_EQ(ionised.get_str(), "h+");
 }
@@ -103,7 +103,7 @@ TEST_F(SpeciesParserTest, IoniseNeutral) {
 TEST_F(SpeciesParserTest, IoniseSinglyIonised) {
   SpeciesParser singly("li+");
   SpeciesParser doubly = singly.ionised();
-  EXPECT_EQ(doubly.get_element(), "li");
+  EXPECT_EQ(doubly.get_base_species(), "li");
   EXPECT_EQ(doubly.get_charge(), 2);
   EXPECT_EQ(doubly.get_str(), "li+2");
 }
@@ -112,7 +112,7 @@ TEST_F(SpeciesParserTest, IoniseSinglyIonised) {
 TEST_F(SpeciesParserTest, IoniseHighlyIonised) {
   SpeciesParser highly("ne+8");
   SpeciesParser next = highly.ionised();
-  EXPECT_EQ(next.get_element(), "ne");
+  EXPECT_EQ(next.get_base_species(), "ne");
   EXPECT_EQ(next.get_charge(), 9);
   EXPECT_EQ(next.get_str(), "ne+9");
 }
@@ -125,12 +125,12 @@ TEST_F(SpeciesParserTest, MultipleIonisations) {
 
   SpeciesParser hep1 = he.ionised();
   EXPECT_EQ(hep1.get_charge(), 1);
-  EXPECT_EQ(hep1.get_element(), "he");
+  EXPECT_EQ(hep1.get_base_species(), "he");
   EXPECT_EQ(hep1.get_str(), "he+");
 
   SpeciesParser hep2 = hep1.ionised();
   EXPECT_EQ(hep2.get_charge(), 2);
-  EXPECT_EQ(hep2.get_element(), "he");
+  EXPECT_EQ(hep2.get_base_species(), "he");
   EXPECT_EQ(hep2.get_str(), "he+2");
 }
 
@@ -138,7 +138,7 @@ TEST_F(SpeciesParserTest, MultipleIonisations) {
 TEST_F(SpeciesParserTest, RecombineSinglyIonised) {
   SpeciesParser singly("h+");
   SpeciesParser neutral = singly.recombined();
-  EXPECT_EQ(neutral.get_element(), "h");
+  EXPECT_EQ(neutral.get_base_species(), "h");
   EXPECT_EQ(neutral.get_charge(), 0);
   EXPECT_EQ(neutral.get_str(), "h");
 }
@@ -147,7 +147,7 @@ TEST_F(SpeciesParserTest, RecombineSinglyIonised) {
 TEST_F(SpeciesParserTest, RecombineHighlyIonised) {
   SpeciesParser highly("ne+9");
   SpeciesParser next = highly.recombined();
-  EXPECT_EQ(next.get_element(), "ne");
+  EXPECT_EQ(next.get_base_species(), "ne");
   EXPECT_EQ(next.get_charge(), 8);
   EXPECT_EQ(next.get_str(), "ne+8");
 }
@@ -159,12 +159,12 @@ TEST_F(SpeciesParserTest, MultipleRecombinations) {
 
   SpeciesParser hep1 = hep2.recombined();
   EXPECT_EQ(hep1.get_charge(), 1);
-  EXPECT_EQ(hep1.get_element(), "he");
+  EXPECT_EQ(hep1.get_base_species(), "he");
   EXPECT_EQ(hep1.get_str(), "he+");
 
   SpeciesParser he0 = hep1.recombined();
   EXPECT_EQ(he0.get_charge(), 0);
-  EXPECT_EQ(he0.get_element(), "he");
+  EXPECT_EQ(he0.get_base_species(), "he");
   EXPECT_EQ(he0.get_str(), "he");
 }
 

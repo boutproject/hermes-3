@@ -10,8 +10,8 @@ static std::map<std::string, std::string> long_names = {
     {"t", "tritium"},  {"he", "helium"},
 };
 
-std::string construct_species_str(std::string element, int charge) {
-  if (element == "e") {
+std::string construct_species_str(std::string base_species, int charge) {
+  if (base_species == "e") {
     // Special case for electrons
     if (charge != -1) {
       throw BoutException(
@@ -38,7 +38,7 @@ std::string construct_species_str(std::string element, int charge) {
         charge_str = "-" + std::to_string(-charge);
       }
     }
-    return element + charge_str;
+    return base_species + charge_str;
   }
 }
 
@@ -47,21 +47,21 @@ std::string construct_species_str(std::string element, int charge) {
 ///
 SpeciesParser::SpeciesParser(const std::string& species_str) {
 
-  // Extract element name, charge and ionisation state with regex
-  // Any number preceding the element is discarded
-  std::regex pattern("^([0-9]*)([a-zA-Z]{1,2})([\\+|\\-]?)([0-9]*)$");
+  // Extract base species, charge and ionisation state with regex
+  // Any number preceding the base species is discarded
+  std::regex pattern("^([0-9]*)([a-zA-Z]{1,2}[0-9]*)([\\+|\\-]?)([0-9]*)$");
   std::smatch matches;
   bool has_matches = std::regex_search(species_str, matches, pattern);
-  // String must provide at least an element name
+  // String must provide at least a base species
   if (!has_matches || !matches[1].matched) {
     throw BoutException(
         fmt::format("Unable to extract charge from species name {}", species_str));
   }
 
-  // Store element name; always lower case
-  this->element = matches[2];
-  std::transform(this->element.begin(), this->element.end(), this->element.begin(),
-                 ::tolower);
+  // Store base species; always lower case
+  this->base_species = matches[2];
+  std::transform(this->base_species.begin(), this->base_species.end(),
+                 this->base_species.begin(), ::tolower);
 
   // Extract charge, electron is a special case
   if (species_str == "e") {
@@ -73,39 +73,39 @@ SpeciesParser::SpeciesParser(const std::string& species_str) {
   }
 
   // Stored species string discards any leading number and is always lower case
-  this->species_str = construct_species_str(this->element, this->charge);
+  this->species_str = construct_species_str(this->base_species, this->charge);
 }
 
 ///
-SpeciesParser::SpeciesParser(const std::string element, int charge)
-    : element(element), charge(charge) {
-  this->species_str = construct_species_str(element, charge);
+SpeciesParser::SpeciesParser(const std::string base_species, int charge)
+    : base_species(base_species), charge(charge) {
+  this->species_str = construct_species_str(base_species, charge);
 }
 
 ///
 std::string SpeciesParser::long_name() const {
-  auto it = long_names.find(this->element);
+  auto it = long_names.find(this->base_species);
   if (it != long_names.end()) {
     return it->second;
   } else {
-    return this->element;
+    return this->base_species;
   }
 }
 
 ///
 SpeciesParser SpeciesParser::ionised() {
-  if (this->element == "e") {
+  if (this->base_species == "e") {
     throw BoutException("Cannot change electron charge!");
   }
   int new_charge = this->charge + 1;
-  return SpeciesParser(this->element, new_charge);
+  return SpeciesParser(this->base_species, new_charge);
 }
 
 ///
 SpeciesParser SpeciesParser::recombined() {
-  if (this->element == "e") {
+  if (this->base_species == "e") {
     throw BoutException("Cannot change electron charge!");
   }
   int new_charge = this->charge - 1;
-  return SpeciesParser(this->element, new_charge);
+  return SpeciesParser(this->base_species, new_charge);
 }
