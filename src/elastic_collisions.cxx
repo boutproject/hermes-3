@@ -54,10 +54,16 @@ void ElasticCollision::transform_additional(
     [[maybe_unused]] const RateData& rate_calc_results) {
 
   // Frictional force between the two species
-  const BoutReal& m1 = state["species"][this->r1]["AA"].GetRef<BoutReal>();
-  const BoutReal& m2 = state["species"][this->r2]["AA"].GetRef<BoutReal>();
-  const Field3D& v1 = state["species"][this->r1]["velocity"].GetRef<Field3D>();
-  const Field3D& v2 = state["species"][this->r2]["velocity"].GetRef<Field3D>();
+  // Local variables to workaround gcc dangling ref false positives
+  const GuardedOptions m1_opt = state["species"][this->r1]["AA"];
+  const GuardedOptions m2_opt = state["species"][this->r2]["AA"];
+  const GuardedOptions v1_opt = state["species"][this->r1]["velocity"];
+  const GuardedOptions v2_opt = state["species"][this->r2]["velocity"];
+
+  const BoutReal& m1 = m1_opt.GetRef<BoutReal>();
+  const BoutReal& m2 = m2_opt.GetRef<BoutReal>();
+  const Field3D& v1 = v1_opt.GetRef<Field3D>();
+  const Field3D& v2 = v2_opt.GetRef<Field3D>();
 
   Field3D mu = (m1 * m2) / (m1 + m2);
   Field3D momentum_exchange = rate_calc_results.rate * mu * (v1 - v2);
