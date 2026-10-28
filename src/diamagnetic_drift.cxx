@@ -8,6 +8,7 @@
 #include <bout/globals.hxx>
 #include <bout/options.hxx>
 #include <bout/output.hxx>
+#include <bout/paralleltransform.hxx>
 #include <bout/solver.hxx>
 #include <bout/sys/range.hxx>
 #include <bout/utils.hxx>
@@ -64,6 +65,13 @@ DiamagneticDrift::DiamagneticDrift(std::string name, Options& alloptions,
                              "closed_average (average the innermost core ring). "
                              "Sheath (y) faces are always closed.")
                         .withDefault(DiamagneticBoundary::closed_average);
+
+  if (form == DiamagneticForm::gradient
+      and !mesh->getCoordinates()->getParallelTransform().canToFromFieldAligned()) {
+    throw BoutException(
+        "Diamagnetic drift: gradient form is not supported by parallel transforms "
+        "that cannot convert to and from field-aligned coordinates (such as FCI).");
+  }
 
   average_core_active = radial_boundary == DiamagneticBoundary::closed_average
                         and mesh->periodicY(mesh->xstart) and mesh->firstX();
@@ -151,7 +159,23 @@ Field3D DiamagneticDrift::calculateDivergenceForm(const Field3D& quantity,
         "DiamagneticDrift::calculateDivergenceForm requires a non-zero charge");
   }
 
-  const Vector3D vD = (temperature / charge) * Curlb_B;
+  // Copy in the aligned frame so the sign-flipped curvature cancels the face
+  // velocity even when the input guard temperature differs or varies in z.
+  Field3D temperature_al = toFieldAligned(copy(temperature), "RGN_ALL");
+  for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
+    for (int jz = mesh->zstart; jz <= mesh->zend; ++jz) {
+      temperature_al(r.ind, mesh->ystart - 1, jz) =
+          temperature_al(r.ind, mesh->ystart, jz);
+    }
+  }
+  for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
+    for (int jz = mesh->zstart; jz <= mesh->zend; ++jz) {
+      temperature_al(r.ind, mesh->yend + 1, jz) = temperature_al(r.ind, mesh->yend, jz);
+    }
+  }
+  // Include x and y guards: vD is also used at the radial faces.
+  const Field3D sheath_temperature = fromFieldAligned(temperature_al, "RGN_ALL");
+  const Vector3D vD = (sheath_temperature / charge) * Curlb_B;
   return factor * FV::Div_f_v(quantity, vD, radial_boundary == DiamagneticBoundary::open);
 }
 
@@ -200,6 +224,39 @@ Field3D DiamagneticDrift::calculateGradientForm(const Field3D& quantity,
       }
     }
   }
+
+  const auto* coords = quantity.getCoordinates();
+  const Field3D g_al = toFieldAligned(g, "RGN_NOX");
+  const auto a_al =
+      toFieldAligned(Coordinates::FieldMetric{coords->J() * Curlb_B.y}, "RGN_NOX");
+  const auto Jdy_al =
+      toFieldAligned(Coordinates::FieldMetric{coords->J() * coords->dy()}, "RGN_NOX");
+  Field3D correction = zeroFrom(g_al);
+
+  // The gradient form needs the unflipped continuation of J*C.y in each
+  // target guard. Extrapolate from interior cells rather than reading the
+  // curvature guard used to close the divergence-form velocity.
+  for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
+    const int jy = mesh->ystart;
+    for (int jz = mesh->zstart; jz <= mesh->zend; ++jz) {
+      const BoutReal a_guard = 2.0 * a_al(r.ind, jy, jz) - a_al(r.ind, jy + 1, jz);
+      const BoutReal flux = 0.5
+                            * (a_guard * g_al(r.ind, jy, jz)
+                               + a_al(r.ind, jy, jz) * g_al(r.ind, jy - 1, jz));
+      correction(r.ind, jy, jz) += factor * flux / Jdy_al(r.ind, jy, jz);
+    }
+  }
+  for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
+    const int jy = mesh->yend;
+    for (int jz = mesh->zstart; jz <= mesh->zend; ++jz) {
+      const BoutReal a_guard = 2.0 * a_al(r.ind, jy, jz) - a_al(r.ind, jy - 1, jz);
+      const BoutReal flux = 0.5
+                            * (a_al(r.ind, jy, jz) * g_al(r.ind, jy + 1, jz)
+                               + a_guard * g_al(r.ind, jy, jz));
+      correction(r.ind, jy, jz) -= factor * flux / Jdy_al(r.ind, jy, jz);
+    }
+  }
+  sink += fromFieldAligned(correction, "RGN_NOBNDRY");
 
   return sink;
 }

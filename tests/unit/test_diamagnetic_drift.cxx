@@ -6,6 +6,7 @@
 #include <bout/constants.hxx>
 #include <bout/coordinates.hxx>
 #include <bout/deriv_store.hxx>
+#include <bout/paralleltransform.hxx>
 
 #include "fake_mesh.hxx"
 #include "fake_mesh_fixture.hxx"
@@ -31,6 +32,7 @@ using DiamagneticDriftTest = FakeMeshFixture;
 using WideDiamagneticDriftTest = FakeMeshFixture_tmpl<5, 5, 7>;
 // FV::Div_f_v needs two x guards for its reconstruction stencil.
 using RadialDiamagneticDriftTest = FakeMeshFixture_tmpl<8, 5, 7, false, 2>;
+using UnsupportedDiamagneticDriftTest = FakeMeshFixtureFCI;
 
 class C4DiamagneticDriftTest : public RadialDiamagneticDriftTest {
 public:
@@ -501,12 +503,152 @@ TEST_F(C4DiamagneticDriftTest, GradientAlwaysUsesC2WithC4Defaults) {
     const auto source = get<Field3D>(state["species"]["d+"][name]);
     const BoutReal factor = std::string(name) == "energy_source" ? 2.5 : 1.0;
     BOUT_FOR_SERIAL(i, source.getRegion("RGN_NOBNDRY")) {
+      // Target cells also include the explicit sheath-face closure.
+      if (i.y() == mesh->ystart or i.y() == mesh->yend) {
+        continue;
+      }
       // C2 differentiates x^3 as 3*x^2 + 1, rather than C4's exact 3*x^2.
       const BoutReal expected =
           -2.0 * factor
           * (3.0 * i.x() * i.x() + 1.0 + 3.0 * i.y() * i.y() + 1.0
              + std::sin(wave_number) * std::cos(wave_number * i.z()));
       EXPECT_NEAR(source[i], expected, 1e-12);
+    }
+  }
+}
+
+TEST_F(RadialDiamagneticDriftTest, SheathFacesConserveWithNonuniformGuardTemperature) {
+  // These x indices lie on open field lines with targets at both ends.
+  static_cast<FakeMesh*>(mesh)->ix_separatrix = 0;
+  const BoutReal wave_number = TWOPI / mesh->LocalNz;
+
+  for (const bool shifted : {false, true}) {
+#if !BOUT_HAS_FFTW
+    if (shifted) {
+      continue;
+    }
+#endif
+    SCOPED_TRACE(shifted ? "shifted" : "identity");
+    if (shifted) {
+      const auto zshift = makeField<Field2D>([](Ind2D& i) { return 0.4 * i.y(); });
+      mesh->getCoordinates()->setParallelTransform(
+          bout::utils::make_unique<ShiftedMetric>(*mesh, CELL_CENTRE, zshift,
+                                                  static_cast<BoutReal>(mesh->LocalNz)));
+    }
+    setCurvature(0.0, 1.0, 0.0);
+
+    // Define profiles in the aligned frame, including nonuniform target values
+    // and deliberately different guard temperatures. The shifted case has
+    // different z shifts in a target cell and its adjacent guard cell.
+    auto quantity_al = makeField<Field3D>([wave_number](Ind3D& i) {
+      return 1.0 + 0.15 * i.x() + 0.2 * i.y() * i.y()
+             + 0.25 * std::sin(wave_number * i.z());
+    });
+    quantity_al.setDirectionY(YDirectionType::Aligned);
+    const auto quantity = fromFieldAligned(quantity_al, "RGN_ALL");
+    auto temperature_al = makeField<Field3D>([wave_number](Ind3D& i) {
+      if (i.y() < mesh->ystart) {
+        return 5.0 + 0.3 * std::cos(wave_number * i.z());
+      }
+      if (i.y() > mesh->yend) {
+        return 9.0 + 0.4 * std::sin(wave_number * i.z());
+      }
+      return 2.0 + 0.4 * i.y() + 0.2 * std::cos(wave_number * i.z());
+    });
+    temperature_al.setDirectionY(YDirectionType::Aligned);
+    const auto temperature = fromFieldAligned(temperature_al, "RGN_ALL");
+    const auto original_temperature = copy(temperature);
+
+    for (const auto* form : {"gradient", "divergence"}) {
+      for (const auto* boundary : {"open", "closed", "closed_average"}) {
+        for (const BoutReal charge : {1.0, -2.0}) {
+          SCOPED_TRACE(std::string(form) + ", " + boundary);
+          SCOPED_TRACE(charge);
+          Options options = diamagneticOptions();
+          options["diamagnetic_drift"]["form"] = form;
+          options["diamagnetic_drift"]["radial_boundary"] = boundary;
+          DiamagneticDrift component("diamagnetic_drift", options, nullptr);
+          auto state = diamagneticState(quantity, 1.0, charge);
+          state["species"]["d+"]["temperature"] = temperature;
+          component.declareAllSpecies({"d+"});
+          component.transform(state);
+
+          EXPECT_TRUE(IsFieldEqual(get<Field3D>(state["species"]["d+"]["temperature"]),
+                                   original_temperature, "RGN_ALL"));
+          for (const auto* name :
+               {"density_source", "energy_source", "momentum_source"}) {
+            SCOPED_TRACE(name);
+            const auto source = get<Field3D>(state["species"]["d+"][name]);
+            EXPECT_NEAR(volumeIntegral(source), 0.0, 1e-12);
+            EXPECT_NE(source(mesh->xstart + 1, mesh->ystart, mesh->zstart), 0.0);
+            EXPECT_NE(source(mesh->xstart + 1, mesh->yend, mesh->zstart), 0.0);
+          }
+        }
+      }
+    }
+  }
+}
+
+TEST_F(RadialDiamagneticDriftTest, GradientSheathClosureExtrapolatesJacobianCurvature) {
+  static_cast<FakeMesh*>(mesh)->ix_separatrix = 0;
+  setCurvature(0.0, 1.0, 0.0);
+  auto* coords = mesh->getCoordinates();
+  Coordinates::FieldMetric J{1.0};
+  for (int jx = 0; jx < mesh->LocalNx; ++jx) {
+    for (int jy = 0; jy < mesh->LocalNy; ++jy) {
+      const BoutReal value = jy < mesh->ystart ? 7.0
+                             : jy > mesh->yend ? 11.0
+                                               : jy - mesh->ystart + 1.0;
+      for (int jz = mesh->zstart; jz <= mesh->zend; ++jz) {
+        J(jx, jy, jz) = value;
+      }
+    }
+  }
+  coords->setJ(J);
+  coords->setDy(2.0);
+
+  // Interior a = J*C.y is 2, 4, 6. Its linear continuation gives guard
+  // values 0 and 8, despite the unrelated J and sign-flipped C.y guards.
+  // Uniform g = -3 gives F_lower = -3 and F_upper = -21.
+  for (const auto* boundary : {"open", "closed", "closed_average"}) {
+    SCOPED_TRACE(boundary);
+    Options options = diamagneticOptions();
+    options["diamagnetic_drift"]["form"] = "gradient";
+    options["diamagnetic_drift"]["radial_boundary"] = boundary;
+    DiamagneticDrift component("diamagnetic_drift", options, nullptr);
+    auto state = diamagneticState(Field3D{3.0}, 2.0, -2.0);
+    component.declareAllSpecies({"d+"});
+    component.transform(state);
+
+    for (const auto* name : {"density_source", "energy_source", "momentum_source"}) {
+      SCOPED_TRACE(name);
+      const auto source = get<Field3D>(state["species"]["d+"][name]);
+      const BoutReal factor = std::string(name) == "energy_source" ? 2.5 : 1.0;
+      for (int jx = mesh->xstart; jx <= mesh->xend; ++jx) {
+        for (int jz = mesh->zstart; jz <= mesh->zend; ++jz) {
+          EXPECT_DOUBLE_EQ(source(jx, mesh->ystart, jz), 1.5 * factor);
+          EXPECT_DOUBLE_EQ(source(jx, mesh->ystart + 1, jz), 0.0);
+          EXPECT_DOUBLE_EQ(source(jx, mesh->yend, jz), -3.5 * factor);
+        }
+      }
+    }
+  }
+}
+
+TEST_F(UnsupportedDiamagneticDriftTest, GradientRejectsUnsupportedParallelTransform) {
+  setCurvature(0.0, 1.0, 0.0);
+  for (const auto* boundary : {"open", "closed", "closed_average"}) {
+    SCOPED_TRACE(boundary);
+    Options options = diamagneticOptions();
+    options["diamagnetic_drift"]["form"] = "gradient";
+    options["diamagnetic_drift"]["radial_boundary"] = boundary;
+    try {
+      DiamagneticDrift component("diamagnetic_drift", options, nullptr);
+      FAIL() << "gradient form must reject a transform without aligned conversion";
+    } catch (const BoutException& error) {
+      const std::string message = error.what();
+      EXPECT_NE(message.find("gradient form is not supported"), std::string::npos);
+      EXPECT_NE(message.find("field-aligned coordinates"), std::string::npos);
     }
   }
 }
