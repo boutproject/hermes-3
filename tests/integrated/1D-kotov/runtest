@@ -1,15 +1,12 @@
 #!/usr/bin/env python3
 
 # Test that a 1D example with molecules produces expected results
-
-from __future__ import division
-from __future__ import print_function
-
-from boututils.run_wrapper import launch_safe
-import numpy
 import pathlib
-import xhermes
+import sys
 
+import numpy
+import xhermes
+from boututils.run_wrapper import launch_safe
 from numpy.testing._private.utils import nulp_diff
 
 this_dir = pathlib.Path(__file__).parent
@@ -57,25 +54,25 @@ def check_ULPs_diff(name, val, target, maxulps):
 def end_test(success):
     if success:
         print(" => Test passed")
-        exit(0)
+        sys.exit(0)
     else:
         print(" => Test failed")
-        exit(1)
+        sys.exit(1)
 
 
 def fail_on_missing_data():
     if not output_path.is_file():
-        print(f"No data at {output_path}")
-        fail_test()
+        fail_test(f"No data at {output_path}")
 
 
 def fail_on_missing_exec():
     if not hermes_exec.is_file():
-        print(f"No executable found at {hermes_exec}")
-        fail_test()
+        fail_test(f"No executable found at {hermes_exec}")
 
 
-def fail_test():
+def fail_test(msg=None):
+    if msg:
+        print(msg)
     end_test(False)
 
 
@@ -172,7 +169,6 @@ for name, target in diags_ref.items():
         else:
             success &= check_ULPs_diff(name, val, target, maxulps=ULPs_tolerance)
     except KeyError:
-        print(f" *** Diagnostic '{name}' missing from test data ***")
-        end_test(False)
+        fail_test(f" *** Diagnostic '{name}' missing from test data ***")
 
 end_test(success)
