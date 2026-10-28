@@ -58,6 +58,16 @@ protected:
     component.outputVars(output);
     return output;
   }
+
+  BoutReal integral(const Field3D& field) {
+    const auto* coord = mesh->getCoordinates();
+    BoutReal result = 0.0;
+    for (const auto& i : field.getRegion("RGN_NOBNDRY")) {
+      result +=
+          field[i] * coord->J()[i] * coord->dx()[i] * coord->dy()[i] * coord->dz()[i];
+    }
+    return result;
+  }
 };
 
 TEST_F(EvolveVorticityIonEnergyTest, RecoveryCanBeScheduledBeforeSheath) {
@@ -130,6 +140,7 @@ TEST_F(EvolveVorticityIonEnergyTest,
   auto options = makeOptions();
   options["test"]["phi_boundary_relax"] = true;
   options["test"]["phi_boundary_timescale"] = 0.4;
+  options["test"]["viscosity"] = 0.3;
   options["units"]["seconds"].force(0.2); // Normalised timescale is 2.
   EvolveVorticityIonEnergy component("test", options, &solver);
   declareSpecies(component);
@@ -260,6 +271,7 @@ TEST_F(IonEnergySingletonYTest, RelaxationRecoveryWorksWithoutYGuards) {
                     {"meters", 1.0}}},
                   {"test",
                    {{"phi_boundary_relax", true},
+                    {"viscosity", 0.1},
                     {"diagnose", true},
                     {"phi_rtol", 1e-10},
                     {"phi_max_iterations", 200}}}};
@@ -289,6 +301,11 @@ TEST_F(IonEnergySingletonYTest, RelaxationRecoveryWorksWithoutYGuards) {
   for (int z = 0; z < nz; ++z) {
     EXPECT_NEAR(phi(mesh->xstart - 1, 0, z) + phi(mesh->xstart, 0, z), 0.0, 1e-12);
   }
+  Options output{{"Nnorm", 1.0}, {"Tnorm", 1.0}, {"Omega_ci", 1.0}, {"rho_s0", 1.0}};
+  component.outputVars(output);
+  EXPECT_TRUE(IsFieldEqual(output["DivJviscous"].as<Field3D>(),
+                           Field3D{-0.4 * SQ(sin(PI / nz)) * vort}, "RGN_NOBNDRY",
+                           1e-12));
 }
 
 TEST_F(EvolveVorticityIonEnergyTest,
@@ -370,6 +387,182 @@ TEST_F(EvolveVorticityIonEnergyTest, CommonTemperatureUsesMassToChargePressurePo
                            "RGN_NOBNDRY", 1e-12));
   EXPECT_TRUE(IsFieldEqual(solver.getTimeDerivs()["Eion"].as<Field3D>(), 0.0,
                            "RGN_NOBNDRY", 1e-12));
+}
+
+TEST_F(EvolveVorticityIonEnergyTest, KinematicViscosityDampsZModeInPhysicalUnits) {
+  const Field3D vort = makeField<Field3D>(
+      [&](const Ind3D& i) { return 0.001 * cos(2 * PI * i.z() / nz); });
+  const auto run = [&](bool viscous) {
+    FakeSolver solver;
+    auto options = makeOptions();
+    options["units"]["meters"].force(2.0);
+    options["units"]["seconds"].force(0.5);
+    if (viscous) {
+      options["test"]["viscosity"] = 8.0; // 8 / (2^2 * 2) = 1 normalised.
+    }
+    EvolveVorticityIonEnergy component("test", options, &solver);
+    declareSpecies(component);
+    solver.setState({{"Vort", vort}, {"Eion", Field3D{10.0}}});
+    auto state = makeState();
+    component.transform(state);
+    component.finally(state);
+    auto output = diagnostics(component);
+    output["vorticity_rhs"] = solver.getTimeDerivs()["Vort"].as<Field3D>();
+    return output;
+  };
+  const auto baseline = run(false);
+  const auto viscous = run(true);
+  EXPECT_FALSE(baseline.isSet("kinematic_viscosity"));
+  const Field3D expected = -4 * SQ(sin(PI / nz)) * vort;
+  EXPECT_TRUE(IsFieldEqual(viscous["kinematic_viscosity"].as<Coordinates::FieldMetric>(),
+                           1.0, "RGN_NOBNDRY", 1e-12));
+  EXPECT_TRUE(
+      IsFieldEqual(viscous["DivJviscous"].as<Field3D>(), expected, "RGN_NOBNDRY", 1e-12));
+  EXPECT_TRUE(IsFieldEqual(Field3D{viscous["vorticity_rhs"].as<Field3D>()
+                                   - baseline["vorticity_rhs"].as<Field3D>()},
+                           expected, "RGN_NOBNDRY", 1e-12));
+  // Missing electron density is supported, as in the legacy component.
+  EXPECT_TRUE(IsFieldEqual(viscous["electron_viscous_heating"].as<Field3D>(), 0.0,
+                           "RGN_NOBNDRY", 0.0));
+}
+
+TEST_F(EvolveVorticityIonEnergyTest, ZeroViscosityMatchesDisabled) {
+  const Field3D vort = makeField<Field3D>(
+      [&](const Ind3D& i) { return 0.001 * sin(2 * PI * i.z() / nz); });
+  const auto run = [&](bool specified) {
+    FakeSolver solver;
+    auto options = makeOptions();
+    if (specified) {
+      options["test"]["viscosity"] = 0.0;
+    }
+    EvolveVorticityIonEnergy component("test", options, &solver);
+    declareSpecies(component);
+    solver.setState({{"Vort", vort}, {"Eion", Field3D{10.0}}});
+    auto state = makeState();
+    state["species"]["e"]["density"] = Field3D{1.0};
+    component.transform(state);
+    component.finally(state);
+    return solver.getTimeDerivs();
+  };
+  const auto disabled = run(false);
+  const auto zero = run(true);
+  for (const auto* name : {"Vort", "Eion"}) {
+    EXPECT_TRUE(IsFieldEqual(zero[name].as<Field3D>(), disabled[name].as<Field3D>(),
+                             "RGN_NOBNDRY", 1e-12));
+  }
+}
+
+TEST_F(EvolveVorticityIonEnergyTest, ViscousFluxObeysProductRuleWithCrossMetric) {
+  auto* coord = mesh->getCoordinates();
+  coord->setNon_uniform(false);
+  coord->setContravariantMetricTensor(
+      ContravariantMetricTensor{1.0, 1.0, 1.0, 0.0, 0.2, 0.0});
+  coord->setJ(makeField<Coordinates::FieldMetric>(
+      [](const auto& i) { return 1.0 + 0.02 * i.x(); }));
+  coord->setDx(makeField<Coordinates::FieldMetric>(
+      [](const auto& i) { return 1.0 + 0.01 * i.x(); }));
+  FakeSolver solver;
+  auto options = makeOptions();
+  options["test"]["viscosity"] = 0.1;
+  EvolveVorticityIonEnergy component("test", options, &solver);
+  component.declareAllSpecies(SpeciesInformation({"e"}, {"d"}, {"d+", "he++"}, {}));
+  const Field3D vort = makeField<Field3D>(
+      [&](const Ind3D& i) { return 0.002 * sin(0.4 * i.x() + 2 * PI * i.z() / nz); });
+  solver.setState({{"Vort", vort}, {"Eion", Field3D{10.0}}});
+  auto state = makeState();
+  const Field3D ne = makeField<Field3D>([](const Ind3D& i) { return 1.0 + 0.1 * i.x(); });
+  state["species"]["e"]["density"] = ne;
+  state["species"]["e"]["AA"].force(0.25); // Make electron transfer measurable.
+  state["species"]["d"] =
+      Options{{"charge", 0.0}, {"AA", 100.0}, {"density", Field3D{100.0}}};
+  component.transform(state);
+  component.finally(state);
+  const auto output = diagnostics(component);
+  const Field3D Phi =
+      output["phi"].as<Field3D>() + output["ion_pressure_potential"].as<Field3D>();
+  const Field3D current = output["DivJviscous"].as<Field3D>();
+  const Field3D energy_flux = output["DivEviscous"].as<Field3D>();
+  const Field3D heat = output["kinematic_viscous_heating"].as<Field3D>();
+  const Field3D electron_heat = output["electron_viscous_heating"].as<Field3D>();
+  EXPECT_GT(max(abs(heat), true), 1e-8);
+  EXPECT_TRUE(
+      IsFieldEqual(heat, Field3D{Phi * current - energy_flux}, "RGN_NOBNDRY", 1e-12));
+  EXPECT_TRUE(IsFieldEqual(electron_heat, Field3D{heat * (0.25 * ne) / (2.0 + 0.25 * ne)},
+                           "RGN_NOBNDRY", 1e-12));
+  EXPECT_TRUE(IsFieldEqual(state["species"]["e"]["energy_source"].as<Field3D>(),
+                           electron_heat, "RGN_NOBNDRY", 1e-12));
+  EXPECT_FALSE(state["species"]["d"].isSet("energy_source"));
+  EXPECT_FALSE(state["species"]["d+"].isSet("energy_source"));
+  // Dirichlet coefficient guards close current and energy faces, including
+  // g13. The same face current must be weighted by Phi for the energy flux.
+  EXPECT_NEAR(integral(current), 0.0, 1e-12);
+  EXPECT_NEAR(integral(energy_flux), 0.0, 1e-12);
+  EXPECT_NEAR(integral(heat), integral(Field3D{Phi * current}), 1e-12);
+  const Field3D rhs_balance =
+      solver.getTimeDerivs()["Eion"].as<Field3D>() + output["DivEExB"].as<Field3D>()
+      + output["DivEReynolds"].as<Field3D>() + output["DivEelectric"].as<Field3D>()
+      + output["DivEparallel"].as<Field3D>() + output["DivEpol"].as<Field3D>()
+      + energy_flux + output["phi_Div_Je"].as<Field3D>() + electron_heat
+      - output["Eion_src"].as<Field3D>();
+  EXPECT_TRUE(IsFieldEqual(rhs_balance, 0.0, "RGN_NOBNDRY", 1e-12));
+}
+
+TEST_F(EvolveVorticityIonEnergyTest, ViscosityConvertsKineticEnergyAndHeatsElectrons) {
+  mesh->getCoordinates()->setNon_uniform(false);
+  FakeSolver solver;
+  auto options = makeOptions();
+  options["test"]["viscosity"] = 0.1;
+  options["e"]["poloidal_flows"] = false;
+  options["e"]["bndry_flux"] = false;
+  EvolvePressure electrons("e", options, &solver);
+  EvolveVorticityIonEnergy component("test", options, &solver);
+  declareSpecies(component);
+  electrons.declareAllSpecies(SpeciesInformation({"e"}, {}, {"d+", "he++"}, {}));
+  const Field3D vort = makeField<Field3D>([&](const Ind3D& i) {
+    return 0.02
+           * sin(2 * PI * (i.x() - mesh->xstart + 0.5) / (mesh->xend - mesh->xstart + 1));
+  });
+  solver.setState({{"Vort", vort}, {"Eion", Field3D{10.0}}, {"Pe", Field3D{1.0}}});
+  auto state = makeState();
+  state["species"]["e"]["density"] = Field3D{1.0};
+  electrons.transform(state);
+  component.transform(state);
+  component.finally(state);
+  electrons.finally(state);
+  const auto output = diagnostics(component);
+  const auto rhs = solver.getTimeDerivs();
+  const Field3D heat_e = output["electron_viscous_heating"].as<Field3D>();
+  EXPECT_GT(integral(output["kinematic_viscous_heating"].as<Field3D>()), 1e-8);
+  EXPECT_TRUE(IsFieldEqual(
+      heat_e, Field3D{output["kinematic_viscous_heating"].as<Field3D>() / 3673},
+      "RGN_NOBNDRY", 1e-12));
+  EXPECT_TRUE(
+      IsFieldEqual(Field3D{1.5 * rhs["Pe"].as<Field3D>()}, heat_e, "RGN_NOBNDRY", 1e-12));
+  EXPECT_NEAR(integral(Field3D{rhs["Eion"].as<Field3D>() + heat_e}), 0.0, 1e-12);
+
+  const BoutReal kinetic_before = integral(output["ion_KE_perp"].as<Field3D>());
+  const BoutReal ion_thermal_before =
+      integral(Field3D{1.5
+                       * (state["species"]["d+"]["pressure"].as<Field3D>()
+                          + state["species"]["he++"]["pressure"].as<Field3D>())});
+  const BoutReal dt = 1e-4;
+  solver.setState({{"Vort", Field3D{vort + dt * rhs["Vort"].as<Field3D>()}},
+                   {"Eion", Field3D{10.0 + dt * rhs["Eion"].as<Field3D>()}},
+                   {"Pe", Field3D{1.0 + dt * rhs["Pe"].as<Field3D>()}}});
+  state = makeState();
+  state["species"]["e"]["density"] = Field3D{1.0};
+  electrons.transform(state);
+  component.transform(state);
+  const BoutReal kinetic_after =
+      integral(diagnostics(component)["ion_KE_perp"].as<Field3D>());
+  const BoutReal ion_thermal_after =
+      integral(Field3D{1.5
+                       * (state["species"]["d+"]["pressure"].as<Field3D>()
+                          + state["species"]["he++"]["pressure"].as<Field3D>())});
+  EXPECT_LT(kinetic_after, kinetic_before);
+  EXPECT_GT(ion_thermal_after, ion_thermal_before);
+  EXPECT_NEAR(ion_thermal_after - ion_thermal_before + dt * integral(heat_e),
+              kinetic_before - kinetic_after, 1e-11);
 }
 
 TEST_F(EvolveVorticityIonEnergyTest, IonCurrentUsesIonMomentumWithoutElectronMomentum) {

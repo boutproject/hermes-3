@@ -249,6 +249,17 @@ EvolveVorticityIonEnergy::EvolveVorticityIonEnergy(std::string name, Options& al
 
   density_floor = options["density_floor"].doc("Minimum density floor").withDefault(1e-7);
 
+  // Match vorticity's physical units, scalar coefficient and guards.
+  include_viscosity = options.isSet("viscosity");
+  viscosity =
+      options["viscosity"].doc("Kinematic viscosity [m^2/s]").withDefault<BoutReal>(0.0)
+      / (Lnorm * Lnorm * Omega_ci);
+  viscosity.applyBoundary("dirichlet");
+  mesh->communicate(viscosity);
+  if (include_viscosity) {
+    setPermissions(readIfSet("species:e:density", Regions::Interior));
+  }
+
   // Add phi to restart files so that the value in the boundaries
   // is restored on restart. This is done even when phi is not evolving,
   // so that phi can be saved and re-loaded
@@ -546,11 +557,29 @@ void EvolveVorticityIonEnergy::transform_impl(GuardedOptions& state) {
   add(electrons["energy_source"], electron_exb_work);
 
   //////////////////////////////////////////////////////////
+  // Kinematic viscosity
+
+  if (include_viscosity) {
+    calculateViscosity();
+    // Match vorticity's mass-density partition, including electrons when
+    // their mass and density are available. Ion heating is already internal
+    // to Eion; only transfer the electron share out of the ion reservoir.
+    if (electrons.isSet("AA") && electrons.isSet("density")) {
+      const Field3D electron_mass_density =
+          get<BoutReal>(electrons["AA"]) * GET_NOBOUNDARY(Field3D, electrons["density"]);
+      electron_viscous_heating = viscous_heating * electron_mass_density
+                                 / floor(mass_density + electron_mass_density,
+                                         average_atomic_mass * density_floor);
+      add(electrons["energy_source"], electron_viscous_heating);
+    }
+  }
+
+  //////////////////////////////////////////////////////////
   // Polarisation drift
 
   // Auxiliary current-continuity potential. Its homogeneous boundary is
   // independent of the relaxing phi boundary and does not require ddt(psi).
-  const Field3D dVortdt = DivJReynolds + DivJdia;
+  const Field3D dVortdt = DivJReynolds + DivJdia + DivJviscous;
   const BoutReal dVort_tolerance = vort_atol + phi_rtol * max(abs(dVortdt), true);
   for (int step = 0; step < phi_max_iterations; ++step) {
     mesh->communicate(chi);
@@ -627,11 +656,11 @@ void EvolveVorticityIonEnergy::finally(const Options& state) {
   if (phi_boundary_relax) {
     ddt(Vort) = 0.0;
     BOUT_FOR(i, Vort.getRegion("RGN_NOBNDRY")) {
-      ddt(Vort)[i] = DivJReynolds[i] + DivJdia[i];
+      ddt(Vort)[i] = DivJReynolds[i] + DivJdia[i] + DivJviscous[i];
     }
     boundaryRHS();
   } else {
-    ddt(Vort) = DivJReynolds + DivJdia;
+    ddt(Vort) = DivJReynolds + DivJdia + DivJviscous;
   }
 
   //////////////////////////////////////////////////////////
@@ -658,8 +687,44 @@ void EvolveVorticityIonEnergy::finally(const Options& state) {
 
   Eion_src = sumIonEnergySources(state["species"]);
 
-  ddt(Eion) = -(DivEExB + DivEReynolds + DivEelectric + DivEparallel + DivEpol)
-              - phi_Div_Je + Eion_src;
+  ddt(Eion) =
+      -(DivEExB + DivEReynolds + DivEelectric + DivEparallel + DivEpol + DivEviscous)
+      - phi_Div_Je - electron_viscous_heating + Eion_src;
+}
+
+void EvolveVorticityIonEnergy::calculateViscosity() {
+  // Applying Neumann boundaries to solver Vort would overwrite the potential
+  // boundary state in relaxation mode. Use a separate physical stencil field.
+  Field3D viscous_vorticity = copy(vorticity);
+  viscous_vorticity.applyBoundary("neumann");
+  mesh->communicate(viscous_vorticity);
+  const Field3D nu{viscosity};
+  const Field3D Phi = phi + psi;
+  const auto* coord = mesh->getCoordinates();
+  DivJviscous = zeroFrom(vorticity);
+  DivEviscous = zeroFrom(vorticity);
+  viscous_heating = zeroFrom(vorticity);
+  electron_viscous_heating = 0.0;
+  BOUT_FOR(i, vorticity.getRegion("RGN_NOBNDRY")) {
+    const auto flux = bout::ion_energy::perpendicularFaceFluxes(nu, viscous_vorticity, i);
+    const BoutReal inverse_volume =
+        1. / (coord->J()[i] * coord->dx()[i] * coord->dz()[i]);
+    DivJviscous[i] = (flux.xp - flux.xm + flux.zp - flux.zm) * inverse_volume;
+    // Weight the common current at faces, rather than interpolating nu*Phi.
+    // In particular a zero viscosity face must also have zero energy flux.
+    DivEviscous[i] =
+        0.5
+        * ((Phi[i] + Phi[i.xp()]) * flux.xp - (Phi[i] + Phi[i.xm()]) * flux.xm
+           + (Phi[i] + Phi[i.zp()]) * flux.zp - (Phi[i] + Phi[i.zm()]) * flux.zm)
+        * inverse_volume;
+    // Discrete product rule: Qnu = Phi*DivJviscous - DivEviscous.
+    // Ion total energy carries the flux, not an additional Qnu source.
+    viscous_heating[i] =
+        -0.5
+        * ((Phi[i.xp()] - Phi[i]) * flux.xp + (Phi[i] - Phi[i.xm()]) * flux.xm
+           + (Phi[i.zp()] - Phi[i]) * flux.zp + (Phi[i] - Phi[i.zm()]) * flux.zm)
+        * inverse_volume;
+  }
 }
 
 void EvolveVorticityIonEnergy::outputVars(Options& state) {
@@ -706,6 +771,32 @@ void EvolveVorticityIonEnergy::outputVars(Options& state) {
                   {"source", "evolve_vorticity_ion_energy"}});
 
   if (diagnose) {
+    if (include_viscosity) {
+      set_with_attrs(state["kinematic_viscosity"], viscosity,
+                     {{"units", "m^2 s^-1"},
+                      {"conversion", SQ(rho_s0) * Omega_ci},
+                      {"long_name", "Kinematic viscosity"}});
+      set_with_attrs(state["kinematic_viscous_heating"], viscous_heating,
+                     {{"time_dimension", "t"},
+                      {"units", "W m^-3"},
+                      {"conversion", Pnorm * Omega_ci},
+                      {"long_name", "Discrete kinematic viscous heating"}});
+      set_with_attrs(state["electron_viscous_heating"], electron_viscous_heating,
+                     {{"time_dimension", "t"},
+                      {"units", "W m^-3"},
+                      {"conversion", Pnorm * Omega_ci},
+                      {"long_name", "Electron share of kinematic viscous heating"}});
+      set_with_attrs(state["DivJviscous"], DivJviscous,
+                     {{"time_dimension", "t"},
+                      {"units", "A m^-3"},
+                      {"conversion", SI::qe * Nnorm * Omega_ci},
+                      {"long_name", "Kinematic viscous current divergence"}});
+      set_with_attrs(state["DivEviscous"], DivEviscous,
+                     {{"time_dimension", "t"},
+                      {"units", "W m^-3"},
+                      {"conversion", Pnorm * Omega_ci},
+                      {"long_name", "Kinematic viscous energy flux divergence"}});
+    }
     set_with_attrs(state["DivJpol"], DivJpol,
                    {{"time_dimension", "t"},
                     {"units", "A m^-3"},

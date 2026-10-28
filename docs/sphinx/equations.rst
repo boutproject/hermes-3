@@ -1646,12 +1646,12 @@ The time evolution is
    \frac{\partial\Omega}{\partial t}
       &= -\nabla\cdot\mathbf{G}
          + \nabla\cdot(\mathbf{J}_{\mathrm{dia},i}
-                       +\mathbf{J}_{\mathrm{dia},e}), \\
+                       +\mathbf{J}_{\mathrm{dia},e}+\mathbf{J}_\nu), \\
    \frac{\partial E_i}{\partial t}
       &= -\nabla\cdot(\mathbf{Q}_{E\times B}+\mathbf{Q}_{\mathrm{R}}
                      +\mathbf{Q}_{\mathrm{electric}}+\mathbf{Q}_\parallel
-                     +\mathbf{Q}_{\mathrm{pol}})
-         -\phi\nabla\cdot\mathbf{J}_e + S_i.
+                     +\mathbf{Q}_{\mathrm{pol}}+\mathbf{Q}_\nu)
+         -\phi\nabla\cdot\mathbf{J}_e - H_{\nu,e} + S_i.
    \end{aligned}
 
 Here :math:`-\mathbf{G}` is the Reynolds stress current, using the full
@@ -1714,6 +1714,36 @@ Here :math:`S_{M,s}` is the source of momentum
 sources are excluded from this conversion because their energy flux is
 already included in :math:`\mathbf{Q}_{\mathrm{pol}}`.
 
+Kinematic viscosity is enabled by setting ``viscosity`` in
+``[evolve_vorticity_ion_energy]`` in SI units (m^2/s), as for
+:ref:`sec-vorticity`. It adds
+
+.. math::
+
+   \mathbf{J}_\nu = \nu\nabla_\perp\Omega,
+   \qquad \mathbf{Q}_\nu = \Phi\mathbf{J}_\nu,
+   \qquad H_\nu = -\mathbf{J}_\nu\cdot\nabla_\perp\Phi.
+
+The viscous current is included in both the vorticity RHS and the auxiliary
+current solve. Current, energy flux and heating use the same X--Z faces,
+including :math:`g^{13}`, and satisfy a discrete product rule. This heating
+differs from the cell-centred gradient product in ``vorticity`` at finite
+resolution. The coefficient has Dirichlet guards and a separate physical
+vorticity stencil has Neumann guards, including when potential boundaries relax.
+
+Loss of perpendicular kinetic energy heats the ions through the recovered
+total-energy partition; :math:`H_\nu` is not added again as an ion energy
+source. As in ``vorticity``, electrons receive their charged-species mass
+fraction of the heating when their mass and density are available:
+
+.. math::
+
+   H_{\nu,e} = \frac{A_e n_e}{\rho+A_e n_e}H_\nu.
+
+This electron thermal source is subtracted from ``Eion`` as an internal
+transfer, conserving the combined ion and electron energy. The mass-density
+denominator is floored using ``average_atomic_mass * density_floor``.
+
 Setting ``phi_boundary_relax = true`` relaxes the radial boundary
 midpoint potential :math:`\phi_b` towards the Z average of the adjacent
 interior potential:
@@ -1747,6 +1777,7 @@ Other options in ``[evolve_vorticity_ion_energy]`` are:
 - ``poloidal_flows``: Include X--Y :math:`E\times B` flows
   (default ``false``).
 - ``density_floor``: Normalised total ion density floor (default ``1e-7``).
+- ``viscosity``: Kinematic viscosity in m^2/s (default ``0.0``).
 - ``neumann_boundary_average_z``: Set radial ion-pressure boundary values
   to the Z average of the adjacent interior values (default ``false``,
   which applies Neumann pressure boundaries).
@@ -1771,6 +1802,9 @@ and ``DivEpol``, and the exchange/source terms ``phi_Div_Je``,
 the closed polarisation transport current. The diagnostic ``ddt(Phi)``
 contains the auxiliary :math:`\chi`, which approximates the polarisation
 current rather than the exact time derivative of :math:`\phi+\psi`.
+When viscosity is specified, diagnostics also include ``kinematic_viscosity``,
+``kinematic_viscous_heating``, ``electron_viscous_heating``, ``DivJviscous`` and
+``DivEviscous``. These additional outputs require ``diagnose = true``.
 
 The implementation is in ``src/evolve_vorticity_ion_energy.cxx``.
 

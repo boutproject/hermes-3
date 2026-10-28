@@ -53,6 +53,7 @@ struct EvolveVorticityIonEnergy : public NamedComponent<EvolveVorticityIonEnergy
   ///   - evolve_log           Evolve logarithm of pressure? Default is false
   ///   - hyper_z              Hyper-diffusion in Z
   ///   - poloidal_flows       Include poloidal ExB flows? Default is true
+  ///   - viscosity            Kinematic viscosity [m^2/s], default 0.0
   ///   - precon               Enable preconditioner? Note: solver may not use it even if
   ///   enabled.
   ///
@@ -98,6 +99,11 @@ private:
   bool neumann_boundary_average_z; ///< Set pressure constant in Z, Neumann in X
   BoutReal density_floor;          ///< Used to calculate Ti
 
+  bool include_viscosity;                ///< Was kinematic viscosity specified?
+  Coordinates::FieldMetric viscosity;    ///< Normalised kinematic viscosity
+  Field3D viscous_heating{0.0};          ///< Face-based -nu grad(Vort) dot grad(Phi)
+  Field3D electron_viscous_heating{0.0}; ///< Electron mass fraction of viscous heating
+
   Field3D phi{0.0}; ///< Electrostatic potential ϕ
   Field3D chi{0.0}; ///< Auxiliary current potential, L(chi) = physical ∂tVort
   Field3D Pi_sum;   ///< Total ion pressure
@@ -125,6 +131,7 @@ private:
   Field3D DivJdia;      ///< Divergence of diamagnetic current
   Field3D DivJReynolds; ///< Divergence of Reynolds stress current
   Field3D DivJpol;      ///< Polarisation transport divergence with closed physical faces
+  Field3D DivJviscous{0.0}; ///< Divergence of nu grad_perp(Vort)
 
   // Divergence of energy fluxes
   Field3D DivEExB;      ///< Divergence of ExB energy flux
@@ -132,6 +139,7 @@ private:
   Field3D DivEelectric; ///< Divergence of ion electrical work Div(phi (Jpar + Jdia))
   Field3D DivEparallel; ///< Divergence of parallel ion enthalpy and kinetic energy flux
   Field3D DivEpol;      ///< Divergence of polarisation drift energy flux
+  Field3D DivEviscous{0.0}; ///< Divergence of Phi nu grad_perp(Vort)
 
   Field3D phi_Div_Je;        ///< Energy transferred to/from electrons
   Field3D electron_exb_work; ///< Thermal work -Jdia_e dot Grad(phi)
@@ -161,6 +169,9 @@ private:
   void applyPotentialBoundary();
   /// Relax encoded midpoints towards averages of the current recovered phi.
   void boundaryRHS();
+
+  /// Shared viscous current, energy flux and heating, using physical vorticity guards.
+  void calculateViscosity();
 
   /// Apply a boundary condition to given pressure field `P`
   void applyPressureBoundary(Field3D& P) const;
