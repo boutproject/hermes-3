@@ -55,6 +55,15 @@ private:
   bool diagnose;           // Save diagnostic variables?
   Options diagnostics;     // Options object to store diagnostic fields like a dict
 
+  Field3D l_up, ratio_up;
+  Field3D l_down, ratio_down;
+
+  Field3D l2_up, l3_up, l2_down, l3_down;
+  Field3D l1_up, l1_down;
+  Field3D fluxfactor_up, fluxfactor_down;
+
+  bool leg_fill_value;
+
   bool no_flow; ///< No flow speed, only remove energy
 
   BoutReal density_boundary_mode, pressure_boundary_mode,
@@ -101,6 +110,7 @@ private:
   /// Note that phi in the domain will not be set, so will be invalid data.
   ///
   ///
+
   void transform_impl(GuardedOptions& state) override;
 };
 

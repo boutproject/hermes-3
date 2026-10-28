@@ -43,6 +43,11 @@ struct SoundSpeed : public NamedComponent<SoundSpeed> {
                             .doc("Minimum temperature when calculating sound speeds [eV]")
                             .withDefault(0.0);
 
+    temperature_offset = options["temperature_offset"]
+                             .doc("Offset temperature when calculating sound speeds [eV]")
+                             .withDefault(0.0)
+                         / get<BoutReal>(alloptions["units"]["eV"]);
+
     fastest_wave_factor =
         options["fastest_wave_factor"]
             .doc("Multiply the fastest wave by this factor, affecting lax flux strength")
@@ -65,7 +70,7 @@ private:
   BoutReal beta_norm{0.0};      ///< Normalisation factor for Alfven speed
   BoutReal temperature_floor;   ///< Minimum temperature when calculating speed
   BoutReal fastest_wave_factor; ///< Multiply the fastest wave by this factor
-
+  BoutReal temperature_offset;
   /// This sets in the state
   /// - sound_speed     The collective sound speed, based on total pressure and total mass
   /// density

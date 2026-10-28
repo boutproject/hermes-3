@@ -8,6 +8,20 @@
 #include "bout/mesh.hxx"
 using bout::globals::mesh;
 
+// LEG FILL VALUE FUNCTIONS
+// EQ 11 in Peter's Paper
+// https://www.sciencedirect.com/science/article/pii/S0010465516303587
+
+BoutReal extrapolate_f3(const BoutReal fb, const BoutReal f2, const BoutReal l2,
+                        const BoutReal l3) {
+  return (fb * (l2 + l3) / l2) - (l3 / l2) * f2;
+}
+
+BoutReal interpolate_fb(const BoutReal f2, const BoutReal f3, const BoutReal l2,
+                        const BoutReal l3) {
+  return f2 + (l2 / (l2 + l3)) * (f3 - f2);
+}
+
 namespace {
 
 BoutReal smoothmax(const BoutReal a, const BoutReal b, const BoutReal eps) {
@@ -141,6 +155,68 @@ SheathBoundaryFci::SheathBoundaryFci(std::string name, Options& alloptions, Solv
                  .doc("Save additional output diagnostics")
                  .withDefault<bool>(false);
 
+  leg_fill_value =
+      options["leg_fill_value"]
+          .doc("Use the leg fill value approach to set the boundaries more accurately?")
+          .withDefault<bool>(false);
+
+  Coordinates* coord = mesh->getCoordinates();
+  // Total length along the field line from one cell to the other
+  l_up = sqrt(coord->g_22_yhigh()) * coord->dy();
+  l_down = sqrt(coord->g_22_ylow()) * coord->dy();
+
+  // Up is not declaring of up or down boundary
+  // For a up boundary l1 has to be the ylow length and vice versa
+  l1_up = sqrt(coord->g_22_ylow()) * coord->dy();
+  l1_down = sqrt(coord->g_22_yhigh()) * coord->dy();
+
+  if (leg_fill_value) {
+
+    // pnt.prev()                       pnt.current()              Bndry               pnt.next()
+    // ----o----------------------------------o----------------------o--------------------o-----
+    // ----o<============= l1 ===============>o<======== l2 ========>o<======= l3 =======>o-----
+    // ----o----------------------------------o<=================== l_up ================>o-----
+
+    // Ratio of the length to the boundary and the length along the field line
+    mesh->get(ratio_up, "l2_dy_up");
+    mesh->get(ratio_down, "l2_dy_down");
+
+    l2_up = 0.0;
+    l3_up = 0.0;
+    l2_down = 0.0;
+    l3_down = 0.0;
+
+    fluxfactor_up = 0.5;
+    fluxfactor_down = 0.5;
+
+    // Cap at 95% of total length to the vall to avoid singularities
+    // Mesh already capping to 5% minimum distance to the wall
+    BOUT_FOR(i, ratio_up.getRegion("RGN_NOBNDRY")) {
+      l2_up[i] = std::min(ratio_up[i], 0.95) * l_up[i];
+      l3_up[i] = l_up[i] - l2_up[i];
+
+      l2_down[i] = std::min(ratio_down[i], 0.95) * l_down[i];
+      l3_down[i] = l_down[i] - l2_down[i];
+
+      fluxfactor_up[i] = std::max(std::min(1.0 - ratio_up[i], 1.0), 0.01);
+      fluxfactor_down[i] = std::max(std::min(1.0 - ratio_down[i], 1.0), 0.01);
+    }
+
+  } else {
+
+    ratio_up = 0.5;
+    ratio_down = 0.5;
+
+    l2_up = 0.5 * l_up;
+    l3_up = 0.5 * l_up;
+
+    l2_down = 0.5 * l_down;
+    l3_down = 0.5 * l_down;
+
+    fluxfactor_up = 1.0;
+    fluxfactor_down = 1.0;
+  }
+
   substitutePermissions("e_whole_domain", {"AA", "charge"});
   substitutePermissions("e_boundary", {"density", "temperature"});
   substitutePermissions("e_optional", {"velocity", "momentum"});
@@ -227,18 +303,39 @@ void SheathBoundaryFci::transform_impl(GuardedOptions& state) {
         const BoutReal Te_im =
             limitFree(pnt.prev(Te), pnt.current(Te), temperature_boundary_mode);
 
-        const BoutReal nisheath = 0.5 * (Ni_im + pnt.current(Ni));
-        const BoutReal tesheath =
-            floor(0.5 * (Te_im + pnt.current(Te)), 1e-5); // electron temperature
-        const BoutReal tisheath =
-            floor(0.5 * (Ti_im + pnt.current(Ti)), 1e-5); // ion temperature
+        BoutReal nisheath;
+        BoutReal tesheath;
+        BoutReal tisheath;
+        if (pnt.dir() > 0) {
+
+          nisheath = interpolate_fb(pnt.current(Ni), Ni_im, pnt.current(l2_up),
+                                    pnt.current(l3_up));
+          tesheath = floor(interpolate_fb(pnt.current(Te), Te_im, pnt.current(l2_up),
+                                          pnt.current(l3_up)),
+                           1e-5);
+          tisheath = floor(interpolate_fb(pnt.current(Ti), Ti_im, pnt.current(l2_up),
+                                          pnt.current(l3_up)),
+                           1e-5);
+
+        } else {
+
+          nisheath = interpolate_fb(pnt.current(Ni), Ni_im, pnt.current(l2_down),
+                                    pnt.current(l3_down));
+          tesheath = floor(interpolate_fb(pnt.current(Te), Te_im, pnt.current(l2_down),
+                                          pnt.current(l3_down)),
+                           1e-5);
+          tisheath = floor(interpolate_fb(pnt.current(Ti), Ti_im, pnt.current(l2_down),
+                                          pnt.current(l3_down)),
+                           1e-5);
+        }
 
         // Sound speed squared
         BoutReal C_i_sq = (sheath_ion_polytropic * tisheath + Zi * tesheath) / Mi;
 
-        BoutReal visheath;
         const BoutReal C_i = sqrt(C_i_sq);
-        visheath = pnt.dir() * smoothmax(std::abs(pnt.current(Vi)), C_i, 1e-1 * C_i_sq);
+
+        BoutReal visheath =
+            pnt.dir() * smoothmax(std::abs(pnt.current(Vi)), C_i, 1e-1 * C_i_sq);
 
         pnt.current(ion_sum) += pnt.dir() * Zi * nisheath * visheath;
       }); // End of yboundary.iter
@@ -258,8 +355,21 @@ void SheathBoundaryFci::transform_impl(GuardedOptions& state) {
       const BoutReal Te_im =
           limitFree(pnt.prev(Te), pnt.current(Te), temperature_boundary_mode);
 
-      const BoutReal nesheath = 0.5 * (Ne_im + pnt.current(Ne));
-      const BoutReal tesheath = floor(0.5 * (Te_im + pnt.current(Te)), 1e-5);
+      BoutReal nesheath;
+      BoutReal tesheath;
+      if (pnt.dir() > 0) {
+        nesheath = interpolate_fb(pnt.current(Ne), Ne_im, pnt.current(l2_up),
+                                  pnt.current(l3_up));
+        tesheath = floor(interpolate_fb(pnt.current(Te), Te_im, pnt.current(l2_up),
+                                        pnt.current(l3_up)),
+                         1e-5);
+      } else {
+        nesheath = interpolate_fb(pnt.current(Ne), Ne_im, pnt.current(l2_down),
+                                  pnt.current(l3_down));
+        tesheath = floor(interpolate_fb(pnt.current(Te), Te_im, pnt.current(l2_down),
+                                        pnt.current(l3_down)),
+                         1e-5);
+      }
 
       pnt.current(phi) =
           tesheath
@@ -295,8 +405,22 @@ void SheathBoundaryFci::transform_impl(GuardedOptions& state) {
     pnt.next(phi) = do_phi_extrapolation ? (2.0 * pnt.current(phi) - pnt.prev(phi))
                                          : pnt.current(phi);
 
-    const BoutReal nesheath = 0.5 * (pnt.next(Ne) + pnt.current(Ne));
-    const BoutReal tesheath = 0.5 * (pnt.next(Te) + pnt.current(Te));
+    BoutReal nesheath;
+    BoutReal tesheath;
+    if (pnt.dir() > 0) {
+      nesheath = interpolate_fb(pnt.current(Ne), pnt.next(Ne), pnt.current(l2_up),
+                                pnt.current(l3_up));
+      tesheath = floor(interpolate_fb(pnt.current(Te), pnt.next(Te), pnt.current(l2_up),
+                                      pnt.current(l3_up)),
+                       1e-5);
+    } else {
+      nesheath = interpolate_fb(pnt.current(Ne), pnt.next(Ne), pnt.current(l2_down),
+                                pnt.current(l3_down));
+      tesheath = floor(interpolate_fb(pnt.current(Te), pnt.next(Te), pnt.current(l2_down),
+                                      pnt.current(l3_down)),
+                       1e-5);
+    }
+
     const BoutReal phi_wall = wall_potential[i];
     const BoutReal phisheath = floor(0.5 * (pnt.next(phi) + pnt.current(phi)),
                                      phi_wall); // Electron saturation at phi = phi_wall
@@ -304,8 +428,15 @@ void SheathBoundaryFci::transform_impl(GuardedOptions& state) {
     BoutReal vesheath = pnt.dir() * sqrt(tesheath / (TWOPI * Me)) * (1. - Ge)
                         * exp(-(phisheath - phi_wall) / floor(tesheath, 1e-5));
 
-    pnt.next(Ve) = 2.0 * vesheath - pnt.current(Ve);
-    pnt.next(NVe) = 2.0 * Me * nesheath * vesheath - pnt.current(NVe);
+    if (pnt.dir() > 0) {
+      pnt.next(Ve) = extrapolate_f3(vesheath, pnt.current(Ve), pnt.current(l2_up),
+                                    pnt.current(l3_up));
+    } else {
+      pnt.next(Ve) = extrapolate_f3(vesheath, pnt.current(Ve), pnt.current(l2_down),
+                                    pnt.current(l3_down));
+    }
+
+    pnt.next(NVe) = 2.0 * Me * pnt.next(Ne) * pnt.next(Ve);
 
     if (abs(pnt.offset())
         == 1) { // Only subtract flux when the cell is actually in direct contact with the sheath
@@ -316,9 +447,9 @@ void SheathBoundaryFci::transform_impl(GuardedOptions& state) {
 
       BoutReal flux;
       if (pnt.dir() > 0.0) {
-        flux = q * coord->cell_area_yhigh()[i];
+        flux = q * coord->cell_area_yhigh()[i] * fluxfactor_up[i];
       } else {
-        flux = q * coord->cell_area_ylow()[i];
+        flux = q * coord->cell_area_ylow()[i] * fluxfactor_down[i];
       }
 
       // Divide by volume of cell to get energy loss rate (< 0)
@@ -405,19 +536,46 @@ void SheathBoundaryFci::transform_impl(GuardedOptions& state) {
       pnt.next(Pi) = limitFree(pnt.prev(Pi), pnt.current(Pi), pressure_boundary_mode);
 
       // Calculate sheath values at half-way points (cell edge)
-      const BoutReal nisheath = 0.5 * (pnt.current(Ni) + pnt.next(Ni));
-      const BoutReal tesheath = floor(0.5 * (pnt.current(Te) + pnt.next(Te)), 1e-5);
-      const BoutReal tisheath = floor(0.5 * (pnt.current(Ti) + pnt.next(Ti)), 1e-5);
+
+      BoutReal nisheath;
+      BoutReal tesheath;
+      BoutReal tisheath;
+      if (pnt.dir() > 0) {
+        nisheath = interpolate_fb(pnt.current(Ni), pnt.next(Ni), pnt.current(l2_up),
+                                  pnt.current(l3_up));
+        tesheath = floor(interpolate_fb(pnt.current(Te), pnt.next(Te), pnt.current(l2_up),
+                                        pnt.current(l3_up)),
+                         1e-5);
+        tisheath = floor(interpolate_fb(pnt.current(Ti), pnt.next(Ti), pnt.current(l2_up),
+                                        pnt.current(l3_up)),
+                         1e-5);
+      } else {
+        nisheath = interpolate_fb(pnt.current(Ni), pnt.next(Ni), pnt.current(l2_down),
+                                  pnt.current(l3_down));
+        tesheath = floor(interpolate_fb(pnt.current(Te), pnt.next(Te),
+                                        pnt.current(l2_down), pnt.current(l3_down)),
+                         1e-5);
+        tisheath = floor(interpolate_fb(pnt.current(Ti), pnt.next(Ti),
+                                        pnt.current(l2_down), pnt.current(l3_down)),
+                         1e-5);
+      }
 
       // Ion speed into sheath
       BoutReal C_i_sq = (sheath_ion_polytropic * tisheath + Zi * tesheath) / Mi;
 
-      BoutReal visheath;
       const BoutReal C_i = sqrt(C_i_sq);
-      visheath = pnt.dir() * smoothmax(std::abs(pnt.current(Vi)), C_i, 1e-1 * C_i_sq);
+      BoutReal visheath =
+          pnt.dir() * smoothmax(std::abs(pnt.current(Vi)), C_i, 1e-1 * C_i_sq);
 
-      pnt.next(Vi) = 2.0 * visheath - pnt.current(Vi);
-      pnt.next(NVi) = 2.0 * Mi * nisheath * visheath - pnt.current(NVi);
+      if (pnt.dir() > 0) {
+        pnt.next(Vi) = extrapolate_f3(visheath, pnt.current(Vi), pnt.current(l2_up),
+                                      pnt.current(l3_up));
+      } else {
+        pnt.next(Vi) = extrapolate_f3(visheath, pnt.current(Vi), pnt.current(l2_down),
+                                      pnt.current(l3_down));
+      }
+
+      pnt.next(NVi) = 2.0 * Mi * pnt.next(Ni) * pnt.next(Vi);
 
       if (abs(pnt.offset())
           == 1) { // Only subtract flux when the cell is actually in direct contact with the sheath
@@ -427,9 +585,9 @@ void SheathBoundaryFci::transform_impl(GuardedOptions& state) {
 
         BoutReal flux;
         if (pnt.dir() > 0.0) {
-          flux = q * coord->cell_area_yhigh()[i];
+          flux = q * coord->cell_area_yhigh()[i] * fluxfactor_up[i];
         } else {
-          flux = q * coord->cell_area_ylow()[i];
+          flux = q * coord->cell_area_ylow()[i] * fluxfactor_down[i];
         }
 
         // Divide by volume of cell to get energy loss rate (< 0)
@@ -466,6 +624,26 @@ void SheathBoundaryFci::outputVars(Options& state) {
   auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
   auto Tnorm = get<BoutReal>(state["Tnorm"]);
   BoutReal Pnorm = SI::qe * Tnorm * Nnorm; // Pressure normalisation
+
+  if (leg_fill_value) {
+    set_with_attrs(state[{"l_up"}], l_up, {{"source", "sheath_boundary_fci"}});
+
+    set_with_attrs(state[{"l_down"}], l_down, {{"source", "sheath_boundary_fci"}});
+
+    set_with_attrs(state[{"l2_down"}], l2_down, {{"source", "sheath_boundary_fci"}});
+
+    set_with_attrs(state[{"l3_down"}], l3_down, {{"source", "sheath_boundary_fci"}});
+
+    set_with_attrs(state[{"fluxfactor_down"}], fluxfactor_down,
+                   {{"source", "sheath_boundary_fci"}});
+
+    set_with_attrs(state[{"l2_up"}], l2_up, {{"source", "sheath_boundary_fci"}});
+
+    set_with_attrs(state[{"l3_up"}], l3_up, {{"source", "sheath_boundary_fci"}});
+
+    set_with_attrs(state[{"fluxfactor_up"}], fluxfactor_up,
+                   {{"source", "sheath_boundary_fci"}});
+  }
 
   if (diagnose) {
     /// Iterate through the first species in each collision pair

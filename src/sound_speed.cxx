@@ -41,7 +41,8 @@ void SoundSpeed::transform_impl(GuardedOptions& state) {
       if (species.isSet("temperature")) {
         auto T = GET_NOBOUNDARY(Field3D, species["temperature"]);
         for (const auto& i : fastest_wave.getRegion("RGN_NOBNDRY")) {
-          const BoutReal sound_speed = sqrt(softFloor(T[i], temperature_floor) / AA);
+          const BoutReal sound_speed =
+              sqrt(softFloor(T[i] + temperature_offset, temperature_floor) / AA);
           fastest_wave[i] = BOUTMAX(fastest_wave[i], sound_speed);
         }
       }
