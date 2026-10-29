@@ -134,6 +134,8 @@ private:
   Field3D viscous_heating;            ///< Heating due to kinematic viscosity
   bool include_viscosity;             ///< Is viscosity > 0?
 
+  Field3D bracket_factor; ///< Multiplication factor for the bracket-operator used for Fci
+  Field3D logB;           ///< Log of the magnetic field
   // Diagnostic outputs
   Field3D DivJdia, DivJcol; // Divergence of diamagnetic and collisional current
 
