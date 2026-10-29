@@ -112,6 +112,18 @@ EvolveDensity::EvolveDensity(std::string name, Options& alloptions, Solver* solv
                             .doc("Zero the source outside the closed field-line region?")
                             .withDefault<bool>(false);
 
+  adaptive_source = n_options["adaptive_source"]
+                        .doc("Density [m^-3] above which the source term will be "
+                             "dampened. Only active when > 0.")
+                        .withDefault<BoutReal>(-1.0)
+                    / Nnorm;
+
+  adaptive_overshoot = n_options["adaptive_overshoot"]
+                           .doc("Density [m^-3] interval in which the source term is "
+                                "dampened when adaptive_source > 0.")
+                           .withDefault<BoutReal>(1e18)
+                       / Nnorm;
+
   source_normalisation = Nnorm * Omega_ci;
   time_normalisation = 1. / Omega_ci;
 
@@ -247,6 +259,8 @@ void EvolveDensity::transform_impl(GuardedOptions& state) {
         source_prefactor_function->generate(bout::generator::Context().set(
             "x", 0, "y", 0, "z", 0, "t", time * time_normalisation));
     final_source = source * source_prefactor;
+  } else if (adaptive_source > 0.0) {
+    final_source = source * adaptive_sourceterm(N, adaptive_source, adaptive_overshoot);
   } else {
     final_source = source;
   }

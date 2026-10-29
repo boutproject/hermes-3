@@ -123,6 +123,18 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
       SI::qe * Nnorm * Tnorm * Omega_ci; // [Pa/s] or [W/m^3] if converted to energy
   time_normalisation = 1. / Omega_ci;    // [s]
 
+  adaptive_source = p_options["adaptive_source"]
+                        .doc("Temperature [eV] above which the source term will be "
+                             "dampened. Only active when > 0.")
+                        .withDefault<BoutReal>(-1.0)
+                    / Tnorm;
+
+  adaptive_overshoot = p_options["adaptive_overshoot"]
+                           .doc("Temperature [eV] interval in which the source term is "
+                                "dampened when adaptive_source > 0.")
+                           .withDefault<BoutReal>(10.0)
+                       / Tnorm;
+
   // Try to read the pressure source from the mesh
   // Units of Pascals per second
   source = 0.0;
@@ -385,6 +397,8 @@ void EvolvePressure::finally(const Options& state) {
         source_prefactor_function->generate(bout::generator::Context().set(
             "x", 0, "y", 0, "z", 0, "t", time * time_normalisation));
     final_source = source * source_prefactor;
+  } else if (adaptive_source > 0.0) {
+    final_source = source * adaptive_sourceterm(T, adaptive_source, adaptive_overshoot);
   } else {
     final_source = source;
   }

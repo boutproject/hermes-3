@@ -83,7 +83,9 @@ private:
   BoutReal source_normalisation; ///< Normalisation factor [m^-3/s]
   BoutReal time_normalisation;   ///< Normalisation factor [s]
   FieldGeneratorPtr source_prefactor_function;
-
+  BoutReal adaptive_source; ///< Adaptive source that keeps the density around this value
+  BoutReal
+      adaptive_overshoot; ///< Density above adaptive_source in which the source are turned off
   /// Modifies the `source` member variable
   void updateSource(BoutReal time);
 

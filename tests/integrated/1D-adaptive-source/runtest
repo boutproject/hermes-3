@@ -1,0 +1,81 @@
+#!/usr/bin/env python3
+
+
+import sys
+
+import numpy as np
+from boutdata.collect import collect
+from boututils.run_wrapper import launch_safe, shell
+
+nout = 20
+timestep = 2e5 / nout
+Nnorm = 1e19
+Bnorm = 1
+Tnorm = 100
+
+
+nproc = 1
+
+density_targets = [1e19, 2e19, 2.5e19, 3e19]
+temperature_targets = [50, 75, 100, 125]
+d_overshoot = 1e18
+t_overshoot = 2.0
+
+success = True
+
+for d_target, t_target in zip(density_targets, temperature_targets):
+    args = f"nout={nout} timestep={timestep} Nd+:adaptive_source={d_target} Pd+:adaptive_source={t_target}"
+
+    # Delete old data
+    shell("rm data/BOUT.dmp.*.nc")
+
+    # Command to run
+    cmd = "../../../hermes-3 " + args
+    # Launch using MPI
+    _, out = launch_safe(cmd, nproc=nproc, pipe=True)
+
+    Pi = np.mean(
+        collect("Pd+", tind=[nout, nout], path="data", info=False)[-1], axis=(0, 2)
+    )
+    Ni = np.mean(
+        collect("Nd+", tind=[nout, nout], path="data", info=False)[-1], axis=(0, 2)
+    )
+
+    Nimax = np.max(Ni) * Nnorm
+    Timax = np.max(Pi / Ni) * Tnorm
+
+    # First check that the value is actully higher than the target
+    # Otherwise the source is too weak
+
+    if Nimax < d_target:
+        print("Density lower than the target value")
+        success = False
+
+    if Timax < t_target:
+        print("Temperature lower than the target value")
+        success = False
+
+    # Now check that the value is close to the overshoot
+    # Maximum tolerance is thrice the overshoot
+
+    if (Nimax - d_target) > 3.0 * d_overshoot:
+        print("Density is too high")
+        success = False
+
+    if (Timax - t_target) > 3.0 * t_overshoot:
+        print("Temperature is too high")
+        success = False
+
+    print(f"Density target: {d_target} m^-3")
+    print(f"Density result: {Nimax} m^-3")
+    print(f"Temperature target: {t_target} eV")
+    print(f"Temperature result: {Timax} eV")
+    print("------------------------------------------------")
+
+
+if success:
+    print(" => Test passed")
+    sys.exit(0)
+else:
+    print(" => Test failed")
+    sys.exit(1)
