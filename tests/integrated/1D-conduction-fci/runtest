@@ -24,51 +24,85 @@ timestep = 1e4 / nout
 
 nproc = 1
 
-varnames = ["Pe"]
+var = "Pe"
+
+petsc_options = ["True", "False"]
 
 results = {}
-for var in varnames:
-    results[var] = {"l2": [], "inf": []}
 
-for ny in nylist:
-    args = f"mesh:file={gridname(ny)} nout={nout} timestep={timestep}"
+for petsc in petsc_options:
+    results[petsc] = {"l2": [], "inf": []}
 
-    print("Running with " + args)
+    for ny in nylist:
+        args = f"mesh:file={gridname(ny)} nout={nout} timestep={timestep} use_petsc_operator={petsc}"
+        print("Running with " + args)
 
-    # Delete old data
-    shell("rm data/BOUT.dmp.*.nc")
+        # Delete old data
+        shell("rm data/BOUT.dmp.*.nc")
 
-    # Command to run
-    cmd = "../../../hermes-3 " + args
-    # Launch using MPI
-    _, out = launch_safe(cmd, nproc=nproc, pipe=True)
-    Path(f"run.log.{ny}").write_text(out)
+        # Command to run
+        cmd = "../../../hermes-3 " + args
+        # Launch using MPI
+        _, out = launch_safe(cmd, nproc=nproc, pipe=True)
+        Path(f"run.log.{ny}").write_text(out)
 
-    # Collect data
-    for var in varnames:
+        # Collect data
         E = collect("E_" + var, tind=[nout, nout], path="data", info=False)
         E = E[:, 2:-2, :, :]
 
-        l2 = sqrt(mean(E**2))
-        linf = max(abs(E))
-        results[var]["l2"].append(l2)
-        results[var]["inf"].append(linf)
+        l2 = float(sqrt(mean(E**2)))
+        linf = float(sqrt(max(abs(E))))
+        results[petsc]["l2"].append(l2)
+        results[petsc]["inf"].append(linf)
 
         print(f"Error norm {var}: l-2 {l2:f} l-inf {linf:f}")
 
-# Calculate grid spacing
-dy = 1.0 / array(nylist)
+    # Calculate grid spacing
+    dy = 1.0 / array(nylist)
 
-success = True
+    success = True
 
-for var in varnames:
-    l2 = results[var]["l2"]
+    l2 = results[petsc]["l2"]
     order = log(l2[-1] / l2[-2]) / log(dy[-1] / dy[-2])
-    print(f"Convergence order {var} = {order:f}")
+    print(f"Convergence order {var}, petsc={petsc} = {order:f}")
 
     if order < 1.8:
         success = False
 
+print(results)
+
+# plot errors
+try:
+    import matplotlib.pyplot as plt
+
+    for petsc in petsc_options:
+        l2 = results[petsc]["l2"]
+        inf = results[petsc]["inf"]
+        order = log(l2[-1] / l2[-2]) / log(dy[-1] / dy[-2])
+
+        plt.plot(dy, l2, "-o", label=r"$l_2$ (petsc=" + petsc + ")")
+        plt.plot(dy, inf, "-x", label=r"$l_\infty$ (petsc=" + petsc + ")")
+        plt.plot(dy, l2[-1] * (dy / dy[-1]) ** order, "--", label=f"Order {order:.1f}")
+
+    plt.legend(loc="upper left")
+    plt.grid()
+
+    plt.yscale("log")
+    plt.xscale("log")
+
+    plt.xlabel(r"Mesh spacing $\delta y$")
+    plt.ylabel("Error norm")
+
+    plt.savefig("conduction_norm.pdf")
+    plt.savefig("conduction_norm.png")
+
+    # plt.show()
+    plt.close()
+except:  # noqa
+    # Plotting could fail for any number of reasons, and the actual
+    # error raised may depend on, among other things, the current
+    # matplotlib backend, so catch everything
+    pass
 
 if success:
     print(" => Test passed")

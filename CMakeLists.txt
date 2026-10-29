@@ -47,8 +47,13 @@ if(HERMES_BUILD_BOUT)
   set(HERMES_BOUT_SRC
       "external/BOUT-dev"
       CACHE STRING "Directory of BOUT++ dir")
-  add_subdirectory(${HERMES_BOUT_SRC}
-                   ${CMAKE_CURRENT_BINARY_DIR}/external/BOUT-dev SYSTEM)
+  # Set a consistent variable for the build location with the `find_package`
+  # call when we're not building BOUT++ here
+  set(bout++_DIR
+      ${CMAKE_CURRENT_BINARY_DIR}/external/BOUT-dev
+      CACHE FILEPATH "BOUT++ build directory" FORCE)
+
+  add_subdirectory(${HERMES_BOUT_SRC} ${bout++_DIR} SYSTEM)
 else()
   find_package(bout++ REQUIRED)
 endif()
@@ -88,6 +93,7 @@ set(HERMES_SOURCES
     src/relax_potential.cxx
     src/sheath_closure.cxx
     src/sheath_boundary.cxx
+    src/sheath_boundary_fci.cxx
     src/sheath_boundary_simple.cxx
     src/sheath_boundary_insulating.cxx
     src/snb_conduction.cxx
@@ -166,6 +172,7 @@ set(HERMES_SOURCES
     include/recycling.hxx
     include/relax_potential.hxx
     include/sheath_boundary.hxx
+    include/sheath_boundary_fci.hxx
     include/sheath_boundary_simple.hxx
     include/sheath_boundary_insulating.hxx
     include/simple_conduction.hxx
@@ -388,6 +395,7 @@ if(HERMES_TESTS)
   hermes_add_integrated_test(2D-energy CONFLICTS BOUT_ENABLE_METRIC_3D)
   hermes_add_integrated_test(2D-recycling CONFLICTS BOUT_ENABLE_METRIC_3D)
   hermes_add_integrated_test(examples CONFLICTS BOUT_ENABLE_METRIC_3D)
+  hermes_add_integrated_test(component-order CONFLICTS BOUT_ENABLE_METRIC_3D)
 
   add_executable(diamagnetic_drift_smoke tests/integrated/diamagnetic-drift/main.cxx)
   target_link_libraries(diamagnetic_drift_smoke PRIVATE hermes_warnings
@@ -401,11 +409,16 @@ if(HERMES_TESTS)
   hermes_add_integrated_test(1D-density-fci REQUIRES BOUT_ENABLE_METRIC_3D)
   hermes_add_integrated_test(1D-momentum-fci REQUIRES BOUT_ENABLE_METRIC_3D)
   hermes_add_integrated_test(1D-pressure-fci REQUIRES BOUT_ENABLE_METRIC_3D)
+  hermes_add_integrated_test(1D-ionviscosity-fci REQUIRES BOUT_ENABLE_METRIC_3D)
+  hermes_add_integrated_test(1D-electronviscosity-fci REQUIRES
+                             BOUT_ENABLE_METRIC_3D)
   hermes_add_integrated_test(2D-density-anomalous-fci REQUIRES
                              BOUT_ENABLE_METRIC_3D)
   hermes_add_integrated_test(2D-fluid-anomalous-fci REQUIRES
                              BOUT_ENABLE_METRIC_3D)
   hermes_add_integrated_test(1D-conduction-fci REQUIRES BOUT_ENABLE_METRIC_3D)
+  hermes_add_integrated_test(1D-golden-answer-fci REQUIRES
+                             BOUT_ENABLE_METRIC_3D)
 
   # Unit tests
   option(HERMES_UNIT_TESTS "Build the unit tests" ON)
@@ -486,6 +499,8 @@ endif()
 
 configure_file(include/hermes_build_config.hxx.in
                include/hermes_build_config.hxx)
+
+configure_file(cmake/hermesconfig.py.in hermesconfig.py)
 
 # Installation
 if(BUILD_SHARED_LIBS)

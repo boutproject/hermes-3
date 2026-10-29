@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 
-import xhermes
-
 # Following two lines needed so all variables are shown when printing the Dataset
 import xarray as xr
+import xhermes
 
 xr.set_options(display_max_rows=1000)
 

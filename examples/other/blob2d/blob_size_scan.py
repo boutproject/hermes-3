@@ -47,8 +47,9 @@ dataset = [
     ),
 ]
 
-from boutdata.data import BoutOptionsFile
 import os
+
+from boutdata.data import BoutOptionsFile
 
 
 def create_inputs(origin, destination, datasets):
@@ -68,7 +69,7 @@ def create_inputs(origin, destination, datasets):
 
     for path, _, changes in datasets:
         newdir = os.path.join(destination, path)
-        print("  Input directory {}".format(newdir))
+        print(f"  Input directory {newdir}")
 
         # Read the original options
         options = BoutOptionsFile(os.path.join(origin, "BOUT.inp"))
@@ -105,13 +106,13 @@ def run_cases(executable, destination, dataset):
     for path, _, _ in dataset:
         rundir = os.path.join(destination, path)
 
-        print("  Input directory {}".format(rundir))
+        print(f"  Input directory {rundir}")
 
         if os.path.exists(os.path.join(rundir, "BOUT.dmp.0.nc")):
             print("   -> Already exists. Skipping")
             continue
 
-        print("   -> Running executable {}".format(executable))
+        print(f"   -> Running executable {executable}")
         launch(
             executable + " -d " + rundir,
             nproc=1,
@@ -132,9 +133,8 @@ def analyse_cases(destination, dataset):
       List of tuples with first element as the subdirectory
     """
 
-    import numpy as np
-    from boutdata.collect import collect
     import blob_velocity
+    import numpy as np
 
     deltas = []
     maxvelocity = []
@@ -144,9 +144,9 @@ def analyse_cases(destination, dataset):
     for path, delta, _ in dataset:
         datadir = os.path.join(destination, path)
 
-        print("  Input directory {}".format(datadir))
+        print(f"  Input directory {datadir}")
 
-        vx, vz, _, _ = blob_velocity.calculate_SI(datadir)
+        vx, _vz, _, _ = blob_velocity.calculate_SI(datadir)
 
         deltas.append(delta)
         maxvelocity.append(np.amax(vx))
@@ -203,7 +203,7 @@ if __name__ == "__main__":
     alow = np.log(maxv[1] / maxv[0]) / np.log(deltas[1] / deltas[0])
     ahigh = np.log(maxv[-1] / maxv[-2]) / np.log(deltas[-1] / deltas[-2])
 
-    print("Exponents: {}, {}".format(alow, ahigh))
+    print(f"Exponents: {alow}, {ahigh}")
 
     try:
         import matplotlib.pyplot as plt
@@ -217,14 +217,14 @@ if __name__ == "__main__":
             [maxv[0], maxv[0] * (deltas[-1] / deltas[0]) ** alow],
             "--k",
         )
-        plt.text(deltas[1], maxv[1] * 1.4, "{:.2f}".format(alow))
+        plt.text(deltas[1], maxv[1] * 1.4, f"{alow:.2f}")
 
         plt.plot(
             [deltas[0], deltas[-1]],
             [maxv[-1] * (deltas[0] / deltas[-1]) ** ahigh, maxv[-1]],
             "--k",
         )
-        plt.text(deltas[-2], maxv[-2] * 1.2, "{:.2f}".format(ahigh))
+        plt.text(deltas[-2], maxv[-2] * 1.2, f"{ahigh:.2f}")
 
         plt.xlabel(r"Blob size $\delta^*$")
         plt.ylabel(r"Radial velocity [m/s]")

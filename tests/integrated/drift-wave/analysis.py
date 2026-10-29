@@ -1,5 +1,5 @@
-import xhermes
 import numpy as np
+import xhermes
 
 
 def extract_data(path):

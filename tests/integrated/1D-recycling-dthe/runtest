@@ -2,10 +2,12 @@
 
 # Test that a 1D-recyling-D-T-He example produces expected results
 
-from boututils.run_wrapper import launch
-import numpy
 import pathlib
+import sys
+
+import numpy
 import xhermes
+from boututils.run_wrapper import launch
 from numpy.testing._private.utils import nulp_diff
 
 this_dir = pathlib.Path(__file__).parent
@@ -53,10 +55,10 @@ def check_ULPs_diff(name, val, target, maxulps):
 def end_test(success):
     if success:
         print(" => Test passed")
-        exit(0)
+        sys.exit(0)
     else:
         print(" => Test failed")
-        exit(1)
+        sys.exit(1)
 
 
 def fail_on_missing_data():
