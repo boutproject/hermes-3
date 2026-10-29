@@ -1,0 +1,91 @@
+
+nout = 10
+timestep = 5000
+
+MXG = 0  # No guard cells in X
+
+[mesh]
+nx = 1
+ny = 100   # Resolution along field-line
+nz = 1
+
+length = 100           # Length of the domain in meters
+
+dymin = 0.1  # Minimum grid spacing near target, as fraction of average. Must be > 0 and < 1
+
+# Parallel grid spacing
+dy = (length / ny) * (1 + (1-dymin)*(1-y/pi))
+J = 1  # Identity metric
+
+ixseps1 = -1
+ixseps2 = -1
+
+[hermes]
+components = (d+, e,
+              sheath_boundary, braginskii_collisions, braginskii_ion_viscosity,
+              braginskii_conduction)
+
+Nnorm = 1e19
+Bnorm = 1
+Tnorm = 100
+
+[solver]
+type = pvode  # Backward Euler steady-state solver
+
+mxstep = 50000
+
+atol = 1e-7
+rtol = 1e-5
+
+[sheath_boundary]
+
+lower_y = false
+upper_y = true
+
+####################################
+
+[d+]  # Deuterium ions
+type = (evolve_density, evolve_pressure, evolve_momentum,
+        noflow_boundary)
+
+noflow_lower_y = true
+noflow_upper_y = false  # Sheath boundary at upper y
+
+charge = 1
+AA = 2
+
+thermal_conduction = true  # in evolve_pressure
+
+[Nd+]
+
+function = 1
+
+source = gauss(y, 0.25) * 1e24 # Feedback controller source shape
+
+adaptive_source = 1e19
+adaptive_overshoot = 1e18
+
+
+[Pd+]
+function = 1
+
+powerflux = 2.5e7  # Input power flux in W/m^2
+
+source = powerflux * gauss(y, 0.25)  # Input power as function of y
+
+adaptive_source = 100
+adaptive_overshoot = 2.0
+
+[NVd+]
+
+function = 0
+
+####################################
+
+[e] # Electrons
+type = quasineutral, fixed_temperature, zero_current, noflow_boundary
+
+charge = -1
+AA = 11/1836
+
+temperature = 10.0
