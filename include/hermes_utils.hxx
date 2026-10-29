@@ -227,3 +227,13 @@ struct join {
 // Helper to get the value out
 template <const std::string_view&... Strs>
 static constexpr auto join_v = join<Strs...>::value;
+
+// Adaptive source function
+// This function uses logistic growth to dampen this over the interval overshoot from 1 to 0
+// k = 5.0/overshoot is chosen so the function goes from 1 to ~0.1 in the inverval of the overshoot
+// This function just returns the correction, which has to be multiplied with the actual source
+//inline Field3D adaptive_sourceterm(const Field3D& thisfield, const BoutReal maximum, const BoutReal overshoot) {
+//  BoutReal k = 5.0 / overshoot;
+//  BoutReal x0 = maximum + overshoot / 2.0;
+//  return (1.0 - (1.0 / (1.0 + exp(-k * (thisfield - x0)))));
+//}
