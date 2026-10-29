@@ -148,6 +148,9 @@ Field3D Div_n_bxGrad_f_B_XPPM(const Field3D& n, const Field3D& f, bool bndry_flu
     const auto& cellarea_U = coord->cell_area_zhigh();
     const auto& cellarea_D = coord->cell_area_zlow();
 
+    const auto& h =
+        sqrt(coord->g_11() * coord->g_22() * coord->g_33()) / (coord->J() * coord->Bxy());
+
     BOUT_FOR(i, n.getRegion("RGN_NOBNDRY")) {
       const auto xp = i.xp();
       const auto xm = i.xm();
@@ -173,11 +176,11 @@ Field3D Div_n_bxGrad_f_B_XPPM(const Field3D& n, const Field3D& f, bool bndry_flu
       BoutReal fpm = 0.25 * (f[i] + f[xp] + f[zm] + f[xpzm]);
       BoutReal fpp = 0.25 * (f[i] + f[xp] + f[zp] + f[xpzp]);
 
-      BoutReal vU = (fmp - fpp) / cellwidth_U; // -J*df/dx
-      BoutReal vD = (fmm - fpm) / cellwidth_D; // -J*df/dx
+      BoutReal vU = 0.5 * (h[i] + h[zp]) * (fmp - fpp) / cellwidth_U; // -J*df/dx
+      BoutReal vD = 0.5 * (h[i] + h[zm]) * (fmm - fpm) / cellwidth_D; // -J*df/dx
 
-      BoutReal vR = (fpp - fpm) / cellheight_R; // J*df/dz
-      BoutReal vL = (fmp - fmm) / cellheight_L;
+      BoutReal vR = 0.5 * (h[i] + h[xp]) * (fpp - fpm) / cellheight_R; // J*df/dz
+      BoutReal vL = 0.5 * (h[i] + h[xm]) * (fmp - fmm) / cellheight_L;
 
       // X Fluxes
       Stencil1D sx;
