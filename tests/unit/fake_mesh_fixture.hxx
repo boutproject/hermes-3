@@ -34,7 +34,10 @@
 /// Use this template class directly to use different sized grid:
 ///
 ///     using MyTest = FakeMeshFixture_tmpl<7, 9, 11>;
-template <int NX, int NY, int NZ, bool FCI = false, int MXG = 1>
+/// The final MeshType parameter can supply a FakeMesh subclass with boundary
+/// topology or communication behaviour specific to a test.
+template <int NX, int NY, int NZ, bool FCI = false, int MXG = 1,
+          class MeshType = FakeMesh>
 class FakeMeshFixture_tmpl : public ::testing::Test {
 public:
   FakeMeshFixture_tmpl()
@@ -150,8 +153,8 @@ private:
   WithQuietOutput quiet_warn{output_warn};
   MpiWrapper mpi;
 
-  FakeMesh mesh_m;
-  FakeMesh mesh_staggered_m;
+  MeshType mesh_m;
+  MeshType mesh_staggered_m;
 
 public:
   // Public pointer to our staggered mesh

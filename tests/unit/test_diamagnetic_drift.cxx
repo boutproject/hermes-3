@@ -15,6 +15,7 @@
 
 #include "../../include/diamagnetic_drift.hxx"
 
+#include <algorithm>
 #include <cmath>
 #include <memory>
 #include <utility>
@@ -30,12 +31,32 @@ extern Mesh* mesh;
 // The unit tests use the global mesh
 using namespace bout::globals;
 
-// Reuse the "standard" fixture for FakeMesh
-using DiamagneticDriftTest = FakeMeshFixture;
-using WideDiamagneticDriftTest = FakeMeshFixture_tmpl<5, 5, 7>;
+// A periodic ring has no target faces. Open rings have both targets.
+class DiamagneticFakeMesh : public FakeMesh {
+public:
+  using FakeMesh::FakeMesh;
+  using FakeMesh::firstY;
+  using FakeMesh::lastY;
+
+  RangeIterator iterateBndryLowerY() const override {
+    const int first_target = std::max(xstart, ix_separatrix);
+    return first_target <= xend ? RangeIterator(first_target, xend) : RangeIterator{};
+  }
+  RangeIterator iterateBndryUpperY() const override { return iterateBndryLowerY(); }
+  bool hasBndryLowerY() const override { return ix_separatrix <= xend; }
+  bool hasBndryUpperY() const override { return hasBndryLowerY(); }
+  bool firstY(int jx) const override { return !periodicY(jx); }
+  bool lastY(int jx) const override { return !periodicY(jx); }
+};
+
+using DiamagneticDriftTest = FakeMeshFixture_tmpl<3, 5, 7, false, 1, DiamagneticFakeMesh>;
+using WideDiamagneticDriftTest =
+    FakeMeshFixture_tmpl<5, 5, 7, false, 1, DiamagneticFakeMesh>;
 // FV::Div_f_v needs two x guards for its reconstruction stencil.
-using RadialDiamagneticDriftTest = FakeMeshFixture_tmpl<8, 5, 7, false, 2>;
-using UnsupportedDiamagneticDriftTest = FakeMeshFixtureFCI;
+using RadialDiamagneticDriftTest =
+    FakeMeshFixture_tmpl<8, 5, 7, false, 2, DiamagneticFakeMesh>;
+using UnsupportedDiamagneticDriftTest =
+    FakeMeshFixture_tmpl<3, 5, 7, true, 1, DiamagneticFakeMesh>;
 
 class C4DiamagneticDriftTest : public RadialDiamagneticDriftTest {
 public:
@@ -164,9 +185,9 @@ public:
   }
 };
 
-class CoreCommunicatorMesh : public FakeMesh {
+class CoreCommunicatorMesh : public DiamagneticFakeMesh {
 public:
-  using FakeMesh::FakeMesh;
+  using DiamagneticFakeMesh::DiamagneticFakeMesh;
   bool at_first_x{true};
   mutable std::vector<int> ycomm_indices;
 
@@ -230,6 +251,27 @@ TEST_F(DiamagneticDriftTest, CreateComponent) {
   Options options = diamagneticOptions();
   setCurvature();
   DiamagneticDrift component("test", options, nullptr);
+}
+
+TEST_F(RadialDiamagneticDriftTest, TargetsExcludePeriodicRings) {
+  auto* fake_mesh = static_cast<DiamagneticFakeMesh*>(mesh);
+  EXPECT_TRUE(mesh->iterateBndryLowerY().isDone());
+  EXPECT_TRUE(mesh->iterateBndryUpperY().isDone());
+  EXPECT_FALSE(mesh->hasBndryLowerY());
+  EXPECT_FALSE(mesh->firstY(mesh->xstart));
+
+  fake_mesh->ix_separatrix = mesh->xstart + 1;
+  EXPECT_TRUE(mesh->periodicY(mesh->xstart));
+  EXPECT_FALSE(mesh->periodicY(mesh->xstart + 1));
+  for (auto targets : {mesh->iterateBndryLowerY(), mesh->iterateBndryUpperY()}) {
+    for (int jx = mesh->xstart + 1; jx <= mesh->xend; ++jx, ++targets) {
+      ASSERT_FALSE(targets.isDone());
+      EXPECT_EQ(targets.ind, jx);
+    }
+    EXPECT_TRUE(targets.isDone());
+  }
+  EXPECT_TRUE(mesh->hasBndryUpperY());
+  EXPECT_TRUE(mesh->lastY(mesh->xstart + 1));
 }
 
 TEST_F(DiamagneticDriftTest, DefaultOptions) {
@@ -791,7 +833,8 @@ TEST_F(CoreCommunicatorDiamagneticDriftTest,
 }
 
 TEST_F(DiamagneticDriftTest, DivergenceFormIsConservativeWithoutBoundaryFluxes) {
-  FakeMesh div_mesh(6, 5, 7, *bout::globals::mpi);
+  DiamagneticFakeMesh div_mesh(6, 5, 7, *bout::globals::mpi);
+  div_mesh.ix_separatrix = 0;
   div_mesh.xstart = 2;
   div_mesh.xend = div_mesh.LocalNx - 3;
   div_mesh.createDefaultRegions();

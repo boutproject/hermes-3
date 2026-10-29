@@ -1,0 +1,26 @@
+# Axisymmetric evolution driven only by diamagnetic sources on the COMPASS grid.
+nout = 4
+timestep = 1e-6
+MZ = 1
+MXG = 2
+MYG = 2
+
+[mesh]
+extrapolate_y = false
+
+[mesh:paralleltransform]
+type = identity
+
+[solver]
+type = rk4
+adaptive = false
+timestep = 1e-6
+
+[N]
+bndry_all = neumann
+
+[P]
+bndry_all = neumann
+
+[M]
+bndry_all = neumann
