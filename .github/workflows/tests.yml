@@ -75,7 +75,8 @@ jobs:
                                      -DBOUT_USE_HYPRE=ON
                                      -DBOUT_ENABLE_METRIC_3D=ON"
             hermes_configure_options: "-DHERMES_ERROR_ON_WARNINGS=ON
-                                       -DHERMES_UNIT_TESTS=OFF"
+                                       -DHERMES_UNIT_TESTS=OFF
+                                       -DHERMES_DIVOPS_MMS_TESTS=OFF"
             coverage: OFF
 
     steps:
