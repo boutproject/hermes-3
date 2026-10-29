@@ -22,6 +22,7 @@
 #include "../include/guarded_options.hxx"
 #include "../include/hermes_build_config.hxx"
 #include "../include/hermes_utils.hxx"
+#include "../include/penalisation.hxx"
 #include "../include/permissions.hxx"
 
 #include <string>
@@ -59,6 +60,11 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
   low_p_diffuse_perp = options["low_p_diffuse_perp"]
                            .doc("Perpendicular diffusion at low pressure")
                            .withDefault<bool>(false);
+
+  penalisation_time = options["penalisation_time"]
+                          .doc("Relaxation time for the penalisation boundary conditions")
+                          .withDefault<BoutReal>(1e-6)
+                      / get<BoutReal>(alloptions["units"]["seconds"]);
 
   damp_p_nt = options["damp_p_nt"]
                   .doc("Damp P - N*T? Active when P < 0 or N < density_floor")
@@ -414,6 +420,12 @@ void EvolvePressure::finally(const Options& state) {
 
   if (evolve_log) {
     ddt(logP) = ddt(P) / P;
+  }
+
+  if (state.isSection("fields") and state["fields"].isSet("penalisation_wall")) {
+    ddt(P) = penalisation::neumann(
+        P, ddt(P), get<Field3D>(state["fields"]["penalisation_wall"]), penalisation_time,
+        1e-5, get<int>(state["penalisation_mode"]));
   }
 
 #if CHECKLEVEL >= 1

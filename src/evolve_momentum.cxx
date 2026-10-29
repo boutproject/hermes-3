@@ -19,6 +19,7 @@
 #include "../include/guarded_options.hxx"
 #include "../include/hermes_build_config.hxx"
 #include "../include/hermes_utils.hxx"
+#include "../include/penalisation.hxx"
 #include "../include/permissions.hxx"
 
 #include <string>
@@ -57,6 +58,11 @@ EvolveMomentum::EvolveMomentum(std::string name, Options& alloptions, Solver* so
   bndry_flux = options["bndry_flux"]
                    .doc("Allow flows through radial boundaries")
                    .withDefault<bool>(true);
+
+  penalisation_time = options["penalisation_time"]
+                          .doc("Relaxation time for the penalisation boundary conditions")
+                          .withDefault<BoutReal>(1e-6)
+                      / get<BoutReal>(alloptions["units"]["seconds"]);
 
   poloidal_flows =
       options["poloidal_flows"].doc("Include poloidal ExB flow").withDefault<bool>(true);
@@ -268,6 +274,12 @@ void EvolveMomentum::finally(const Options& state) {
   // Note: This correction is calculated in transform()
   //       because NV may be modified by electromagnetic terms
   ddt(NV) += NV_err;
+
+  if (state.isSection("fields") and state["fields"].isSet("penalisation_wall")) {
+    ddt(NV) = penalisation::neumann(
+        NV, ddt(NV), get<Field3D>(state["fields"]["penalisation_wall"]),
+        penalisation_time, 0.0, get<int>(state["penalisation_mode"]));
+  }
 
   // Scale time derivatives
   if (state.isSet("scale_timederivs")) {

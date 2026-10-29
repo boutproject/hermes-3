@@ -21,8 +21,8 @@
 #include "../include/guarded_options.hxx"
 #include "../include/hermes_build_config.hxx"
 #include "../include/hermes_utils.hxx"
+#include "../include/penalisation.hxx"
 #include "../include/permissions.hxx"
-
 #include <string>
 #include <vector>
 
@@ -68,6 +68,10 @@ EvolveDensity::EvolveDensity(std::string name, Options& alloptions, Solver* solv
                    .doc("Evolve the logarithm of density?")
                    .withDefault<bool>(false);
 
+  penalisation_time = options["penalisation_time"]
+                          .doc("Relaxation time for the penalisation boundary conditions")
+                          .withDefault<BoutReal>(1e-6)
+                      / get<BoutReal>(alloptions["units"]["seconds"]);
   dissipative = options["dissipative"]
                     .doc("Lax flux in the parallel advection in Fci?")
                     .withDefault<bool>(mesh->isFci());
@@ -333,6 +337,12 @@ void EvolveDensity::finally(const Options& state) {
 
   if (evolve_log) {
     ddt(logN) = ddt(N) / N;
+  }
+
+  if (state.isSection("fields") and state["fields"].isSet("penalisation_wall")) {
+    ddt(N) = penalisation::neumann(
+        N, ddt(N), get<Field3D>(state["fields"]["penalisation_wall"]), penalisation_time,
+        1e-1, get<int>(state["penalisation_mode"]));
   }
 
 #if CHECKLEVEL >= 1
