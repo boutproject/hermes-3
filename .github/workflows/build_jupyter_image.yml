@@ -1,20 +1,22 @@
 name: Build hermes-3-jupyter Docker image
 
-# Configures this workflow to run every time a change is pushed to the master branch,
-# when a release is released, or when manually triggered.
+# Runs on every push to master, when a stable version tag (vX.Y.Z) is pushed,
+# or when manually triggered. The tag push publishes the versioned image.
+# create_release.yml turns that same push into the GitHub release notes; the
+# release itself does not trigger workflows.
 on:
   push:
     branches:
       - 'master'
-  release:
-    types: [released]
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
   workflow_dispatch:  # Allows manual triggering
 
 permissions:
   contents: read
   packages: write
 
-# Serialize runs so overlapping push/release/dispatch builds don't race on the
+# Serialize runs so overlapping push/tag/dispatch builds don't race on the
 # shared image tags.
 concurrency:
   group: build-jupyter-image
