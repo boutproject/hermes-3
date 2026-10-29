@@ -1029,39 +1029,38 @@ potential is calculated. Other drifts can be added with the following components
 diamagnetic_drift
 ~~~~~~~~~~~~~~~~~
 
-Adds diamagnetic drift terms to all species' density, pressure and parallel momentum
-equations. Calculates the diamagnetic drift velocity as
+Adds diamagnetic drift terms to charged species' density, pressure and parallel
+momentum equations. In physical units, the effective diamagnetic drift velocity is
 
 .. math::
 
-   \mathbf{v}_{dia} = \frac{T}{q} \nabla\times\left(\frac{\mathbf{b}}{B}\right)
+   \mathbf{v}_{dia} = \frac{T}{q}\mathbf{C},
+   \qquad \mathbf{C} = \nabla\times\left(\frac{\mathbf{b}}{B}\right)
 
-where the curvature vector :math:`\nabla\times\left(\frac{\mathbf{b}}{B}\right)`
-is read from the `bxcv` mesh input variable.
+where :math:`\mathbf{b}` is the unit vector along the magnetic field,
+:math:`B` is its magnitude [T], and :math:`q` is the species charge [C]. The
+temperature :math:`T` is specified in eV and expressed as an energy [J] in
+these SI equations. The curvature vector :math:`\mathbf{C}` is constructed
+from the contravariant ``bxcv`` mesh vector, including conversion and code
+normalisation.
 
-Two forms are available for the diamagnetic contribution to the density,
-momentum, and pressure equations. The gradient form applies
-:math:`\mathbf{C}\cdot\nabla(f T / q)` directly, while the divergence form
-uses :math:`\nabla\cdot(f \mathbf{v}_{dia})`. These are analytically
-equivalent away from boundaries, differing by the divergence of a curl.
+For a transported quantity :math:`f`, define :math:`g=fT/q`. The gradient
+form applies :math:`\mathbf{C}\cdot\nabla g`, while the divergence form
+uses :math:`\nabla\cdot(f\mathbf{v}_{dia})`. These are analytically
+equivalent because their difference is :math:`g\nabla\cdot\mathbf{C}`,
+which vanishes for a curl. Their discrete forms and boundary treatments
+are described below.
 
-At boundaries the distinction matters: the divergence form can correspond to
-a flux through the boundary, while the gradient form can be used to avoid
-those unphysical boundary fluxes.
-
-In Hermes-3 these are selected with the boolean option ``divergence_form``:
-
-.. code-block:: ini
-
-   [diamagnetic_drift]
-   divergence_form = true   # Use Div(f v_dia)
-   bndry_flux = false       # Do not allow boundary fluxes in divergence form
-
-If ``divergence_form = false`` then the gradient form is used. This avoids
-constructing :math:`\mathbf{v}_{dia}` explicitly and applies
-:math:`\mathbf{C}\cdot\nabla(f T / q)` directly.
-
-A table of the two forms used in Hermes-3, and the corresponding terms in `Simakov & Catto <https://doi.org/10.1063/1.1623492>`_ is shown below, where :math:`\mathbf{C}=\nabla\times\left(\frac{\mathbf{b}}{B}\right)` is the curvature vector. Instead of the diamagnetic velocity, the whole terms associated are shown. The difference among the forms is the divergence of a curl, which vanishes. The diamagnetic velocity :math:`\mathbf{v}_{dia}` is defined above. Notice that Simakov & Catto used Gaussian units, but Hermes-3 uses SI units.
+The following table compares the transport terms with those in
+`Simakov & Catto <https://doi.org/10.1063/1.1623492>`_. Here :math:`n` is
+the number density [m\ :sup:`-3`], :math:`p=nT` is the pressure [Pa],
+:math:`m` is the particle mass [kg], and :math:`v_\parallel` is the
+parallel velocity [m/s]. In the Gaussian-unit expressions, :math:`c`
+denotes the speed of light and :math:`\Omega` the cyclotron frequency.
+The terms are subtracted from the density, momentum and thermal energy
+sources. The pressure equation converts the energy source to a pressure
+source with a factor of :math:`2/3`, as described in
+:ref:`sec-evolve_pressure`.
 
 .. list-table::
    :header-rows: 1
@@ -1079,14 +1078,183 @@ A table of the two forms used in Hermes-3, and the corresponding terms in `Simak
      - :math:`\mathbf{C} \cdot \nabla\left(\dfrac{mnv_\parallel T}{q}\right)`
      - :math:`\nabla\cdot (mnv_\parallel \mathbf{v}_{dia})`
      - Eq. (64): :math:`\nabla\cdot \left(\dfrac{1}{\Omega} \mathbf{b} \times \nabla(p v_\parallel)\right)`
-   * - Pressure
+   * - Thermal energy
      - :math:`\dfrac{5}{2}\mathbf{C} \cdot \nabla\left(\dfrac{pT}{q}\right)`
      - :math:`\dfrac{5}{2}\nabla\cdot (p \mathbf{v}_{dia})`
      - Eq. (56): :math:`\nabla\cdot\left(\dfrac{5}{2 m \Omega} \mathbf{b} \times \nabla(p T)\right)`
 
-\* Eq.(64) in Simakov & Catto is derived for ion parallel momentum,
+Eq. (64) in Simakov & Catto is derived for ion parallel momentum,
 but it is also applicable to electrons since it comes from the gyro-viscosity
 and the mass factors of :math:`m_i` or :math:`m_e` cancel out.
+
+Options
+^^^^^^^
+
+The defaults select the divergence form with closed radial faces and core-ring
+averaging:
+
+.. code-block:: ini
+
+   [diamagnetic_drift]
+   form = divergence
+   radial_boundary = closed_average
+
+.. list-table::
+   :header-rows: 1
+   :widths: 20 25 15 40
+
+   * - Option
+     - Values
+     - Default
+     - Meaning
+   * - ``form``
+     - ``divergence``, ``gradient``
+     - ``divergence``
+     - Finite-volume flux divergence or C2 gradient form.
+   * - ``radial_boundary``
+     - ``open``, ``closed``, ``closed_average``
+     - ``closed_average``
+     - Treatment of radial (:math:`x`) faces only.
+   * - ``bndry_flux`` (deprecated)
+     - ``true``, ``false``
+     - Unset
+     - Alias for ``radial_boundary``: ``true`` selects ``open`` and
+       ``false`` selects ``closed``. Setting both options is an error.
+
+Boundary treatment
+^^^^^^^^^^^^^^^^^^
+
+Both forms close the sheath (:math:`y`) faces for every value of
+``radial_boundary``. The sheath boundary component supplies the target fluxes.
+The radial treatment is:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 20 40 40
+
+   * - ``radial_boundary``
+     - Divergence form
+     - Gradient form
+   * - ``open``
+     - Retain the finite-volume radial face fluxes.
+     - Retain the radial face fluxes implied by C2 derivatives.
+   * - ``closed``
+     - Set both radial boundary face fluxes to zero.
+     - Remove both implied radial boundary face fluxes.
+   * - ``closed_average``
+     - Apply ``closed``, then average the core-ring sources.
+     - Apply ``closed``, then average the core-ring sources.
+
+In the divergence form, the target guard temperature is copied from the adjacent
+interior cell in field-aligned coordinates. Together with the sign-reversed guard
+curvature, this makes the face velocity zero even when the supplied guard
+temperature differs from the interior value. The gradient form removes the
+implied target face flux, using a linear continuation of :math:`J C^y` from the
+interior in the field-aligned frame, where :math:`J` is the coordinate Jacobian
+and :math:`C^y` the contravariant :math:`y` component of the curvature. It requires
+a parallel transform that can convert to and from field-aligned coordinates;
+``form = gradient`` is rejected for FCI transforms.
+
+The pressure-gradient diamagnetic flow is tangent to a boundary on which the
+pressure is uniform. The effective curvature-drift velocity can nevertheless
+have a normal component, so its radial face flux is closed by default. Closing
+the face changes the outermost cell's transport term by order
+:math:`f T C^x/(q\Delta x)`, where :math:`C^x` is the radial curvature component
+and :math:`\Delta x` the radial mesh spacing. For fixed curvature and charge,
+the rate relative to :math:`f` scales as :math:`T/\Delta x` and is reduced by
+the low temperatures normally imposed at radial walls.
+
+Conservation
+^^^^^^^^^^^^
+
+The divergence form is a finite-volume flux form. Its volume integral is the
+net boundary flux, to roundoff. With closed radial faces, closed sheath faces
+and periodic toroidal boundaries, its density, thermal energy and parallel
+momentum sources each have zero volume integral.
+
+The gradient form is conservative when the curvature is a discrete curl
+compatible with the C2 derivatives, so that its discrete divergence vanishes.
+For general transported fields, this zero discrete divergence is required;
+an analytic curl sampled on the mesh need not satisfy it. In one coordinate
+direction the C2 stencil has the exact face-flux identity
+
+.. math::
+
+   a_i\frac{g_{i+1}-g_{i-1}}{2}
+   = F_{i+1/2}-F_{i-1/2}
+     - g_i\frac{a_{i+1}-a_{i-1}}{2},
+   \qquad
+   F_{i+1/2}=\frac{a_i g_{i+1}+a_{i+1}g_i}{2}.
+
+Here :math:`i` indexes cells along the coordinate direction and
+:math:`a=J C^x` in the radial direction, with analogous expressions for the
+other directions. Dividing by :math:`J_i\Delta x_i` gives the cell-centred
+transport term. The face fluxes telescope in a volume integral; the remaining
+volume term vanishes only when the discrete divergence of the curvature
+vanishes. Closing a boundary removes its implied face flux, while retaining
+this volume term.
+
+Spatially varying blends of the two cell-centred forms are not conservative,
+even when compatible curvature makes both forms flux divergences. To see this,
+consider a closed one-dimensional domain and a blended sink
+:math:`D_i=w_i D_i^D+(1-w_i)D_i^G`, where :math:`w_i` is the divergence-form
+weight and the superscripts identify the two forms. Summation by parts gives
+
+.. math::
+
+   \sum_i V_i D_i
+   = -\sum_{i+1/2}\left(F^D_{i+1/2}-F^G_{i+1/2}\right)\Delta w_{i+1/2},
+   \qquad \Delta w_{i+1/2}=w_{i+1}-w_i.
+
+Here :math:`V_i` is the cell volume, and :math:`F^D` and :math:`F^G` are
+the integrated face fluxes of the two forms. Fluxes shared by adjacent cells
+are weighted differently, leaving a term proportional to the difference
+between the face fluxes and the change in weight. It does not generally
+cancel, which is why spatial blending has been removed.
+
+Core averaging
+^^^^^^^^^^^^^^
+
+For ``closed_average``, each source :math:`S` in the innermost closed core
+ring is replaced by its volume-weighted mean:
+
+.. math::
+
+   \overline{S} = \frac{\sum_{i\in R} V_i S_i}{\sum_{i\in R}V_i},
+   \qquad V_i=J_i\Delta x_i\Delta y_i\Delta z_i.
+
+Here :math:`R` contains all poloidal and toroidal cells on the innermost core
+ring, including cells on other MPI processors, and :math:`V_i` is the cell
+volume [m\ :sup:`3`]. This preserves the ring integral of each density,
+energy and momentum source, including when the metric varies in the toroidal
+direction. It removes the dipole artefact produced by blocking the inner
+radial face flux and is consistent with holding the evolving fields uniform
+around the core boundary. Private-flux cells and other radial rings are not
+averaged. Where no closed core ring is present, ``closed_average`` acts as
+``closed``.
+
+Migration
+^^^^^^^^^
+
+The ``diamag_form`` option has been removed. Replace ``diamag_form = 1``
+with ``form = divergence`` and ``diamag_form = 0`` with ``form = gradient``,
+and delete the old option: any remaining ``diamag_form`` setting is an error.
+Spatially varying expressions must be replaced by a single form for the whole
+domain, for the conservation reason given above.
+
+The deprecated ``bndry_flux`` alias emits a warning. Replace
+``bndry_flux = true`` with ``radial_boundary = open`` and
+``bndry_flux = false`` with ``radial_boundary = closed``; do not set both
+the alias and ``radial_boundary``. The branch-only switches ``divergence_form``
+and ``average_core`` have also been removed; select ``form`` and
+``radial_boundary`` explicitly instead.
+
+The former master defaults were effectively divergence form with open radial
+faces. The defaults are now ``form = divergence`` and
+``radial_boundary = closed_average``. To retain the former open radial
+treatment, set ``radial_boundary = open`` explicitly. The gradient form now
+always uses C2 derivatives, independently of the mesh's default derivative
+settings.
 
 
 .. doxygenstruct:: DiamagneticDrift
