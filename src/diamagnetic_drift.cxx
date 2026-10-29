@@ -6,6 +6,7 @@
 #include <bout/field3d.hxx>
 #include <bout/fv_ops.hxx>
 #include <bout/globals.hxx>
+#include <bout/mpi_wrapper.hxx>
 #include <bout/options.hxx>
 #include <bout/output.hxx>
 #include <bout/paralleltransform.hxx>
@@ -20,6 +21,8 @@
 #include "../include/permissions.hxx"
 
 #include <string>
+#include <utility>
+#include <vector>
 
 using bout::globals::mesh;
 
@@ -76,6 +79,23 @@ DiamagneticDrift::DiamagneticDrift(std::string name, Options& alloptions,
   average_core_active = radial_boundary == DiamagneticBoundary::closed_average
                         and mesh->periodicY(mesh->xstart) and mesh->firstX();
 
+  if (mesh->firstX()) {
+    // BoutMesh builds Y communicators per x-processor column and separates
+    // core and private-flux ranks. All members must take the same collectives.
+    const int local_active = average_core_active ? 1 : 0;
+    int min_active{0}, max_active{0};
+    const auto comm = mesh->getYcomm(mesh->xstart);
+    bout::globals::mpi->MPI_Allreduce(&local_active, &min_active, 1, MPI_INT, MPI_MIN,
+                                      comm);
+    bout::globals::mpi->MPI_Allreduce(&local_active, &max_active, 1, MPI_INT, MPI_MAX,
+                                      comm);
+    if (min_active != max_active) {
+      throw BoutException(
+          "Diamagnetic drift: core averaging must be consistent across all "
+          "processors in getYcomm(xstart); average_core_active flags differ.");
+    }
+  }
+
   if (BoutComm::rank() == 0) {
     output_info.write("Diamagnetic drift: form = {}, radial_boundary = {}.\n",
                       toString(form), toString(radial_boundary));
@@ -93,8 +113,8 @@ DiamagneticDrift::DiamagneticDrift(std::string name, Options& alloptions,
       local_core_volume += this->cell_volume(mesh->xstart, jy);
     }
     // Sum over processors on core boundary
-    MPI_Allreduce(&local_core_volume, &this->core_ring_volume, 1, MPI_DOUBLE, MPI_SUM,
-                  mesh->getYcomm(0));
+    bout::globals::mpi->MPI_Allreduce(&local_core_volume, &this->core_ring_volume, 1,
+                                      MPI_DOUBLE, MPI_SUM, mesh->getYcomm(mesh->xstart));
   }
 
   // Read curvature vector
@@ -261,66 +281,7 @@ Field3D DiamagneticDrift::calculateGradientForm(const Field3D& quantity,
   return sink;
 }
 
-void DiamagneticDrift::addDiamagneticSources(GuardedOptions& species) {
-  if (!(species.isSet("charge") and species.isSet("temperature"))) {
-    return;
-  }
-
-  const auto charge = get<BoutReal>(species["charge"]);
-  if (fabs(charge) < 1e-5) {
-    return;
-  }
-  const auto temperature = GET_VALUE(Field3D, species["temperature"]);
-
-  if (IS_SET(species["density"])) {
-    Field3D sink = form == DiamagneticForm::divergence
-                       ? calculateDivergenceForm(GET_VALUE(Field3D, species["density"]),
-                                                 temperature, charge)
-                       : calculateGradientForm(GET_VALUE(Field3D, species["density"]),
-                                               temperature, charge);
-
-    if (average_core_active) {
-      coreAverage(sink);
-    }
-
-    subtract(species["density_source"], sink);
-  }
-
-  if (IS_SET(species["pressure"])) {
-    Field3D sink = form == DiamagneticForm::divergence
-                       ? calculateDivergenceForm(get<Field3D>(species["pressure"]),
-                                                 temperature, charge, 5. / 2)
-                       : calculateGradientForm(get<Field3D>(species["pressure"]),
-                                               temperature, charge, 5. / 2);
-
-    if (average_core_active) {
-      coreAverage(sink);
-    }
-
-    subtract(species["energy_source"], sink);
-  }
-
-  if (IS_SET(species["momentum"])) {
-    Field3D sink = form == DiamagneticForm::divergence
-                       ? calculateDivergenceForm(get<Field3D>(species["momentum"]),
-                                                 temperature, charge)
-                       : calculateGradientForm(get<Field3D>(species["momentum"]),
-                                               temperature, charge);
-
-    if (average_core_active) {
-      coreAverage(sink);
-    }
-
-    subtract(species["momentum_source"], sink);
-  }
-}
-
-void DiamagneticDrift::coreAverage(Field3D& f) {
-  if (!average_core_active) {
-    throw BoutException("DiamagneticDrift::coreAverage requires closed_average "
-                        "on the core boundary");
-  }
-
+BoutReal DiamagneticDrift::coreRingSum(const Field3D& f) const {
   BoutReal local_sum = 0.0;
   for (int jy = mesh->ystart; jy <= mesh->yend; ++jy) {
     BoutReal zavg = 0.0;
@@ -330,10 +291,10 @@ void DiamagneticDrift::coreAverage(Field3D& f) {
     zavg /= mesh->zend - mesh->zstart + 1;
     local_sum += this->cell_volume(mesh->xstart, jy) * zavg;
   }
-  // Sum over processors on core boundary
-  BoutReal global_sum{0.0};
-  MPI_Allreduce(&local_sum, &global_sum, 1, MPI_DOUBLE, MPI_SUM, mesh->getYcomm(0));
+  return local_sum;
+}
 
+void DiamagneticDrift::coreAverage(Field3D& f, BoutReal global_sum) const {
   const BoutReal average = global_sum / core_ring_volume;
   for (int jy = mesh->ystart; jy <= mesh->yend; ++jy) {
     for (int jz = mesh->zstart; jz <= mesh->zend; ++jz) {
@@ -343,11 +304,59 @@ void DiamagneticDrift::coreAverage(Field3D& f) {
 }
 
 void DiamagneticDrift::transform_impl(GuardedOptions& state) {
-  // Iterate through all subsections
+  struct Source {
+    GuardedOptions output;
+    Field3D sink;
+  };
+  std::vector<Source> sources;
+  std::vector<BoutReal> ring_sums;
   GuardedOptions allspecies = state["species"];
 
+  // First compute every sink and collect its local core-ring sum in the
+  // same species/quantity order on all members of the Y communicator.
   for (auto& kv : allspecies.getChildren()) {
-    GuardedOptions species = allspecies[kv.first]; // Note: Need non-const
-    addDiamagneticSources(species);
+    GuardedOptions species = allspecies[kv.first];
+    if (!(species.isSet("charge") and species.isSet("temperature"))) {
+      continue;
+    }
+    const auto charge = get<BoutReal>(species["charge"]);
+    if (fabs(charge) < 1e-5) {
+      continue;
+    }
+    const auto temperature = GET_VALUE(Field3D, species["temperature"]);
+
+    const auto collect = [&](const char* input, const char* output, BoutReal factor) {
+      if (!IS_SET(species[input])) {
+        return;
+      }
+      const auto quantity = GET_VALUE(Field3D, species[input]);
+      Field3D sink = form == DiamagneticForm::divergence
+                         ? calculateDivergenceForm(quantity, temperature, charge, factor)
+                         : calculateGradientForm(quantity, temperature, charge, factor);
+      if (average_core_active) {
+        ring_sums.push_back(coreRingSum(sink));
+      }
+      sources.push_back({species[output], std::move(sink)});
+    };
+    collect("density", "density_source", 1.0);
+    collect("pressure", "energy_source", 5. / 2);
+    collect("momentum", "momentum_source", 1.0);
+  }
+
+  if (average_core_active) {
+    // Even an empty batch participates, keeping one collective per transform.
+    BoutReal empty_buffer{0.0};
+    bout::globals::mpi->MPI_Allreduce(
+        MPI_IN_PLACE, ring_sums.empty() ? &empty_buffer : ring_sums.data(),
+        static_cast<int>(ring_sums.size()), MPI_DOUBLE, MPI_SUM,
+        mesh->getYcomm(mesh->xstart));
+  }
+
+  // Apply the global means and write the source terms in a second pass.
+  for (std::size_t i = 0; i < sources.size(); ++i) {
+    if (average_core_active) {
+      coreAverage(sources[i].sink, ring_sums[i]);
+    }
+    subtract(sources[i].output.getWritable(), sources[i].sink);
   }
 }

@@ -6,6 +6,7 @@
 #include <bout/constants.hxx>
 #include <bout/coordinates.hxx>
 #include <bout/deriv_store.hxx>
+#include <bout/mpi_wrapper.hxx>
 #include <bout/paralleltransform.hxx>
 
 #include "fake_mesh.hxx"
@@ -16,6 +17,8 @@
 
 #include <cmath>
 #include <memory>
+#include <utility>
+#include <vector>
 
 /// Global mesh
 namespace bout {
@@ -101,6 +104,79 @@ private:
   Mesh* previous_mesh;
 };
 
+class ScopedGlobalMpi {
+public:
+  explicit ScopedGlobalMpi(MpiWrapper* new_mpi) : previous_mpi(mpi) { mpi = new_mpi; }
+  ~ScopedGlobalMpi() { mpi = previous_mpi; }
+
+private:
+  MpiWrapper* previous_mpi;
+};
+
+class RecordingMpi : public MpiWrapper {
+public:
+  struct Reduction {
+    int count;
+    MPI_Datatype datatype;
+    MPI_Op operation;
+    MPI_Comm communicator;
+    int active_flag;
+    std::vector<BoutReal> local_sums;
+  };
+  std::vector<Reduction> reductions;
+  bool inconsistent_flags{false};
+  // Simulate a remote rank's contribution to the next SUM reduction.
+  std::vector<BoutReal> sum_additions;
+
+  int MPI_Allreduce(const void* sendbuf, void* recvbuf, int count, MPI_Datatype datatype,
+                    MPI_Op op, MPI_Comm comm) override {
+    const void* input = sendbuf == MPI_IN_PLACE ? recvbuf : sendbuf;
+    Reduction reduction{count, datatype, op, comm, -1, {}};
+    if (datatype == MPI_INT and count == 1) {
+      reduction.active_flag = *static_cast<const int*>(input);
+    } else if (datatype == MPI_DOUBLE and count > 0) {
+      const auto* values = static_cast<const BoutReal*>(input);
+      reduction.local_sums.assign(values, values + count);
+    }
+    reductions.push_back(reduction);
+
+    const int result =
+        MpiWrapper::MPI_Allreduce(sendbuf, recvbuf, count, datatype, op, comm);
+    if (inconsistent_flags and datatype == MPI_INT) {
+      if (op == MPI_MIN) {
+        *static_cast<int*>(recvbuf) = 0;
+      } else if (op == MPI_MAX) {
+        *static_cast<int*>(recvbuf) = 1;
+      }
+    }
+    if (op == MPI_SUM and !sum_additions.empty()) {
+      EXPECT_EQ(datatype, MPI_DOUBLE);
+      EXPECT_EQ(count, static_cast<int>(sum_additions.size()));
+      if (datatype == MPI_DOUBLE and count == static_cast<int>(sum_additions.size())) {
+        auto* values = static_cast<BoutReal*>(recvbuf);
+        for (std::size_t i = 0; i < sum_additions.size(); ++i) {
+          values[i] += sum_additions[i];
+        }
+      }
+      sum_additions.clear();
+    }
+    return result;
+  }
+};
+
+class CoreCommunicatorMesh : public FakeMesh {
+public:
+  using FakeMesh::FakeMesh;
+  bool at_first_x{true};
+  mutable std::vector<int> ycomm_indices;
+
+  bool firstX() const override { return at_first_x; }
+  MPI_Comm getYcomm(int jx) const override {
+    ycomm_indices.push_back(jx);
+    return MPI_COMM_SELF;
+  }
+};
+
 std::shared_ptr<Coordinates> makeUnitCoordinates(Mesh* target_mesh) {
   auto coords = std::make_shared<Coordinates>(
       target_mesh, Field2D{1.0, target_mesh}, Field2D{1.0, target_mesh},
@@ -126,6 +202,27 @@ std::shared_ptr<Coordinates> makeUnitCoordinates(Mesh* target_mesh) {
 }
 
 } // namespace
+
+class CoreCommunicatorDiamagneticDriftTest : public RadialDiamagneticDriftTest {
+public:
+  CoreCommunicatorDiamagneticDriftTest()
+      : core_mesh(8, 5, 7, recording_mpi, 2), use_mesh(&core_mesh),
+        use_mpi(&recording_mpi) {
+    BoutComm::get(); // Initialise MPI before using MPI_COMM_SELF.
+    core_mesh.createDefaultRegions();
+    core_mesh.setCoordinates(nullptr);
+    core_mesh.setCoordinates(makeUnitCoordinates(&core_mesh));
+    core_mesh.createBoundaryRegions();
+    setCurvature();
+  }
+
+  RecordingMpi recording_mpi;
+  CoreCommunicatorMesh core_mesh;
+
+private:
+  ScopedGlobalMesh use_mesh;
+  ScopedGlobalMpi use_mpi;
+};
 
 TEST_F(DiamagneticDriftTest, CreateComponent) {
   Options options = diamagneticOptions();
@@ -338,6 +435,246 @@ TEST_F(RadialDiamagneticDriftTest, TransformAveragesInnermostCoreRing) {
       }
       EXPECT_NEAR(volumeIntegral(averaged), volumeIntegral(closed), 1e-12);
     }
+  }
+}
+
+TEST_F(CoreCommunicatorDiamagneticDriftTest, ConstructorChecksFlagsAndCachesRingVolume) {
+  auto* coords = mesh->getCoordinates();
+  Coordinates::FieldMetric J{1.0};
+  J(mesh->xstart, mesh->ystart + 1) = 2.0;
+  J(mesh->xstart, mesh->yend) = 3.0;
+  coords->setJ(J);
+  Options options = diamagneticOptions();
+  DiamagneticDrift component("test", options, nullptr);
+
+  const auto& reductions = recording_mpi.reductions;
+  ASSERT_EQ(reductions.size(), 3u);
+  EXPECT_EQ(reductions[0].operation, MPI_MIN);
+  EXPECT_EQ(reductions[1].operation, MPI_MAX);
+  for (std::size_t i = 0; i < 2; ++i) {
+    EXPECT_EQ(reductions[i].datatype, MPI_INT);
+    EXPECT_EQ(reductions[i].count, 1);
+    EXPECT_EQ(reductions[i].active_flag, 1);
+  }
+  EXPECT_EQ(reductions[2].operation, MPI_SUM);
+  EXPECT_EQ(reductions[2].datatype, MPI_DOUBLE);
+  ASSERT_EQ(reductions[2].local_sums.size(), 1u);
+  EXPECT_DOUBLE_EQ(reductions[2].local_sums[0], 6.0);
+  for (const auto& reduction : reductions) {
+    EXPECT_EQ(reduction.communicator, MPI_COMM_SELF);
+  }
+  ASSERT_FALSE(core_mesh.ycomm_indices.empty());
+  for (const int jx : core_mesh.ycomm_indices) {
+    EXPECT_EQ(jx, mesh->xstart);
+  }
+}
+
+TEST_F(CoreCommunicatorDiamagneticDriftTest,
+       InactiveFirstXRanksCheckFlagsWithoutAveraging) {
+  for (const auto* boundary : {"open", "closed", "closed_average"}) {
+    SCOPED_TRACE(boundary);
+    // Model a private-flux rank for closed_average, which acts as closed.
+    core_mesh.ix_separatrix = std::string(boundary) == "closed_average" ? 0 : 1000000;
+    recording_mpi.reductions.clear();
+    Options options = diamagneticOptions();
+    options["test"]["radial_boundary"] = boundary;
+    options["test"]["form"] = "gradient";
+    DiamagneticDrift component("test", options, nullptr);
+
+    const auto& reductions = recording_mpi.reductions;
+    ASSERT_EQ(reductions.size(), 2u);
+    EXPECT_EQ(reductions[0].operation, MPI_MIN);
+    EXPECT_EQ(reductions[1].operation, MPI_MAX);
+    for (const auto& reduction : reductions) {
+      EXPECT_EQ(reduction.datatype, MPI_INT);
+      EXPECT_EQ(reduction.count, 1);
+      EXPECT_EQ(reduction.active_flag, 0);
+      EXPECT_EQ(reduction.communicator, MPI_COMM_SELF);
+    }
+
+    recording_mpi.reductions.clear();
+    auto state = diamagneticState(Field3D{1.0});
+    component.declareAllSpecies({"d+"});
+    component.transform(state);
+    EXPECT_TRUE(recording_mpi.reductions.empty());
+    EXPECT_TRUE(state["species"]["d+"].isSet("density_source"));
+  }
+}
+
+TEST_F(CoreCommunicatorDiamagneticDriftTest, NonFirstXRanksSkipCoreCollectives) {
+  core_mesh.at_first_x = false;
+  Options options = diamagneticOptions();
+  options["test"]["form"] = "gradient";
+  DiamagneticDrift component("test", options, nullptr);
+  auto state = diamagneticState(Field3D{1.0});
+  component.declareAllSpecies({"d+"});
+  component.transform(state);
+
+  EXPECT_TRUE(recording_mpi.reductions.empty());
+  EXPECT_TRUE(core_mesh.ycomm_indices.empty());
+  EXPECT_TRUE(state["species"]["d+"].isSet("density_source"));
+}
+
+TEST_F(CoreCommunicatorDiamagneticDriftTest, ConstructorRejectsInconsistentCoreFlags) {
+  recording_mpi.inconsistent_flags = true;
+  for (const auto* boundary : {"closed", "closed_average"}) {
+    SCOPED_TRACE(boundary);
+    recording_mpi.reductions.clear();
+    Options options = diamagneticOptions();
+    options["test"]["radial_boundary"] = boundary;
+    try {
+      DiamagneticDrift component("test", options, nullptr);
+      FAIL() << "Inconsistent averaging flags must be rejected";
+    } catch (const BoutException& error) {
+      EXPECT_NE(std::string(error.what()).find("average_core_active flags differ"),
+                std::string::npos);
+    }
+    ASSERT_EQ(recording_mpi.reductions.size(), 2u);
+    EXPECT_EQ(recording_mpi.reductions[0].operation, MPI_MIN);
+    EXPECT_EQ(recording_mpi.reductions[1].operation, MPI_MAX);
+  }
+}
+
+TEST_F(CoreCommunicatorDiamagneticDriftTest,
+       TransformBatchesSpeciesAndUsesGlobalRingMeans) {
+  auto* coords = mesh->getCoordinates();
+  Coordinates::FieldMetric J{1.0};
+  J(mesh->xstart, mesh->ystart + 1) = 2.0;
+  J(mesh->xstart, mesh->yend) = 3.0;
+  coords->setJ(J);
+  const auto quantity = makeField<Field3D>([](Ind3D& i) {
+    return 1.0 + 0.2 * i.x() * i.x() + 0.1 * i.x() * i.y() + 0.03 * i.z();
+  });
+  const std::vector<std::pair<std::string, std::string>> outputs{
+      {"d+", "density_source"},
+      {"d+", "energy_source"},
+      {"d+", "momentum_source"},
+      {"e", "density_source"},
+      {"e", "energy_source"}};
+  const std::vector<BoutReal> remote_sums{3.0, -5.0, 7.0, 11.0, -13.0};
+  constexpr BoutReal initial_source = 11.0;
+
+  for (const auto* form : {"gradient", "divergence"}) {
+    SCOPED_TRACE(form);
+    auto state = diamagneticState(quantity, 0.8);
+    state["species"]["d+"]["pressure"] = Field3D{2.0 * quantity};
+    state["species"]["d+"]["momentum"] = Field3D{-0.5 * quantity};
+    auto& electrons = state["species"]["e"];
+    electrons["charge"] = -1.0;
+    electrons["temperature"] = 1.4;
+    electrons["density"] = Field3D{3.1 * quantity};
+    electrons["pressure"] = Field3D{2.0 * quantity};
+    for (const auto& output : outputs) {
+      state["species"][output.first][output.second] = Field3D{initial_source};
+    }
+
+    // Reference unaveraged sinks include the same boundary closures.
+    Options closed_options = diamagneticOptions();
+    closed_options["test"]["form"] = form;
+    closed_options["test"]["radial_boundary"] = "closed";
+    DiamagneticDrift closed_component("test", closed_options, nullptr);
+    closed_component.declareAllSpecies({"d+", "e"});
+    auto closed_state = state.copy();
+    closed_component.transform(closed_state);
+
+    std::vector<BoutReal> local_sums;
+    for (const auto& output : outputs) {
+      const auto closed =
+          get<Field3D>(closed_state["species"][output.first][output.second]);
+      BoutReal sum = 0.0;
+      for (int jy = mesh->ystart; jy <= mesh->yend; ++jy) {
+        for (int jz = mesh->zstart; jz <= mesh->zend; ++jz) {
+          sum += coords->cell_volume()(mesh->xstart, jy, jz)
+                 * (initial_source - closed(mesh->xstart, jy, jz));
+        }
+      }
+      local_sums.push_back(sum / (mesh->zend - mesh->zstart + 1));
+    }
+
+    recording_mpi.reductions.clear();
+    recording_mpi.sum_additions = {9.0}; // Local ring volume is 6; global is 15.
+    Options options = diamagneticOptions();
+    options["test"]["form"] = form;
+    DiamagneticDrift component("test", options, nullptr);
+    ASSERT_EQ(recording_mpi.reductions.size(), 3u);
+    component.declareAllSpecies({"d+", "e"});
+
+    // Repeated transforms reuse the cached volume and accumulate sources.
+    for (int call = 1; call <= 2; ++call) {
+      SCOPED_TRACE(call);
+      recording_mpi.reductions.clear();
+      core_mesh.ycomm_indices.clear();
+      recording_mpi.sum_additions = remote_sums;
+      component.transform(state);
+
+      ASSERT_EQ(recording_mpi.reductions.size(), 1u);
+      const auto& reduction = recording_mpi.reductions[0];
+      EXPECT_EQ(reduction.operation, MPI_SUM);
+      EXPECT_EQ(reduction.datatype, MPI_DOUBLE);
+      EXPECT_EQ(reduction.communicator, MPI_COMM_SELF);
+      EXPECT_EQ(reduction.count, 5);
+      ASSERT_EQ(reduction.local_sums.size(), local_sums.size());
+      ASSERT_EQ(core_mesh.ycomm_indices.size(), 1u);
+      EXPECT_EQ(core_mesh.ycomm_indices[0], mesh->xstart);
+
+      for (std::size_t i = 0; i < outputs.size(); ++i) {
+        SCOPED_TRACE(outputs[i].first + ":" + outputs[i].second);
+        EXPECT_NEAR(reduction.local_sums[i], local_sums[i], 1e-12);
+        // Keep outputs writable for the next transform's accumulation.
+        const auto source =
+            getNonFinal<Field3D>(state["species"][outputs[i].first][outputs[i].second]);
+        const auto closed =
+            get<Field3D>(closed_state["species"][outputs[i].first][outputs[i].second]);
+        const BoutReal expected =
+            initial_source - call * (local_sums[i] + remote_sums[i]) / 15.0;
+        for (int jy = mesh->ystart; jy <= mesh->yend; ++jy) {
+          for (int jz = mesh->zstart; jz <= mesh->zend; ++jz) {
+            EXPECT_NEAR(source(mesh->xstart, jy, jz), expected, 1e-12);
+            EXPECT_NEAR(source(mesh->xstart + 1, jy, jz),
+                        initial_source
+                            + call * (closed(mesh->xstart + 1, jy, jz) - initial_source),
+                        1e-12);
+          }
+        }
+      }
+      EXPECT_FALSE(state["species"]["e"].isSet("momentum_source"));
+    }
+  }
+}
+
+TEST_F(CoreCommunicatorDiamagneticDriftTest,
+       EmptyBatchesStillParticipateInCoreReduction) {
+  Options options = diamagneticOptions();
+  DiamagneticDrift component("test", options, nullptr);
+  component.declareAllSpecies(
+      {"missing_temperature", "missing_charge", "neutral", "no_quantity"});
+  Options state;
+  // An entirely empty species collection also participates.
+  recording_mpi.reductions.clear();
+  component.transform(state);
+  ASSERT_EQ(recording_mpi.reductions.size(), 1u);
+  EXPECT_EQ(recording_mpi.reductions[0].count, 0);
+  EXPECT_EQ(recording_mpi.reductions[0].operation, MPI_SUM);
+
+  state["species"]["missing_temperature"]["charge"] = 1.0;
+  state["species"]["missing_temperature"]["density"] = 1.0;
+  state["species"]["missing_charge"]["temperature"] = 1.0;
+  state["species"]["missing_charge"]["density"] = 1.0;
+  state["species"]["neutral"]["charge"] = 0.0;
+  state["species"]["neutral"]["temperature"] = 1.0;
+  state["species"]["neutral"]["density"] = 1.0;
+  state["species"]["no_quantity"]["charge"] = 1.0;
+  state["species"]["no_quantity"]["temperature"] = 1.0;
+  recording_mpi.reductions.clear();
+  component.transform(state);
+  ASSERT_EQ(recording_mpi.reductions.size(), 1u);
+  EXPECT_EQ(recording_mpi.reductions[0].count, 0);
+  EXPECT_EQ(recording_mpi.reductions[0].operation, MPI_SUM);
+  EXPECT_EQ(recording_mpi.reductions[0].communicator, MPI_COMM_SELF);
+  for (const auto& species : state["species"].getChildren()) {
+    EXPECT_FALSE(species.second.isSet("density_source"));
+    EXPECT_FALSE(species.second.isSet("energy_source"));
+    EXPECT_FALSE(species.second.isSet("momentum_source"));
   }
 }
 

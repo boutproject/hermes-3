@@ -39,14 +39,14 @@ private:
   Field3D calculateGradientForm(const Field3D& quantity, const Field3D& temperature,
                                 BoutReal charge, BoutReal factor = 1.0);
 
-  /// Add diamagnetic source terms for a single species subsection.
-  void addDiamagneticSources(GuardedOptions& species);
+  /// Calculate the local volume-weighted sum on the inner core ring.
+  BoutReal coreRingSum(const Field3D& f) const;
 
   /// Smooth a source around the inner radial core boundary.
   ///
   /// Requires closed_average on the core boundary for this component.
   /// Modifies the input field in-place.
-  void coreAverage(Field3D& f);
+  void coreAverage(Field3D& f, BoutReal global_sum) const;
 
   VectorMetric Curlb_B;
   DiamagneticForm form;                ///< Form of the diamagnetic sink

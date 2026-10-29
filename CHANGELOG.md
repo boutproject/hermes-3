@@ -14,3 +14,7 @@
   field-aligned frame; the gradient form removes its implied target flux
   using an interior extrapolation of `J*C.y`. The gradient form rejects
   parallel transforms without field-aligned conversion support.
+- Diamagnetic core-ring averaging uses the Y communicator at the first
+  interior x cell and checks that its processors agree on whether averaging
+  is active. It caches the ring volume and batches all species' source sums
+  into one MPI reduction per transform.
