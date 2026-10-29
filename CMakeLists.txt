@@ -414,7 +414,7 @@ if(HERMES_TESTS)
   option(HERMES_DIVOPS_MMS_TESTS "Build the differential operator MMS tests" ON)
 
   if(HERMES_UNIT_TESTS OR HERMES_DIVOPS_MMS_TESTS)
-    if(NOT PACKAGE_TESTS)
+    if(NOT BOUT_TESTS)
       # Not running BOUT++ tests Since BOUT++ includes googletest, adding it
       # again causes errors
       add_subdirectory(external/googletest)

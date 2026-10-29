@@ -38,13 +38,13 @@ jobs:
             test_type: unit
             coverage: ON
             name: "CMake default options"
-            bout_configure_options: "-DPACKAGE_TESTS=OFF"
+            bout_configure_options: "-DBOUT_TESTS=OFF"
             hermes_configure_options: "-DHERMES_ERROR_ON_WARNINGS=ON -DHERMES_DIVOPS_MMS_TESTS=OFF"
           - cmake_build_type: RelWithDebInfo
             test_type: integration
             coverage: OFF
             name: "CMake default options"
-            bout_configure_options: "-DPACKAGE_TESTS=OFF
+            bout_configure_options: "-DBOUT_TESTS=OFF
                                 -DBOUT_USE_PETSC=ON
                                 -DBOUT_USE_SLEPC=ON
                                 -DBOUT_USE_SUNDIALS=ON
@@ -55,7 +55,7 @@ jobs:
             test_type: unit
             coverage: ON
             name: "3D metrics"
-            bout_configure_options: "-DPACKAGE_TESTS=OFF
+            bout_configure_options: "-DBOUT_TESTS=OFF
                                      -DBOUT_USE_PETSC=ON
                                      -DBOUT_USE_SLEPC=ON
                                      -DBOUT_USE_SUNDIALS=ON
@@ -67,7 +67,7 @@ jobs:
           - cmake_build_type: RelWithDebInfo
             test_type: integration
             name: "3D metrics"
-            bout_configure_options: "-DPACKAGE_TESTS=OFF
+            bout_configure_options: "-DBOUT_TESTS=OFF
                                      -DBOUT_USE_PETSC=ON
                                      -DBOUT_USE_SLEPC=ON
                                      -DBOUT_USE_SUNDIALS=ON
