@@ -44,13 +44,6 @@
 
 using bout::globals::mesh;
 
-Field3D adaptive_sourceterm(const Field3D& thisfield, const BoutReal maximum,
-                            const BoutReal overshoot) {
-  BoutReal k = 5.0 / overshoot;
-  BoutReal x0 = maximum + overshoot / 2.0;
-  return (1.0 - (1.0 / (1.0 + exp(-k * (thisfield - x0)))));
-}
-
 Field3D Div_par_diffusion_index(const Field3D& f, bool bndry_flux) {
   Field3D result;
   result = 0.0;

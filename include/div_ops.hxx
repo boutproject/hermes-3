@@ -40,9 +40,6 @@
 
 #include <cmath>
 
-Field3D adaptive_sourceterm(const Field3D& thisfield, const BoutReal maximum,
-                            const BoutReal overshoot);
-
 /*!
  * Diffusion in index space
  *
