@@ -375,7 +375,7 @@ The density control is managed in each species density section:
    adaptive_source = 1e19      # m^-3
    adaptive_overshoot = 1e18   # m^-3
 
-Temperature controll is done in the pressure section 
+Temperature control is done in the pressure section 
 
 .. code-block:: ini
 
@@ -397,4 +397,5 @@ The function used for the dampening is
      return (1.0 - (1.0 / (1.0 + exp(-k * (thisfield - x0)))));
    }
 
+This function is multiplied with the individual source terms in the components ``evolve_density`` and ``evolve_pressure``.
 
