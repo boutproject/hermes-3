@@ -9,7 +9,7 @@
 
 #include <bout/bout_enum_class.hxx>
 #include <bout/bout_types.hxx>
-#include <bout/field2d.hxx>
+#include <bout/coordinates.hxx>
 #include <bout/options.hxx>
 #include <bout/vector2d.hxx>
 
@@ -62,7 +62,7 @@ private:
   ///  - energy_source
   ///  - momentum_source
   void transform_impl(GuardedOptions& state) override;
-  Field2D cell_volume;
+  Coordinates::FieldMetric cell_volume;
   BoutReal core_ring_volume{0.0};
 };
 

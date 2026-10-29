@@ -82,13 +82,13 @@ void setCurvature(BoutReal bx = 1.0, BoutReal by = 0.0, BoutReal bz = 0.0) {
 
 BoutReal volumeIntegral(const Field3D& field) {
   const auto* coords = mesh->getCoordinates();
-  const Field2D cell_volume = coords->dx() * coords->dy() * coords->dz() * coords->J();
+  const Coordinates::FieldMetric cell_volume = coords->cell_volume();
 
   BoutReal result = 0.0;
   for (int jx = mesh->xstart; jx <= mesh->xend; ++jx) {
     for (int jy = mesh->ystart; jy <= mesh->yend; ++jy) {
       for (int jz = mesh->zstart; jz <= mesh->zend; ++jz) {
-        result += cell_volume(jx, jy) * field(jx, jy, jz);
+        result += cell_volume(jx, jy, jz) * field(jx, jy, jz);
       }
     }
   }
@@ -192,8 +192,10 @@ std::shared_ptr<Coordinates> makeUnitCoordinates(Mesh* target_mesh) {
   coords->setD1_dy(0.2);
   coords->setD1_dz(0.0);
 #if BOUT_USE_METRIC_3D
-  coords->Bxy.splitParallelSlices();
-  coords->Bxy.yup() = coords->Bxy.ydown() = coords->Bxy;
+  auto Bxy = coords->Bxy();
+  Bxy.splitParallelSlices();
+  Bxy.yup() = Bxy.ydown() = coords->Bxy();
+  coords->setBxy(Bxy);
 #endif
   coords->setParallelTransform(
       bout::utils::make_unique<ParallelTransformIdentity>(*target_mesh));
@@ -372,9 +374,10 @@ TEST_F(RadialDiamagneticDriftTest, TransformAveragesInnermostCoreRing) {
 
   auto* coords = mesh->getCoordinates();
   Coordinates::FieldMetric J{1.0};
-  J(mesh->xstart, mesh->ystart) = 1.0;
-  J(mesh->xstart, mesh->ystart + 1) = 2.0;
-  J(mesh->xstart, mesh->yend) = 3.0;
+  for (int jz = mesh->zstart; jz <= mesh->zend; ++jz) {
+    J(mesh->xstart, mesh->ystart + 1, jz) = 2.0;
+    J(mesh->xstart, mesh->yend, jz) = 3.0;
+  }
   coords->setJ(J);
 
   for (const auto* form : {"gradient", "divergence"}) {
@@ -438,11 +441,116 @@ TEST_F(RadialDiamagneticDriftTest, TransformAveragesInnermostCoreRing) {
   }
 }
 
+#if BOUT_USE_METRIC_3D
+TEST_F(RadialDiamagneticDriftTest, CoreAveragePreservesRingIntegralWithZVaryingJacobian) {
+  setCurvature();
+  const BoutReal wave_number = TWOPI / mesh->LocalNz;
+  const auto J = makeField<Field3D>([wave_number](Ind3D& i) {
+    return 1.5 + 0.2 * i.y() + 0.3 * std::cos(wave_number * i.z());
+  });
+  auto* coords = mesh->getCoordinates();
+  coords->setJ(J);
+  // Bxy = J makes J*C.x constant, so the discrete curvature is divergence-free.
+  coords->setBxy(J);
+  const auto quantity = makeField<Field3D>([wave_number](Ind3D& i) {
+    return 1.0 + 0.2 * i.x() * i.x() + 0.1 * i.x() * i.y()
+           + 0.5 * i.x() * std::sin(wave_number * i.z());
+  });
+  const auto& cell_volume = coords->cell_volume();
+
+  for (const auto* form : {"gradient", "divergence"}) {
+    SCOPED_TRACE(form);
+    Options options = diamagneticOptions();
+    options["test"]["form"] = form;
+    DiamagneticDrift component("test", options, nullptr);
+    Options closed_options = diamagneticOptions();
+    closed_options["test"]["form"] = form;
+    closed_options["test"]["radial_boundary"] = "closed";
+    DiamagneticDrift closed_component("test", closed_options, nullptr);
+    auto state = diamagneticState(quantity, 1.7, -2.0);
+    auto closed_state = state.copy();
+    component.declareAllSpecies({"d+"});
+    closed_component.declareAllSpecies({"d+"});
+    component.transform(state);
+    closed_component.transform(closed_state);
+
+    for (const auto* name : {"density_source", "energy_source", "momentum_source"}) {
+      SCOPED_TRACE(name);
+      const auto averaged = get<Field3D>(state["species"]["d+"][name]);
+      const auto closed = get<Field3D>(closed_state["species"]["d+"][name]);
+      BoutReal ring_volume = 0.0;
+      BoutReal closed_integral = 0.0;
+      BoutReal averaged_integral = 0.0;
+      BoutReal unweighted_sum = 0.0;
+      int ring_cells = 0;
+      for (int jy = mesh->ystart; jy <= mesh->yend; ++jy) {
+        for (int jz = mesh->zstart; jz <= mesh->zend; ++jz) {
+          const BoutReal volume = cell_volume(mesh->xstart, jy, jz);
+          ring_volume += volume;
+          closed_integral += volume * closed(mesh->xstart, jy, jz);
+          averaged_integral += volume * averaged(mesh->xstart, jy, jz);
+          unweighted_sum += closed(mesh->xstart, jy, jz);
+          ++ring_cells;
+        }
+      }
+      const BoutReal expected = closed_integral / ring_volume;
+      // The profiles distinguish volume weighting from an arithmetic mean.
+      EXPECT_GT(std::abs(expected - unweighted_sum / ring_cells), 1e-4);
+      EXPECT_NEAR(averaged_integral, closed_integral, 1e-12);
+      for (int jy = mesh->ystart; jy <= mesh->yend; ++jy) {
+        for (int jz = mesh->zstart; jz <= mesh->zend; ++jz) {
+          EXPECT_NEAR(averaged(mesh->xstart, jy, jz), expected, 1e-12);
+          EXPECT_DOUBLE_EQ(averaged(mesh->xstart + 1, jy, jz),
+                           closed(mesh->xstart + 1, jy, jz));
+        }
+      }
+      EXPECT_NEAR(volumeIntegral(averaged), 0.0, 1e-12);
+      EXPECT_NEAR(volumeIntegral(closed), 0.0, 1e-12);
+    }
+  }
+}
+
+TEST_F(RadialDiamagneticDriftTest, ShiftedCurvatureReadsThreeDimensionalSinty) {
+  const BoutReal wave_number = TWOPI / mesh->LocalNz;
+  const auto sinty = makeField<Field3D>([wave_number](Ind3D& i) {
+    return 0.2 + 0.05 * i.y() + 0.1 * std::sin(wave_number * i.z());
+  });
+  setCurvature();
+  static_cast<FakeMesh*>(mesh)->setGridDataSource(new FakeGridDataSource{
+      {{"bxcvx", 1.0}, {"bxcvy", 0.0}, {"bxcvz", 0.0}, {"sinty", sinty}}});
+  // Select the curvature correction while retaining the identity transform
+  // to isolate its dependence on the 3D sinty field.
+  Options::root()["mesh"]["paralleltransform"]["type"] = "shifted";
+  Options options = diamagneticOptions();
+  options["test"]["form"] = "gradient";
+  options["test"]["radial_boundary"] = "open";
+  DiamagneticDrift component("test", options, nullptr);
+  const auto quantity = makeField<Field3D>(
+      [wave_number](Ind3D& i) { return std::sin(wave_number * i.z()); });
+  auto state = diamagneticState(quantity);
+  component.declareAllSpecies({"d+"});
+  component.transform(state);
+
+  for (const auto* name : {"density_source", "energy_source", "momentum_source"}) {
+    SCOPED_TRACE(name);
+    const auto source = get<Field3D>(state["species"]["d+"][name]);
+    const BoutReal factor = std::string(name) == "energy_source" ? 2.5 : 1.0;
+    BOUT_FOR_SERIAL(i, source.getRegion("RGN_NOBNDRY")) {
+      const BoutReal expected = -2.0 * factor * sinty[i] * std::sin(wave_number)
+                                * std::cos(wave_number * i.z());
+      EXPECT_NEAR(source[i], expected, 1e-12);
+    }
+  }
+}
+#endif
+
 TEST_F(CoreCommunicatorDiamagneticDriftTest, ConstructorChecksFlagsAndCachesRingVolume) {
   auto* coords = mesh->getCoordinates();
   Coordinates::FieldMetric J{1.0};
-  J(mesh->xstart, mesh->ystart + 1) = 2.0;
-  J(mesh->xstart, mesh->yend) = 3.0;
+  for (int jz = mesh->zstart; jz <= mesh->zend; ++jz) {
+    J(mesh->xstart, mesh->ystart + 1, jz) = 2.0;
+    J(mesh->xstart, mesh->yend, jz) = 3.0;
+  }
   coords->setJ(J);
   Options options = diamagneticOptions();
   DiamagneticDrift component("test", options, nullptr);
@@ -459,7 +567,7 @@ TEST_F(CoreCommunicatorDiamagneticDriftTest, ConstructorChecksFlagsAndCachesRing
   EXPECT_EQ(reductions[2].operation, MPI_SUM);
   EXPECT_EQ(reductions[2].datatype, MPI_DOUBLE);
   ASSERT_EQ(reductions[2].local_sums.size(), 1u);
-  EXPECT_DOUBLE_EQ(reductions[2].local_sums[0], 6.0);
+  EXPECT_DOUBLE_EQ(reductions[2].local_sums[0], 6.0 * (mesh->zend - mesh->zstart + 1));
   for (const auto& reduction : reductions) {
     EXPECT_EQ(reduction.communicator, MPI_COMM_SELF);
   }
@@ -539,8 +647,10 @@ TEST_F(CoreCommunicatorDiamagneticDriftTest,
        TransformBatchesSpeciesAndUsesGlobalRingMeans) {
   auto* coords = mesh->getCoordinates();
   Coordinates::FieldMetric J{1.0};
-  J(mesh->xstart, mesh->ystart + 1) = 2.0;
-  J(mesh->xstart, mesh->yend) = 3.0;
+  for (int jz = mesh->zstart; jz <= mesh->zend; ++jz) {
+    J(mesh->xstart, mesh->ystart + 1, jz) = 2.0;
+    J(mesh->xstart, mesh->yend, jz) = 3.0;
+  }
   coords->setJ(J);
   const auto quantity = makeField<Field3D>([](Ind3D& i) {
     return 1.0 + 0.2 * i.x() * i.x() + 0.1 * i.x() * i.y() + 0.03 * i.z();
@@ -553,6 +663,8 @@ TEST_F(CoreCommunicatorDiamagneticDriftTest,
       {"e", "energy_source"}};
   const std::vector<BoutReal> remote_sums{3.0, -5.0, 7.0, 11.0, -13.0};
   constexpr BoutReal initial_source = 11.0;
+  const BoutReal remote_volume = 9.0 * (mesh->zend - mesh->zstart + 1);
+  const BoutReal global_volume = 15.0 * (mesh->zend - mesh->zstart + 1);
 
   for (const auto* form : {"gradient", "divergence"}) {
     SCOPED_TRACE(form);
@@ -588,11 +700,11 @@ TEST_F(CoreCommunicatorDiamagneticDriftTest,
                  * (initial_source - closed(mesh->xstart, jy, jz));
         }
       }
-      local_sums.push_back(sum / (mesh->zend - mesh->zstart + 1));
+      local_sums.push_back(sum);
     }
 
     recording_mpi.reductions.clear();
-    recording_mpi.sum_additions = {9.0}; // Local ring volume is 6; global is 15.
+    recording_mpi.sum_additions = {remote_volume};
     Options options = diamagneticOptions();
     options["test"]["form"] = form;
     DiamagneticDrift component("test", options, nullptr);
@@ -626,7 +738,7 @@ TEST_F(CoreCommunicatorDiamagneticDriftTest,
         const auto closed =
             get<Field3D>(closed_state["species"][outputs[i].first][outputs[i].second]);
         const BoutReal expected =
-            initial_source - call * (local_sums[i] + remote_sums[i]) / 15.0;
+            initial_source - call * (local_sums[i] + remote_sums[i]) / global_volume;
         for (int jy = mesh->ystart; jy <= mesh->yend; ++jy) {
           for (int jz = mesh->zstart; jz <= mesh->zend; ++jz) {
             EXPECT_NEAR(source(mesh->xstart, jy, jz), expected, 1e-12);

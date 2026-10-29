@@ -2,7 +2,6 @@
 #include <bout/boutcomm.hxx>
 #include <bout/boutexception.hxx>
 #include <bout/derivs.hxx>
-#include <bout/field2d.hxx>
 #include <bout/field3d.hxx>
 #include <bout/fv_ops.hxx>
 #include <bout/globals.hxx>
@@ -110,7 +109,9 @@ DiamagneticDrift::DiamagneticDrift(std::string name, Options& alloptions,
     this->cell_volume = coords->dx() * coords->dy() * coords->dz() * coords->J();
     BoutReal local_core_volume = 0.0;
     for (int jy = mesh->ystart; jy <= mesh->yend; ++jy) {
-      local_core_volume += this->cell_volume(mesh->xstart, jy);
+      for (int jz = mesh->zstart; jz <= mesh->zend; ++jz) {
+        local_core_volume += this->cell_volume(mesh->xstart, jy, jz);
+      }
     }
     // Sum over processors on core boundary
     bout::globals::mpi->MPI_Allreduce(&local_core_volume, &this->core_ring_volume, 1,
@@ -127,7 +128,7 @@ DiamagneticDrift::DiamagneticDrift(std::string name, Options& alloptions,
   Options& paralleltransform = Options::root()["mesh"]["paralleltransform"];
   if (paralleltransform.isSet("type")
       and paralleltransform["type"].as<std::string>() == "shifted") {
-    Field2D I;
+    Coordinates::FieldMetric I;
     if (mesh->get(I, "sinty") != 0) {
       I = 0.0;
     }
@@ -284,12 +285,9 @@ Field3D DiamagneticDrift::calculateGradientForm(const Field3D& quantity,
 BoutReal DiamagneticDrift::coreRingSum(const Field3D& f) const {
   BoutReal local_sum = 0.0;
   for (int jy = mesh->ystart; jy <= mesh->yend; ++jy) {
-    BoutReal zavg = 0.0;
     for (int jz = mesh->zstart; jz <= mesh->zend; ++jz) {
-      zavg += f(mesh->xstart, jy, jz);
+      local_sum += this->cell_volume(mesh->xstart, jy, jz) * f(mesh->xstart, jy, jz);
     }
-    zavg /= mesh->zend - mesh->zstart + 1;
-    local_sum += this->cell_volume(mesh->xstart, jy) * zavg;
   }
   return local_sum;
 }
