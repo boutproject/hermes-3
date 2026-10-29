@@ -386,4 +386,15 @@ Temperature controll is done in the pressure section
 
 The overshoot is an approximate interval after which the source is completely dampened. This is not meant to be exact. The precise value it reaches depends on e.g. the source term. It is advised to not use too unrealistic source strengths, otherwise the density or temperature values might exceed multiples of the overshoot. 
 
+The function used for the dampening is 
+
+.. code-block:: ini
+
+   Field3D adaptive_sourceterm(const Field3D& thisfield, const BoutReal maximum,
+                               const BoutReal overshoot) {
+     BoutReal k = 5.0 / overshoot;
+     BoutReal x0 = maximum + overshoot / 2.0;
+     return (1.0 - (1.0 / (1.0 + exp(-k * (thisfield - x0)))));
+   }
+
 
