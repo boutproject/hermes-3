@@ -2,6 +2,7 @@
 #ifndef RELAX_POTENTIAL_H
 #define RELAX_POTENTIAL_H
 
+#include "../include/div_ops.hxx"
 #include "../include/guarded_options.hxx"
 
 #include <bout/bout_types.hxx>
@@ -12,6 +13,7 @@
 
 #include "component.hxx"
 
+#include <memory>
 #include <string>
 
 /// Evolve vorticity and potential in time.
@@ -132,16 +134,18 @@ private:
 
   Field3D Pi_hat; ///< Contribution from ion pressure, weighted by atomic mass / charge
 
-  bool exb_advection;            //< Include nonlinear ExB advection?
-  bool exb_advection_simplified; // Simplify nonlinear ExB advection form?
-  bool diamagnetic;              //< Include diamagnetic current?
-  bool diamagnetic_polarisation; //< Include diamagnetic drift in polarisation current?
+  bool exb_advection;            ///< Include nonlinear ExB advection?
+  BoutReal scale_ExB;            ///< Multiply ExB advection by this factor
+  bool exb_advection_simplified; ///< Simplify nonlinear ExB advection form?
+  bool diamagnetic;              ///< Include diamagnetic current?
+  bool diamagnetic_polarisation; ///< Include diamagnetic drift in polarisation current?
+  bool diamagnetic_bracketform;  ///< Use Arakawa form of diamagnetic current?
   bool boussinesq;               ///< Use the Boussinesq approximation?
-  BoutReal average_atomic_mass;  //< Weighted average atomic mass, for polarisaion current
-                                 // (Boussinesq approximation)
-  BoutReal permittivity;         ///< Vacuum permittivity
-  bool poloidal_flows;           ///< Include poloidal ExB flow?
-  bool bndry_flux;               ///< Allow flows through radial boundaries?
+  BoutReal average_atomic_mass; ///< Weighted average atomic mass, for polarisaion current
+                                // (Boussinesq approximation)
+  BoutReal permittivity;        ///< Vacuum permittivity
+  bool poloidal_flows;          ///< Include poloidal ExB flow?
+  bool bndry_flux;              ///< Allow flows through radial boundaries?
 
   bool collisional_friction; ///< Damping of vorticity due to collisional friction
 
@@ -157,8 +161,9 @@ private:
   BoutReal phi_boundary_last_update; ///< Time when last updated
   bool phi_core_averagey;            ///< Average phi core boundary in Y?
 
-  Coordinates::FieldMetric Bsq;           ///< SQ(coord->Bxy())
-  VectorMetric Curlb_B;                   ///< Curvature vector Curl(b/B)
+  Coordinates::FieldMetric Bsq; ///< SQ(coord->Bxy())
+  VectorMetric Curlb_B;         ///< Curvature vector Curl(b/B)
+  Field3D logB;
   BoutReal hyper_z;                       ///< Hyper-viscosity in Z
   Coordinates::FieldMetric viscosity;     ///< Perpendicular Kinematic viscosity
   Coordinates::FieldMetric viscosity_par; ///< Parallel Kinematic viscosity
@@ -172,6 +177,10 @@ private:
   Field3D Vort_rhs;         // Rate of change of vorticity, even if not evolved
 
   bool diagnose; ///< Output additional diagnostics?
+
+  std::shared_ptr<FCI::dagp_fv> dagp_op; ///< Perp. diffusion operator for Fci
+  Coordinates::FieldMetric
+      bracket_factor; ///< For non-Clebsch coordinate systems (e.g. FCI)
 
   /// Optional inputs
   ///
