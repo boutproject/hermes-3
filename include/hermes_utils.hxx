@@ -3,8 +3,13 @@
 #define HERMES_UTILS_H
 
 #include <algorithm>
+#include <cctype>
+#include <cmath>
+#include <map>
+#include <string>
+#include <vector>
 
-#include "bout/bout_enum_class.hxx"
+#include "bout/field3d.hxx"
 #include "bout/traits.hxx"
 
 inline BoutReal floor(BoutReal value, BoutReal min) { return std::max(value, min); }
@@ -93,21 +98,31 @@ static inline std::vector<std::string> str_keys(const std::map<std::string, T>& 
   return keys;
 }
 
-// TODO: Replace the later SpeciesType with this one. This one
-// doesn't work in elec
+inline int identifySpeciesMultiplicity(const std::string& species) {
+  auto end = species.find_first_of("+-");
+  const std::string uncharged = species.substr(0, end);
 
-/// Enum that identifies the type of a species: electron, ion, neutral
-BOUT_ENUM_CLASS(SpeciesType, electron, ion, neutral);
-
-/// Identify species name string as electron, ion or neutral
-inline SpeciesType identifySpeciesType(const std::string& species) {
-  if (species == "e") {
-    return SpeciesType::electron;
-  } else if ((species == "i") or species.find(std::string("+")) != std::string::npos) {
-    return SpeciesType::ion;
+  auto digit = uncharged.end();
+  while (digit != uncharged.begin() and std::isdigit(*(digit - 1)) != 0) {
+    --digit;
   }
-  // Not electron or ion -> neutral
-  return SpeciesType::neutral;
+
+  if (digit == uncharged.end()) {
+    return 1;
+  }
+
+  return std::stoi(std::string(digit, uncharged.end()));
+}
+
+inline std::string identifySpeciesElement(const std::string& species) {
+  auto end = species.find_first_of("+-");
+  std::string uncharged = species.substr(0, end);
+
+  while (!uncharged.empty() and std::isdigit(uncharged.back()) != 0) {
+    uncharged.pop_back();
+  }
+
+  return uncharged;
 }
 
 template <typename T, typename = bout::utils::EnableIfField<T>>

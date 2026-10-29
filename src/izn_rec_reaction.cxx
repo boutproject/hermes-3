@@ -23,7 +23,7 @@ IznRecReaction::IznRecReaction(std::string short_reaction_type, std::string name
   Data type is assumed to be the same as the izn/rec rate data for now and the data ID is
   the default for that type.
   */
-  ReactionDataTypes e_energy_loss_data_type = this->rate_data->get_type();
+  ReactionDataTypes e_energy_loss_data_type = get_reaction_data().get_type();
 
   const std::string e_energy_loss_data_src_id =
       get_default_data_id(this->parser->get_reaction_str(), e_energy_loss_data_type,
@@ -68,7 +68,7 @@ IznRecReaction::IznRecReaction(std::string short_reaction_type, std::string name
 
     std::string long_reaction_type =
         this->short_reaction_type == "iz" ? "ionisation" : "recombination";
-    std::string rate_data_src = this->rate_data->src_str();
+    std::string rate_data_src = get_reaction_data().src_str();
     add_diagnostic(
         this->heavy_product, fmt::format("S{:s}", default_diag_suffix),
         fmt::format("Particle source due to {:s} of {:s} to {:s}", long_reaction_type,

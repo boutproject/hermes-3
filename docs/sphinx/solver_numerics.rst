@@ -451,3 +451,86 @@ layers that can form:
    \Gamma_{nv, i+1/2}^{boundary} = n_{i,R}v_{||i,R}v_{||i+1/2} + a_{max}\left[n_{i,R}v_{||i,R} - n_{i+1/2}v_{||i+1/2}\right]
 
 where :math:`n_{i+1/2} = \frac{1}{2}\left(n_{i} + n_{i+1}\right)`.
+
+.. _sec-low-n-sources:
+
+Low-density sources (experimental)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The ``low_n_sources`` component is an **experimental feature** intended for use
+in simulations where low species densities are expected to cause numerical
+issues. It adds artificial sources and sinks via ``pseudo-reactions`` to restore
+depleted species towards a density threshold. Note that, while these terms are
+implemented via the regular :ref:`reactions framework<sec-reactions-dev>`, they
+are distinct from anything in the :code:`[reactions]` block, and are included
+purely to improve numerical stability.
+
+To enable the sources, add :code:`low_n_sources` to the component list in your
+input file:
+
+.. code-block:: ini
+
+   [hermes]
+   components = ..., low_n_sources
+
+   [low_n_sources]
+   floor_factor = 10
+   diagnose = true
+
+The activation threshold for each source is the :code:`density_floor` of its target
+species multiplied by a :code:`floor_factor` (default :code:`10`). Below this density,
+the pseudo-reaction adds density sources and sinks to the participating species,
+together with the associated momentum and energy transfers. They do not impose a
+hard lower bound on density. Setting :code:`diagnose = true` adds the density
+sources associated with each pseudo-reaction to the simulation output.
+
+Pseudo-reactions
+^^^^^^^^^^^^^^^^
+
+The types of pseudo-reactions available in each simulation are determined
+automatically based on which species are present. Reactants and products are
+typically, but not necessarily, the same as the equivalent physical reactions.
+The pseudo-reaction types are listed below, with example reaction strings in
+parentheses for a simulation including :math:`H`, :math:`H^+`, :math:`H_2` and :math:`H_2^+`.
+
+* **Recombination** (:math:`H^+ + e \to H` and :math:`H_2^+ + e \to H_2`):
+
+  * Restores depleted neutral species, consuming some ions.
+  * ``Available when`` at least one neutral and singly charged ion pair is present.
+  * ``Triggered when`` the neutral (atom or molecule) population falls below its threshold.
+  * ``Boosted when`` the product species is an atom and the corresponding molecular species (if present) is also depleted.
+
+* **Ionisation** (:math:`H \to H^+ + e` and :math:`H_2 \to H_2^+ + e`):
+
+  * Restores depleted ion species, consuming some neutrals.
+  * ``Available when`` at least one pair of neutral and ion species are present in the simulation.
+  * ``Triggered when`` the ion population falls below its threshold.
+  * Smoothly ``suppressed when`` the reactant species is below its density threshold.
+
+* **Association** (:math:`2H \to H_2`):
+
+  * Restores depleted molecules, consuming some atoms.
+  * ``Available when`` at least one pair of atom and molecule species are present in the simulation.
+  * ``Triggered when`` the molecular population falls below its threshold.
+
+* **External ion source** (represented internally as :math:`H^+ \to 2H^+` and :math:`H_2^+ \to 2H_2^+`):
+
+  * Adds ions to the system (introduces a net source of nuclei and mass).
+  * ``Available when`` at least one ion species is present in the simulation.
+  * ``Triggered only as a last resort when`` the ion and corresponding neutral populations are simultaneously below their thresholds.
+  * If the corresponding neutral species is not present, the external source is triggered solely by ion deficit.
+  * Adds momentum and thermal energy at the local ion velocity and temperature. These terms can be disabled with :code:`external_src_mom_energy_enabled = false`.
+  * ``Boosted when`` a corresponding neutral species is included in the simulation and is also depleted.
+
+Note that, for now, only singly charged ions can be included in pseudo-reactions, other charge states are ignored.
+
+Choosing the restoration timescale
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The :code:`timescale` option controls how rapidly pseudo-reactions restore
+species densities towards their threshold(s). User-supplied values must be
+in normalised code units; the default corresponds to :math:`10^{-5}` s.
+When setting this option, aim for a timescale short enough that
+pseudo-reactions are able to compete with physical reactions in the low-density
+regime where they are triggered, but not so short that they behave like a hard
+density floor, which may increase stiffness and worsen solver convergence.

@@ -4,6 +4,7 @@
 
 #include <map>
 #include <memory>
+#include <vector>
 
 #include "component.hxx"
 #include "rate_helper.hxx"
@@ -24,13 +25,15 @@ using OPTYPE = GuardedOptions && (GuardedOptions&&, Field3D);
  * Reaction.
  */
 struct ReactionBase : public Component {
-  ReactionBase(std::string name, Permissions&& permissions)
-      : Component(name, std::move(permissions)),
-        inst_num(incremented_instance_num() + 1) {}
+  ReactionBase(std::string name, Permissions&& permissions, bool is_internal = false)
+      : Component(name, std::move(permissions)), is_internal(is_internal),
+        inst_num(is_internal ? 1 : incremented_instance_num() + 1) {}
 
   static std::size_t incremented_instance_num() { return instance_num_ref()++; }
 
-  // Reset the instance counter; needed to avoid unit tests affecting each other!
+  // Reset the instance counter
+  // This is left in for now, as it's used by ConcreteComponentTests and is less ugly
+  // than setting is_internal=true for every tested reaction component.
   static void reset_instance_counter() { instance_num_ref() = 0; }
 
 private:
@@ -40,6 +43,9 @@ private:
   }
 
 protected:
+  /// 'internal' reactions (e.g. the PseudoReactions instantiated by LowNSources) do not increment inst_num
+  const bool is_internal;
+  /// Any scheduled reactions (those read from the config) that inherit from this class have a unique instance number
   std::size_t inst_num;
 };
 
@@ -61,6 +67,7 @@ struct Reaction : public ReactionBase {
    *
    * @param name
    * @param options Options object
+   * @param is_internal Whether or not this instance is an 'internal' reaction (e.g. a PseudoReaction created by LowNSources)
    */
   Reaction(std::string name, Options& options);
 
@@ -73,18 +80,25 @@ struct Reaction : public ReactionBase {
    */
   void outputVars(Options& state) final;
 
+  /// Apply this reaction to an already permission-scoped state.
+  void transform_guarded(GuardedOptions& state) { transform_impl(state); }
+
+  /// The 'type' of this reaction is the reaction string.
   std::string typeName() const final { return parser->get_reaction_str(); }
 
 protected:
   /// Reaction string parser
   std::unique_ptr<ReactionParser> parser;
 
-  /// Reaction data
-  std::unique_ptr<ReactionData> rate_data;
-
   /// Units and normalisations extracted to member vars for convenience
   Options& units;
   BoutReal Tnorm, Nnorm, FreqNorm;
+
+  /// Species names extracted once during construction
+  std::vector<std::string> reactant_names;
+  std::vector<std::string> heavy_reactant_names;
+  std::vector<std::string> heavy_product_names;
+  std::vector<std::string> heavy_produced_names;
 
   /// Rate multipliers, extracted from input options
   BoutReal rate_multiplier, radiation_multiplier;
@@ -111,19 +125,22 @@ protected:
    * @param diag_type enum identifying the diagnostic type, also used to determine source
    * name
    * @param data_source Name to use as the 'source' output attribute
-   * @param standard_name Optional string to use as the 'standard_name' output attribute.
-   * Defaults to diag_name.
    * @param transformer Optional transformer function to use when modifying the diagnostic
    * (default is 'negate', i.e. the diagnostic has the opposite sign to the source)
+   * @param standard_name Optional string to use as the 'standard_name' output attribute.
+   * Defaults to diag_name.
    *
    * @details Adds a new entry in the diagnostic (multi)map. The (non-unique)
    * key is < \p sp_name, \p type >
    */
   void add_diagnostic(const std::string& sp_name, const std::string& diag_name,
-                      const std::string& long_diag_name, ReactionDiagnosticType type,
+                      const std::string& long_diag_name, ReactionDiagnosticType diag_type,
                       const std::string& data_source,
                       DiagnosticTransformerType transformer = negate,
                       const std::string& standard_name = "");
+
+  // Borrow the reaction data owned by this reaction. Throws if no data is set.
+  ReactionData& get_reaction_data() const;
 
   /**
    * @brief Set weights for any reactant => product momentum / energy channel that hasn't
@@ -165,6 +182,16 @@ protected:
    */
   virtual void transform_additional([[maybe_unused]] GuardedOptions& state,
                                     [[maybe_unused]] const RateData& rate_calc_results) {}
+
+  /**
+   * @brief Compute and return rate data for the current state.
+   *
+   * @details Default implementation uses RateHelper, subclasses may override to set custom rates, collision frequencies.
+   *
+   * @param state
+   * @return RateData
+   */
+  virtual RateData get_rate(GuardedOptions& state);
 
   /**
    * @brief Update both a species source term and the corresponding diagnostics (if any
@@ -220,6 +247,9 @@ private:
   /// Participation factors of all species - currently set to 1!
   std::map<std::string, BoutReal> pfactors;
 
+  /// Reaction data
+  std::unique_ptr<ReactionData> reaction_data;
+
   /**
    * @brief Extract reaction string and data type and data ID for this reaction from the
    * input options, or set suitable defaults for the type and ID if they aren't specified.
@@ -249,7 +279,7 @@ private:
   void transform_impl(GuardedOptions& state) override final;
 
   /**
-   * @brief Reset the temporary values of the diagnostics stored in the state.
+   * @brief Reset diagnostics in the state and the cached data used for output.
    *
    * @param state
    */

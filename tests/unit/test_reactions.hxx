@@ -182,10 +182,6 @@ protected:
     // Generate input state for test
     Options test_state = generate_state();
 
-    // For now we need to manually reset reaction instance counter in tests, otherwise
-    // Reaction component construction will fail
-    ReactionBase::reset_instance_counter();
-
     // Run reaction
     RTYPE component = RTYPE("test" + lbl, test_state, nullptr);
     if (expectThrow) {
@@ -205,13 +201,12 @@ protected:
   void generate_data() {
     // Generate input state
     Options state = generate_state();
-
-    // For now we need to manually reset reaction instance counter in tests, otherwise
-    // Reaction component construction will fail
-    ReactionBase::reset_instance_counter();
+    const std::string component_name("test" + this->lbl);
+    // This is required to bypass the instance number check in Reaction/ReactionBase, which is only appropriate for reaction strings read from config files.
+    state[component_name]["is_internal"] = "true";
 
     // Run reaction
-    RTYPE component = RTYPE("test" + lbl, state, nullptr);
+    RTYPE component = RTYPE(component_name, state, nullptr);
     component.transform(state);
 
     // Write output state

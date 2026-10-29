@@ -9,6 +9,8 @@ namespace hermes {
 
 struct ConcreteCXReaction : public CXReaction {
   using CXReaction::CXReaction;
+  // Expose (protected) get_reaction_data() for testing
+  using Reaction::get_reaction_data;
   static constexpr auto type = "test_cx_reaction";
 };
 
@@ -80,6 +82,7 @@ protected:
     Options state{{comp_name,
                    {
                        {"type", this->parser.get_reaction_str()},
+                       {"is_internal", "true"},
                        {"diagnose", true},
                    }},
                   {"units", {{"eV", 1.0}, {"inv_meters_cubed", 1.0}, {"seconds", 1.0}}},
