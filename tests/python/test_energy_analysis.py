@@ -175,6 +175,30 @@ def dataset():
     return ds
 
 
+@pytest.mark.parametrize("settings_present", [False, True])
+def test_path_loader_prefers_settings_and_accepts_input_only(
+    dataset, tmp_path, monkeypatch, settings_present
+):
+    import xhermes
+
+    (tmp_path / "BOUT.inp").write_text("supplied input")
+    if settings_present:
+        (tmp_path / "BOUT.settings").write_text("resolved settings")
+    calls = []
+
+    def load(**kwargs):
+        calls.append(kwargs)
+        return dataset
+
+    monkeypatch.setattr(xhermes, "open_hermesdataset", load)
+    run = open_run(tmp_path)
+    assert calls[0]["inputfilepath"] == str(
+        tmp_path / ("BOUT.settings" if settings_present else "BOUT.inp")
+    )
+    assert calls[0]["keep_xboundaries"] and calls[0]["keep_yboundaries"]
+    assert run.source == str(tmp_path)
+
+
 def test_multispecies_inventory_units_and_no_double_counting(dataset):
     r = open_run(dataset)
     d = energy_densities(r)

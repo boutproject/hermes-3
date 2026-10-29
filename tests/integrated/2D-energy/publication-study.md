@@ -41,12 +41,121 @@ Every run gets its own generated `BOUT.inp` from `publication-input.inp`.
 The study manifest records configuration, input/executable/runner hashes,
 hashes of separately built Hermes/BOUT libraries, checkout revisions and dirty
 state, Python environment and MPI layout.
-`--resume STUDY` requires the same simulation arguments, executable and source
-hashes; repeat the original flags (including `--smoke`, if used). Successful
-runs are reused; incomplete outputs are archived before a fresh attempt. Runtime limits and
+`--resume STUDY` requires matching simulation arguments, executable and source
+hashes; repeat the original flags (including `--smoke`, if used). The level
+count can stay the same or increase; increasing it appends finer grids.
+After updating the runner, add `--allow-runner-change` to accept and record its
+new hash; configuration, input/template and executable/library checks still
+apply, and the original runner hash is retained in the manifest.
+Completed runs are reused; incomplete outputs are archived before a fresh attempt. Runtime limits and
 interrupts stop the local launch group and retain an explicit failure status.
 `--analyse-only` uses the retained configuration and rejects changed inputs,
-failed exit status, missing records and irregular output axes.
+missing records and irregular output axes.
+
+A nonzero process exit can occur after the final output, for example during
+MPI finalisation. The runner checks every rank's complete expected time axis
+and finite required physical fields in the final record. If these checks pass,
+it accepts the outputs and records `outputs_complete=true` in `status.json`,
+preserving the nonzero exit code and printing a warning. Startup recovery also
+requires readable restart files for every rank. Resume and reanalysis perform
+the same check for previously failed runs. Incomplete or unreadable outputs
+remain failures; a keyboard interrupt stops the current invocation even when
+its outputs are complete.
+
+## Extending and distributing a study
+
+To add resolution levels without repeating all the original simulation flags,
+use `--extend`. The number of levels is the **new total**, not the number to
+add. All saved simulation settings and the original executable path are
+inherited; only an increased level count is accepted.
+
+```sh
+.venv/bin/python tests/integrated/2D-energy/publication_scan.py \
+  --extend /path/to/results/interchange-TIMESTAMP --levels 5 \
+  --allow-runner-change
+```
+
+The manifest retains existing cases and records the appended grids. Completed
+cases are reused; remaining cases run normally. Once the whole matrix is
+complete, figures and tables are regenerated, using each formulation's new
+finest grid as its convergence reference. Decreasing the level count or
+changing physical settings is rejected. The runner-version override is needed
+only when the script has changed since the study was created or last resumed.
+
+For remote execution, prepare matched initial conditions locally:
+
+```sh
+.venv/bin/python tests/integrated/2D-energy/publication_scan.py \
+  --extend /path/to/results/interchange-TIMESTAMP --levels 5 \
+  --allow-runner-change --prepare-only
+```
+
+`--prepare-only` also works with a new study or `--resume`. It runs the
+zero-output startup simulations needed to generate native restart metadata,
+then writes matched time-zero restarts and a standalone `run-remote.py` into
+each pending case. It stops before the full simulations and analysis.
+`--cases CASE [CASE ...]` selects particular directory names, such as
+`fixed-pressure-128x128` and `fixed-total_energy-128x128`, for preparation or
+execution. Completed cases are skipped. Prepared restarts are retained and
+can also be used by an ordinary local resume.
+
+Copy these files from each prepared case to a directory on the other machine:
+
+- `BOUT.inp`;
+- all `BOUT.restart.<rank>.nc` files;
+- `initial-state.nc`, `remote-case.json` and `run-remote.py`.
+
+The nested `startup/` directory is not needed remotely. Keep the original
+`initial-state.nc` and `remote-case.json` locally. The remote simulation needs
+the same Hermes/BOUT source revisions and MPI rank count, but can use a build
+for a different architecture. The helper needs only Python's standard library:
+
+```sh
+python3 /remote/cases/fixed-pressure-128x128/run-remote.py \
+  --exe /remote/hermes/build/hermes-3 --source-root /remote/hermes
+```
+
+The helper verifies the prepared file hashes and uses the saved MPI process
+count. `--mpiexec PATH` selects a launcher; `--timeout SECONDS` sets an optional
+wall-clock limit. MPI inherits the remote environment. The helper retains
+stdout/stderr in `run.log` and writes `remote-execution.json` with the exit
+code, hostname, executable/library hashes and checkout revisions. It refuses
+to overwrite an existing attempt. Copy `BOUT.inp`, every rank's
+`BOUT.dmp.<rank>.nc`, `BOUT.settings`, logs, and `remote-execution.json` back under their original
+case directory names in a return directory, then import them:
+
+```sh
+.venv/bin/python tests/integrated/2D-energy/publication_scan.py \
+  --import-runs /path/to/results/interchange-TIMESTAMP \
+  --import-from /path/to/returned-cases \
+  --cases fixed-pressure-128x128 fixed-total_energy-128x128
+```
+
+Alternatively copy outputs directly into the original local case directories
+and omit `--import-from`. No local Hermes executable or MPI launcher is needed
+for importing. Without `--cases`, import scans pending cases with returned
+dumps. Existing completed cases are reused. Each imported case must have the
+original input, every MPI rank's full time axis, finite final state, the
+expected grid and physical box, and the matched initial pressure, density,
+potential, vorticity and (for total energy) `Eion`. External outputs are staged
+and checked before replacing a local failed attempt or writing completion
+status. Known source-revision mismatches or a build changed during execution
+are rejected. A nonzero remote exit is retained and can be accepted when the
+outputs pass these checks.
+
+Manual remote launches are supported too: return the input, dumps and logs
+and import them the same way. Return `BOUT.settings` when available: its
+resolved values must agree with every supplied input option. If it is absent,
+loading falls back to `BOUT.inp`, and the import records that only supplied
+options were available. If `remote-execution.json` is absent, the script
+records the exit code and remote build provenance as unknown and prints a
+warning. It does not invent a successful exit code. Use the helper when
+collecting publication evidence.
+
+Import registers completion without running remaining simulations or doing
+analysis. Use `--resume` to complete the matrix, or `--analyse-only` when all
+cases have finished. Copied dumps alone are not treated as completed by a
+resume; import them first.
 
 ## Physical setup and startup
 

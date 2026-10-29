@@ -222,3 +222,637 @@ def test_reanalysis_preserves_saved_style_and_allows_overrides(runner, tmp_path)
         updated = json.loads(saved.read_text())["rcParams"]
         assert updated["font.size"] == 10
         assert updated["axes.labelsize"] == 11
+
+
+def write_publication_dump(directory, rank, times, *, bad_final=False, seed=False):
+    fields = ("Ne", "Nh+", "Pe", "phi", "Vort", "Ph+")
+    values = np.ones((len(times), 8, 1, 4))
+    # Physical state is required; undefined diagnostic/guard entries are allowed.
+    values[:, :2] = values[:, -2:] = np.nan
+    ds = xr.Dataset(
+        {name: (("t", "x", "y", "z"), values.copy()) for name in fields},
+        coords={"t": times},
+    )
+    if bad_final:
+        ds["Ph+"][-1, 3, 0, 1] = np.nan
+    ds.to_netcdf(directory / f"BOUT.dmp.{rank}.nc")
+    if seed:
+        xr.Dataset({"tt": 0.0}).to_netcdf(directory / f"BOUT.restart.{rank}.nc")
+
+
+@pytest.fixture
+def completed_output_case(tmp_path):
+    directory = tmp_path / "run"
+    directory.mkdir()
+    config = {"nproc": 2, "end_time": 4, "outputs": 4}
+    for rank in range(2):
+        write_publication_dump(directory, rank, np.arange(5.0))
+    return directory, config
+
+
+def test_nonzero_exit_accepts_complete_outputs(
+    runner, completed_output_case, monkeypatch
+):
+    import json
+
+    directory, config = completed_output_case
+    # Use a real process return code without requiring MPI for this test.
+    executable = directory / "finished-simulation"
+    executable.write_text("#!/bin/sh\nexit 143\n")
+    executable.chmod(0o755)
+    monkeypatch.setitem(config, "nproc", 1)
+    (directory / "BOUT.dmp.1.nc").unlink()
+    status = runner.execute(executable, directory, config, 2)
+    assert status["exit_code"] == 143
+    assert status["outputs_complete"]
+    assert status["output_check"] == {
+        "ranks": 1,
+        "records_per_rank": 5,
+        "final_time_normalised": 4,
+    }
+    assert json.loads((directory / "status.json").read_text()) == status
+
+
+@pytest.mark.parametrize("defect", ["rank", "time", "field", "unreadable"])
+def test_complete_output_check_rejects_incomplete_ranks(
+    runner, completed_output_case, defect
+):
+    import json
+
+    directory, config = completed_output_case
+    file = directory / "BOUT.dmp.1.nc"
+    if defect == "rank":
+        file.unlink()
+    elif defect == "time":
+        write_publication_dump(directory, 1, np.arange(4.0))
+    elif defect == "field":
+        write_publication_dump(directory, 1, np.arange(5.0), bad_final=True)
+    else:
+        file.write_bytes(b"unreadable output")
+    runner.save_json(directory / "status.json", {"exit_code": 143})
+    assert not runner.completed_run(directory, config)
+    status = json.loads((directory / "status.json").read_text())
+    assert status["exit_code"] == 143
+    assert not status["outputs_complete"]
+    assert status["output_check_error"]
+
+
+def test_resume_recovers_old_status_and_rechecks_saved_completion(
+    runner, completed_output_case
+):
+    directory, config = completed_output_case
+    runner.save_json(directory / "status.json", {"exit_code": 143})
+    assert runner.completed_run(directory, config)
+    write_publication_dump(directory, 1, np.arange(4.0))
+    assert not runner.completed_run(directory, config)
+
+
+def test_seed_completion_requires_restart_files(runner, completed_output_case):
+    directory, config = completed_output_case
+    for rank in range(2):
+        write_publication_dump(directory, rank, [0.0], seed=True)
+    assert (
+        runner.verify_completed_outputs(directory, config, seed=True)[
+            "records_per_rank"
+        ]
+        == 1
+    )
+    (directory / "BOUT.restart.1.nc").unlink()
+    with pytest.raises(AuditError, match="restart per MPI rank"):
+        runner.verify_completed_outputs(directory, config, seed=True)
+
+
+def test_interrupt_does_not_accept_completed_outputs(runner, tmp_path, monkeypatch):
+    class Process:
+        pid = 123
+        calls = 0
+
+        def wait(self, timeout):
+            self.calls += 1
+            if self.calls == 1:
+                raise KeyboardInterrupt
+            return 0
+
+    monkeypatch.setattr(runner.subprocess, "Popen", lambda *a, **k: Process())
+    monkeypatch.setattr(runner.os, "killpg", lambda *a: None)
+
+    def unexpected_check(*args, **kwargs):
+        pytest.fail("Interrupt must stop the invocation before completion recovery")
+
+    monkeypatch.setattr(runner, "accept_completed_outputs", unexpected_check)
+    with pytest.raises(KeyboardInterrupt):
+        runner.execute(tmp_path / "simulation", tmp_path, {"nproc": 1}, 1)
+
+
+@pytest.fixture
+def resume_case(runner, tmp_path, monkeypatch):
+    executable = tmp_path / "hermes-3"
+    executable.write_bytes(b"simulation")
+    study = tmp_path / "study"
+    study.mkdir()
+    argv = ["--exe", str(executable), "--resume", str(study)]
+    manifest = {
+        "configuration": runner.configuration(runner.parser().parse_args(argv)),
+        "executable": {"sha256": runner.digest(executable)},
+        "runtime_artifacts": runner.runtime_artifacts(executable),
+        "template_sha256": runner.digest(runner.HERE / "publication-input.inp"),
+        "runner_sha256": "original-runner",
+        "runs": [],
+    }
+    runner.save_json(study / "manifest.json", manifest)
+    monkeypatch.setattr(runner, "analyse", lambda *a, **k: {})
+    return study, argv, manifest
+
+
+def test_resume_runner_change_is_explicit_and_recorded(runner, resume_case):
+    import json
+
+    study, argv, manifest = resume_case
+    with pytest.raises(AuditError, match="Runner changed"):
+        runner.main(argv)
+    assert runner.main([*argv, "--allow-runner-change"]) == 0
+    updated = json.loads((study / "manifest.json").read_text())
+    assert updated["runner_sha256"] == manifest["runner_sha256"]
+    assert updated["runner_updates"][0]["previous_sha256"] == "original-runner"
+    assert updated["resume_runner_sha256"] == runner.digest(runner.__file__)
+    assert runner.main(argv) == 0
+    assert json.loads((study / "manifest.json").read_text()) == updated
+
+
+@pytest.mark.parametrize(
+    "change", ["configuration", "executable", "template", "library"]
+)
+def test_runner_override_preserves_simulation_hash_guards(runner, resume_case, change):
+    study, argv, manifest = resume_case
+    if change == "configuration":
+        manifest["configuration"]["end_time"] *= 2
+    elif change == "executable":
+        manifest["executable"]["sha256"] = "changed"
+    elif change == "template":
+        manifest["template_sha256"] = "changed"
+    else:
+        manifest["runtime_artifacts"] = {}
+    runner.save_json(study / "manifest.json", manifest)
+    with pytest.raises(
+        AuditError, match="matching configuration, executable and template"
+    ):
+        runner.main([*argv, "--allow-runner-change"])
+
+
+@pytest.fixture
+def portable_study(runner, tmp_path):
+    exe = tmp_path / "hermes-3"
+    exe.write_bytes(b"simulation")
+    study = tmp_path / "study"
+    study.mkdir()
+    config = runner.configuration(
+        runner.parser().parse_args(
+            [
+                "--levels",
+                "2",
+                "--base-nx",
+                "4",
+                "--base-nz",
+                "4",
+                "--end-time",
+                "4",
+                "--outputs",
+                "4",
+            ]
+        )
+    )
+    rows = list(runner.grid_rows(config))
+    runner.add_inputs(study, config, rows)
+    manifest = {
+        "schema_version": runner.SCHEMA,
+        "created_utc": "test-study",
+        "configuration": config,
+        "executable": {"path": str(exe), "sha256": runner.digest(exe)},
+        "runtime_artifacts": runner.runtime_artifacts(exe),
+        "template_sha256": runner.digest(runner.HERE / "publication-input.inp"),
+        "runner_sha256": runner.digest(runner.__file__),
+        "revisions": {"hermes": {"revision": "expected-source"}},
+        "runs": rows,
+    }
+    runner.save_json(study / "manifest.json", manifest)
+    return study, exe, manifest
+
+
+def test_extension_runs_only_new_grids_and_keeps_completed_data(
+    runner, portable_study, monkeypatch
+):
+    import json
+
+    study, exe, manifest = portable_study
+    original = {}
+    for row in manifest["runs"]:
+        directory = study / row["directory"]
+        runner.save_json(directory / "status.json", {"exit_code": 0})
+        (directory / "inventory.nc").write_bytes(b"original analysis")
+        for name in ("BOUT.inp", "status.json", "inventory.nc"):
+            original[directory / name] = (directory / name).read_bytes()
+    prepared, executed, analyses = [], [], []
+    monkeypatch.setattr(
+        runner, "ensure_startup", lambda e, d, c, t: prepared.append(d.name)
+    )
+
+    def execute(e, d, c, t):
+        executed.append(d.name)
+        runner.save_json(d / "status.json", {"exit_code": 0})
+
+    monkeypatch.setattr(runner, "execute", execute)
+    monkeypatch.setattr(runner, "analyse", lambda s, m, **k: analyses.append(m["runs"]))
+    assert runner.main(["--extend", str(study), "--levels", "3"]) == 0
+    assert set(executed) == {"fixed-pressure-16x16", "fixed-total_energy-16x16"}
+    assert prepared == executed
+    updated = json.loads((study / "manifest.json").read_text())
+    assert updated["configuration"]["levels"] == 3
+    assert len(updated["runs"]) == len(analyses[0]) == 6
+    assert updated["extensions"][0]["previous_levels"] == 2
+    for path, content in original.items():
+        assert path.read_bytes() == content
+    # Ordinary resume also accepts a larger level count with matching flags.
+    flags = [
+        "--resume",
+        str(study),
+        "--exe",
+        str(exe),
+        "--levels",
+        "4",
+        "--base-nx",
+        "4",
+        "--base-nz",
+        "4",
+        "--end-time",
+        "4",
+        "--outputs",
+        "4",
+    ]
+    executed.clear()
+    assert runner.main(flags) == 0
+    assert set(executed) == {"fixed-pressure-32x32", "fixed-total_energy-32x32"}
+
+
+@pytest.mark.parametrize(
+    "flags", [["--levels", "1"], ["--levels", "3", "--viscosity", "2"]]
+)
+def test_extension_rejects_shrinking_and_other_setting_changes(
+    runner, portable_study, flags
+):
+    study, _, _ = portable_study
+    original = (study / "manifest.json").read_bytes()
+    with pytest.raises(AuditError):
+        runner.main(["--extend", str(study), *flags])
+    assert (study / "manifest.json").read_bytes() == original
+
+
+def test_extension_does_not_adopt_conflicting_input(runner, portable_study):
+    study, _, manifest = portable_study
+    directory = study / "fixed-total_energy-16x16"
+    directory.mkdir()
+    (directory / "BOUT.inp").write_text("different experiment")
+    original = (study / "manifest.json").read_bytes()
+    with pytest.raises(AuditError, match="Existing input differs"):
+        runner.extend_study(study, manifest, {**manifest["configuration"], "levels": 3})
+    assert (study / "manifest.json").read_bytes() == original
+    assert not (study / "fixed-pressure-16x16").exists()
+
+
+def test_prepare_selection_preserves_restarts_for_resume(
+    runner, portable_study, monkeypatch
+):
+    study, exe, manifest = portable_study
+    calls = []
+
+    def startup(e, d, c, t):
+        calls.append(d.name)
+        (d / "startup").mkdir()
+        xr.Dataset({"tt": 0.0}).to_netcdf(d / "BOUT.restart.0.nc")
+        xr.Dataset({"phi": 0.0}).to_netcdf(d / "initial-state.nc")
+
+    monkeypatch.setattr(runner, "build_startup", startup)
+    monkeypatch.setattr(
+        runner,
+        "execute",
+        lambda *a, **k: pytest.fail("Full simulation ran during preparation"),
+    )
+    monkeypatch.setattr(
+        runner, "analyse", lambda *a, **k: pytest.fail("Incomplete study was analysed")
+    )
+    name = "fixed-pressure-16x16"
+    flags = ["--extend", str(study), "--levels", "3", "--prepare-only", "--cases", name]
+    assert runner.main(flags) == 0
+    assert calls == [name]
+    directory = study / name
+    original = (directory / "BOUT.restart.0.nc").read_bytes()
+    runner.ensure_startup(exe, directory, {**manifest["configuration"], "levels": 3}, 2)
+    assert calls == [name]
+    assert (directory / "BOUT.restart.0.nc").read_bytes() == original
+    assert (directory / "run-remote.py").is_file()
+    assert not list(directory.glob("failed-*"))
+    (directory / "BOUT.dmp.0.nc").write_bytes(b"returned output")
+    with pytest.raises(AuditError, match="Unregistered outputs"):
+        runner.ensure_startup(exe, directory, manifest["configuration"], 2)
+
+
+@pytest.fixture
+def importable_case(runner, portable_study, monkeypatch, tmp_path):
+    from dataclasses import dataclass
+
+    study, _, manifest = portable_study
+    row = manifest["runs"][0]
+    destination = study / row["directory"]
+    returned = tmp_path / "returned"
+    source = returned / row["directory"]
+    source.mkdir(parents=True)
+    (source / "BOUT.inp").write_bytes((destination / "BOUT.inp").read_bytes())
+    write_publication_dump(source, 0, np.arange(5.0))
+    with xr.open_dataset(source / "BOUT.dmp.0.nc") as ds:
+        initial = ds.isel(t=0, drop=True).load()
+    initial.to_netcdf(destination / "initial-state.nc")
+
+    @dataclass
+    class Run:
+        data: xr.Dataset
+        source: str
+        formulation: str = "pressure"
+        length_scale: float = 1
+
+        def interior(self, value):
+            return value.isel(x=slice(2, -2))
+
+    def open_run(directory):
+        from boutdata.data import BoutOptionsFile
+
+        ds = xr.open_dataset(directory / "BOUT.dmp.0.nc")
+        options = directory / "BOUT.settings"
+        if not options.exists():
+            options = directory / "BOUT.inp"
+        ds.attrs["options"] = BoutOptionsFile(str(options))
+        for name, value in {
+            "dx": 0.05 / 4,
+            "dz": 0.05 / 4,
+            "g11": 1.0,
+            "g33": 1.0,
+        }.items():
+            ds[name] = value
+        return Run(ds, str(directory))
+
+    monkeypatch.setattr(runner, "open_run", open_run)
+    return study, manifest, row, returned, source
+
+
+def test_import_bare_outputs_without_executable_and_resume_reuses_case(
+    runner, importable_case, monkeypatch, capsys
+):
+    import json
+
+    study, manifest, row, returned, source = importable_case
+    (source / "BOUT.log.0").write_text("remote run")
+    assert (
+        runner.main(
+            [
+                "--import-runs",
+                str(study),
+                "--import-from",
+                str(returned),
+                "--cases",
+                row["directory"],
+                "--exe",
+                "/missing/executable",
+            ]
+        )
+        == 0
+    )
+    assert "provenance are unknown" in capsys.readouterr().err
+    destination = study / row["directory"]
+    status = json.loads((destination / "status.json").read_text())
+    assert status["exit_code"] is None
+    assert status["origin"] == "external"
+    assert status["outputs_complete"]
+    assert status["initial_state_check"]["ion_pressure"] == 0
+    assert (destination / "BOUT.log.0").read_text() == "remote run"
+    assert runner.completed_run(destination, manifest["configuration"])
+    assert runner.import_runs(study, manifest, [row["directory"]], returned) == 0
+    # Imported files are validated again on resume, even with unknown exit code.
+    write_publication_dump(destination, 0, np.arange(4.0))
+    with pytest.raises(AuditError, match="output times"):
+        runner.completed_run(destination, manifest["configuration"])
+
+
+@pytest.mark.parametrize(
+    "defect", ["time", "initial", "nan-initial", "input", "rank", "grid"]
+)
+def test_import_rejects_invalid_outputs_before_registering(
+    runner, importable_case, defect
+):
+    study, manifest, row, returned, source = importable_case
+    file = source / "BOUT.dmp.0.nc"
+    if defect == "time":
+        write_publication_dump(source, 0, np.arange(4.0))
+    elif defect == "input":
+        (source / "BOUT.inp").write_text("different settings")
+    elif defect == "rank":
+        write_publication_dump(source, 1, np.arange(5.0))
+    else:
+        with xr.open_dataset(file) as ds:
+            ds = ds.load()
+        if defect == "grid":
+            ds = ds.isel(z=slice(0, 3))
+        else:
+            ds["phi"][0, 3, 0, 1] = np.nan if defect == "nan-initial" else 2
+        ds.to_netcdf(file)
+    with pytest.raises(AuditError):
+        runner.import_runs(study, manifest, [row["directory"]], returned)
+    assert not (study / row["directory"] / "status.json").exists()
+    assert not list(study.glob(".import-*"))
+    assert not (study / row["directory"] / "BOUT.dmp.0.nc").exists()
+
+
+def test_import_files_copied_directly_back(runner, importable_case):
+    import shutil
+
+    study, manifest, row, _, source = importable_case
+    destination = study / row["directory"]
+    shutil.copy2(source / "BOUT.dmp.0.nc", destination / "BOUT.dmp.0.nc")
+    assert runner.import_runs(study, manifest, [row["directory"]]) == 1
+    assert runner.completed_run(destination, manifest["configuration"])
+
+
+def test_import_archives_failed_outputs_logs_and_stale_settings(
+    runner, importable_case
+):
+    import json
+
+    study, manifest, row, returned, _ = importable_case
+    destination = study / row["directory"]
+    write_publication_dump(destination, 0, np.arange(4.0))
+    runner.save_json(destination / "status.json", {"exit_code": -1})
+    (destination / "BOUT.settings").write_text("old settings")
+    (destination / "run.log").write_text("failed attempt")
+    assert runner.import_runs(study, manifest, [row["directory"]], returned) == 1
+    (archive,) = destination.glob("pre-import-*")
+    assert (archive / "BOUT.dmp.0.nc").is_file()
+    assert (archive / "BOUT.settings").read_text() == "old settings"
+    assert (archive / "run.log").read_text() == "failed attempt"
+    assert not (destination / "BOUT.settings").exists()
+    status = json.loads((destination / "status.json").read_text())
+    assert status["previous_status"]["exit_code"] == -1
+    assert status["options_source"] == "BOUT.inp"
+
+
+def test_import_rejects_command_line_override_in_returned_settings(
+    runner, importable_case
+):
+    study, manifest, row, returned, source = importable_case
+    (source / "BOUT.settings").write_text(
+        (source / "BOUT.inp").read_text().replace("viscosity = 1", "viscosity = 2")
+    )
+    with pytest.raises(AuditError, match="Returned setting differs"):
+        runner.import_runs(study, manifest, [row["directory"]], returned)
+    assert not (study / row["directory"] / "status.json").exists()
+
+
+@pytest.fixture
+def remote_runner(runner):
+    spec = importlib.util.spec_from_file_location(
+        "publication_remote", runner.HERE / "publication_remote.py"
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_remote_runner_records_real_exit_and_build_provenance(
+    runner, remote_runner, importable_case, tmp_path, monkeypatch
+):
+    import json
+    import shutil
+
+    study, manifest, row, returned, source = importable_case
+    destination = study / row["directory"]
+    xr.Dataset({"tt": 0.0}).to_netcdf(destination / "BOUT.restart.0.nc")
+    runner.prepare_remote(destination, row, manifest)
+    execution_dir = tmp_path / "remote-execution" / row["directory"]
+    shutil.copytree(destination, execution_dir)
+    exe = tmp_path / "finished-simulation"
+    exe.write_text("#!/bin/sh\nexit 143\n")
+    exe.chmod(0o755)
+    monkeypatch.setattr(
+        remote_runner,
+        "revision",
+        lambda p: {"revision": "expected-source", "dirty": False},
+    )
+    assert (
+        remote_runner.main(
+            ["--exe", str(exe), "--source-root", str(tmp_path)], directory=execution_dir
+        )
+        == 143
+    )
+    execution = json.loads((execution_dir / "remote-execution.json").read_text())
+    assert execution["exit_code"] == 143
+    assert (
+        execution["input_files"]
+        == json.loads((destination / "remote-case.json").read_text())["input_files"]
+    )
+    assert execution["runtime_artifacts"][str(exe)] == runner.digest(exe)
+    shutil.copy2(
+        execution_dir / "remote-execution.json", source / "remote-execution.json"
+    )
+    assert runner.import_runs(study, manifest, [row["directory"]], returned) == 1
+    status = json.loads((destination / "status.json").read_text())
+    assert status["exit_code"] == 143
+    assert status["remote_execution"]["hostname"]
+    with pytest.raises(ValueError, match="Outputs already exist"):
+        remote_runner.main(["--exe", str(exe)], directory=execution_dir)
+
+
+@pytest.mark.parametrize("defect", ["preparation", "revision", "runtime"])
+def test_import_rejects_mismatched_execution_metadata(runner, importable_case, defect):
+    import json
+
+    study, manifest, row, returned, source = importable_case
+    destination = study / row["directory"]
+    xr.Dataset({"tt": 0.0}).to_netcdf(destination / "BOUT.restart.0.nc")
+    runner.prepare_remote(destination, row, manifest)
+    execution = {
+        "schema_version": 1,
+        "case": row["directory"],
+        "exit_code": 0,
+        "prepared_case_sha256": runner.digest(destination / "remote-case.json"),
+        "input_files": json.loads((destination / "remote-case.json").read_text())[
+            "input_files"
+        ],
+        "runtime_artifacts": {"exe": "build"},
+        "runtime_artifacts_after": {"exe": "build"},
+        "revisions": {"hermes": {"revision": "expected-source"}},
+    }
+    if defect == "preparation":
+        execution["prepared_case_sha256"] = "other-case"
+    elif defect == "revision":
+        execution["revisions"]["hermes"]["revision"] = "different-source"
+    else:
+        execution["runtime_artifacts_after"] = {"exe": "rebuilt"}
+    runner.save_json(source / "remote-execution.json", execution)
+    with pytest.raises(AuditError):
+        runner.import_runs(study, manifest, [row["directory"]], returned)
+    assert not (destination / "status.json").exists()
+
+
+def test_remote_helper_runs_without_site_packages(runner, portable_study, tmp_path):
+    import json
+    import subprocess
+    import sys
+
+    study, _, manifest = portable_study
+    row = manifest["runs"][0]
+    directory = study / row["directory"]
+    xr.Dataset({"tt": 0.0}).to_netcdf(directory / "BOUT.restart.0.nc")
+    xr.Dataset({"phi": 0.0}).to_netcdf(directory / "initial-state.nc")
+    runner.prepare_remote(directory, row, manifest)
+    exe = tmp_path / "remote-simulation"
+    exe.write_text("#!/bin/sh\nexit 143\n")
+    exe.chmod(0o755)
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-I",
+            "-S",
+            str(directory / "run-remote.py"),
+            "--exe",
+            str(exe),
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 143, result.stderr
+    assert (
+        json.loads((directory / "remote-execution.json").read_text())["exit_code"]
+        == 143
+    )
+
+
+def test_remote_helper_rejects_known_source_change_before_launch(
+    runner, remote_runner, portable_study, monkeypatch
+):
+    study, exe, manifest = portable_study
+    row = manifest["runs"][0]
+    directory = study / row["directory"]
+    xr.Dataset({"tt": 0.0}).to_netcdf(directory / "BOUT.restart.0.nc")
+    xr.Dataset({"phi": 0.0}).to_netcdf(directory / "initial-state.nc")
+    runner.prepare_remote(directory, row, manifest)
+    monkeypatch.setattr(
+        remote_runner,
+        "revision",
+        lambda p: {"revision": "wrong-source", "dirty": False},
+    )
+    monkeypatch.setattr(
+        remote_runner.subprocess,
+        "Popen",
+        lambda *a, **k: pytest.fail("Mismatched remote source was launched"),
+    )
+    with pytest.raises(ValueError, match="revision differs"):
+        remote_runner.main(
+            ["--exe", str(exe), "--source-root", str(study)], directory=directory
+        )

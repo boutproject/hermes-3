@@ -454,8 +454,8 @@ if(HERMES_TESTS)
       endforeach()
     endif()
     if(HERMES_COPY_TESTS_TO_BUILD)
-      foreach(PUBLICATION_FILE publication_scan.py publication-input.inp
-                               publication-study.md)
+      foreach(PUBLICATION_FILE publication_scan.py publication_remote.py
+                               publication-input.inp publication-study.md)
         configure_file(
           "${CMAKE_CURRENT_SOURCE_DIR}/tests/integrated/2D-energy/${PUBLICATION_FILE}"
           "${CMAKE_CURRENT_BINARY_DIR}/tests/integrated/2D-energy/${PUBLICATION_FILE}"

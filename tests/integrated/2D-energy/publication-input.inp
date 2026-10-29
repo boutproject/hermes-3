@@ -54,7 +54,7 @@ output_step = ${output_step}
 atol = ${atol}
 rtol = ${rtol}
 max_timestep = ${max_timestep}
-mxstep = 100000
+mxstep = 1e6
 
 [hermes]
 components = e, h+, ${components}

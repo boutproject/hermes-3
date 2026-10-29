@@ -13,6 +13,7 @@ import signal
 import string
 import subprocess
 import sys
+import tempfile
 import time
 from dataclasses import replace
 from datetime import datetime, timezone
@@ -128,16 +129,51 @@ def parser():
     p.add_argument("--nproc", type=int, default=1)
     p.add_argument("--timeout", type=float, default=7200)
     p.add_argument("--output-root", type=Path, default=HERE / "publication-results")
-    p.add_argument("--analyse-only", type=Path, metavar="STUDY")
-    p.add_argument("--resume", type=Path, metavar="STUDY")
-    p.add_argument("--diagnose", action="store_true")
-    p.add_argument("--atol", type=float, default=1e-11)
-    p.add_argument("--rtol", type=float, default=1e-8)
-    p.add_argument("--phi-rtol", type=float, default=1e-8)
-    p.add_argument(
-        "--phi-atol", type=float, default=1e-5, help="Potential iteration scale [eV]"
+    mode = p.add_mutually_exclusive_group()
+    mode.add_argument("--analyse-only", type=Path, metavar="STUDY")
+    mode.add_argument("--resume", type=Path, metavar="STUDY")
+    mode.add_argument(
+        "--extend",
+        type=Path,
+        metavar="STUDY",
+        help="Inherit an existing study's settings and append grids using --levels",
     )
-    p.add_argument("--vort-atol", type=float, default=1e-12)
+    mode.add_argument(
+        "--import-runs",
+        type=Path,
+        metavar="STUDY",
+        help="Validate returned outputs and register them without running Hermes",
+    )
+    p.add_argument(
+        "--prepare-only",
+        action="store_true",
+        help="Prepare matched time-zero restarts and a standalone remote runner, then stop",
+    )
+    p.add_argument(
+        "--cases",
+        nargs="+",
+        metavar="CASE",
+        help="Select case directory names for preparation, execution or import",
+    )
+    p.add_argument(
+        "--import-from",
+        type=Path,
+        metavar="DIRECTORY",
+        help="Parent directory of returned case directories; defaults to STUDY",
+    )
+    p.add_argument(
+        "--allow-runner-change",
+        action="store_true",
+        help="With --resume, record a changed runner version; input and executable checks still apply",
+    )
+    p.add_argument("--diagnose", action="store_true")
+    p.add_argument("--atol", type=float, default=1e-10)
+    p.add_argument("--rtol", type=float, default=1e-5)
+    p.add_argument("--phi-rtol", type=float, default=1e-5)
+    p.add_argument(
+        "--phi-atol", type=float, default=1e-3, help="Potential iteration scale [eV]"
+    )
+    p.add_argument("--vort-atol", type=float, default=1e-10)
     p.add_argument("--max-timestep", type=float, default=50)
     p.add_argument(
         "--accuracy-pilot",
@@ -171,6 +207,12 @@ def configuration(args):
             "exe",
             "output_root",
             "resume",
+            "extend",
+            "import_runs",
+            "prepare_only",
+            "cases",
+            "import_from",
+            "allow_runner_change",
             "analyse_only",
             "style",
             "latex",
@@ -287,6 +329,98 @@ def input_text(config, row):
     return text
 
 
+def check_output_times(values, config, source, *, seed=False):
+    expected = (
+        np.asarray([0.0])
+        if seed
+        else np.linspace(0, config["end_time"], config["outputs"] + 1)
+    )
+    if values.shape != expected.shape or not np.allclose(
+        values, expected, rtol=0, atol=max(1, config["end_time"]) * 1e-10
+    ):
+        raise AuditError(f"Incomplete/mismatched output times: {source}")
+
+
+def verify_completed_outputs(directory, config, *, seed=False):
+    """Check every rank's time axis and final physical state after a bad exit."""
+    expected = {f"BOUT.dmp.{rank}.nc" for rank in range(config["nproc"])}
+    files = sorted(directory.glob("BOUT.dmp.*.nc"))
+    if {file.name for file in files} != expected:
+        raise AuditError("Expected one dump file per MPI rank")
+    for file in files:
+        with xr.open_dataset(file, decode_times=False) as ds:
+            if "t" not in ds:
+                raise AuditError(f"Missing output time axis: {file}")
+            check_output_times(np.asarray(ds.t), config, file, seed=seed)
+            fields = ["Ne", "Nh+", "Pe", "phi", "Vort"]
+            fields += ["Eion", "Tion"] if "Eion" in ds else ["Ph+"]
+            for name in fields:
+                if name not in ds or not {"t", "x", "y", "z"}.issubset(ds[name].dims):
+                    raise AuditError(
+                        f"Missing time-dependent state field {name}: {file}"
+                    )
+                final = ds[name].isel(t=-1, x=slice(2, -2)).load()
+                if not final.size or not np.isfinite(final).all():
+                    raise AuditError(f"Incomplete/nonfinite final {name}: {file}")
+    if seed:
+        restarts = sorted(directory.glob("BOUT.restart.*.nc"))
+        if {file.name for file in restarts} != {
+            f"BOUT.restart.{rank}.nc" for rank in range(config["nproc"])
+        }:
+            raise AuditError("Startup did not write one restart per MPI rank")
+        for file in restarts:
+            with xr.open_dataset(file, decode_cf=False) as ds:
+                ds.load()
+    return {
+        "ranks": config["nproc"],
+        "records_per_rank": 1 if seed else config["outputs"] + 1,
+        "final_time_normalised": 0.0 if seed else config["end_time"],
+    }
+
+
+def accept_completed_outputs(directory, config, status, *, seed=False):
+    path = directory / ("startup-status.json" if seed else "status.json")
+    try:
+        check = verify_completed_outputs(directory, config, seed=seed)
+    except (
+        AuditError,
+        OSError,
+        ValueError,
+        KeyError,
+        RuntimeError,
+        TypeError,
+    ) as error:
+        status["outputs_complete"] = False
+        status["output_check_error"] = str(error)
+        save_json(path, status)
+        return False
+    status["outputs_complete"] = True
+    status["output_check"] = check
+    status.pop("output_check_error", None)
+    save_json(path, status)
+    print(
+        f"Warning: exit code {status['exit_code']} from {directory}; "
+        "all expected outputs were verified. Accepting the completed run.",
+        file=sys.stderr,
+        flush=True,
+    )
+    return True
+
+
+def completed_run(directory, config):
+    path = directory / "status.json"
+    if not path.exists():
+        return False
+    status = json.loads(path.read_text())
+    if status.get("origin") == "external":
+        verify_completed_outputs(directory, config)
+        return status.get("outputs_complete", False)
+    if status["exit_code"] == 0:
+        return True
+    # Recheck files rather than trusting a saved completion flag on resume.
+    return accept_completed_outputs(directory, config, status)
+
+
 def execute(exe, directory, config, timeout, *, seed=False):
     command = [str(exe), "-d", str(directory)]
     if seed:
@@ -299,6 +433,7 @@ def execute(exe, directory, config, timeout, *, seed=False):
     log = directory / ("startup.log" if seed else "run.log")
     start = time.monotonic()
     interrupted = False
+    termination_reason = None
     with log.open("w") as stream:
         process = subprocess.Popen(
             command,
@@ -314,6 +449,7 @@ def execute(exe, directory, config, timeout, *, seed=False):
             code = process.wait(timeout=timeout)
         except (subprocess.TimeoutExpired, KeyboardInterrupt) as error:
             interrupted = isinstance(error, KeyboardInterrupt)
+            termination_reason = "interrupted" if interrupted else "timeout"
             code = -2 if interrupted else -1
             # Stop the entire local launch group, including MPI children.
             try:
@@ -331,10 +467,12 @@ def execute(exe, directory, config, timeout, *, seed=False):
         "elapsed_s": time.monotonic() - start,
         "log": log.name,
     }
+    if termination_reason:
+        status["termination_reason"] = termination_reason
     save_json(directory / ("startup-status.json" if seed else "status.json"), status)
     if interrupted:
         raise KeyboardInterrupt
-    if code:
+    if code and not accept_completed_outputs(directory, config, status, seed=seed):
         raise AuditError(
             f"Run failed ({code}): {log}\n"
             + "\n".join(log.read_text().splitlines()[-30:])
@@ -447,11 +585,7 @@ def build_startup(exe, directory, config, timeout):
 def validate_times(run, config):
     values = np.asarray(run.data.t)
     regular_timestep(values)
-    expected = np.linspace(0, config["end_time"], config["outputs"] + 1)
-    if values.shape != expected.shape or not np.allclose(
-        values, expected, rtol=0, atol=config["end_time"] * 1e-10
-    ):
-        raise AuditError(f"Incomplete/mismatched output times: {run.source}")
+    check_output_times(values, config, run.source)
     return [exact_index(values, v) for v in config["snapshot_times"]], exact_index(
         values, config["convergence_time"]
     )
@@ -508,22 +642,23 @@ def coordinates(run):
     return (np.arange(nx) + 0.5) * dx, np.arange(nz) * dz, lx, lz
 
 
-def analyse_run(directory, config):
-    status = json.loads((directory / "status.json").read_text())
-    if status["exit_code"] != 0:
-        raise AuditError(f"Refusing failed run {directory}")
-    run = open_run(directory)
-    save_json(directory / "resolved-options.json", run.data.options.as_dict())
-    snapshots, convergence = validate_times(run, config)
+def validate_initial_state(directory, run, *, first=None):
+    """Check the physical time-zero state independently of execution status."""
     with xr.open_dataset(directory / "initial-state.nc") as saved:
         initial = saved.load()
     checks = {}
-    first = replace(run, data=run.data.isel(t=[0]).compute())
-    for name in ("Pe", "Nh+", "phi", "Vort"):
+    if first is None:
+        first = replace(run, data=run.data.isel(t=[0]).compute())
+    names = ["Pe", "Nh+", "phi", "Vort"]
+    if run.formulation == "total_energy":
+        names.append("Eion")
+    for name in names:
         checks[name] = float(
-            abs(run.interior(first.data[name].isel(t=0) - initial[name])).max()
+            abs(run.interior(first.data[name].isel(t=0) - initial[name])).max(
+                skipna=False
+            )
         )
-        if checks[name] > 1e-8:
+        if not np.isfinite(checks[name]) or checks[name] > 1e-8:
             raise AuditError(f"Initial {name} mismatch {checks[name]}: {directory}")
     pi = (
         first.data["Ph+"]
@@ -531,10 +666,26 @@ def analyse_run(directory, config):
         else first.data["Nh+"] * first.data.Tion
     )
     checks["ion_pressure"] = float(
-        abs(run.interior(pi.isel(t=0) - initial["Ph+"])).max()
+        abs(run.interior(pi.isel(t=0) - initial["Ph+"])).max(skipna=False)
     )
-    if checks["ion_pressure"] > 1e-8:
+    if not np.isfinite(checks["ion_pressure"]) or checks["ion_pressure"] > 1e-8:
         raise AuditError("Initial ion pressure mismatch")
+    checks["Ne"] = float(
+        abs(run.interior(first.data.Ne.isel(t=0) - initial["Nh+"])).max(skipna=False)
+    )
+    if not np.isfinite(checks["Ne"]) or checks["Ne"] > 1e-8:
+        raise AuditError("Initial electron density mismatch")
+    return checks
+
+
+def analyse_run(directory, config):
+    if not completed_run(directory, config):
+        raise AuditError(f"Refusing failed run {directory}")
+    run = open_run(directory)
+    save_json(directory / "resolved-options.json", run.data.options.as_dict())
+    snapshots, convergence = validate_times(run, config)
+    first = replace(run, data=run.data.isel(t=[0]).compute())
+    checks = validate_initial_state(directory, run, first=first)
     inventories, powers, defects, diagnostics = [], [], [], []
     coverage = (
         "Legacy polarisation and full Phi boundary-state power coverage is incomplete"
@@ -1117,10 +1268,366 @@ def pilot(study, manifest, exe, timeout, results):
     return evidence
 
 
+def grid_rows(config):
+    boundaries = (
+        ("fixed", "relax")
+        if config["phi_boundary"] == "both"
+        else (config["phi_boundary"],)
+    )
+    for boundary in boundaries:
+        for formulation in ("pressure", "total_energy"):
+            for level in range(config["levels"]):
+                nx = config["base_nx"] * config["refinement"] ** level
+                nz = config["base_nz"] * config["refinement"] ** level
+                yield {
+                    "boundary": boundary,
+                    "formulation": formulation,
+                    "level": level,
+                    "nx": nx,
+                    "nz": nz,
+                    "directory": f"{boundary}-{formulation}-{nx}x{nz}",
+                }
+
+
+def add_inputs(study, config, rows):
+    # Preflight all collisions before creating anything. A previous interrupted
+    # extension can leave matching inputs that are safe to adopt.
+    for row in rows:
+        path = study / row["directory"] / "BOUT.inp"
+        if path.exists() and path.read_text() != input_text(config, row):
+            raise AuditError(f"Existing input differs: {path}")
+    for row in rows:
+        directory = study / row["directory"]
+        directory.mkdir(exist_ok=True)
+        path = directory / "BOUT.inp"
+        if not path.exists():
+            path.write_text(input_text(config, row))
+        row["input_sha256"] = digest(path)
+
+
+def compatible_configuration(saved, config):
+    return config["levels"] >= saved["levels"] and {
+        k: v for k, v in saved.items() if k != "levels"
+    } == {k: v for k, v in config.items() if k != "levels"}
+
+
+def extend_study(study, manifest, config):
+    old = manifest["configuration"]
+    if not compatible_configuration(old, config):
+        raise AuditError(
+            "Extension may only increase --levels; other settings must match"
+        )
+    if config["levels"] == old["levels"]:
+        return
+    for row in manifest["runs"]:
+        if digest(study / row["directory"] / "BOUT.inp") != row["input_sha256"]:
+            raise AuditError(f"Modified input: {row['directory']}")
+    rows = [row for row in grid_rows(config) if row["level"] >= old["levels"]]
+    add_inputs(study, config, rows)
+    manifest.setdefault("extensions", []).append(
+        {
+            "previous_levels": old["levels"],
+            "levels": config["levels"],
+            "added_cases": [row["directory"] for row in rows],
+            "recorded_utc": datetime.now(timezone.utc).isoformat(),
+        }
+    )
+    manifest["configuration"] = config
+    manifest["runs"].extend(rows)
+    save_json(study / "manifest.json", manifest)
+    print(
+        f"Extended study from {old['levels']} to {config['levels']} levels", flush=True
+    )
+
+
+def select_cases(manifest, names):
+    rows = manifest["runs"]
+    if not names:
+        return rows
+    unknown = set(names) - {row["directory"] for row in rows}
+    if unknown:
+        raise AuditError(f"Unknown case directories: {', '.join(sorted(unknown))}")
+    return [row for row in rows if row["directory"] in names]
+
+
+def check_prepared_files(directory, case):
+    if case["schema_version"] != 1:
+        raise AuditError("Unsupported remote case schema")
+    for name, expected in case["input_files"].items():
+        if Path(name).name != name or digest(directory / name) != expected:
+            raise AuditError(f"Prepared input changed: {directory / name}")
+
+
+def archive_attempt(directory):
+    archive = directory / f"failed-{time.time_ns()}"
+    archive.mkdir()
+    files = list(directory.glob("BOUT.*.nc")) + list(directory.glob("BOUT.log*"))
+    files += [
+        directory / name
+        for name in (
+            "initial-state.nc",
+            "startup",
+            "status.json",
+            "run.log",
+            "remote-case.json",
+            "remote-execution.json",
+            "run-remote.py",
+        )
+    ]
+    for file in files:
+        if file.exists():
+            file.rename(archive / file.name)
+
+
+def ensure_startup(exe, directory, config, timeout):
+    prepared = directory / "remote-case.json"
+    if prepared.exists() and not (directory / "status.json").exists():
+        if (
+            list(directory.glob("BOUT.dmp.*.nc"))
+            or (directory / "remote-execution.json").exists()
+        ):
+            raise AuditError(
+                f"Unregistered outputs in {directory}; use --import-runs first"
+            )
+        check_prepared_files(directory, json.loads(prepared.read_text()))
+        return
+    if (directory / "startup").exists():
+        archive_attempt(directory)
+    if not (directory / "initial-state.nc").exists() or not list(
+        directory.glob("BOUT.restart.*.nc")
+    ):
+        build_startup(exe, directory, config, timeout)
+
+
+def prepare_remote(directory, row, manifest):
+    files = [directory / "BOUT.inp", directory / "initial-state.nc"]
+    files += sorted(directory.glob("BOUT.restart.*.nc"))
+    if len(files) != manifest["configuration"]["nproc"] + 2:
+        raise AuditError(f"Missing matched restart files: {directory}")
+    path = directory / "remote-case.json"
+    if not path.exists():
+        save_json(
+            path,
+            {
+                "schema_version": 1,
+                "study": manifest["created_utc"],
+                "case": row,
+                "configuration": manifest["configuration"],
+                "input_files": {file.name: digest(file) for file in files},
+                "expected_revisions": manifest["revisions"],
+                "prepared_utc": datetime.now(timezone.utc).isoformat(),
+            },
+        )
+    else:
+        check_prepared_files(directory, json.loads(path.read_text()))
+    shutil.copyfile(HERE / "publication_remote.py", directory / "run-remote.py")
+    print(f"Prepared {row['directory']} for local or remote execution", flush=True)
+
+
+def link_or_copy(source, target):
+    try:
+        os.link(source, target)
+    except OSError:
+        shutil.copy2(source, target)
+
+
+def validate_supplied_options(directory, options):
+    from boutdata.data import BoutOptionsFile
+
+    expected = BoutOptionsFile(str(directory / "BOUT.inp")).as_dict()
+
+    def compare(given, actual, prefix=""):
+        for name, value in given.items():
+            key = f"{prefix}:{name}" if prefix else name
+            if name not in actual:
+                raise AuditError(f"Missing supplied option in returned settings: {key}")
+            if isinstance(value, dict):
+                if not isinstance(actual[name], dict):
+                    raise AuditError(f"Returned option section differs: {key}")
+                compare(value, actual[name], key)
+            elif actual[name] != value:
+                raise AuditError(f"Returned setting differs from supplied input: {key}")
+
+    compare(expected, options.as_dict())
+
+
+def validate_import(directory, row, config):
+    check = verify_completed_outputs(directory, config)
+    run = open_run(directory)
+    try:
+        validate_supplied_options(directory, run.data.options)
+        if (
+            run.formulation != row["formulation"]
+            or run.data.sizes["x"] != row["nx"] + 4
+            or run.data.sizes["z"] != row["nz"]
+            or run.data.sizes["y"] != 1
+        ):
+            raise AuditError(
+                f"Imported grid/formulation does not match {row['directory']}"
+            )
+        coordinates(run)
+        validate_times(run, config)
+        initial = validate_initial_state(directory, run)
+    finally:
+        run.data.close()
+    return check, initial
+
+
+def import_execution(source, destination, row, manifest):
+    path = source / "remote-execution.json"
+    if not path.exists():
+        print(
+            f"Warning: no remote-execution.json for {row['directory']}; "
+            "remote exit code and build provenance are unknown.",
+            file=sys.stderr,
+        )
+        return None
+    execution = json.loads(path.read_text())
+    prepared = destination / "remote-case.json"
+    if (
+        execution.get("schema_version") != 1
+        or execution.get("case") != row["directory"]
+        or not prepared.exists()
+        or execution.get("prepared_case_sha256") != digest(prepared)
+        or execution.get("input_files")
+        != json.loads(prepared.read_text())["input_files"]
+    ):
+        raise AuditError(f"Remote execution does not match prepared case: {source}")
+    if execution.get("runtime_artifacts") != execution.get("runtime_artifacts_after"):
+        raise AuditError(
+            f"Remote executable/libraries changed during execution: {source}"
+        )
+    for name in ("hermes", "bout"):
+        expected = manifest.get("revisions", {}).get(name, {}).get("revision")
+        actual = execution.get("revisions", {}).get(name, {}).get("revision")
+        if expected and actual and expected != actual:
+            raise AuditError(f"Remote {name} revision differs from study: {source}")
+    return execution
+
+
+def import_runs(study, manifest, names=None, source_root=None):
+    """Stage, validate and register returned cases without requiring Hermes."""
+    rows = select_cases(manifest, names)
+    source_root = source_root.resolve() if source_root else study
+    imported = 0
+    for row in rows:
+        destination = study / row["directory"]
+        source = source_root / row["directory"]
+        if completed_run(destination, manifest["configuration"]):
+            print(f"Reusing complete {row['directory']}", flush=True)
+            continue
+        files = sorted(source.glob("BOUT.dmp.*.nc"))
+        if not files and not names:
+            continue
+        if (
+            digest(source / "BOUT.inp") != row["input_sha256"]
+            or digest(destination / "BOUT.inp") != row["input_sha256"]
+        ):
+            raise AuditError(f"Modified returned/local input: {source}")
+        execution = import_execution(source, destination, row, manifest)
+        with tempfile.TemporaryDirectory(prefix=".import-", dir=study) as staging:
+            stage = Path(staging)
+            for file in files:
+                link_or_copy(file, stage / file.name)
+            for name in ("BOUT.inp", "initial-state.nc"):
+                link_or_copy(destination / name, stage / name)
+            if (source / "BOUT.settings").is_file():
+                link_or_copy(source / "BOUT.settings", stage / "BOUT.settings")
+            check, initial = validate_import(stage, row, manifest["configuration"])
+            status = {
+                "origin": "external",
+                "exit_code": execution["exit_code"] if execution else None,
+                "outputs_complete": True,
+                "output_check": check,
+                "initial_state_check": initial,
+                "imported_utc": datetime.now(timezone.utc).isoformat(),
+                "source": str(source),
+                "remote_execution": execution,
+                "options_source": "BOUT.settings"
+                if (stage / "BOUT.settings").exists()
+                else "BOUT.inp",
+                "files": {file.name: file.stat().st_size for file in files},
+            }
+            old_status = destination / "status.json"
+            if old_status.exists():
+                status["previous_status"] = json.loads(old_status.read_text())
+            if source != destination:
+                old_files = list(destination.glob("BOUT.dmp.*.nc"))
+                old_files += list(destination.glob("BOUT.log*"))
+                old_files += [
+                    destination / name
+                    for name in (
+                        "run.log",
+                        "BOUT.settings",
+                        "remote-execution.json",
+                        "status.json",
+                    )
+                    if (destination / name).exists()
+                ]
+                if old_files:
+                    archive = destination / f"pre-import-{time.time_ns()}"
+                    archive.mkdir()
+                    for file in old_files:
+                        file.rename(archive / file.name)
+                for file in files:
+                    (stage / file.name).replace(destination / file.name)
+                for pattern in (
+                    "BOUT.log*",
+                    "run.log",
+                    "remote-execution.json",
+                    "BOUT.settings",
+                ):
+                    for file in source.glob(pattern):
+                        if file.is_file():
+                            shutil.copy2(file, destination / file.name)
+            save_json(old_status, status)
+        manifest.setdefault("imports", []).append(
+            {
+                "case": row["directory"],
+                "imported_utc": status["imported_utc"],
+                "source": str(source),
+                "remote_execution": execution,
+                "runner_sha256": digest(__file__),
+            }
+        )
+        save_json(study / "manifest.json", manifest)
+        imported += 1
+        print(f"Imported complete {row['directory']}", flush=True)
+    print(
+        f"Imported {imported} cases. Resume to run remaining cases or use --analyse-only."
+    )
+    return imported
+
+
 def main(argv=None):
-    args = parser().parse_args(argv)
-    if args.analyse_only and args.resume:
-        raise AuditError("Choose analyse-only or resume")
+    p = parser()
+    args = p.parse_args(argv)
+    if args.extend:
+        saved = json.loads((args.extend / "manifest.json").read_text())
+        p.set_defaults(**saved["configuration"])
+        if "path" in saved["executable"]:
+            p.set_defaults(exe=Path(saved["executable"]["path"]))
+        args = p.parse_args(argv)
+        if args.levels <= saved["configuration"]["levels"]:
+            raise AuditError(
+                "--extend requires --levels greater than the saved level count"
+            )
+        args.resume = args.extend
+    if args.import_from and not args.import_runs:
+        raise AuditError("--import-from requires --import-runs")
+    if args.prepare_only and (args.analyse_only or args.import_runs):
+        raise AuditError("--prepare-only requires a new, resumed or extended study")
+    if args.cases and args.analyse_only:
+        raise AuditError("--cases cannot restrict --analyse-only")
+    if args.allow_runner_change and not args.resume:
+        raise AuditError("--allow-runner-change requires --resume")
+    if args.import_runs:
+        study = args.import_runs.resolve()
+        manifest = json.loads((study / "manifest.json").read_text())
+        if manifest["schema_version"] != SCHEMA:
+            raise AuditError("Unsupported manifest schema")
+        import_runs(study, manifest, args.cases, args.import_from)
+        return 0
     if args.analyse_only:
         study = args.analyse_only.resolve()
         manifest = json.loads((study / "manifest.json").read_text())
@@ -1142,15 +1649,34 @@ def main(argv=None):
         study = args.resume.resolve()
         manifest = json.loads((study / "manifest.json").read_text())
         if (
-            manifest["configuration"] != config
+            not compatible_configuration(manifest["configuration"], config)
             or manifest["executable"]["sha256"] != exe_hash
             or manifest["template_sha256"] != template_hash
-            or manifest["runner_sha256"] != digest(__file__)
             or manifest.get("runtime_artifacts") != runtime_hashes
         ):
             raise AuditError(
-                "Resume requires matching configuration, executable, template and runner hashes"
+                "Resume requires matching configuration, executable and template hashes"
             )
+        current_runner = digest(__file__)
+        previous_runner = manifest.get(
+            "resume_runner_sha256", manifest["runner_sha256"]
+        )
+        if previous_runner != current_runner:
+            if not args.allow_runner_change:
+                raise AuditError(
+                    "Runner changed; use --allow-runner-change with --resume to record "
+                    "and accept the updated runner"
+                )
+            manifest.setdefault("runner_updates", []).append(
+                {
+                    "previous_sha256": previous_runner,
+                    "sha256": current_runner,
+                    "recorded_utc": datetime.now(timezone.utc).isoformat(),
+                }
+            )
+            manifest["resume_runner_sha256"] = current_runner
+            save_json(study / "manifest.json", manifest)
+        extend_study(study, manifest, config)
     else:
         args.output_root.mkdir(parents=True, exist_ok=True)
         stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ")
@@ -1160,30 +1686,8 @@ def main(argv=None):
 
         import xhermes
 
-        boundaries = (
-            ("fixed", "relax")
-            if config["phi_boundary"] == "both"
-            else (config["phi_boundary"],)
-        )
-        rows = []
-        for b in boundaries:
-            for f in ("pressure", "total_energy"):
-                for level in range(config["levels"]):
-                    nx = config["base_nx"] * config["refinement"] ** level
-                    nz = config["base_nz"] * config["refinement"] ** level
-                    row = {
-                        "boundary": b,
-                        "formulation": f,
-                        "level": level,
-                        "nx": nx,
-                        "nz": nz,
-                        "directory": f"{b}-{f}-{nx}x{nz}",
-                    }
-                    directory = study / row["directory"]
-                    directory.mkdir()
-                    (directory / "BOUT.inp").write_text(input_text(config, row))
-                    row["input_sha256"] = digest(directory / "BOUT.inp")
-                    rows.append(row)
+        rows = list(grid_rows(config))
+        add_inputs(study, config, rows)
         manifest = {
             "schema_version": SCHEMA,
             "created_utc": stamp,
@@ -1215,7 +1719,7 @@ def main(argv=None):
         }
         save_json(study / "manifest.json", manifest)
     print(f"Study: {study}", flush=True)
-    for row in manifest["runs"]:
+    for row in select_cases(manifest, args.cases):
         directory = study / row["directory"]
         if runtime_artifacts(exe) != runtime_hashes:
             raise AuditError(
@@ -1223,28 +1727,23 @@ def main(argv=None):
             )
         if digest(directory / "BOUT.inp") != row["input_sha256"]:
             raise AuditError(f"Modified input: {directory}")
-        status = directory / "status.json"
-        if status.exists() and json.loads(status.read_text())["exit_code"] == 0:
-            print(f"Reusing successful {row['directory']}", flush=True)
+        if completed_run(directory, config):
+            print(f"Reusing complete {row['directory']}", flush=True)
             continue
-        if (directory / "startup").exists() and (
-            not status.exists() or json.loads(status.read_text())["exit_code"] != 0
-        ):
-            # Archive failed attempts; never pool their dumps with this attempt.
-            archive = directory / f"failed-{time.time_ns()}"
-            archive.mkdir()
-            for file in directory.glob("BOUT.*.nc"):
-                file.rename(archive / file.name)
-            if (directory / "initial-state.nc").exists():
-                (directory / "initial-state.nc").rename(archive / "initial-state.nc")
-            if (directory / "startup").exists():
-                (directory / "startup").rename(archive / "startup")
+        ensure_startup(exe, directory, config, args.timeout)
+        if args.prepare_only:
+            prepare_remote(directory, row, manifest)
+            continue
         print(f"Running {row['directory']}", flush=True)
-        if not (directory / "initial-state.nc").exists() or not list(
-            directory.glob("BOUT.restart.*.nc")
-        ):
-            build_startup(exe, directory, config, args.timeout)
         execute(exe, directory, config, args.timeout)
+    if args.prepare_only:
+        print(f"Prepared cases: {study}. No full simulations or analysis were run.")
+        return 0
+    if args.cases and any(
+        not completed_run(study / row["directory"], config) for row in manifest["runs"]
+    ):
+        print("Selected cases finished. Resume to complete the matrix before analysis.")
+        return 0
     results = analyse(study, manifest, latex=args.latex, style=args.style)
     if config["accuracy_pilot"]:
         evidence = pilot(study, manifest, exe, args.timeout, results)

@@ -142,6 +142,7 @@ def open_run(source, *, species=None, chunks=None):
     Keep all physical guards, compute in normalised coordinates, and integrate
     only physical cells. Tokamak topology and density-floor corrections are
     deliberately rejected until their reconstruction contracts are validated.
+    Load resolved BOUT.settings when available, otherwise supplied BOUT.inp.
     """
     if isinstance(source, xr.Dataset):
         ds = source
@@ -150,8 +151,12 @@ def open_run(source, *, species=None, chunks=None):
         import xhermes
 
         path = str(Path(source).resolve())
-        ds = xhermes.open(
-            path,
+        options_path = Path(path) / "BOUT.settings"
+        if not options_path.is_file():
+            options_path = Path(path) / "BOUT.inp"
+        ds = xhermes.open_hermesdataset(
+            datapath=str(Path(path) / "BOUT.dmp.*.nc"),
+            inputfilepath=str(options_path),
             unnormalise=False,
             keep_xboundaries=True,
             keep_yboundaries=True,
