@@ -384,7 +384,7 @@ Temperature control is done in the pressure section
    adaptive_source = 120       # eV
    adaptive_overshoot = 5      # eV
 
-The overshoot is an approximate interval after which the source is completely dampened. This is not meant to be exact. The precise value it reaches depends on e.g. the source term. It is advised to not use too unrealistic source strengths, otherwise the density or temperature values might exceed multiples of the overshoot.
+The overshoot is an approximate interval after which the source is completely dampened. This is not meant to be exact. The precise value it reaches depends on e.g. the source terms. It is advised to not use too unrealistic source strengths, otherwise the density or temperature values might exceed multiples of the overshoot.
 
 The function used for the dampening is
 
