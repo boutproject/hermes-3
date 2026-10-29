@@ -46,7 +46,7 @@ private:
   bool upper_y; // Boundary on upper y?
 
   bool always_set_phi; ///< Set phi field?
-
+  bool do_phi_extrapolation;
   Field3D wall_potential; ///< Voltage of the wall. Normalised units.
 
   Field3D hflux_e;         // Electron heat flux through sheath

@@ -292,9 +292,13 @@ void BraginskiiIonViscosity::transform_impl(GuardedOptions& state) {
       // This term is the parallel flow part of
       // -(2/3) B^(3/2) Grad_par(Pi_ci / B^(3/2))
 
-      const Field3D div_Pi_cipar = sqrtB
-                                   * FV::Div_par_K_Grad_par(Field3DParallel{eta / Bxy},
-                                                            Field3DParallel{sqrtB * V});
+      Field3D div_Pi_cipar;
+      if (mesh->isFci()) {
+        Field3D dummy;
+        div_Pi_cipar = sqrtB * Div_par_K_Grad_par_mod(eta / Bxy, sqrtB * V, dummy, true);
+      } else {
+        div_Pi_cipar = sqrtB * FV::Div_par_K_Grad_par(eta / Bxy, sqrtB * V);
+      }
 
       add(species["momentum_source"], div_Pi_cipar);
 
