@@ -3,7 +3,7 @@
 Feedback control
 ===============================
 
-The two feedback controllers detailed in this section are implemented for 1D only at the moment.
+The feedback controllers ``Upstream density controller`` and ``Detachment front position controller`` detailed in this section are implemented for 1D only at the moment. The ``adaptive source`` is generally applicable to 1D, 2D and 3D. 
 
 .. _sec-upstream_density_feedback:
 
@@ -359,3 +359,31 @@ Input Parameters
 -  **``debug``**: Controls the level of debugging information printed to
    the screen. A value of ``0`` disables debugging output, ``1`` enables
    basic output, and ``2`` provides extensive debugging information.
+
+
+Adaptive source
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+This algorithm is applicable to 1D, 2D and 3D simulations. The controller is responsive to plasma density and temperature. It uses logistic growth to smoothly transition the set source term from its full strength to zero. This makes it differentable but potentially stiff. Each cell is individually controlled and does not rely on any averaging which makes it suitable for 3D geometries like stellarators.
+
+The density control is managed in each species density section:
+
+.. code-block:: ini
+
+   [Nd+]
+   source = ...
+   adaptive_source = 1e19      # m^-3
+   adaptive_overshoot = 1e18   # m^-3
+
+Temperature controll is done in the pressure section 
+
+.. code-block:: ini
+
+   [Pd+]
+   source = ...
+   adaptive_source = 120       # eV
+   adaptive_overshoot = 5      # eV
+
+The overshoot is an approximate interval after which the source is completely dampened. This is not meant to be exact. The precise value it reaches depends on e.g. the source term. It is advised to not use too unrealistic source strengths, otherwise the density or temperature values might exceed multiples of the overshoot. 
+
+
