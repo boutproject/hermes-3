@@ -50,6 +50,7 @@ jobs:
 
       - name: Install dependencies
         run: sudo apt update &&
+             sudo apt install -y ca-certificates &&
              sudo apt install -y
                  libfftw3-dev
                  libnetcdf-dev
@@ -80,6 +81,7 @@ jobs:
         uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
+          version: "0.13.4"
 
       - name: Install dev tools
         run: uv sync --only-dev
