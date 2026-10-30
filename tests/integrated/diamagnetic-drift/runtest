@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Check diamagnetic conservation, every physical boundary, and MPI consistency."""
+"""Check diamagnetic conservation,
+every physical boundary in a single-null tokamak plasma,
+and MPI consistency with NXPE=1 or 2."""
 
 import argparse
 import os
@@ -19,9 +21,9 @@ REFERENCE_TOLERANCE = 1e-12
 
 
 def read(name, directory):
-    return np.asarray(collect(
-        name, path=str(directory), xguards=False, yguards=False, info=False
-    ))
+    return np.asarray(
+        collect(name, path=str(directory), xguards=False, yguards=False, info=False)
+    )
 
 
 def run_case(executable, grid, run_root, nproc, nxpe, timeout):
@@ -34,13 +36,21 @@ def run_case(executable, grid, run_root, nproc, nxpe, timeout):
     shutil.copyfile(HERE / "data/BOUT.inp", directory / "BOUT.inp")
     launcher = shlex.split(os.environ.get("MPIRUN", "mpiexec -np"))
     command = [
-        *launcher, str(nproc), str(executable), "-d", str(directory),
-        f"mesh:file={grid}", f"NXPE={nxpe}",
+        *launcher,
+        str(nproc),
+        str(executable),
+        "-d",
+        str(directory),
+        f"mesh:file={grid}",
+        f"NXPE={nxpe}",
     ]
     print(f"Running {nproc} ranks: NXPE={nxpe}, NYPE={nproc // nxpe}", flush=True)
     with subprocess.Popen(
-        command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-        text=True, start_new_session=True,
+        command,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        start_new_session=True,
     ) as process:
         try:
             output, _ = process.communicate(timeout=timeout)
@@ -69,16 +79,31 @@ def run_case(executable, grid, run_root, nproc, nxpe, timeout):
             np.max(np.sum(np.abs(rates) * volume, axis=(1, 2, 3))), 1e-30
         )
         assert error < CONSERVATION_TOLERANCE, (name, "conservation", error)
-        assert rate_error < CONSERVATION_TOLERANCE, (name, "source integral", rate_error)
-        assert np.max(np.abs(values[-1] - values[0])) > 1e-7, (name, "inactive evolution")
+        assert rate_error < CONSERVATION_TOLERANCE, (
+            name,
+            "source integral",
+            rate_error,
+        )
+        assert np.max(np.abs(values[-1] - values[0])) > 1e-7, (
+            name,
+            "inactive evolution",
+        )
         core = read("core_mask", directory).astype(bool)
         assert core.sum() > 1, "Grid must contain an MPI core ring"
-        assert np.max(np.ptp(values[:, core], axis=1)) < MPI_TOLERANCE, (name, "core field")
-        assert np.max(np.ptp(rates[:, core], axis=1)) < MPI_TOLERANCE, (name, "core source")
+        assert np.max(np.ptp(values[:, core], axis=1)) < MPI_TOLERANCE, (
+            name,
+            "core field",
+        )
+        assert np.max(np.ptp(rates[:, core], axis=1)) < MPI_TOLERANCE, (
+            name,
+            "core source",
+        )
         fields[name] = values
         fields[source] = rates
-        print(f"  {name}: relative content drift={error:.3e}, "
-              f"rate integral={rate_error:.3e}")
+        print(
+            f"  {name}: relative content drift={error:.3e}, "
+            f"rate integral={rate_error:.3e}"
+        )
 
     error = read("reference_error", directory)
     assert np.max(error) < REFERENCE_TOLERANCE, ("zero-face reference", np.max(error))
@@ -89,13 +114,17 @@ def run_case(executable, grid, run_root, nproc, nxpe, timeout):
     assert np.max(np.abs(read("radial_guard_flux", directory))) < 1e-14
     # Positive controls: each physical boundary would carry flux if left open.
     for name in [
-        "open_core_flux", "open_pf_flux", "open_outer_flux",
-        "unclosed_lower_flux", "unclosed_upper_flux",
+        "open_core_flux",
+        "open_pf_flux",
+        "open_outer_flux",
+        "unclosed_lower_flux",
+        "unclosed_upper_flux",
     ]:
         flux = read(name, directory)
         assert np.isfinite(flux).all() and np.min(flux) > 1e-10, (name, flux)
-    print(f"  Boundary reference error={np.max(error):.3e}; "
-          "all closed-face checks passed")
+    print(
+        f"  Boundary reference error={np.max(error):.3e}; all closed-face checks passed"
+    )
     return fields
 
 
@@ -106,8 +135,11 @@ def main():
     )
     copied_grid = HERE / "data/compass-36x48.grd.nc"
     parser.add_argument(
-        "--grid", type=Path, default=copied_grid if copied_grid.exists()
-        else HERE.parents[2] / "examples/tokamak-2D/compass-36x48.grd.nc"
+        "--grid",
+        type=Path,
+        default=copied_grid
+        if copied_grid.exists()
+        else HERE.parents[2] / "examples/tokamak-2D/compass-36x48.grd.nc",
     )
     parser.add_argument("--run-root", type=Path, default=HERE / "runs")
     parser.add_argument("--timeout", type=float, default=60)
@@ -115,10 +147,16 @@ def main():
     results = []
     # The 8-cell divertor legs require NYPE >= 6; a serial run is invalid.
     for nproc, nxpe in [(6, 1), (12, 1), (12, 2)]:
-        results.append(run_case(
-            args.executable.resolve(), args.grid.resolve(), args.run_root.resolve(),
-            nproc, nxpe, args.timeout,
-        ))
+        results.append(
+            run_case(
+                args.executable.resolve(),
+                args.grid.resolve(),
+                args.run_root.resolve(),
+                nproc,
+                nxpe,
+                args.timeout,
+            )
+        )
     for parallel in results[1:]:
         for name, reference in results[0].items():
             error = np.max(np.abs(parallel[name] - reference)) / max(
