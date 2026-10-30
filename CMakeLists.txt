@@ -431,8 +431,11 @@ if(HERMES_TESTS)
 
     add_test(NAME hermes_unit_tests COMMAND hermes_unit_tests)
     set_tests_properties(hermes_unit_tests PROPERTIES LABELS unit)
-    target_link_libraries(hermes_unit_tests PRIVATE gtest bout++::bout++
-                                                    hermes-3-lib)
+    target_link_libraries(
+      hermes_unit_tests
+      PRIVATE gtest bout++::bout++
+              # Make sure ALL components are linked into the binary.
+              "$<LINK_LIBRARY:WHOLE_ARCHIVE,hermes-3-lib>")
     # Have hermes_unit_tests look for dynamic libs in ./ before searching
     # elsewhere
     set_target_properties(hermes_unit_tests PROPERTIES BUILD_RPATH "$ORIGIN")
