@@ -181,7 +181,7 @@ TEST_F(RelaxPotentialTest, ApplyPhiBoundarySheath) {
 
   RelaxPotential component("test", options, &solver);
 
-  Field3D phi{1.0};
+  Field3DParallel phi{1.0};
   Options state{
       {"species", {{"e", {{"AA", 1.0}, {"charge", -1.0}, {"temperature", 2.0}}}}}};
   Permissions permissions{{readOnly("species")}};
@@ -207,7 +207,7 @@ TEST_F(RelaxPotentialTest, ApplyPhiBoundaryRelax) {
 
   RelaxPotential component("test", options, &solver);
 
-  Field3D phi{2.0};
+  Field3DParallel phi{2.0};
   for (int j = mesh->ystart; j <= mesh->yend; j++) {
     for (int k = 0; k < mesh->LocalNz; k++) {
       phi(mesh->xstart - 1, j, k) = 0.0;
@@ -243,7 +243,7 @@ TEST_F(RelaxPotentialTest, CalculateDivJdia) {
   Permissions permissions{{readOnly("species"), readWrite("species:d+:energy_source")}};
   const GuardedOptions guarded_state{&state, &permissions};
 
-  Field3D phi{0.0}; // Y boundary modified in calculateDivJdia
+  Field3DParallel phi{0.0}; // Y boundary modified in calculateDivJdia
   const Field3D DivJdia = component.calculateDivJdia(phi, guarded_state["species"]);
 
   ASSERT_TRUE(IsFieldEqual(DivJdia, 0.0, "RGN_NOBNDRY"));
@@ -268,7 +268,8 @@ TEST_F(RelaxPotentialTest, CalculateDivJcol) {
   Permissions permissions{{readOnly("species")}};
   const GuardedOptions guarded_state{&state, &permissions};
 
-  const Field3D DivJcol = component.calculateDivJcol(1.0, 0.5, guarded_state["species"]);
+  const Field3D DivJcol =
+      component.calculateDivJcol(Field3DParallel{1.0}, 0.5, guarded_state["species"]);
 
   ASSERT_TRUE(IsFieldEqual(DivJcol, 0.0, "RGN_NOBNDRY"));
 }
@@ -327,7 +328,7 @@ TEST_F(RelaxPotentialTest, BoussinesqVorticityUsesChargeWeighting) {
 
   RelaxPotential component("test", options, &solver);
 
-  const Field3D phi{0.0, mesh};
+  const Field3DParallel phi{0.0};
   const Field3D pressure = makeXProfile();
 
   Options state_charge_two{
@@ -376,9 +377,9 @@ TEST_F(RelaxPotentialTest, FinallyUsesBoundaryConditionedPhiVorticity) {
   const GuardedOptions guarded_state{&state, &permissions};
   auto guarded_species = guarded_state["species"];
 
-  Field3D expected_phi1{1.0, mesh};
+  Field3DParallel expected_phi1{1.0};
   expected_phi1.applyBoundary("neumann");
-  Field3D expected_phi = expected_phi1;
+  Field3DParallel expected_phi = expected_phi1;
   component.applyPhiBoundary(expected_phi, guarded_state);
   const Field3D expected = component.calculatePhi1Source(
       0.0, 0.0, component.vorticity(expected_phi, guarded_species));

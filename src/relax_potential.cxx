@@ -169,16 +169,18 @@ RelaxPotential::RelaxPotential(std::string name, Options& alloptions, Solver* so
                   .doc("Perpendicular Kinematic viscosity [m^2/s]")
                   .withDefault(viscosity)
               / (Lnorm * Lnorm * Omega_ci);
-  viscosity.applyBoundary("dirichlet");
+
+  include_viscosity = options.isSet("viscosity");
 
   viscosity_par = 0.0;
   viscosity_par = options["viscosity_par"]
                       .doc("Parallel Kinematic viscosity [m^2/s]")
                       .withDefault(viscosity_par)
                   / (Lnorm * Lnorm * Omega_ci);
+  include_viscosity_par = options.isSet("viscosity_par");
+
   mesh->communicate(viscosity_par);
-  viscosity_par.applyBoundary("dirichlet");
-  viscosity_par.applyParallelBoundary("parallel_dirichlet_o2");
+  viscosity_par.applyParallelBoundary("parallel_neumann_o1");
 
   hyper_z = options["hyper_z"].doc("Hyper-viscosity in Z. < 0 -> off").withDefault(-1.0);
 
@@ -250,10 +252,7 @@ RelaxPotential::RelaxPotential(std::string name, Options& alloptions, Solver* so
     if (diamagnetic_bracketform) {
       // Calculate logB
       logB = log(coord->Bxy());
-      logB.applyBoundary("neumann");
-      mesh->communicate(logB);
-      logB.applyParallelBoundary("parallel_neumann_o1");
-
+      ASSERT0(logB.hasParallelSlices());
     } else {
       // Read curvature vector
       try {
@@ -298,8 +297,7 @@ RelaxPotential::RelaxPotential(std::string name, Options& alloptions, Solver* so
   }
 
   Bsq = SQ(coord->Bxy());
-  mesh->communicate(Bsq);
-  Bsq.applyParallelBoundary("parallel_neumann_o2");
+  ASSERT0(Bsq.hasParallelSlices());
 
   diagnose =
       options["diagnose"].doc("Output additional diagnostics?").withDefault<bool>(false);
@@ -361,7 +359,7 @@ Field3D RelaxPotential::calculatePihat(GuardedOptions allspecies) {
   return Pi_hat;
 }
 
-void RelaxPotential::applyPhiBoundary(Field3D& phi, GuardedOptions state) {
+void RelaxPotential::applyPhiBoundary(Field3DParallel& phi, GuardedOptions state) {
   if (phi_boundary_relax) {
     const BoutReal time = get<BoutReal>(state["time"]);
 
@@ -455,6 +453,34 @@ void RelaxPotential::applyPhiBoundary(Field3D& phi, GuardedOptions state) {
     Te = 0.0;
   }
 
+  // Set boundary in Fci when sheath boundary
+  // Keep default FA behavior the same
+  if ((mesh->lastX() && sheath_boundary) || (mesh->lastX() && !mesh->isFci())) {
+    for (int j = mesh->ystart; j <= mesh->yend; j++) {
+      BoutReal teavg = 0.0;
+      for (int k = 0; k < mesh->LocalNz; k++) {
+        teavg += Te(mesh->xend, j, k);
+      }
+      teavg /= mesh->LocalNz;
+      const BoutReal phivalue = sheathmult * teavg;
+      for (int k = 0; k < mesh->LocalNz; k++) {
+        phi(mesh->xend + 1, j, k) = (2. * phivalue) - phi(mesh->xend, j, k);
+      }
+      if (mesh->xend < mesh->LocalNx - 2) {
+        for (int k = 0; k < mesh->LocalNz; k++) {
+          phi(mesh->xend + 2, j, k) = phi(mesh->xend + 1, j, k);
+        }
+      }
+    }
+  }
+
+  // FirstX is the inner boundary, which sets the core potential as dirichlet
+  // Keep default FA behavior the same
+
+  if (mesh->isFci()) {
+    return;
+  }
+
   if (mesh->firstX()) {
     for (int j = mesh->ystart; j <= mesh->yend; j++) {
       BoutReal teavg = 0.0;
@@ -473,28 +499,10 @@ void RelaxPotential::applyPhiBoundary(Field3D& phi, GuardedOptions state) {
       }
     }
   }
-
-  if (mesh->lastX()) {
-    for (int j = mesh->ystart; j <= mesh->yend; j++) {
-      BoutReal teavg = 0.0;
-      for (int k = 0; k < mesh->LocalNz; k++) {
-        teavg += Te(mesh->xend, j, k);
-      }
-      teavg /= mesh->LocalNz;
-      const BoutReal phivalue = sheathmult * teavg;
-      for (int k = 0; k < mesh->LocalNz; k++) {
-        phi(mesh->xend + 1, j, k) = (2. * phivalue) - phi(mesh->xend, j, k);
-      }
-      if (mesh->xend < mesh->LocalNx - 2) {
-        for (int k = 0; k < mesh->LocalNz; k++) {
-          phi(mesh->xend + 2, j, k) = phi(mesh->xend + 1, j, k);
-        }
-      }
-    }
-  }
 }
 
-Field3D RelaxPotential::calculateDivJdia(Field3D& phi, GuardedOptions allspecies) {
+Field3D RelaxPotential::calculateDivJdia(Field3DParallel& phi,
+                                         GuardedOptions allspecies) {
   if (diamagnetic_bracketform) {
     Field3D DivJdia{zeroFrom(phi)};
     for (auto& kv : allspecies.getChildren()) {
@@ -593,7 +601,8 @@ Field3D RelaxPotential::calculateDivJdia(Field3D& phi, GuardedOptions allspecies
   return Div(Jdia);
 }
 
-Field3D RelaxPotential::calculateDivJcol(const Field3D& phi, const Field3D& pi_hat,
+Field3D RelaxPotential::calculateDivJcol(const Field3DParallel& phi,
+                                         const Field3D& pi_hat,
                                          GuardedOptions allspecies) {
   Field3D sum_A_nu_n = zeroFrom(phi);
   Field3D sum_A_n = zeroFrom(phi);
@@ -632,7 +641,7 @@ Field3D RelaxPotential::calculateDivJcol(const Field3D& phi, const Field3D& pi_h
 }
 
 Field3D RelaxPotential::calculateExBAdvectionSource(const Field3D& vort,
-                                                    const Field3D& phi,
+                                                    const Field3DParallel& phi,
                                                     const Field3D& pi_hat) {
   Field3D result = zeroFrom(vort);
 
@@ -695,10 +704,12 @@ Field3D RelaxPotential::calculateParallelCurrentSource(const Options& state) {
       continue;
     }
 
-    const Field3D NV = get<Field3D>(species["momentum"]);
+    const Field3DParallel NV = get<Field3D>(species["momentum"]);
+    ASSERT2(NV.hasParallelSlices());
     ensure_initialised(NV);
     const BoutReal A = get<BoutReal>(species["AA"]);
-    const Field3D jpar = (Z / A) * NV;
+    const Field3DParallel jpar = (Z / A) * NV;
+    ASSERT2(jpar.hasParallelSlices());
     result += Div_par(jpar);
 
     if (state["fields"].isSet("Apar_flutter")) {
@@ -717,16 +728,21 @@ Field3D RelaxPotential::calculateParallelCurrentSource(const Options& state) {
 
 Field3D RelaxPotential::calculateDissipationSource(const Options& state,
                                                    const Field3D& vort,
-                                                   const Field3D& phi) {
+                                                   const Field3DParallel& phi) {
   Field3D result = zeroFrom(vort);
-
-  if (mesh->isFci()) {
-    Field3D flow_xlow, flow_ylow;
-    result += (*dagp_op)(viscosity, vort, flow_xlow, flow_ylow, false);
-  } else {
-    result += FV::Div_a_Grad_perp(viscosity, vort);
+  if (include_viscosity) {
+    if (mesh->isFci()) {
+      Field3D flow_xlow, flow_ylow;
+      result += (*dagp_op)(viscosity, vort, flow_xlow, flow_ylow, false);
+    } else {
+      result += FV::Div_a_Grad_perp(viscosity, vort);
+    }
   }
-  result += FV::Div_par_K_Grad_par(viscosity_par, vort);
+
+  if (include_viscosity_par) {
+    Field3D dummy;
+    result += Div_par_K_Grad_par_mod(viscosity_par, vort, dummy, true);
+  }
 
   if (vort_dissipation) {
     const Field3D sound_speed = get<Field3D>(state["sound_speed"]);
@@ -799,15 +815,14 @@ void RelaxPotential::transform_impl(GuardedOptions& state) {
 
   auto allspecies = state["species"];
 
-  phi.name = "phi";
   auto fields = state["fields"];
 
   // Set the boundary of phi1.
-  phi1.applyBoundary("neumann");
+  phi1.applyBoundary();
+  mesh->communicate(phi1);
+  phi1.applyParallelBoundary();
 
   phi = phi1 / lambda_2;
-  // Ensure that potential is set in the communication guard cells
-  mesh->communicate(phi1, phi);
 
   Pi_hat = calculatePihat(allspecies);
   applyPhiBoundary(phi, state);
@@ -817,9 +832,9 @@ void RelaxPotential::transform_impl(GuardedOptions& state) {
     Vort = this->Vort_from_phi;
   }
 
-  Vort.applyBoundary("neumann");
+  Vort.applyBoundary();
   mesh->communicate(Vort);
-  applyParallelNeumannBoundary(Vort);
+  Vort.applyParallelBoundary();
 
   // Vorticity equation
 
@@ -849,7 +864,7 @@ void RelaxPotential::transform_impl(GuardedOptions& state) {
 }
 
 void RelaxPotential::finally(const Options& state) {
-  phi = get<Field3D>(state["fields"]["phi"]);
+  phi = Field3DParallel{get<Field3D>(state["fields"]["phi"])};
 
   Vort_rhs += calculateExBAdvectionSource(Vort, phi, Pi_hat);
   Vort_rhs += calculateParallelCurrentSource(state);
@@ -913,7 +928,8 @@ void RelaxPotential::outputVars(Options& state) {
   }
 }
 
-Field3D RelaxPotential::vorticity(const Field3D& phi, GuardedOptions& allspecies) {
+Field3D RelaxPotential::vorticity(const Field3DParallel& phi,
+                                  GuardedOptions& allspecies) {
   if (boussinesq) {
     Field3D phi_vort;
     if (mesh->isFci()) {
