@@ -34,7 +34,12 @@
 /// Use this template class directly to use different sized grid:
 ///
 ///     using MyTest = FakeMeshFixture_tmpl<7, 9, 11>;
-template <int NX, int NY, int NZ, bool FCI = false, int MXG = 1>
+/// The MeshType parameter can supply a FakeMesh subclass with boundary
+/// topology or communication behaviour specific to a test.
+/// MpiType can supply a wrapper that records or modifies MPI calls.
+/// Override getCoordinates() to select custom coordinates during SetUp().
+template <int NX, int NY, int NZ, bool FCI = false, int MXG = 1,
+          class MeshType = FakeMesh, class MpiType = MpiWrapper>
 class FakeMeshFixture_tmpl : public ::testing::Test {
 public:
   FakeMeshFixture_tmpl()
@@ -142,16 +147,31 @@ public:
   static constexpr int ny = NY;
   static constexpr int nz = NZ;
 
+protected:
+  void SetUp() override {
+    mesh_m.setCoordinates(nullptr);
+    test_coords = getCoordinates();
+    mesh_m.setCoordinates(test_coords);
+  }
+
+  /// Called after the derived fixture is constructed, so overrides can supply
+  /// custom coordinates. Keep the constructor's defaults for existing fixtures
+  /// that initialise fields or components before SetUp().
+  virtual std::shared_ptr<Coordinates> getCoordinates() { return test_coords; }
+
+  MeshType& getMesh() { return mesh_m; }
+  MpiType& getMpi() { return mpi; }
+
 private:
   std::shared_ptr<Coordinates> test_coords{nullptr};
   std::shared_ptr<Coordinates> test_coords_staggered{nullptr};
 
   WithQuietOutput quiet_info{output_info};
   WithQuietOutput quiet_warn{output_warn};
-  MpiWrapper mpi;
+  MpiType mpi;
 
-  FakeMesh mesh_m;
-  FakeMesh mesh_staggered_m;
+  MeshType mesh_m;
+  MeshType mesh_staggered_m;
 
 public:
   // Public pointer to our staggered mesh
