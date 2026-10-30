@@ -558,7 +558,7 @@ void EvolvePressure::outputVars(Options& state) {
 
     if (numerical_viscous_heating) {
       set_with_attrs(
-          state[std::string("E") + name + std::string("_nvh")], Sp_nvh * 3 / .2,
+          state[std::string("E") + name + std::string("_nvh")], Sp_nvh * 3. / 2,
           {{"time_dimension", "t"},
            {"units", "W"},
            {"conversion", Pnorm * Omega_ci},
