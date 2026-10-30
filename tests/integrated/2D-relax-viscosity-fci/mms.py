@@ -38,9 +38,9 @@ def div_a_grad_perp(a, b):
 
 # Define solution in terms of input x,y,z
 phi1 = 0.35 * sin(2.0 * pi * x) * sin(2 * z + 1.321312)
-Vort = 1e-2 * sin(2.0 * pi * x) * sin(2 * z - 2.521312)
+Vort = 1e-4 * sin(2.0 * pi * x) * sin(2 * z - 2.521312)
 
-B = (1.0 + 0.01 * (x - 0.5)) / Bnorm
+B = (1.0 + 0.1 * sin(2.0 * pi * x)) / Bnorm
 
 n = 1.0 + 0.2 * sin(2.0 * pi * x) * sin(2 * z + 4.7)
 T = 1.0 + 0.0 * x
