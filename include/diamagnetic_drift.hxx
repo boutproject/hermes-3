@@ -42,11 +42,12 @@ private:
   /// Calculate the local volume-weighted sum on the inner core ring.
   BoutReal coreRingSum(const Field3D& f) const;
 
-  /// Smooth a source around the inner radial core boundary.
+  /// Set the inner core-ring cells to the global volume-weighted average.
   ///
   /// Requires closed_average on the core boundary for this component.
+  /// global_sum is the volume-weighted sum over the full core ring.
   /// Modifies the input field in-place.
-  void coreAverage(Field3D& f, BoutReal global_sum) const;
+  void setCoreAverage(Field3D& f, BoutReal global_sum) const;
 
   VectorMetric Curlb_B;
   DiamagneticForm form;                ///< Form of the diamagnetic sink

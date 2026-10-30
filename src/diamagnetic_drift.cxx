@@ -1,7 +1,10 @@
 #include <bout/bout_types.hxx>
 #include <bout/boutcomm.hxx>
 #include <bout/boutexception.hxx>
+#include <bout/coordinates.hxx>
 #include <bout/derivs.hxx>
+#include <bout/field.hxx>
+#include <bout/field2d.hxx>
 #include <bout/field3d.hxx>
 #include <bout/fv_ops.hxx>
 #include <bout/globals.hxx>
@@ -226,9 +229,9 @@ Field3D DiamagneticDrift::calculateGradientForm(const Field3D& quantity,
       const int jx = mesh->xstart;
       for (int jy = mesh->ystart; jy <= mesh->yend; ++jy) {
         for (int jz = mesh->zstart; jz <= mesh->zend; ++jz) {
-          const BoutReal flux =
-              0.5
-              * (a(jx - 1, jy, jz) * g(jx, jy, jz) + a(jx, jy, jz) * g(jx - 1, jy, jz));
+          const BoutReal flux = 0.5
+                                * ((a(jx - 1, jy, jz) * g(jx, jy, jz))
+                                   + (a(jx, jy, jz) * g(jx - 1, jy, jz)));
           sink(jx, jy, jz) += factor * flux / (J(jx, jy, jz) * dx(jx, jy, jz));
         }
       }
@@ -237,9 +240,9 @@ Field3D DiamagneticDrift::calculateGradientForm(const Field3D& quantity,
       const int jx = mesh->xend;
       for (int jy = mesh->ystart; jy <= mesh->yend; ++jy) {
         for (int jz = mesh->zstart; jz <= mesh->zend; ++jz) {
-          const BoutReal flux =
-              0.5
-              * (a(jx, jy, jz) * g(jx + 1, jy, jz) + a(jx + 1, jy, jz) * g(jx, jy, jz));
+          const BoutReal flux = 0.5
+                                * ((a(jx, jy, jz) * g(jx + 1, jy, jz))
+                                   + (a(jx + 1, jy, jz) * g(jx, jy, jz)));
           sink(jx, jy, jz) -= factor * flux / (J(jx, jy, jz) * dx(jx, jy, jz));
         }
       }
@@ -260,20 +263,20 @@ Field3D DiamagneticDrift::calculateGradientForm(const Field3D& quantity,
   for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
     const int jy = mesh->ystart;
     for (int jz = mesh->zstart; jz <= mesh->zend; ++jz) {
-      const BoutReal a_guard = 2.0 * a_al(r.ind, jy, jz) - a_al(r.ind, jy + 1, jz);
+      const BoutReal a_guard = (2.0 * a_al(r.ind, jy, jz)) - a_al(r.ind, jy + 1, jz);
       const BoutReal flux = 0.5
-                            * (a_guard * g_al(r.ind, jy, jz)
-                               + a_al(r.ind, jy, jz) * g_al(r.ind, jy - 1, jz));
+                            * ((a_guard * g_al(r.ind, jy, jz))
+                               + (a_al(r.ind, jy, jz) * g_al(r.ind, jy - 1, jz)));
       correction(r.ind, jy, jz) += factor * flux / Jdy_al(r.ind, jy, jz);
     }
   }
   for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
     const int jy = mesh->yend;
     for (int jz = mesh->zstart; jz <= mesh->zend; ++jz) {
-      const BoutReal a_guard = 2.0 * a_al(r.ind, jy, jz) - a_al(r.ind, jy - 1, jz);
+      const BoutReal a_guard = (2.0 * a_al(r.ind, jy, jz)) - a_al(r.ind, jy - 1, jz);
       const BoutReal flux = 0.5
-                            * (a_al(r.ind, jy, jz) * g_al(r.ind, jy + 1, jz)
-                               + a_guard * g_al(r.ind, jy, jz));
+                            * ((a_al(r.ind, jy, jz) * g_al(r.ind, jy + 1, jz))
+                               + (a_guard * g_al(r.ind, jy, jz)));
       correction(r.ind, jy, jz) -= factor * flux / Jdy_al(r.ind, jy, jz);
     }
   }
@@ -292,7 +295,7 @@ BoutReal DiamagneticDrift::coreRingSum(const Field3D& f) const {
   return local_sum;
 }
 
-void DiamagneticDrift::coreAverage(Field3D& f, BoutReal global_sum) const {
+void DiamagneticDrift::setCoreAverage(Field3D& f, BoutReal global_sum) const {
   const BoutReal average = global_sum / core_ring_volume;
   for (int jy = mesh->ystart; jy <= mesh->yend; ++jy) {
     for (int jz = mesh->zstart; jz <= mesh->zend; ++jz) {
@@ -353,7 +356,7 @@ void DiamagneticDrift::transform_impl(GuardedOptions& state) {
   // Apply the global means and write the source terms in a second pass.
   for (std::size_t i = 0; i < sources.size(); ++i) {
     if (average_core_active) {
-      coreAverage(sources[i].sink, ring_sums[i]);
+      setCoreAverage(sources[i].sink, ring_sums[i]);
     }
     subtract(sources[i].output.getWritable(), sources[i].sink);
   }
