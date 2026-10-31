@@ -1,4 +1,5 @@
 
+#include <bout/assert.hxx>
 #include <bout/bout_types.hxx>
 #include <bout/boutexception.hxx>
 #include <bout/constants.hxx>
@@ -12,6 +13,7 @@
 #include <bout/output.hxx>
 #include <bout/output_bout_types.hxx>
 #include <bout/solver.hxx>
+#include <bout/utils.hxx>
 
 #include "../include/component.hxx"
 #include "../include/div_ops.hxx"
@@ -21,6 +23,7 @@
 #include "../include/hermes_utils.hxx"
 #include "../include/permissions.hxx"
 
+#include <cmath>
 #include <string>
 
 using bout::globals::mesh;
@@ -80,6 +83,10 @@ EvolveMomentum::EvolveMomentum(std::string name, Options& alloptions, Solver* so
           .doc("Fix Y boundary momentum flux to boundary midpoint value?")
           .withDefault<bool>(false);
 
+  scale_momentum_ddt = options["scale_momentum_ddt"]
+                           .doc("Scale time derivatives if > 0")
+                           .withDefault(-1.0);
+
   // Set to zero so set for output
   momentum_source = 0.0;
   NV_err = 0.0;
@@ -98,7 +105,7 @@ void EvolveMomentum::transform_impl(GuardedOptions& state) {
   auto species = state["species"][name];
 
   // Not using density boundary condition
-  Field3DParallel N = getNoBoundary<Field3D>(species["density"]);
+  const Field3DParallel N = getNoBoundary<Field3D>(species["density"]);
 
   const Field3DParallel Nlim = softFloor(N, density_floor);
 
@@ -272,6 +279,11 @@ void EvolveMomentum::finally(const Options& state) {
   // Scale time derivatives
   if (state.isSet("scale_timederivs")) {
     ddt(NV) *= get<Field3D>(state["scale_timederivs"]);
+  }
+
+  // Scale momentum time derivatives
+  if (this->scale_momentum_ddt > 0.0) {
+    ddt(NV) *= this->scale_momentum_ddt;
   }
 
 #if CHECKLEVEL >= 1
