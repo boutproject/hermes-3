@@ -34,8 +34,8 @@ def div_a_grad_par(a, b):
 phi1 = 0.35 * sin(y)
 Vort = 1e-4 * sin(2.0 * y + 0.231)
 
-Ve = 0.125 * sin(y + 3.6525122)
-Vi = -0.422 * sin(2 * y + 5.12)
+Ve = 0.0125 * sin(y + 3.6525122)
+Vi = -0.0422 * sin(2 * y + 5.12)
 
 B = (1.0 + 0.0 * y) / Bnorm
 
