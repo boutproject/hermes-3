@@ -7,6 +7,7 @@ No diagnostic is used to reconstruct an RHS or solve for the polarisation flow.
 """
 
 from dataclasses import dataclass
+from functools import lru_cache
 
 import numpy as np
 import xarray as xr
@@ -230,74 +231,75 @@ def fill_transport_guards(field, run, periodic_x, periodic_y):
     return result
 
 
-def solve_polarisation(run, rhs, periodic_x, periodic_y):
-    """Independent sparse FV solve, gauge-fixed for periodic X.
-
-    Nonperiodic X uses homogeneous Dirichlet at half-cell faces. Relaxation
-    retains this auxiliary-current boundary; fixed-boundary runs reproduce
-    the legacy post-solve Neumann overwrite. This is an auxiliary chi, not an
-    exact temporal derivative of the recovered Phi.
-    """
-    from scipy.sparse import coo_matrix
+@lru_cache(maxsize=32)
+def _polarisation_factors(nx, nz, ax, az, periodic_x):
+    """Reusable complex X factors for the finite-volume Z Fourier modes."""
+    from scipy.sparse import diags
     from scipy.sparse.linalg import splu
 
+    factors = []
+    for k in range(nz // 2 + 1):
+        diagonal = np.full(nx, -2 * ax - 4 * az * np.sin(np.pi * k / nz) ** 2)
+        if not periodic_x:
+            # DC: negative reflected guard. AC: equal reflected guard.
+            shift = -ax if k == 0 else ax
+            diagonal[0] += shift
+            diagonal[-1] += shift
+        matrix = diags(
+            [np.full(nx - 1, ax), diagonal, np.full(nx - 1, ax)],
+            [-1, 0, 1],
+            dtype=complex,
+            format="lil",
+        )
+        if periodic_x:
+            matrix[0, -1] += ax
+            matrix[-1, 0] += ax
+            if k == 0:
+                matrix[0, :] = 0
+                matrix[0, 0] = 1
+        factors.append(splu(matrix.tocsc()))
+    return tuple(factors)
+
+
+def solve_polarisation(run, rhs, periodic_x, periodic_y):
+    """Independent FV inverse: DC Dirichlet and AC Neumann at X faces.
+
+    The nonperiodic DC value is fixed without a mean projection or an RHS
+    compatibility condition. Periodic X retains a gauge-fixed constant mode.
+    The Fourier eigenvalues include the FV Nyquist response. Time/Y slices
+    remain lazy and matrix factors are cached for uniform orthogonal geometry.
+    """
     ds = run.data
-    # Nondefault inversion boundary flags or coefficients need explicit support.
     section = ds.options[run.model]
-    for key in (
-        "laplacian:inner_boundary_flags",
-        "laplacian:outer_boundary_flags",
-        "laplacian:global_flags",
-    ):
-        if key in section and section.evaluate_scalar(key) not in (
-            (0, 16) if key.endswith("boundary_flags") else (0,)
-        ):
-            raise AuditError(
-                "Polarisation solve supports only default Laplace boundary flags"
-            )
+    if not periodic_x and "polarisation_laplacian" in section:
+        opts = section["polarisation_laplacian"]
+        for key in ("inner_boundary_flags", "outer_boundary_flags"):
+            if not periodic_x and key in opts and opts.evaluate_scalar(key) != 2:
+                raise AuditError(
+                    "Polarisation inversion requires DC Dirichlet/AC Neumann flags=2"
+                )
+        if "global_flags" in opts and int(opts.evaluate_scalar("global_flags")) & 17:
+            raise AuditError("Polarisation inversion must retain the DC solution")
     nx, nz = ds.sizes["x"] - 2 * run.mxg, ds.sizes["z"]
     c = run.scalar_option("average_atomic_mass") / float(ds.Bxy.values.flat[0]) ** 2
     ax = c * float(ds.g11.values.flat[0]) / float(ds.dx.values.flat[0]) ** 2
     az = c * float(ds.g33.values.flat[0]) / float(ds.dz.values.flat[0]) ** 2
-    rows, cols, entries = [], [], []
-    for x in range(nx):
-        for z in range(nz):
-            i = x * nz + z
-            diagonal = -2 * ax - 2 * az
-            for xx in (x - 1, x + 1):
-                if periodic_x or 0 <= xx < nx:
-                    rows.append(i)
-                    cols.append((xx % nx) * nz + z)
-                    entries.append(ax)
-                else:
-                    diagonal -= ax  # reflected negative guard at the face
-            for zz in (z - 1, z + 1):
-                rows.append(i)
-                cols.append(x * nz + (zz % nz))
-                entries.append(az)
-            rows.append(i)
-            cols.append(i)
-            entries.append(diagonal)
-    matrix = coo_matrix((entries, (rows, cols)), shape=(nx * nz, nx * nz)).tocsc()
-    if periodic_x:
-        matrix = matrix.tolil()
-        matrix[0, :] = 0
-        matrix[0, 0] = 1
-        matrix = matrix.tocsc()
-    factor = splu(matrix)
+    factors = _polarisation_factors(nx, nz, ax, az, periodic_x)
 
     def solve(values):
-        b = np.asarray(values).ravel().copy()
-        if not np.isfinite(b).all():
+        values = np.asarray(values)
+        if not np.isfinite(values).all():
             raise AuditError("Polarisation RHS contains nonfinite physical values")
+        if periodic_x and abs(values.mean()) > 1e-11 * max(1.0, abs(values).max()):
+            raise AuditError("Periodic polarisation RHS has incompatible nonzero mean")
+        b = np.fft.rfft(values, axis=-1)
         if periodic_x:
-            if abs(b.mean()) > 1e-11 * max(1.0, abs(b).max()):
-                raise AuditError(
-                    "Periodic polarisation RHS has incompatible nonzero mean"
-                )
-            b[0] = 0
-        solved = factor.solve(b).reshape(nx, nz)
-        return solved - solved.mean() if periodic_x else solved
+            b[0, 0] = 0
+        coefficients = np.column_stack(
+            [factor.solve(b[:, k]) for k, factor in enumerate(factors)]
+        )
+        result = np.fft.irfft(coefficients, n=nz, axis=-1)
+        return result - result.mean() if periodic_x else result
 
     interior = run.interior(rhs).reset_coords(drop=True)
     if interior.chunks is not None:
@@ -311,20 +313,13 @@ def solve_polarisation(run, rhs, periodic_x, periodic_y):
         dask="parallelized",
         output_dtypes=[float],
     )
-    # Reindex introduces only undefined guard placeholders; communication or
-    # the known Neumann rule fills them lazily. No full-time 4D allocation.
     result = solved.reindex(x=rhs.x, y=rhs.y).transpose(*rhs.dims)
     result = fill_transport_guards(result, run, periodic_x, periodic_y)
-    if (
-        not periodic_x
-        and "phi_boundary_relax" in section
-        and section.get_bool("phi_boundary_relax")
-    ):
-        result[{"x": run.mxg - 1}] = -result.isel(x=run.mxg)
-        result[{"x": -run.mxg}] = -result.isel(x=-run.mxg - 1)
-        for i in range(run.mxg - 1):
-            result[{"x": i}] = result.isel(x=run.mxg - 1)
-            result[{"x": -i - 1}] = result.isel(x=-run.mxg)
+    if not periodic_x:
+        # Each radial layer is odd in DC and even in AC.
+        for guard in (*range(run.mxg), *range(ds.sizes["x"] - run.mxg, ds.sizes["x"])):
+            layer = result.isel(x=guard, drop=True)
+            result[{"x": guard}] = layer - 2 * layer.mean("z")
     return result
 
 
@@ -464,7 +459,11 @@ def reconstruct_fluxes(run, *, sources=None):
         )
 
     families["DivEExB"] = xppm(1.5 * pi + densities.ion_parallel, phi, ds)
-    families["DivEReynolds"] = fv_xz(0.5 * c * bracket, Phi, ds, periodic_x=periodic_x)
+    # Match the component's existing Neumann stencil for Reynolds energy.
+    energy_phi = fill_transport_guards(Phi, run, periodic_x, periodic_y)
+    families["DivEReynolds"] = fv_xz(
+        0.5 * c * bracket, energy_phi, ds, periodic_x=periodic_x
+    )
     advected = polarisation_energy_coefficient(run)
     families["DivEpol"] = pol(advected.total)
     families["DivEpol_enthalpy"] = pol(advected.enthalpy)
@@ -679,9 +678,9 @@ def reconstruct_fluxes(run, *, sources=None):
         "limitations": "XPPM closes the periodic radial seam when bndry_flux=false",
         "polarisation_potential": "auxiliary current-continuity chi",
         "polarisation_boundary": (
-            "homogeneous midpoint Dirichlet"
-            if ds.options[run.model].get_bool("phi_boundary_relax") and not periodic_x
-            else "legacy post-solve Neumann / periodic communication"
+            "periodic communication with fixed gauge"
+            if periodic_x
+            else "homogeneous midpoint Dirichlet DC / radial Neumann AC"
         ),
     }
     return output
@@ -807,8 +806,8 @@ def closed_slab_outward_power(run, *, densities=None):
 
     In this explicitly closed singleton-Y contract, polarisation and electron
     thermal radial faces are suppressed and Z is periodic. Their net outward
-    power is exactly zero by the implemented face rules. Reynolds energy faces
-    remain open and are reconstructed. This function does not provide regional
+    power is exactly zero by the implemented face rules. Reynolds and viscous
+    energy faces are reconstructed. This function does not provide regional
     divergences or claim that the locally nonzero closed transports vanish.
     """
     if run.formulation != "total_energy":
@@ -833,7 +832,8 @@ def closed_slab_outward_power(run, *, densities=None):
         periodic_x,
         periodic_y,
     )
-    reynolds = fv_xz(0.5 * c * bracket, Phi, ds, periodic_x=periodic_x)
+    energy_phi = fill_transport_guards(Phi, run, periodic_x, periodic_y)
+    reynolds = fv_xz(0.5 * c * bracket, energy_phi, ds, periodic_x=periodic_x)
     nu = run.scalar_option("viscosity", 0) / (run.length_scale**2 * run.frequency)
     viscosity = xr.ones_like(ds.phi) * nu
     if not periodic_x:

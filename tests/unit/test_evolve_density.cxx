@@ -20,6 +20,40 @@ using namespace bout::globals;
 // Reuse the "standard" fixture for FakeMesh
 using EvolveDensityTest = FakeMeshFixture;
 
+TEST_F(EvolveDensityTest, MmsForcingDoesNotEnterPhysicalSourceBookkeeping) {
+  FakeSolver solver;
+  Options options{{"units", {{"eV", 1.0}, {"inv_meters_cubed", 2.0}, {"seconds", 0.5}}},
+                  {"solver", {{"mms", true}}},
+                  {"Ni", {{"source", 12.0}}},
+                  {"i", {{"AA", 2.0}, {"charge", 1.0}}}};
+  EvolveDensity component("i", options, &solver);
+  Options state;
+  component.transform(state);
+  Field3D prescribed = get<Field3D>(state["species"]["i"]["density_source"]);
+  // A physical exchange from another component still reaches ddt(Ni).
+  state["species"]["i"]["density_source"] = Field3D{0.5};
+  component.finally(state);
+  Field3D derivative = solver.getTimeDerivs()["Ni"].as<Field3D>();
+  BOUT_FOR_SERIAL(i, prescribed.getRegion("RGN_NOBNDRY")) {
+    EXPECT_DOUBLE_EQ(0.0, prescribed[i]);
+    EXPECT_DOUBLE_EQ(0.5, derivative[i]);
+  }
+}
+
+TEST_F(EvolveDensityTest, PrescribedSourceStillUsesPhysicalUnitsWithoutMms) {
+  FakeSolver solver;
+  Options options{{"units", {{"eV", 1.0}, {"inv_meters_cubed", 2.0}, {"seconds", 0.5}}},
+                  {"Ni", {{"source", 12.0}}},
+                  {"i", {{"AA", 2.0}, {"charge", 1.0}}}};
+  EvolveDensity component("i", options, &solver);
+  Options state;
+  component.transform(state);
+  Field3D prescribed = get<Field3D>(state["species"]["i"]["density_source"]);
+  BOUT_FOR_SERIAL(i, prescribed.getRegion("RGN_NOBNDRY")) {
+    EXPECT_DOUBLE_EQ(3.0, prescribed[i]);
+  }
+}
+
 /// Check that EvolveDensity can be constructed and will register the
 /// density variable for this species with the solver.
 TEST_F(EvolveDensityTest, CreateComponent) {

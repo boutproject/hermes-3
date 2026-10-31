@@ -1389,6 +1389,51 @@ and core/pfr boundaries. If the test fails, it will print the degree of error at
 The test file can be used to generate the test data if `gen_data` is set to `True` in the beginning
 of the script.
 
+3D-ion-energy-mms
+~~~~~~~~~~~~~~~~~
+
+This slab method of manufactured solutions (MMS) test evolves two ion
+densities and parallel momenta, electron pressure, vorticity and total ion
+energy. The ions share a temperature and have different mass-to-charge
+ratios. X has physical Dirichlet potential and Neumann pressure boundaries;
+Y and Z are periodic, with no sheaths. SymPy generates normalised analytic
+sources for BOUT's MMS forcing, including the auxiliary polarisation-current
+solve before forcing is added.
+
+The test reports volume-weighted L2 and Linf errors for all evolved fields
+and independently recovered total/species ion pressures, temperature and
+potential. It checks native MMS errors, X face conditions and discrete
+recovery residuals. CSV/JSON tables and PDF/PNG convergence plots retain all
+physical cells, including extrema and cells beside boundaries. Per-field
+criteria allow the reduced orders associated with the production limiters.
+
+The registered tests refine from :math:`8^3` to :math:`32^3` and evolve to
+normalised time 0.1. ``runtest`` also supports larger or directional scans,
+tighter-tolerance repeats and serial/X/Y/2x2 MPI comparisons. Separate
+``3D-ion-energy-mms-skew`` and ``3D-ion-energy-mms-viscosity`` directories
+test the mixed perpendicular metric and kinematic viscosity with compatible
+analytic X-boundary profiles. See the test READMEs for commands and the
+observed convergence orders.
+
+2D-ion-energy-polarisation-boundary
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+This orthogonal curvature slab isolates the radial polarisation transport
+boundary. A pressure perturbation independent of X produces a pure AC
+current drive. The auxiliary potential uses midpoint Dirichlet conditions
+for its DC mode and radial Neumann conditions for AC modes. Its initial
+finite-volume solution is known analytically: the unmasked AC normal current
+must vanish, including at the first and last physical cells.
+
+The test refines X at fixed Z, then both dimensions, with fixed and relaxing
+phi boundaries, diagnostics on/off, a tighter-tolerance pilot and two MPI
+ranks. It checks independent Python reconstruction, closed transport faces,
+face Gauss identities, and global energy and particle balance. Reports retain
+boundary/interior maxima and DC/AC weighted-current corrections. Nonzero DC
+and mixed-metric normal currents remain explicitly closed in transport;
+the unit tests cover those cases, invalid solver flags and auxiliary
+warm-start independence under reordered RHS calls.
+
 .. _subsec-2d-energy-comparison:
 
 2D-energy (energy comparison and resolution scan)

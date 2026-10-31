@@ -707,13 +707,74 @@ TEST_F(EvolveVorticityIonEnergyTest, PolarisationPotentialSatisfiesVorticityDeri
   // The inversion converges to the finite-volume forward operator, even
   // though its approximate inverse uses spectral Z differentiation.
   const Field3D forward = bout::ion_energy::Div_a_Grad_perp_XZ(Field3D{1.5}, chi);
-  for (int x = mesh->xstart + 1; x < mesh->xend; ++x) {
+  for (int x = mesh->xstart; x <= mesh->xend; ++x) {
     for (int y = mesh->ystart; y <= mesh->yend; ++y) {
       for (int z = 0; z < nz; ++z) {
         EXPECT_NEAR(forward(x, y, z), rhs(x, y, z), 2e-10);
+        EXPECT_NEAR(chi(x, y, z), chi(mesh->xstart, y, z), 2e-10);
       }
     }
   }
+}
+
+TEST_F(EvolveVorticityIonEnergyTest, MixedPolarisationGuardsPreserveACAndFixDC) {
+  Field3D potential = makeField<Field3D>([&](const Ind3D& i) {
+    return 2.0 + 0.1 * i.x() * i.x() + cos(2 * PI * i.z() / nz) + 0.3 * cos(PI * i.z());
+  });
+  bout::ion_energy::applyPolarisationBoundary(potential);
+  for (int y = 0; y < mesh->LocalNy; ++y) {
+    for (const auto pair : {std::pair{mesh->xstart - 1, mesh->xstart},
+                            std::pair{mesh->xend + 1, mesh->xend}}) {
+      const BoutReal mean = 2.0 + 0.1 * pair.second * pair.second;
+      for (int z = 0; z < nz; ++z) {
+        EXPECT_NEAR(potential(pair.first, y, z), potential(pair.second, y, z) - 2 * mean,
+                    1e-12);
+      }
+    }
+  }
+}
+
+TEST_F(EvolveVorticityIonEnergyTest, PolarisationDCSourceDoesNotRequireZeroMean) {
+  static_cast<FakeMesh*>(mesh)->setGridDataSource(
+      new FakeGridDataSource{{{"bxcvx", 0.5}, {"bxcvy", 0.0}, {"bxcvz", 0.0}}});
+  FakeSolver solver;
+  auto options = makeOptions();
+  EvolveVorticityIonEnergy component("test", options, &solver);
+  declareSpecies(component);
+  solver.setState({{"Vort", Field3D{0.0}}, {"Eion", Field3D{3.0}}});
+  auto state = makeState();
+  state["species"]["e"]["pressure"] =
+      makeField<Field3D>([](const Ind3D& i) { return 1.0 + 0.02 * i.x(); });
+  component.transform(state);
+  component.finally(state);
+  const Field3D chi = diagnostics(component)["ddt(Phi)"].as<Field3D>();
+  const Field3D rhs = solver.getTimeDerivs()["Vort"].as<Field3D>();
+  EXPECT_GT(abs(integral(rhs)), 1e-3);
+  const Field3D forward = bout::ion_energy::Div_a_Grad_perp_XZ(Field3D{1.5}, chi);
+  EXPECT_TRUE(IsFieldEqual(forward, rhs, "RGN_NOBNDRY", 2e-10));
+  for (int y = mesh->ystart; y <= mesh->yend; ++y) {
+    for (int z = 0; z < nz; ++z) {
+      EXPECT_NEAR(chi(mesh->xstart - 1, y, z), -chi(mesh->xstart, y, z), 1e-12);
+      EXPECT_NEAR(chi(mesh->xend + 1, y, z), -chi(mesh->xend, y, z), 1e-12);
+      const BoutReal cells = mesh->xend - mesh->xstart + 1;
+      for (int x = mesh->xstart; x <= mesh->xend; ++x) {
+        const BoutReal centre = x - mesh->xstart + 0.5;
+        // Discrete quadratic satisfying odd-reflected half-cell boundaries.
+        EXPECT_NEAR(chi(x, y, z), rhs(x, y, z) / 3.0 * (centre * (centre - cells) - 0.25),
+                    2e-10);
+      }
+    }
+  }
+}
+
+TEST_F(EvolveVorticityIonEnergyTest, MixedAuxiliaryRejectsInvalidSolverFlags) {
+  FakeSolver solver;
+  auto options = makeOptions();
+  options["test"]["polarisation_laplacian"]["inner_boundary_flags"] = 3;
+  EXPECT_THROW(EvolveVorticityIonEnergy("test", options, &solver), BoutException);
+  options["test"]["polarisation_laplacian"]["inner_boundary_flags"].force(2);
+  options["test"]["polarisation_laplacian"]["global_flags"] = INVERT_ZERO_DC;
+  EXPECT_THROW(EvolveVorticityIonEnergy("test", options, &solver), BoutException);
 }
 
 TEST_F(EvolveVorticityIonEnergyTest, PolarisationFluxConservesEnergyOnNonuniformMesh) {
@@ -1073,32 +1134,107 @@ TEST_F(EvolveVorticityIonEnergyTest, VaryingSpeciesFractionsPreservePolarisation
   EXPECT_TRUE(IsFieldEqual(charge_source, Field3D{-divJpol}, "RGN_NOBNDRY", 1e-12));
 }
 
-TEST_F(EvolveVorticityIonEnergyTest, FixedAuxiliaryBoundaryIsIndependentOfRHSHistories) {
-  FakeSolver solver;
-  auto options = makeOptions();
-  options["test"]["viscosity"] = 0.3;
-  options["test"]["phi_rtol"].force(1e-12);
-  options["test"]["phi_atol"] = 1e-3;
-  options["test"]["vort_atol"] = 1e-13;
-  options["test"]["phi_max_iterations"].force(200);
-  EvolveVorticityIonEnergy component("test", options, &solver);
-  declareSpecies(component);
-  Field3D vort = makeField<Field3D>(
-      [&](const Ind3D& i) { return 0.002 * sin(2 * PI * i.z() / nz); });
-  solver.setState({{"Vort", vort}, {"Eion", Field3D{4.0}}});
-  auto state = makeState();
-  component.transform(state);
-  component.finally(state);
-  const auto reference = copy(diagnostics(component)["ddt(Phi)"].as<Field3D>());
-  const auto rhs = copy(solver.getTimeDerivs()["Eion"].as<Field3D>());
-  for (BoutReal time : {5.0, 5.0, 1.0}) {
-    state = makeState();
-    state["time"] = time;
+TEST_F(EvolveVorticityIonEnergyTest, MixedAuxiliaryBoundaryIsIndependentOfRHSHistories) {
+  static_cast<FakeMesh*>(mesh)->setGridDataSource(
+      new FakeGridDataSource{{{"bxcvx", 0.3}, {"bxcvy", 0.0}, {"bxcvz", 0.5}}});
+  for (bool relax : {false, true}) {
+    FakeSolver solver;
+    auto options = makeOptions();
+    options["test"]["phi_boundary_relax"] = relax;
+    options["test"]["viscosity"] = 0.3;
+    options["test"]["phi_rtol"].force(1e-12);
+    options["test"]["phi_atol"] = 1e-3;
+    options["test"]["vort_atol"] = 1e-13;
+    options["test"]["phi_max_iterations"].force(200);
+    EvolveVorticityIonEnergy component("test", options, &solver);
+    declareSpecies(component);
+    Field3D vort = makeField<Field3D>(
+        [&](const Ind3D& i) { return 0.002 * sin(2 * PI * i.z() / nz); });
+    solver.setState({{"Vort", vort}, {"Eion", Field3D{4.0}}});
+    auto state = makeState();
     component.transform(state);
     component.finally(state);
-    EXPECT_TRUE(IsFieldEqual(reference, diagnostics(component)["ddt(Phi)"].as<Field3D>(),
-                             "RGN_NOBNDRY", 1e-10));
-    EXPECT_TRUE(IsFieldEqual(rhs, solver.getTimeDerivs()["Eion"].as<Field3D>(),
-                             "RGN_NOBNDRY", 1e-10));
+    const auto reference = copy(diagnostics(component)["ddt(Phi)"].as<Field3D>());
+    const auto rhs = copy(solver.getTimeDerivs()["Eion"].as<Field3D>());
+    for (BoutReal time : {5.0, 5.0, 1.0}) {
+      // Interleave another RHS, then deliberately alter the stored initial guess.
+      state = makeState();
+      state["species"]["e"]["pressure"] = makeField<Field3D>([&](const Ind3D& i) {
+        return 1.0 + 0.01 * i.x() + 0.03 * cos(2 * PI * i.z() / nz);
+      });
+      component.transform(state);
+      // Field3D copies share data; element access intentionally modifies chi.
+      auto warm = diagnostics(component)["ddt(Phi)"].as<Field3D>();
+      for (const auto& i : warm.getRegion("RGN_ALL")) {
+        warm[i] += 0.7;
+      }
+      state = makeState();
+      state["time"] = time;
+      component.transform(state);
+      component.finally(state);
+      EXPECT_TRUE(IsFieldEqual(reference,
+                               diagnostics(component)["ddt(Phi)"].as<Field3D>(),
+                               "RGN_NOBNDRY", 1e-10));
+      EXPECT_TRUE(IsFieldEqual(rhs, solver.getTimeDerivs()["Eion"].as<Field3D>(),
+                               "RGN_NOBNDRY", 1e-10));
+    }
+  }
+}
+
+TEST_F(EvolveVorticityIonEnergyTest, MixedAuxiliaryConvergesWithNonuniformCrossMetric) {
+  static_cast<FakeMesh*>(mesh)->setGridDataSource(
+      new FakeGridDataSource{{{"bxcvx", 0.3}, {"bxcvy", 0.0}, {"bxcvz", 0.5}}});
+  auto* coord = mesh->getCoordinates();
+  coord->setDx(makeField<Coordinates::FieldMetric>(
+      [](const auto& i) { return 1.0 + 0.03 * i.x(); }));
+  coord->setContravariantMetricTensor(
+      ContravariantMetricTensor{1.0, 1.0, 1.0, 0.0, 0.2, 0.0});
+  const Field3D coefficient{Coordinates::FieldMetric{1.5 / SQ(coord->Bxy())}};
+  for (bool relax : {false, true}) {
+    FakeSolver solver;
+    auto options = makeOptions();
+    options["test"]["phi_boundary_relax"] = relax;
+    EvolveVorticityIonEnergy component("test", options, &solver);
+    declareSpecies(component);
+    solver.setState({{"Vort", Field3D{0.0}}, {"Eion", Field3D{3.0}}});
+    auto state = makeState();
+    state["species"]["e"]["pressure"] = makeField<Field3D>([&](const Ind3D& i) {
+      return 1.0 + 0.01 * i.x() + 0.02 * cos(2 * PI * i.z() / nz);
+    });
+    component.transform(state);
+    component.finally(state);
+    const auto output = diagnostics(component);
+    const Field3D potential = output["ddt(Phi)"].as<Field3D>();
+    const Field3D rhs = solver.getTimeDerivs()["Vort"].as<Field3D>();
+    EXPECT_TRUE(IsFieldEqual(bout::ion_energy::Div_a_Grad_perp_XZ(coefficient, potential),
+                             rhs, "RGN_NOBNDRY", 2e-10));
+    BoutReal normal_ac = 0.0;
+    for (int x : {mesh->xstart, mesh->xend}) {
+      for (int y = mesh->ystart; y <= mesh->yend; ++y) {
+        const int guard = x == mesh->xstart ? x - 1 : x + 1;
+        BoutReal dc = 0.0;
+        BoutReal flux_dc = 0.0;
+        for (int z = 0; z < nz; ++z) {
+          dc += potential(x, y, z) / nz;
+          const Ind3D i{(x * ny + y) * nz + z, ny, nz};
+          const auto full =
+              bout::ion_energy::perpendicularFaceFluxes(coefficient, potential, i);
+          flux_dc += (x == mesh->xstart ? full.xm : full.xp) / nz;
+        }
+        for (int z = 0; z < nz; ++z) {
+          EXPECT_NEAR(potential(guard, y, z), potential(x, y, z) - 2 * dc, 1e-12);
+          const Ind3D i{(x * ny + y) * nz + z, ny, nz};
+          const auto full =
+              bout::ion_energy::perpendicularFaceFluxes(coefficient, potential, i);
+          normal_ac =
+              std::max(normal_ac, abs((x == mesh->xstart ? full.xm : full.xp) - flux_dc));
+          const auto closed =
+              bout::ion_energy::perpendicularFaceFluxes(coefficient, potential, i, false);
+          EXPECT_EQ(x == mesh->xstart ? closed.xm : closed.xp, 0.0);
+        }
+      }
+    }
+    EXPECT_GT(normal_ac, 1e-5); // coordinate Neumann retains g13 normal current
+    EXPECT_NEAR(integral(output["DivEpol"].as<Field3D>()), 0.0, 1e-11);
   }
 }

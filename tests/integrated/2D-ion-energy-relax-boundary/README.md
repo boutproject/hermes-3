@@ -10,8 +10,9 @@ The potential boundary midpoint relaxes towards the adjacent interior Z
 average on a 1 microsecond timescale. Its state is carried by the physical
 boundary cells of solver `Vort`, while ordinary output `Vort` and stencil
 inputs contain physical vorticity. The auxiliary current potential has
-homogeneous midpoint Dirichlet boundaries. The full current operator permits
-normal current, but particle, momentum, enthalpy, parallel kinetic and
+homogeneous midpoint Dirichlet DC and radial Neumann AC boundaries.
+The full current operator permits DC and mixed-metric normal current, but
+particle, momentum, enthalpy, parallel kinetic and
 polarisation electrical fluxes are closed at physical radial faces.
 
 The independent Python audit reconstructs inventories, the full current solve,

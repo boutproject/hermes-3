@@ -27,6 +27,7 @@ from energy_analysis.inventory import (
     soft_floor,
 )
 from energy_analysis.operators import perpendicular_operator
+from energy_analysis.options import physics_options_file
 from energy_analysis.transport import parallel_flux
 
 MODEL = "evolve_vorticity_ion_energy"
@@ -45,9 +46,10 @@ ESSENTIAL = (
 
 
 def read_ranks(folder):
-    options = BoutOptionsFile(
-        str(folder / "BOUT.settings"), gridfilename=str(folder / "compass-36x48.grd.nc")
-    )
+    with physics_options_file(folder / "BOUT.settings") as settings:
+        options = BoutOptionsFile(
+            str(settings), gridfilename=str(folder / "compass-36x48.grd.nc")
+        )
     runs = []
     for path in sorted(folder.glob("BOUT.dmp.*.nc")):
         with xr.open_dataset(path) as saved:

@@ -122,13 +122,17 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
   // Try to read the pressure source from the mesh
   // Units of Pascals per second
   source = 0.0;
-  mesh->get(source, std::string("P") + name + "_src");
-  // Allow the user to override the source
-  source = p_options["source"]
-               .doc(std::string("Source term in ddt(P") + name
-                    + std::string("). Units [Pa/s], note P = 2/3 E"))
-               .withDefault(source)
-           / (source_normalisation);
+  // BOUT adds the normalised MMS forcing after the model RHS. Reading the
+  // same option here would add it again as a physical pressure source.
+  if (!alloptions["solver"]["mms"].withDefault<bool>(false)) {
+    mesh->get(source, std::string("P") + name + "_src");
+    // Allow the user to override the source
+    source = p_options["source"]
+                 .doc(std::string("Source term in ddt(P") + name
+                      + std::string("). Units [Pa/s], note P = 2/3 E"))
+                 .withDefault(source)
+             / source_normalisation;
+  }
 
   source_time_dependent = p_options["source_time_dependent"]
                               .doc("Use a time-dependent source?")

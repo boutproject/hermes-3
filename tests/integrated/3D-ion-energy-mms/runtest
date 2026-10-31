@@ -1,0 +1,333 @@
+#!/usr/bin/env python3
+"""Run a reproducible physical-X, periodic-Y/Z MMS refinement scan."""
+
+import argparse
+import hashlib
+import json
+import shlex
+import shutil
+import subprocess
+import tempfile
+from pathlib import Path
+
+import numpy as np
+from analysis import analyse_case, compare_cases, require, write_scan
+from manufactured import EVOLVED, VARIANTS, preflight
+from mms import input_path
+from netCDF4 import Dataset
+
+HERE = Path(__file__).resolve().parent
+ROOT = HERE.parents[2]
+
+
+def write_json(path, value):
+    Path(path).write_text(json.dumps(value, indent=2, allow_nan=False) + "\n")
+
+
+def output_complete(folder, nproc, end_time, outputs, *, diagnose=False):
+    """Check all ranks' written states, independently of launcher exit status."""
+    files = list(folder.glob("BOUT.dmp.*.nc"))
+    if len(files) != nproc:
+        return False
+    for rank in range(nproc):
+        try:
+            with Dataset(folder / f"BOUT.dmp.{rank}.nc") as data:
+                time = np.asarray(data["t"][:])
+                if time.shape != (outputs + 1,) or not np.allclose(
+                    time, np.linspace(0, end_time, outputs + 1), rtol=1e-10, atol=1e-12
+                ):
+                    return False
+                for name in (
+                    *EVOLVED,
+                    "Tion",
+                    "phi",
+                    *("E_" + v for v in EVOLVED),
+                    *(("ddt(Phi)",) if diagnose else ()),
+                ):
+                    values = data[name][-1]
+                    if (
+                        np.ma.getmaskarray(values).any()
+                        or not np.isfinite(values).all()
+                    ):
+                        return False
+        except (OSError, KeyError, IndexError):
+            return False
+    return True
+
+
+def run_case(
+    folder, config, args, grid, *, nxpe=1, nproc=None, tight=False, diagnose=False
+):
+    nproc = args.nproc if nproc is None else nproc
+    require(
+        nproc % nxpe == 0 and grid[0] % nxpe == 0 and grid[1] % (nproc // nxpe) == 0,
+        "MPI decomposition must divide each physical X/Y grid",
+    )
+    folder.mkdir(parents=True, exist_ok=True)
+    input_path = folder / "BOUT.inp"
+    if not input_path.exists():
+        shutil.copyfile(config["template"], input_path)
+    require(
+        hashlib.sha256(input_path.read_bytes()).hexdigest() == config["input_sha256"],
+        f"Input differs from scan manifest: {input_path}",
+    )
+    spec = {
+        "grid": list(grid),
+        "nproc": nproc,
+        "nxpe": nxpe,
+        "tight": tight,
+        "diagnose": diagnose,
+        "end_time": config["end_time"],
+        "outputs": config["outputs"],
+        "source_backend": config["source_backend"],
+    }
+    spec_path = folder / "case.json"
+    if spec_path.exists():
+        require(
+            json.loads(spec_path.read_text()) == spec,
+            f"Case settings changed: {folder}",
+        )
+    else:
+        write_json(spec_path, spec)
+    if output_complete(
+        folder, nproc, config["end_time"], config["outputs"], diagnose=diagnose
+    ):
+        print(f"Using completed outputs: {folder.name}", flush=True)
+        return analyse_case(folder)
+    command = [
+        str(args.exe.resolve()),
+        "-d",
+        str(folder.resolve()),
+        f"mesh:nx={grid[0] + 4}",
+        f"mesh:ny={grid[1]}",
+        f"mesh:nz={grid[2]}",
+        f"NXPE={nxpe}",
+        f"solver:nout={config['outputs']}",
+        f"solver:output_step={config['end_time'] / config['outputs']:.17g}",
+    ]
+    if tight:
+        command += [
+            "solver:atol=1e-11",
+            "solver:rtol=1e-9",
+            "solver:max_timestep=0.025",
+            "evolve_vorticity_ion_energy:phi_atol=1",
+            "evolve_vorticity_ion_energy:phi_rtol=1e-14",
+            "evolve_vorticity_ion_energy:vort_atol=1e-13",
+        ]
+    if diagnose:
+        command += ["evolve_vorticity_ion_energy:diagnose=true"]
+    if not args.expression_sources:
+        command += [
+            "hermes:components=test_ion_energy_mms,i,j,e,evolve_vorticity_ion_energy,sound_speed"
+        ]
+    if nproc > 1:
+        require(args.mpiexec is not None, "Specify --mpiexec for MPI checks")
+        command = [
+            str(args.mpiexec),
+            *shlex.split(args.mpi_args),
+            "-n",
+            str(nproc),
+            *command,
+        ]
+    print(f"Running {folder.name}: grid={grid}, ranks={nproc}", flush=True)
+    status = {"command": command}
+    with (folder / "run.log").open("w") as log:
+        try:
+            result = subprocess.run(
+                command,
+                stdout=log,
+                stderr=subprocess.STDOUT,
+                timeout=args.timeout,
+                check=False,
+            )
+        except subprocess.TimeoutExpired:
+            status["timed_out"] = True
+            write_json(folder / "execution.json", status)
+            raise ValueError(f"MMS timed out: {folder / 'run.log'}")
+    status["returncode"] = result.returncode
+    status["outputs_complete"] = output_complete(
+        folder, nproc, config["end_time"], config["outputs"], diagnose=diagnose
+    )
+    write_json(folder / "execution.json", status)
+    require(
+        status["outputs_complete"],
+        f"MMS run failed ({result.returncode}): {folder / 'run.log'}",
+    )
+    if result.returncode:
+        print(
+            f"Warning: exit {result.returncode} but every final output is complete: {folder / 'run.log'}"
+        )
+    return analyse_case(folder)
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--exe",
+        type=Path,
+        default=ROOT / "hermes-3"
+        if (ROOT / "hermes-3").is_file()
+        else ROOT / "build/hermes-3",
+    )
+    parser.add_argument("--variant", choices=VARIANTS, default="baseline")
+    parser.add_argument("--sizes", nargs="+", type=int, default=[8, 16, 32])
+    parser.add_argument("--axis", choices=("all", "x", "y", "z"), default="all")
+    parser.add_argument("--end-time", type=float, default=0.1)
+    parser.add_argument("--outputs", type=int, default=1)
+    parser.add_argument("--output-root", type=Path)
+    parser.add_argument("--resume", type=Path)
+    parser.add_argument("--analyse-only", type=Path)
+    parser.add_argument(
+        "--timeout", type=float, default=900, help="Seconds per simulation"
+    )
+    parser.add_argument("--nproc", type=int, default=1)
+    parser.add_argument("--nxpe", type=int, default=1)
+    parser.add_argument("--mpiexec", type=Path, default=shutil.which("mpiexec"))
+    parser.add_argument(
+        "--mpi-args", default="", help="Extra launcher arguments, e.g. --oversubscribe"
+    )
+    parser.add_argument("--mpi-checks", action="store_true")
+    parser.add_argument("--tolerance-check", action="store_true")
+    parser.add_argument(
+        "--diagnose", action="store_true", help="Also audit analytic auxiliary chi"
+    )
+    parser.add_argument(
+        "--no-criteria",
+        action="store_true",
+        help="Exploratory scan; still verify outputs and native errors",
+    )
+    parser.add_argument(
+        "--expression-sources",
+        action="store_true",
+        help="Use the BOUT expression evaluator (also works with HERMES_TESTS=OFF)",
+    )
+    args = parser.parse_args()
+    require(
+        all(n >= 8 for n in args.sizes) and sorted(set(args.sizes)) == args.sizes,
+        "--sizes must be strictly increasing with at least eight cells",
+    )
+    require(
+        np.isfinite(args.end_time) and args.end_time > 0 and args.outputs > 0,
+        "Invalid time/output count",
+    )
+    require(
+        args.nproc > 0 and args.nxpe > 0 and args.nproc % args.nxpe == 0,
+        "NXPE must divide the MPI rank count",
+    )
+    base = args.sizes[0]
+    grids = [
+        tuple(n if args.axis == "all" or axis == args.axis else base for axis in "xyz")
+        for n in args.sizes
+    ]
+    template = input_path(args.variant)
+    config = {
+        "variant": args.variant,
+        "template": str(template.resolve()),
+        "grids": [list(g) for g in grids],
+        "axis": args.axis,
+        "source_backend": "expression" if args.expression_sources else "compiled",
+        "executable_sha256": hashlib.sha256(args.exe.read_bytes()).hexdigest()
+        if args.exe.is_file()
+        else None,
+        "end_time": args.end_time,
+        "outputs": args.outputs,
+        "input_sha256": hashlib.sha256(template.read_bytes()).hexdigest(),
+    }
+    folder = args.analyse_only or args.resume or args.output_root
+    folder = (
+        folder.resolve()
+        if folder
+        else Path(tempfile.mkdtemp(prefix="hermes-ion-energy-mms-"))
+    )
+    folder.mkdir(parents=True, exist_ok=True)
+    print(f"MMS results: {folder}", flush=True)
+    manifest = folder / "scan.json"
+    if manifest.exists():
+        saved = json.loads(manifest.read_text())
+        if args.analyse_only:
+            config, grids = saved, [tuple(g) for g in saved["grids"]]
+        else:
+            require(config == saved, "Resume settings/input differ from the saved scan")
+    else:
+        require(not args.analyse_only, "No saved scan manifest")
+        write_json(manifest, config)
+        write_json(folder / "preflight.json", preflight(args.variant))
+    reports, directories = [], []
+    for grid in grids:
+        case = folder / ("slab-" + "x".join(map(str, grid)))
+        directories.append(case)
+        if args.analyse_only:
+            reports.append(analyse_case(case))
+        else:
+            require(args.exe.is_file(), f"Hermes executable missing: {args.exe}")
+            reports.append(
+                run_case(
+                    case, config, args, grid, nxpe=args.nxpe, diagnose=args.diagnose
+                )
+            )
+    criteria = None
+    if not args.no_criteria:
+        require(config["axis"] == "all", "Use --no-criteria for directional scans")
+        document = json.loads((HERE / "criteria.json").read_text())
+        criteria = {
+            **document["fields"],
+            **document["variants"].get(config["variant"], {}),
+        }
+    failures = write_scan(folder, reports, axis=config["axis"], criteria=criteria)
+    if not args.analyse_only:
+        extras = {}
+        if args.tolerance_check:
+            case = folder / "tolerance-check"
+            run_case(
+                case,
+                config,
+                args,
+                grids[-1],
+                nxpe=args.nxpe,
+                tight=True,
+                diagnose=args.diagnose,
+            )
+            comparison = compare_cases(directories[-1], case)
+            final_errors = {
+                r["field"]: r["l2"]
+                for r in reports[-1]["errors"]
+                if r["time"] == config["end_time"]
+            }
+            extras["tolerance"] = comparison
+            for name, norms in comparison.items():
+                if norms["l2"] > 0.1 * final_errors[name]:
+                    failures.append(
+                        f"{name}: tolerance change > 10% of spatial L2 error"
+                    )
+        if args.mpi_checks:
+            require(args.nproc == 1, "--mpi-checks needs a serial scan reference")
+            mid = len(grids) // 2
+            for nxpe, nproc in ((2, 2), (1, 2), (2, 4)):
+                case = folder / f"mpi-{nxpe}x{nproc // nxpe}"
+                run_case(
+                    case,
+                    config,
+                    args,
+                    grids[mid],
+                    nxpe=nxpe,
+                    nproc=nproc,
+                    diagnose=args.diagnose,
+                )
+                comparison = compare_cases(directories[mid], case)
+                extras[case.name] = comparison
+                for name, norms in comparison.items():
+                    if norms["linf"] > 2e-8:
+                        failures.append(
+                            f"{name}: MPI discrepancy {norms['linf']} > 2e-8"
+                        )
+        write_json(folder / "comparisons.json", extras)
+    write_json(folder / "result.json", {"passed": not failures, "failures": failures})
+    require(not failures, "MMS criteria failed:\n" + "\n".join(failures))
+    print(f"MMS passed; reports and figures: {folder}")
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except (ValueError, OSError) as error:
+        raise SystemExit(f"MMS stopped: {error}") from None

@@ -6,6 +6,8 @@ from pathlib import Path
 import numpy as np
 import xarray as xr
 
+from .options import physics_options_file
+
 
 class AuditError(ValueError):
     """An audit prerequisite is missing or unsupported."""
@@ -154,14 +156,17 @@ def open_run(source, *, species=None, chunks=None):
         options_path = Path(path) / "BOUT.settings"
         if not options_path.is_file():
             options_path = Path(path) / "BOUT.inp"
-        ds = xhermes.open_hermesdataset(
-            datapath=str(Path(path) / "BOUT.dmp.*.nc"),
-            inputfilepath=str(options_path),
-            unnormalise=False,
-            keep_xboundaries=True,
-            keep_yboundaries=True,
-            chunks={"t": 1, "y": 1} if chunks is None else chunks,
-        )
+        with physics_options_file(options_path) as physics_path:
+            ds = xhermes.open_hermesdataset(
+                datapath=str(Path(path) / "BOUT.dmp.*.nc"),
+                inputfilepath=str(physics_path),
+                unnormalise=False,
+                keep_xboundaries=True,
+                keep_yboundaries=True,
+                chunks={"t": 1, "y": 1} if chunks is None else chunks,
+            )
+        if ds.attrs.get("options") is not None and hasattr(ds.options, "filename"):
+            ds.options.filename = str(options_path)
     ds = _normalised_view(ds)
     options = ds.attrs.get("options")
     if options is None:

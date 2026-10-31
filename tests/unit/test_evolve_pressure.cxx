@@ -19,6 +19,22 @@ using namespace bout::globals;
 // Reuse the "standard" fixture for FakeMesh
 using EvolvePressureTest = FakeMeshFixture;
 
+TEST_F(EvolvePressureTest, MmsForcingIsNotAddedAsPhysicalPressureSource) {
+  FakeSolver solver;
+  Options options{{"units", {{"eV", 1.0}, {"inv_meters_cubed", 1.0}, {"seconds", 1.0}}},
+                  {"solver", {{"mms", true}}},
+                  {"Pi", {{"source", 1.0}}},
+                  {"i", {{"AA", 2.0}, {"charge", 1.0}, {"thermal_conduction", false}}}};
+  EvolvePressure component("i", options, &solver);
+  Options state{{"species", {{"i", {{"density", 1.0}, {"energy_source", 0.75}}}}}};
+  component.transform(state);
+  component.finally(state);
+  Field3D derivative = solver.getTimeDerivs()["Pi"].as<Field3D>();
+  BOUT_FOR_SERIAL(i, derivative.getRegion("RGN_NOBNDRY")) {
+    EXPECT_DOUBLE_EQ(0.5, derivative[i]);
+  }
+}
+
 TEST_F(EvolvePressureTest, CreateComponent) {
   FakeSolver solver;
 

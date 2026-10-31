@@ -1,0 +1,324 @@
+#!/usr/bin/env python3
+"""Analytic AC boundary-current regression and bounded energy/refinement scan."""
+
+import argparse
+import json
+import sys
+import tempfile
+from dataclasses import replace
+from pathlib import Path
+
+import numpy as np
+import xarray as xr
+from boutdata.data import BoutOptionsFile
+
+HERE = Path(__file__).resolve().parent
+ROOT = HERE.parents[2]
+sys.path.insert(0, str(ROOT / "tools"))
+sys.path.insert(0, str(HERE.parent / "2D-energy"))
+import publication_scan as scan
+from energy_analysis import energy_balance, open_run, regular_timestep
+from energy_analysis.fluxes import (
+    PrescribedSources,
+    flux_power,
+    net_face_flux,
+    reconstruct_fluxes,
+)
+from energy_analysis.operators import perpendicular_operator, spectral_ddz
+from energy_analysis.report import inventory_report
+
+
+def require(condition, message):
+    if not condition:
+        raise ValueError(message)
+
+
+def matched_initial(run):
+    ds = run.data
+    phase = xr.DataArray(
+        2 * np.pi * np.arange(ds.sizes["z"]) / ds.sizes["z"],
+        dims="z",
+        coords={"z": ds.z},
+    )
+    p = xr.ones_like(ds.phi) * (1 + 0.1 * np.cos(phase))
+    phi = xr.zeros_like(p)
+    c = run.scalar_option("average_atomic_mass") / ds.Bxy**2
+    op = perpendicular_operator(c, p, ds)
+    v = op.divergence.copy()
+    e = 1.5 * p + op.kperp
+    for guard, physical in [(0, 3), (1, 2), (-2, -3), (-1, -4)]:
+        v[{"x": guard}] = v.isel(x=physical)
+        e[{"x": guard}] = e.isel(x=physical)
+    return {"Pe": p, "Ph+": p, "Nh+": xr.ones_like(p), "phi": phi, "Vort": v, "Eion": e}
+
+
+def maxima(run, field):
+    physical = run.interior(field)
+    return {
+        "boundary": float(abs(physical.isel(x=[0, -1])).max()),
+        "interior": float(abs(physical.isel(x=slice(1, -1))).max()),
+    }
+
+
+def audit(folder, tolerances, diagnose):
+    run = open_run(folder)
+    run.data = run.data.load()
+    ds = run.data
+    regular_timestep(ds.t)
+    report, inventory = inventory_report(run)
+    require(
+        report["partition_max_absolute_error_normalised"] < tolerances["forward"],
+        "Ion partition mismatch",
+    )
+    require(
+        report["forward_max_absolute_error_normalised"] < tolerances["forward"],
+        "Physical FV vorticity residual",
+    )
+    zero = {s.name: 0.0 for s in run.species}
+    flux = reconstruct_fluxes(
+        run,
+        sources=PrescribedSources(
+            zero, zero, zero, "BOUT.inp: all prescribed sources explicitly zero"
+        ),
+    ).compute()
+    first = replace(run, data=ds.isel(t=0, drop=True))
+    initial = matched_initial(first)
+    for name in ("Pe", "Nh+", "phi", "Vort", "Eion"):
+        require(
+            float(abs(run.interior(ds[name].isel(t=0) - initial[name])).max())
+            < tolerances["initial_state"],
+            f"Initial {name} mismatch",
+        )
+    curl = (
+        2 * run.length_scale**2 * ds.options["mesh"].evaluate_scalar("bxcvz") / ds.Bxy
+    )
+    drive = spectral_ddz(2 * initial["Pe"] * curl, ds.dz)
+    az = (
+        run.scalar_option("average_atomic_mass")
+        / float(ds.Bxy.values.flat[0]) ** 2
+        * float(ds.g33.values.flat[0])
+        / float(ds.dz.values.flat[0]) ** 2
+    )
+    expected_chi = drive / (-4 * az * np.sin(np.pi / ds.sizes["z"]) ** 2)
+    chi_error = float(
+        abs(run.interior(flux["ddt(Phi)"].isel(t=0) - expected_chi)).max()
+    )
+    require(chi_error < tolerances["initial_chi"], "Initial analytic AC chi mismatch")
+    full = perpendicular_operator(
+        run.scalar_option("average_atomic_mass") / ds.Bxy**2, flux["ddt(Phi)"], ds
+    )
+    require(
+        float(abs(run.interior(full.divergence - flux["ddt(Vort)"])).max())
+        < tolerances["forward"],
+        "Auxiliary residual at a physical boundary cell",
+    )
+    faces = [run.mxg - 1, ds.sizes["x"] - run.mxg - 1]
+    initial_face = float(abs(full.flux_x.isel(t=0, x=faces)).max())
+    require(initial_face < tolerances["face"], "Spurious initial AC normal current")
+    density_error = float(abs(run.interior(flux["ddt(Nh+)"].isel(t=0) - drive)).max())
+    require(density_error < tolerances["forward"], "Initial particle boundary source")
+    gauss = {}
+    for name in (
+        "DivEExB",
+        "DivEReynolds",
+        "DivEelectric",
+        "DivEparallel",
+        "DivEpol",
+        "DivEviscous",
+        "DivJpol",
+    ):
+        gauss[name] = float(
+            abs(run.integrate(flux[name]) - net_face_flux(run, flux, name)).max()
+        )
+        require(gauss[name] < tolerances["gauss"], f"Gauss balance: {name}")
+    for name in flux:
+        if name.endswith("_flux_x") and name.startswith(
+            ("DivEpol", "DivJpol", "particle_pol_")
+        ):
+            require(float(abs(flux[name].isel(x=faces)).max()) == 0, f"Open {name}")
+    diagnostics = {}
+    if diagnose:
+        for name in (
+            "ddt(Phi)",
+            "DivJpol",
+            "DivEpol",
+            "DivEReynolds",
+            "ddt(Eion)",
+            "ddt(Nh+)",
+            "ddt(Pe)",
+        ):
+            diagnostics[name] = float(abs(run.interior(ds[name] - flux[name])).max())
+            require(diagnostics[name] < tolerances["diagnostic"], f"Diagnostic {name}")
+    outward = sum(
+        flux_power(run, flux, name)
+        for name in (
+            "DivEExB",
+            "DivEReynolds",
+            "DivEelectric",
+            "DivEparallel",
+            "DivEpol",
+            "DivEviscous",
+            "electron_ExB",
+            "electron_parallel_thermal",
+        )
+    ).assign_attrs(units="W", provenance="reconstructed energy boundary faces")
+    zero_power = xr.zeros_like(inventory.t).assign_attrs(
+        units="W", provenance="input source=0"
+    )
+    balance = energy_balance(inventory, source_power=zero_power, outward_power=outward)
+    energy_error = float(abs(balance.relative_residual).max())
+    require(energy_error < tolerances["balance_relative"], "Plasma power balance")
+    particles = run.integrate(ds["Nh+"])
+    particle_error = float(abs(particles / particles.isel(t=0) - 1).max())
+    require(particle_error < tolerances["balance_relative"], "Particle balance")
+    radial = {
+        name: maxima(run, value)
+        for name, value in {
+            "Vort": ds.Vort,
+            "density": ds["Nh+"],
+            "pressure": ds["Nh+"] * ds.Tion,
+            "vorticity_rhs": flux["ddt(Vort)"],
+            "density_rhs": flux["ddt(Nh+)"],
+            "energy_rhs": flux["ddt(Eion)"],
+            "pressure_output_derivative": (ds["Nh+"] * ds.Tion).differentiate("t"),
+        }.items()
+    }
+    correction = full.flux_x.isel(x=faces)
+    dc = correction.mean("z")
+    weighted_corrections = {}
+    rho = ds["Nh+"]
+    weights = {
+        "particle": xr.ones_like(rho),
+        "enthalpy": 2.5 * ds.Tion,
+        "electric": ds.phi,
+    }
+    for name, weight in weights.items():
+        unmasked = perpendicular_operator(
+            run.scalar_option("average_atomic_mass") / ds.Bxy**2 * weight,
+            flux["ddt(Phi)"],
+            ds,
+        ).flux_x.isel(x=faces)
+        mean = unmasked.mean("z")
+        weighted_corrections[name] = {
+            "dc_max": float(abs(mean).max()),
+            "ac_max": float(abs(unmasked - mean).max()),
+        }
+    result = {
+        "initial_chi_error": chi_error,
+        "initial_normal_current": initial_face,
+        "initial_density_rhs_error": density_error,
+        "gauss": gauss,
+        "energy_relative_residual": energy_error,
+        "particle_relative_residual": particle_error,
+        "diagnostics": diagnostics,
+        "maxima": radial,
+        "normal_current_dc_max": float(abs(dc).max()),
+        "normal_current_ac_max": float(abs(correction - dc).max()),
+        "closed_minus_full_weighted_flux": weighted_corrections,
+    }
+    if diagnose:
+        result["auxiliary_solver"] = {
+            "maximum_iterations": int(ds.ion_chi_iterations.max()),
+            "maximum_residual": float(ds.ion_chi_residual.max()),
+        }
+    histories = {
+        name: np.asarray(run.interior(ds[name]))
+        for name in ("Vort", "Nh+", "Tion", "Eion", "Pe", "phi")
+    }
+    return result, histories
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--exe", type=Path, default=scan.DEFAULT_EXE)
+    parser.add_argument("--output-root", type=Path)
+    parser.add_argument("--profile", choices=("ci", "smoke"), default="ci")
+    parser.add_argument("--sizes", type=int, nargs="+")
+    parser.add_argument("--end-time", type=float)
+    parser.add_argument("--timeout", type=float, default=120)
+    args = parser.parse_args()
+    criteria = json.loads((HERE / "criteria.json").read_text())
+    sizes = args.sizes or criteria["x_sizes"][: 2 if args.profile == "smoke" else None]
+    require(all(n >= 8 for n in sizes), "At least eight physical X cells required")
+    end = args.end_time or criteria["end_time"]
+    require(end > 0, "End time must be positive")
+    parent = args.output_root or HERE / "results"
+    parent.mkdir(parents=True, exist_ok=True)
+    study = Path(tempfile.mkdtemp(prefix="mixed-chi-", dir=parent))
+    print(f"Results: {study}", flush=True)
+    # Reuse native restart preparation and complete-output checks, with this
+    # test's independent matched initial state instead of the interchange sine.
+    scan.initial_state = matched_initial
+    results, saved = {}, {}
+
+    def case(nx, nz, relax=False, diagnose=True, ranks=1, pilot=False):
+        key = f"{'relax' if relax else 'fixed'}-{nx}x{nz}-{'on' if diagnose else 'off'}-{ranks}mpi"
+        if pilot:
+            key += "-pilot"
+        if key in results:
+            return key
+        folder = study / key
+        folder.mkdir()
+        opts = BoutOptionsFile(str(HERE / "data/BOUT.inp"))
+        opts["NXPE"] = ranks
+        opts["mesh:nx"], opts["mesh:nz"] = nx + 4, nz
+        opts["solver:nout"] = criteria["outputs"]
+        opts["solver:output_step"] = end / criteria["outputs"]
+        opts["evolve_vorticity_ion_energy:phi_boundary_relax"] = str(relax).lower()
+        if relax:
+            opts["evolve_vorticity_ion_energy:phi_boundary_timescale"] = "1e-6"
+            opts["evolve_vorticity_ion_energy:phi_core_averagey"] = "false"
+        for name in ("e", "h+", "evolve_vorticity_ion_energy"):
+            opts[name + ":diagnose"] = str(diagnose).lower()
+        if pilot:
+            opts["solver:atol"], opts["solver:rtol"] = "1e-12", "1e-10"
+            opts["solver:max_timestep"] = end / (2 * criteria["outputs"])
+        opts.write(str(folder / "BOUT.inp"), overwrite=True)
+        config = {"nproc": ranks, "end_time": end, "outputs": criteria["outputs"]}
+        scan.build_startup(args.exe.resolve(), folder, config, args.timeout)
+        scan.execute(args.exe.resolve(), folder, config, args.timeout)
+        results[key], saved[key] = audit(folder, criteria["tolerances"], diagnose)
+        print(
+            f"PASS {key}: chi error {results[key]['initial_chi_error']:.3g}, "
+            f"energy residual {results[key]['energy_relative_residual']:.3g}",
+            flush=True,
+        )
+        (study / "result.json").write_text(json.dumps(results, indent=2) + "\n")
+        return key
+
+    for n in sizes:
+        for relaxing in (False, True):
+            case(n, criteria["nz"], relaxing)
+    reference = f"fixed-{sizes[-1]}x{criteria['nz']}-on-1mpi"
+    off = case(sizes[-1], criteria["nz"], diagnose=False)
+    comparisons = [(reference, off)]
+    if args.profile == "ci":
+        for n in sizes[-2:]:
+            case(n, n)
+        comparisons.extend(
+            [
+                (reference, case(sizes[-1], criteria["nz"], ranks=2)),
+                (reference, case(sizes[-1], criteria["nz"], pilot=True)),
+            ]
+        )
+    for first, second in comparisons:
+        error = max(
+            float(np.max(abs(saved[first][name] - saved[second][name])))
+            for name in saved[first]
+        )
+        require(
+            error < criteria["tolerances"]["history"],
+            f"History comparison {second}: {error}",
+        )
+        results[second]["history_error"] = error
+    (study / "result.json").write_text(
+        json.dumps({"passed": True, "runs": results}, indent=2) + "\n"
+    )
+    print(f"PASS mixed DC/AC polarisation boundaries: {len(results)} cases", flush=True)
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except (ValueError, scan.AuditError) as error:
+        raise SystemExit(f"Polarisation boundary test stopped: {error}") from None

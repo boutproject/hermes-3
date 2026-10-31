@@ -1,0 +1,16 @@
+{
+  "x_sizes": [16, 32, 64],
+  "nz": 16,
+  "end_time": 10.0,
+  "outputs": 10,
+  "tolerances": {
+    "initial_state": 1e-10,
+    "initial_chi": 1e-9,
+    "forward": 1e-10,
+    "diagnostic": 1e-9,
+    "face": 1e-12,
+    "gauss": 1e-10,
+    "balance_relative": 1e-7,
+    "history": 1e-8
+  }
+}

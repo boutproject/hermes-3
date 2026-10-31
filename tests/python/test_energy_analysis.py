@@ -199,6 +199,76 @@ def test_path_loader_prefers_settings_and_accepts_input_only(
     assert run.source == str(tmp_path)
 
 
+@pytest.mark.parametrize("model", ["vorticity", "evolve_vorticity_ion_energy"])
+def test_loader_preserves_resolved_model_options_after_raw_git_diff(
+    dataset, tmp_path, monkeypatch, model
+):
+    import xhermes
+    from boutdata.data import BoutOptionsFile
+
+    prefix = f"""[mesh]
+nx = 12
+ny = 1
+nz = 16
+[hermes]
+components = e, d+, impurity, {model}
+[e]
+AA = 1/1836
+charge = -1
+[d+]
+AA = 2
+charge = 1
+[impurity]
+AA = 3
+charge = 2
+[{model}]
+type = {model}
+"""
+    supplied = prefix + f"[{model}]\naverage_atomic_mass = 1\n"
+    # The removed/added C++ lines form an unbalanced expression in boutdata's
+    # reader. Without filtering, it consumes later solver/model sections.
+    resolved = (
+        prefix
+        + f"""[run]
+git_diff = diff --git a/example.cxx b/example.cxx
+--- a/example.cxx
++++ b/example.cxx
+@@ -1 +1 @@
++ source = make_source(
++    options["solver"]["func_iter"]
+[solver] # Resolved options follow the metadata
+rtol = 1e-7 # source: Command line
+[{model}]
+average_atomic_mass = 3/2 + 1/4 # source: Command line
+"""
+    )
+    (tmp_path / "BOUT.inp").write_text(supplied)
+    settings = tmp_path / "BOUT.settings"
+    settings.write_text(resolved)
+    assert "average_atomic_mass" not in BoutOptionsFile(str(settings))[model]
+    if model == "vorticity":
+        for species in ("d+", "impurity"):
+            dataset["P" + species] = dataset["N" + species].copy()
+    calls = []
+
+    def load(**kwargs):
+        physics_path = kwargs["inputfilepath"]
+        calls.append(physics_path)
+        dataset.attrs["options"] = BoutOptionsFile(physics_path)
+        return dataset
+
+    monkeypatch.setattr(xhermes, "open_hermesdataset", load)
+    run = open_run(tmp_path)
+    assert run.scalar_option("average_atomic_mass") == 1.75
+    assert run.data.options["solver"].evaluate_scalar("rtol") == 1e-7
+    assert run.data.options.filename == str(settings)
+    assert settings.read_text() == resolved
+    assert (tmp_path / "BOUT.inp").read_text() == supplied
+    from pathlib import Path
+
+    assert not Path(calls[0]).exists()
+
+
 def test_multispecies_inventory_units_and_no_double_counting(dataset):
     r = open_run(dataset)
     d = energy_densities(r)
@@ -578,50 +648,79 @@ def test_open_rectangle_is_not_misclassified_as_tokamak(dataset):
         open_run(dataset)
 
 
-def test_sparse_dirichlet_solve_before_transport_boundary_change(dataset):
-    from energy_analysis.fluxes import solve_polarisation
-
-    dataset["g13"] *= 0
-    run = open_run(dataset)
-    nx = dataset.sizes["x"] - 4
-    xphase = np.pi * (dataset.x - 2 + 0.5) / nx
-    phi = xr.ones_like(dataset.phi) * np.sin(xphase) * np.cos(2 * np.pi * dataset.z / 8)
-    rhs = perpendicular_operator(1.75, phi, dataset).divergence
-    solved = solve_polarisation(run, rhs, False, True)
-    xr.testing.assert_allclose(run.interior(solved), run.interior(phi), atol=2e-14)
-    # The transport potential is Neumann, although the inverse used Dirichlet.
-    xr.testing.assert_allclose(solved.isel(x=1, drop=True), solved.isel(x=2, drop=True))
-
-
-def test_relaxation_auxiliary_solve_retains_full_current_boundary(dataset):
+@pytest.mark.parametrize("relax", [False, True])
+@pytest.mark.parametrize("mode", [0, 1, 4, "mixed"])
+def test_mixed_auxiliary_boundary_satisfies_full_forward_operator(dataset, relax, mode):
     from energy_analysis.fluxes import solve_polarisation
     from energy_analysis.transport import fv_xz
 
     dataset["g13"] *= 0
-    dataset.options["evolve_vorticity_ion_energy:phi_boundary_relax"] = "true"
+    dataset.options["evolve_vorticity_ion_energy:phi_boundary_relax"] = str(relax)
     run = open_run(dataset)
     nx = dataset.sizes["x"] - 4
-    potential = (
-        xr.ones_like(dataset.phi)
-        * np.sin(np.pi * (dataset.x - 2 + 0.5) / nx)
-        * np.cos(2 * np.pi * dataset.z / 8)
+    x = dataset.x - 2 + 0.5
+    dc = x * (x - nx) - 0.25  # exact discrete midpoint-Dirichlet quadratic
+    phase = 2 * np.pi * dataset.z / dataset.sizes["z"]
+    potential = xr.ones_like(dataset.phi) * (
+        dc
+        if mode == 0
+        else dc + 0.2 * np.cos(phase) + 0.1 * np.cos(4 * phase)
+        if mode == "mixed"
+        else np.cos(mode * phase)
     )
+    for guard, physical in [(1, 2), (0, 3), (-2, -3), (-1, -4)]:
+        layer = potential.isel(x=physical, drop=True)
+        potential[{"x": guard}] = layer - 2 * layer.mean("z")
     rhs = perpendicular_operator(1.75, potential, dataset).divergence
     solved = solve_polarisation(run, rhs, False, True)
+    lazy = solve_polarisation(run, rhs.chunk({"t": 1, "x": 3, "z": 3}), False, True)
+    xr.testing.assert_allclose(lazy.compute(), solved, atol=2e-13)
     xr.testing.assert_allclose(
-        run.interior(solved), run.interior(potential), atol=2e-14
-    )
-    xr.testing.assert_allclose(
-        solved.isel(x=1, drop=True), -solved.isel(x=2, drop=True)
+        run.interior(solved), run.interior(potential), atol=2e-13
     )
     full = fv_xz(1.75, solved, dataset)
     xr.testing.assert_allclose(
-        run.interior(full.divergence), run.interior(rhs), atol=2e-14
+        run.interior(full.divergence), run.interior(rhs), atol=2e-13
     )
-    assert float(abs(full.flux_x.isel(x=[1, -3])).max()) > 1e-3
+    for guard, physical in [(1, 2), (-2, -3)]:
+        g, i = solved.isel(x=guard, drop=True), solved.isel(x=physical, drop=True)
+        assert_allclose((g + i).mean("z"), 0, atol=2e-14)
+        xr.testing.assert_allclose(g - g.mean("z"), i - i.mean("z"), atol=2e-14)
+    if mode in (0, "mixed"):
+        assert float(abs(run.interior(rhs).mean()).max()) > 0.1
+        assert float(abs(full.flux_x.isel(x=[1, -3])).max()) > 0.1
+    else:
+        assert_allclose(full.flux_x.isel(x=[1, -3]), 0, atol=2e-14)
     for weight in (1.0, 0.7, -0.2, 2.5, 0.03, 0.4):
         closed = fv_xz(weight, solved, dataset, boundary_flux=False)
         assert_allclose(closed.flux_x.isel(x=[1, -3]), 0)
+
+
+def test_auxiliary_singleton_z_is_dirichlet(dataset):
+    from energy_analysis.fluxes import solve_polarisation
+
+    dataset = dataset.isel(z=slice(0, 1))
+    dataset["g13"] *= 0
+    run = open_run(dataset)
+    rhs = xr.ones_like(dataset.phi)
+    solved = solve_polarisation(run, rhs, False, True)
+    op = perpendicular_operator(1.75, solved, dataset)
+    assert_allclose(run.interior(op.divergence), run.interior(rhs), atol=2e-14)
+    assert_allclose(solved.isel(x=1), -solved.isel(x=2), atol=2e-14)
+
+
+def test_auxiliary_rejects_dc_removal_and_wrong_boundary_flags(dataset):
+    from energy_analysis.fluxes import solve_polarisation
+
+    run = open_run(dataset)
+    opts = dataset.options["evolve_vorticity_ion_energy"]
+    opts["polarisation_laplacian:inner_boundary_flags"] = "3"
+    with pytest.raises(AuditError, match="flags=2"):
+        solve_polarisation(run, xr.ones_like(dataset.phi), False, True)
+    opts["polarisation_laplacian:inner_boundary_flags"] = "2"
+    opts["polarisation_laplacian:global_flags"] = "1"
+    with pytest.raises(AuditError, match="retain the DC"):
+        solve_polarisation(run, xr.ones_like(dataset.phi), False, True)
 
 
 def test_boundary_relaxation_core_mean_excludes_y_guards(dataset):

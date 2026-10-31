@@ -1,0 +1,225 @@
+# Template; regenerate data/BOUT.inp using .venv/bin/python mms.py.
+periodicX = false
+MXG = 2
+MYG = 2
+ZMIN = 0
+ZMAX = 10/(2*pi)
+TwistShift = false
+
+[input]
+# Recovered-field analytic references are intentionally read by Python only.
+error_on_unused_options = false
+
+[mesh]
+nx = 20
+ny = 16
+nz = 16
+symmetricGlobalX = true
+symmetricGlobalY = true
+ixseps1 = nx
+ixseps2 = nx
+jyseps1_1 = -1
+jyseps2_1 = ny/2-1
+jyseps1_2 = ny/2-1
+jyseps2_2 = ny-1
+ny_inner = ny/2
+dx = 10/(nx-4)
+dy = 10/ny
+dz = 10/nz
+J = 1
+Bxy = 1
+g11 = 1
+g22 = 1
+g33 = 17/16
+g12 = 0
+g13 = 1/4
+g23 = 0
+g_11 = 17/16
+g_22 = 1
+g_33 = 1
+g_12 = 0
+g_13 = -1/4
+g_23 = 0
+bxcvx = 0
+bxcvy = 0
+bxcvz = 0
+
+[mesh:ddz]
+first = FFT
+fft_filter = 0
+
+[mesh:paralleltransform]
+type = identity
+
+[solver]
+type = cvode
+adams_moulton = true
+func_iter = true
+mms = true
+mms_initialise = true
+nout = 5
+output_step = 1
+atol = 1e-10
+rtol = 1e-08
+max_timestep = 0.05
+mxstep = 10000
+
+[hermes]
+components = i, j, e, evolve_vorticity_ion_energy, sound_speed
+recalculate_metric = false
+normalise_metric = false
+Nnorm = 1e+18
+Tnorm = 1
+Bnorm = 1
+
+[i]
+type = evolve_density, evolve_momentum
+AA = 2
+charge = 1
+bndry_flux = false
+poloidal_flows = false
+use_div_par_fvv = true
+density_floor = 1e-10
+diagnose = false
+
+[j]
+type = evolve_density, evolve_momentum
+AA = 3
+charge = 2
+bndry_flux = false
+poloidal_flows = false
+use_div_par_fvv = true
+density_floor = 1e-10
+diagnose = false
+
+[e]
+type = quasineutral, evolve_pressure, zero_current
+AA = 1/1836
+charge = -1
+bndry_flux = false
+poloidal_flows = false
+thermal_conduction = false
+p_div_v = true
+density_floor = 1e-10
+diagnose = false
+
+[Vi]
+bndry_xin = neumann
+bndry_xout = neumann
+
+[Vj]
+bndry_xin = neumann
+bndry_xout = neumann
+
+[evolve_vorticity_ion_energy]
+average_atomic_mass = 2
+poloidal_flows = false
+phi_boundary_relax = false
+neumann_boundary_average_z = false
+density_floor = 1e-10
+# phi_atol is a denominator scale: effective absolute update tolerance is
+# phi_atol*phi_rtol. Avoid requesting sub-roundoff updates where phi crosses 0.
+phi_atol = 1
+phi_rtol = 1e-13
+vort_atol = 1e-12
+phi_max_iterations = 400
+diagnose = false
+
+[evolve_vorticity_ion_energy:laplacian]
+type = cyclic
+inner_boundary_flags = 0
+outer_boundary_flags = 0
+
+[sound_speed]
+# Electrons have zero-current closure, with no independent electron momentum.
+# Use the collective acoustic speed for numerical Lax fluxes.
+electron_dynamics = false
+alfven_wave = false
+
+[mms]
+variant = skew
+c9 = cos(2*pi*x)*cos(t/5 - y)/20 + 3*cos(t/5 + z)/100
+c17 = -sin(t/5 - z)*cos(2*pi*x)*cos(t/5 + y)/80 + 1/4
+c22 = -sin(t/5 - y)*cos(2*pi*x)*cos(t/5 - z)/50 + 1/10
+c23 = cos(2*pi*x)*cos(t/5 - y)/10 + 3*cos(t/5 + z)/50
+c26 = -3*sin(t/5 - z)*cos(2*pi*x)*cos(t/5 + y)/80 + 3/4
+c27 = -3*sin(t/5 - z)*cos(2*pi*x)*cos(t/5 + y)/200 + 7/100
+c29 = -sin(t/5 - z)*cos(2*pi*x)*cos(t/5 - y)/20 + 1
+c30 = sin(t/5 - z)*cos(2*pi*x)*cos(t/5 + y)/40
+c37 = (1 - cos(2*pi*x))^3*(cos(t/5 + y)/1000 + 1/50)
+c40 = pi^2*(cos(t/5 + y)/1000 + 1/50)*sin(t/5 - z)
+c44 = pi^2*(cos(t/5 + y)/1000 + 1/50)*cos(t/5 - z)
+c49 = 3*sin(t/5 - z)*cos(2*pi*x)*cos(t/5 + y)/160
+c58 = pi*(1 - cos(2*pi*x))^2*(cos(t/5 + y)/1000 + 1/50)*sin(2*pi*x)
+c60 = 17*pi*mms:c37*cos(t/5 - z)/80 - 3*mms:c58*sin(t/5 - z)/20
+c63 = pi*mms:c37*cos(t/5 - z)/20 - 3*mms:c58*sin(t/5 - z)/5
+c64 = -2*mms:c37*sin(t/5 - z) + 2*cos(t/5 - y)/25 + 12/5
+c75 = cos(2*pi*x)*cos(t/5 - y)*cos(t/5 - z)/250
+c77 = pi*mms:c22*sin(t/5 - y)*cos(2*pi*x)/100 + pi*mms:c75*(mms:c9 + 1)
+c81 = sin(t/5 + y)*sin(t/5 - z)*cos(2*pi*x)/400
+c83 = 3*sin(t/5 + y)*sin(t/5 - z)*cos(2*pi*x)/1000
+c86 = mms:c81 - cos(2*pi*x)*cos(t/5 + y)*cos(t/5 - z)/400
+c88 = sin(t/5 - y)*cos(2*pi*x)/50 + 3*sin(t/5 + z)/250
+c90 = cos(2*pi*x)*cos(t/5 - y)*cos(t/5 - z)/125
+c93 = (1 - cos(2*pi*x))^3*sin(t/5 + y)*sin(t/5 - z)
+c94 = (pi*mms:c93/2500 + 2*pi*sin(t/5 - y)/125)/(mms:c23 - mms:c49 + 19/8)
+c96 = 3*sin(t/5 + y)*sin(t/5 - z)*cos(2*pi*x)/800
+c99 = mms:c64*(-pi*mms:c96 - pi*sin(t/5 - y)*cos(2*pi*x)/50)/(mms:c23 - mms:c49 + 19/8)^2
+c101 = 3*sin(t/5 + y)*sin(t/5 - z)*cos(2*pi*x)/400
+c102 = 3*sin(t/5 + y)*sin(t/5 - z)*cos(2*pi*x)/500
+c106 = sin(t/5 - y)*cos(2*pi*x)/100 + 3*sin(t/5 + z)/500
+c107 = sin(t/5 - y)*sin(t/5 - z)*cos(2*pi*x)/100
+c111 = pi*sin(t/5 + y)*sin(t/5 - z)*cos(2*pi*x)/200
+c115 = 3*cos(2*pi*x)*cos(t/5 + y)*cos(t/5 - z)/800
+c117 = pi*(1 - cos(2*pi*x))^3*sin(t/5 + y)*cos(t/5 - z)
+c119 = 3*pi*(1 - cos(2*pi*x))^2*(cos(t/5 + y)/1000 + 1/50)*sin(2*pi*x)*cos(t/5 - z)/25
+c122 = (-2*mms:c37*cos(t/5 - z)/5 + (1 - cos(2*pi*x))^3*sin(t/5 + y)*sin(t/5 - z)/2500 - 2*sin(t/5 - y)/125)/(mms:c23 - mms:c49 + 19/8)
+total_pressure = mms:c17*mms:c64/(mms:c23 - mms:c49 + 19/8) + mms:c64*(mms:c9 + 1)/(mms:c23 - mms:c49 + 19/8)
+pressure_i = mms:c64*(mms:c9 + 1)/(mms:c23 - mms:c49 + 19/8)
+pressure_j = mms:c17*mms:c64/(mms:c23 - mms:c49 + 19/8)
+ion_temperature = mms:c64/(mms:c23 - mms:c49 + 19/8)
+potential = 0
+pressure_potential = -mms:c37*sin(t/5 - z) + cos(t/5 - y)/25 + 6/5
+current_potential = 0
+
+[Ni]
+solution = mms:c9 + 1
+source = mms:c77 - sin(t/5 - y)*cos(2*pi*x)/100 - 3*sin(t/5 + z)/500
+bndry_xin = neumann
+bndry_xout = neumann
+
+[Nj]
+solution = mms:c17
+source = pi*mms:c17*mms:c83 + pi*mms:c27*mms:c81 + mms:c86
+bndry_xin = neumann
+bndry_xout = neumann
+
+[NVi]
+solution = mms:c22*(mms:c23 + 2)
+source = pi*mms:c22^2*sin(t/5 - y)*cos(2*pi*x)/50 - mms:c22*mms:c88 + pi*mms:c22*mms:c90*(mms:c23 + 2) + pi*mms:c64*sin(t/5 - y)*cos(2*pi*x)/(100*(mms:c23 - mms:c49 + 19/8)) + mms:c94*(mms:c9 + 1) + mms:c99*(mms:c9 + 1) + (mms:c23 + 2)*(-mms:c75 + sin(t/5 - y)*sin(t/5 - z)*cos(2*pi*x)/250)
+bndry_xin = neumann
+bndry_xout = neumann
+
+[NVj]
+solution = mms:c26*mms:c27
+source = pi*mms:c101*mms:c27^2 + pi*mms:c102*mms:c26*mms:c27 + mms:c17*mms:c94 + mms:c17*mms:c99 + mms:c26*(mms:c83 - 3*cos(2*pi*x)*cos(t/5 + y)*cos(t/5 - z)/1000) + mms:c27*(mms:c101 - 3*cos(2*pi*x)*cos(t/5 + y)*cos(t/5 - z)/400) + pi*mms:c64*mms:c81/(mms:c23 - mms:c49 + 19/8)
+bndry_xin = neumann
+bndry_xout = neumann
+
+[Pe]
+solution = mms:c29*(-mms:c30 + mms:c9 + 3/2)
+source = -pi*mms:c107*(mms:c22*(mms:c9 + 1) + mms:c27*(1/2 - mms:c30)) + 2*mms:c29*((-mms:c111 - pi*sin(t/5 - y)*cos(2*pi*x)/100)*(mms:c22*(mms:c9 + 1) + mms:c27*(1/2 - mms:c30))/(-mms:c30 + mms:c9 + 3/2)^2 + (mms:c111*mms:c27 + mms:c77 + pi*mms:c83*(1/2 - mms:c30))/(-mms:c30 + mms:c9 + 3/2))*(-mms:c30 + mms:c9 + 3/2)/3 + mms:c29*(-mms:c106 + sin(t/5 + y)*sin(t/5 - z)*cos(2*pi*x)/200 - cos(2*pi*x)*cos(t/5 + y)*cos(t/5 - z)/200) + mms:c29*(mms:c111*mms:c27 + mms:c77 + pi*mms:c83*(1/2 - mms:c30)) + (mms:c107 - cos(2*pi*x)*cos(t/5 - y)*cos(t/5 - z)/100)*(-mms:c30 + mms:c9 + 3/2)
+bndry_xin = neumann
+bndry_xout = neumann
+
+[Vort]
+solution = 17*pi^2*mms:c37*sin(t/5 - z)/200 - 6*mms:c40*(1 - cos(2*pi*x))^2*cos(2*pi*x)/25 - 12*mms:c40*(1 - cos(2*pi*x))*sin(2*pi*x)^2/25 + 3*mms:c44*(1 - cos(2*pi*x))^2*sin(2*pi*x)/25
+source = -3*mms:c40*(1 - cos(2*pi*x))^2*sin(2*pi*x)/125 - 6*mms:c44*(1 - cos(2*pi*x))^2*cos(2*pi*x)/125 - 12*mms:c44*(1 - cos(2*pi*x))*sin(2*pi*x)^2/125 - 17*pi^2*mms:c93/1000000 + 17*pi^2*(1 - cos(2*pi*x))^3*(cos(t/5 + y)/1000 + 1/50)*cos(t/5 - z)/1000 - 3*pi^2*(1 - cos(2*pi*x))^2*sin(2*pi*x)*sin(t/5 + y)*cos(t/5 - z)/125000 + 3*pi^2*(1 - cos(2*pi*x))^2*sin(t/5 + y)*sin(t/5 - z)*cos(2*pi*x)/62500 + 3*pi^2*(1 - cos(2*pi*x))*sin(2*pi*x)^2*sin(t/5 + y)*sin(t/5 - z)/31250
+bndry_xin = dirichlet_o2(Vort:solution)
+bndry_xout = dirichlet_o2(Vort:solution)
+
+[Eion]
+solution = 3*mms:c17*mms:c64/(2*(mms:c23 - mms:c49 + 19/8)) + mms:c22^2*(mms:c9 + 1) + mms:c27^2*(3/8 - mms:c49) + pi*mms:c37*mms:c60*cos(t/5 - z)/5 - 3*mms:c58*mms:c63*sin(t/5 - z)/5 + 3*mms:c64*(mms:c9 + 1)/(2*(mms:c23 - mms:c49 + 19/8))
+source = -mms:c106*mms:c22^2 - 3*mms:c106*mms:c64/(2*(mms:c23 - mms:c49 + 19/8)) - mms:c117*mms:c60/25000 - mms:c119*mms:c63 + 3*mms:c122*mms:c17/2 + mms:c122*(3*mms:c9/2 + 3/2) + 3*mms:c17*mms:c64*(mms:c115 + mms:c88 - mms:c96)/(2*(mms:c23 - mms:c49 + 19/8)^2) + mms:c22*(mms:c9 + 1)*(-mms:c90 + sin(t/5 - y)*sin(t/5 - z)*cos(2*pi*x)/125) + mms:c22*(pi*mms:c22^2*sin(t/5 - y)*cos(2*pi*x)/100 + pi*mms:c22*mms:c90*(mms:c9 + 1) + pi*mms:c64*sin(t/5 - y)*cos(2*pi*x)/(40*(mms:c23 - mms:c49 + 19/8)) + 5*mms:c94*(mms:c9 + 1)/2 + 5*mms:c99*(mms:c9 + 1)/2) + mms:c27^2*(-mms:c115 + mms:c96) + mms:c27*(3/8 - mms:c49)*(mms:c102 - 3*cos(2*pi*x)*cos(t/5 + y)*cos(t/5 - z)/500) + mms:c27*(pi*mms:c102*mms:c27*(3/8 - mms:c49) + 5*mms:c17*mms:c94/2 + 5*mms:c17*mms:c99/2 + pi*mms:c27^2*mms:c96 + pi*mms:c64*sin(t/5 + y)*sin(t/5 - z)*cos(2*pi*x)/(160*(mms:c23 - mms:c49 + 19/8))) - pi*mms:c37*mms:c60*sin(t/5 - z)/25 + pi*mms:c37*(-17*mms:c117/400000 - 17*pi*mms:c37*sin(t/5 - z)/400 - 3*mms:c58*cos(t/5 - z)/100 + 3*pi*(1 - cos(2*pi*x))^2*sin(2*pi*x)*sin(t/5 + y)*sin(t/5 - z)/100000)*cos(t/5 - z)/5 - 3*mms:c58*(-mms:c117/100000 - mms:c119 - pi*mms:c37*sin(t/5 - z)/100 + 3*pi*(1 - cos(2*pi*x))^2*sin(2*pi*x)*sin(t/5 + y)*sin(t/5 - z)/25000)*sin(t/5 - z)/5 + 3*pi*mms:c63*(1 - cos(2*pi*x))^2*sin(2*pi*x)*sin(t/5 + y)*sin(t/5 - z)/25000 + 3*mms:c64*mms:c86/(2*(mms:c23 - mms:c49 + 19/8)) + mms:c64*(3*mms:c9/2 + 3/2)*(mms:c115 + mms:c88 - mms:c96)/(mms:c23 - mms:c49 + 19/8)^2 + pi*mms:c75*(mms:c22^2*(mms:c9 + 1) + 5*mms:c64*(mms:c9 + 1)/(2*(mms:c23 - mms:c49 + 19/8))) + pi*mms:c83*(5*mms:c17*mms:c64/(2*(mms:c23 - mms:c49 + 19/8)) + mms:c27^2*(3/8 - mms:c49))
+bndry_xin = dirichlet_o2(Eion:solution)
+bndry_xout = dirichlet_o2(Eion:solution)

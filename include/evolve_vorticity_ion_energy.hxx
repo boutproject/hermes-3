@@ -25,6 +25,8 @@ PerpendicularFaceFluxes perpendicularFaceFluxes(const Field3D& a, const Field3D&
 Field3D Div_a_Grad_perp_XZ(const Field3D& a, const Field3D& f, bool bndry_flux = true);
 /// Face-based energy density consistent with Div_a_Grad_perp_XZ.
 Field3D kineticEnergyPerp(const Field3D& a, const Field3D& f);
+/// Homogeneous midpoint Dirichlet DC and radial Neumann AC at physical X faces.
+void applyPolarisationBoundary(Field3D& chi);
 } // namespace bout::ion_energy
 
 /// Evolves vorticity and ion total energy
@@ -105,12 +107,15 @@ private:
   Field3D electron_viscous_heating{0.0}; ///< Electron mass fraction of viscous heating
 
   Field3D phi{0.0}; ///< Electrostatic potential ϕ
-  Field3D chi{0.0}; ///< Auxiliary current potential, L(chi) = physical ∂tVort
+  Field3D chi{0.0}; ///< Auxiliary current potential with DC Dirichlet / AC Neumann
   Field3D Pi_sum;   ///< Total ion pressure
   Field3D psi;      ///< Pressure potential Σ A_s p_s / (Abar Z_s)
   Field3D Ti;       ///< Common ion temperature
   Coordinates::FieldMetric boussinesq_coeff; ///< c = mass / B^2
   std::unique_ptr<Laplacian> phiSolver;      ///< Laplacian solver in X-Z
+  std::unique_ptr<Laplacian> chiSolver;      ///< Mixed-boundary auxiliary inverse
+  int chi_iterations{0};                     ///< Last auxiliary correction count
+  BoutReal chi_residual{0.0};                ///< Last physical FV residual
 
   bool phi_boundary_relax;         ///< Relax boundary to zero-gradient
   BoutReal phi_boundary_timescale; ///< Relaxation timescale [normalised]
@@ -181,6 +186,11 @@ private:
 
   /// Use the Laplacian as a preconditioner for a finite-volume residual step.
   Field3D correctPotential(const Field3D& rhs, const Field3D& potential) const;
+  Field3D correctPotential(const Field3D& rhs, const Field3D& potential,
+                           Laplacian& approximate_inverse) const;
+
+  /// Converge the stored auxiliary iterate with its mixed boundary conditions.
+  void solvePolarisationPotential(const Field3D& rhs);
 
   /// Calculate ion perpendicular kinetic energy, K⊥ = 1/2 c |∇⊥Φ|^2
   ///

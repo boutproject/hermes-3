@@ -39,6 +39,10 @@ from integration. Both normalised and explicitly annotated SI inputs are
 supported without modifying the caller's dataset. Unknown units are errors.
 Path loading chunks one time record and Y plane at a time by default; pass
 `chunks` to `open_run` to override this or supply an already chunked dataset.
+Path loading prefers resolved `BOUT.settings`. Its reserved `[run]` metadata,
+including raw multiline Git diffs, is omitted from a temporary analysis copy
+so that the options reader retains later physics sections and command-line
+overrides. Original settings and inputs are preserved.
 Species names and charges come from resolved options; a `Species` manifest can
 override discovery, while model and boundary options remain required.
 
@@ -182,13 +186,14 @@ area factor is applied. Energy faces are labelled `quantity=energy`;
 antiderivative with an arbitrary periodic constant-flux gauge; selected-volume
 balances are independent of that gauge. Outer guard results are undefined.
 
-The polarisation inverse is independently assembled as a sparse finite-volume
-matrix. It uses a gauge for periodic X, or homogeneous half-face Dirichlet for
-nonperiodic X. With `phi_boundary_relax=true`, the auxiliary χ retains
-homogeneous midpoint Dirichlet guards; fixed-boundary runs retain the legacy
-post-solve Neumann overwrite. It is
-lazy across time/Y, with complete local X-Z solve planes. Diagnostic comparison
-removes the free inversion gauge and reports both field and integrated errors.
+The polarisation inverse uses independent X tridiagonal systems for the
+finite-volume Z Fourier modes, with cached factors. Nonperiodic X has
+homogeneous midpoint Dirichlet DC and radial Neumann AC boundaries, for both
+fixed and relaxing phi. The DC field is retained without mean subtraction.
+Periodic X uses its existing fixed gauge. The solve is lazy across time/Y,
+with complete local X-Z planes, and includes the FV Nyquist response.
+Diagnostic comparison removes a free inversion gauge only for periodic X,
+and reports both field and integrated errors.
 The MC operators weight the common flux after limiting, so species charge
 fluxes sum even with spatially varying composition.
 
@@ -198,7 +203,12 @@ Core Y averages exclude guards. The separately reconstructed
 `DivEpol_enthalpy`, `DivEpol_parallel_kinetic` and `DivEpol_electric` face families
 expose each energy contribution's physical-face closure. Particle and momentum
 polarisation faces use the same mask. Full-current inversion permits normal
-current; closed transport deliberately omits it at physical boundaries.
+DC current and mixed-metric current; closed transport omits them at physical
+boundaries. Orthogonal AC potential-flow current is zero before the mask.
+
+The separate `2D-ion-energy-polarisation-boundary` test checks the initial
+analytic AC current, boundary-cell residuals, X refinement, fixed/relaxing phi,
+diagnostics-off reconstruction, MPI decomposition and power balance.
 
 The diagnostic named `ddt(Phi)` contains an auxiliary current potential solving
 `L(chi)=physical ddt(Vort)`, rather than the exact derivative of `phi+psi`.

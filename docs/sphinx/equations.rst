@@ -1774,8 +1774,15 @@ Normal polarisation transport of particles, momentum, enthalpy, parallel
 kinetic energy and electrical work is closed at physical radial faces,
 including cross-metric fluxes. This lets imposed sources and sheath
 boundary conditions determine the corresponding boundary fluxes.
-In relaxation mode :math:`\chi` has homogeneous midpoint Dirichlet
-boundaries. Normal output ``Vort`` remains physical vorticity; restart
+With either fixed or relaxing phi boundaries, :math:`\chi` has homogeneous
+midpoint Dirichlet conditions for its Z average (DC) and radial Neumann
+conditions for its nonzero Z Fourier modes (AC), at both X boundaries.
+A separate approximate inverse and finite-volume residual iteration enforce
+these conditions before polarisation transport is evaluated. The DC value
+fixes the constant mode without subtracting the mean source or solution.
+For orthogonal metrics the AC normal potential-flow current is already zero;
+DC current and cross-metric current can remain and are closed in transport.
+Normal output ``Vort`` remains physical vorticity; restart
 files also store the potential boundary state.
 
 Other options in ``[evolve_vorticity_ion_energy]`` are:
@@ -1799,6 +1806,10 @@ Other options in ``[evolve_vorticity_ion_energy]`` are:
   residual (default ``1e-10``); ``phi_rtol`` supplies its relative tolerance.
 - ``laplacian``: Subsection containing options for the approximate
   Laplacian solver.
+- ``polarisation_laplacian``: Independent auxiliary solver options, with
+  ``type`` defaulting to the phi solver type. For nonperiodic X both boundary
+  flags must be ``2`` (``INVERT_AC_GRAD``); DC-removal global flags are rejected.
+  Periodic X retains the existing potential inverse and gauge.
 - ``diagnose``: Save additional energy and flux diagnostics (default ``false``).
 
 The default outputs are ``Eion``, ``Tion``, ``Vort`` and ``phi``.
@@ -1810,6 +1821,8 @@ and ``DivEpol``, and the exchange/source terms ``phi_Div_Je``,
 the closed polarisation transport current. The diagnostic ``ddt(Phi)``
 contains the auxiliary :math:`\chi`, which approximates the polarisation
 current rather than the exact time derivative of :math:`\phi+\psi`.
+``ion_chi_iterations`` and ``ion_chi_residual`` report the auxiliary solve's
+correction count and final normalised finite-volume residual.
 When viscosity is specified, diagnostics also include ``kinematic_viscosity``,
 ``kinematic_viscous_heating``, ``electron_viscous_heating``, ``DivJviscous`` and
 ``DivEviscous``. These additional outputs require ``diagnose = true``.

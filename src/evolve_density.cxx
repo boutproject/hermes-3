@@ -114,12 +114,17 @@ EvolveDensity::EvolveDensity(std::string name, Options& alloptions, Solver* solv
   // Try to read the density source from the mesh
   // Units of particles per cubic meter per second
   source = 0.0;
-  mesh->get(source, std::string("N") + name + "_src");
-  // Allow the user to override the source from input file
-  source = n_options["source"]
-               .doc("Source term in ddt(N" + name + std::string("). Units [m^-3/s]"))
-               .withDefault(source)
-           / source_normalisation;
+  // In MMS mode Solver::run_rhs adds this option as a normalised forcing
+  // after the model RHS. Do not also interpret it as a prescribed SI source
+  // or expose it to other components' energy-source conversion.
+  if (!alloptions["solver"]["mms"].withDefault<bool>(false)) {
+    mesh->get(source, std::string("N") + name + "_src");
+    // Allow the user to override the source from input file
+    source = n_options["source"]
+                 .doc("Source term in ddt(N" + name + std::string("). Units [m^-3/s]"))
+                 .withDefault(source)
+             / source_normalisation;
+  }
 
   // If time dependent, parse the function with respect to time from the input file
   if (source_time_dependent) {

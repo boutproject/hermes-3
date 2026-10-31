@@ -489,7 +489,56 @@ if(HERMES_TESTS)
                  "${PUBLICATION_SMOKE_DIR}")
     hermes_add_ion_energy_test(2D-ion-energy-equilibrium)
     hermes_add_ion_energy_test(2D-ion-energy-curvature)
+    hermes_add_ion_energy_test(2D-ion-energy-polarisation-boundary)
+    set_tests_properties(2D-ion-energy-polarisation-boundary PROPERTIES TIMEOUT
+                                                                        600)
     hermes_add_ion_energy_test(2D-ion-energy-multispecies)
+    set(ION_MMS_SOURCE
+        "${CMAKE_CURRENT_SOURCE_DIR}/tests/integrated/3D-ion-energy-mms")
+    set(ION_MMS_DEST "${ION_MMS_SOURCE}")
+    if(HERMES_COPY_TESTS_TO_BUILD)
+      set(ION_MMS_DEST
+          "${CMAKE_CURRENT_BINARY_DIR}/tests/integrated/3D-ion-energy-mms")
+      foreach(
+        ION_MMS_FILE
+        runtest
+        README.md
+        data/BOUT.inp
+        base.inp
+        criteria.json
+        manufactured.py
+        mms.py
+        analysis.py
+        compiled_sources.hxx
+        generated_sources.hxx
+        requirements.txt)
+        configure_file("${ION_MMS_SOURCE}/${ION_MMS_FILE}"
+                       "${ION_MMS_DEST}/${ION_MMS_FILE}" COPYONLY)
+      endforeach()
+    endif()
+    foreach(ION_MMS_VARIANT baseline skew viscosity)
+      set(ION_MMS_NAME "3D-ion-energy-mms")
+      if(NOT ION_MMS_VARIANT STREQUAL "baseline")
+        string(APPEND ION_MMS_NAME "-${ION_MMS_VARIANT}")
+        if(HERMES_COPY_TESTS_TO_BUILD)
+          foreach(ION_MMS_FILE runtest README.md data/BOUT.inp)
+            configure_file(
+              "${CMAKE_CURRENT_SOURCE_DIR}/tests/integrated/${ION_MMS_NAME}/${ION_MMS_FILE}"
+              "${CMAKE_CURRENT_BINARY_DIR}/tests/integrated/${ION_MMS_NAME}/${ION_MMS_FILE}"
+              COPYONLY)
+          endforeach()
+        endif()
+      endif()
+      add_test(
+        NAME "${ION_MMS_NAME}"
+        COMMAND
+          "${HERMES_ENERGY_PYTHON}" "${ION_MMS_DEST}/runtest" --exe
+          $<TARGET_FILE:${PROJECT_NAME}> --variant "${ION_MMS_VARIANT}" --sizes
+          8 16 32 --end-time 0.1 --outputs 1)
+      set_tests_properties(
+        "${ION_MMS_NAME}" PROPERTIES LABELS "integration;energy;mms" TIMEOUT
+                                     1200 WORKING_DIRECTORY "${ION_MMS_DEST}")
+    endforeach()
     hermes_add_ion_energy_test(2D-ion-energy-fluxes)
     hermes_add_ion_energy_test(2D-ion-energy-heating)
     hermes_add_ion_energy_test(2D-ion-energy-sources)

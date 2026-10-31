@@ -24,6 +24,7 @@
 #include "revision.hxx"
 
 #ifdef HERMES_TEST_ENERGY_SOURCES
+#include "tests/integrated/3D-ion-energy-mms/compiled_sources.hxx"
 #include "tests/integrated/test_energy_sources.hxx"
 #endif
 
