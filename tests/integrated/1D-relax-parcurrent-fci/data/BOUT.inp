@@ -1,0 +1,68 @@
+nout = 50
+timestep = 0.1
+
+
+[mesh]
+
+extrapolate_y = false
+
+[mesh:paralleltransform]
+type = fci
+
+
+[solver]
+mxstep = 10000
+rtol = 1e-6
+atol = 1e-12
+mms = true  # Run with MMS sources and output diagnostics
+mms_initialise = true
+[hermes]
+components = h+, e, relax_potential
+
+
+Nnorm = 1e18
+Bnorm = 1
+Tnorm = 5
+
+[relax_potential]
+exb_advection = false
+diamagnetic = false
+vort_dissipation = false
+phi_dissipation = false
+viscosity_par = 1e5
+boussinesq = false
+diamagnetic_polarisation = false
+
+#############################################################
+
+[h+]  # Ions
+type = fixed_density, fixed_velocity, fixed_temperature
+charge = 1.0
+AA = 1.0
+
+density = 2.0e+17*sin(y) + 1.0e+18
+temperature = 5.00000000000000
+velocity = -9236.13671688189*sin(2.0*y + 5.12)
+
+#############################################################
+
+[e]  # Electrons
+type = fixed_density, fixed_velocity, fixed_temperature
+charge = -1.0
+AA = 1.0 / 1836.0
+
+density = 2.0e+17*sin(y) + 1.0e+18
+temperature = 5.00000000000000
+velocity = 2735.82248722805*sin(y + 3.6525122)
+#############################################################
+
+[Vort]
+solution = 0.0001*sin(2.0*y + 0.231)
+source = -0.00022847*(0.2*sin(y) + 1.0)*(-0.125*cos(y + 3.6525122) - 0.844*cos(2.0*y + 5.12)) - 4.5694e-5*(-0.125*sin(y + 3.6525122) - 0.422*sin(2.0*y + 5.12))*cos(y) + 4.17552675779574e-7*sin(2.0*y + 0.231)
+
+
+bndry_all = dirichlet(Vort:solution)
+[phi1]
+solution = 0.35*sin(y)
+source = 0.0
+bndry_all = dirichlet(phi1:solution)
