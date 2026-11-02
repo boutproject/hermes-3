@@ -331,9 +331,9 @@ void EvolvePressure::finally(const Options& state) {
                * FV::Div_par_fvv_heating(Nlim, V, fastest_wave, flow_ylow_viscous_heating,
                                          fix_momentum_boundary_flux);
       flow_ylow_viscous_heating *= AA;
-      flow_ylow += flow_ylow_viscous_heating;
       if (numerical_viscous_heating) {
         ddt(P) += Sp_nvh;
+        flow_ylow += flow_ylow_viscous_heating; // only counts in the total if it's actually in ddt(P)
       }
     }
   } else if (diagnose) {
