@@ -60,6 +60,8 @@ private:
   std::map<std::string, BoutReal> all_kappa_limit_alpha; ///< Flux limit if >0
   std::map<std::string, Field3D>
       all_flow_ylow_conduction; ///< Conduction energy flow diagnostics
+  std::map<std::string, Field3D>
+      all_E_conduction; ///< conduction energy channel (only filled when diagnose is on)
   /// Save more diagnostics?
   std::map<std::string, bool> all_diagnose;
 
