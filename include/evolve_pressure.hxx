@@ -108,6 +108,10 @@ private:
   Field3D Sp_nvh;                  ///< Pressure source due to artificial viscosity
   Field3D E_PdivV,
       E_VgradP; ///< Diagnostic energy source terms for p*Div(V) and V*Grad(P)
+  // energy channels, only filled when diagnose is on
+  Field3D E_Div_VExB_32P; ///< ExB advection of pressure
+  Field3D E_Div_Vpar_32P; ///< parallel advection of pressure
+  Field3D E_numerical_P;  ///< all the numerical diffusion and damping in ddt(P)
 
   /// Inputs
   /// - species
