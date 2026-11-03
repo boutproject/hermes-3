@@ -348,6 +348,10 @@ void SheathBoundarySimple::transform_impl(GuardedOptions& state) {
 
   hflux_e = zeroFrom(electron_energy_source); // sheath heat flux for diagnostics
 
+  // only the bit on top of advection, this is what actually goes into energy_source
+  // (E<sp>_sheath stays as the total so post processing does not change)
+  Field3D sheath_extra_e = zeroFrom(electron_energy_source);
+
   if (lower_y) {
     for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
       for (int jz = 0; jz < mesh->LocalNz; jz++) {
@@ -404,6 +408,9 @@ void SheathBoundarySimple::transform_impl(GuardedOptions& state) {
         BoutReal heatflow = q * da;     // [W]
         BoutReal power = heatflow / dv; // [Wm^-3]
         electron_energy_source[i] += power;
+        if (diagnose) {
+          sheath_extra_e[i] += power;
+        }
 
         // Total heat flux for diagnostic purposes
         q = gamma_e * tesheath * nesheath * vesheath; // [Wm^-2]
@@ -470,6 +477,9 @@ void SheathBoundarySimple::transform_impl(GuardedOptions& state) {
         BoutReal heatflow = q * da;     // [W]
         BoutReal power = heatflow / dv; // [Wm^-3]
         electron_energy_source[i] -= power;
+        if (diagnose) {
+          sheath_extra_e[i] -= power;
+        }
 
         // Total heat flux for diagnostic purposes
         q = gamma_e * tesheath * nesheath * vesheath; // [Wm^-2]
@@ -481,6 +491,10 @@ void SheathBoundarySimple::transform_impl(GuardedOptions& state) {
   }
 
   set(diagnostics["e"]["energy_source"], hflux_e);
+  if (diagnose) {
+    // back out of field aligned, same as energy_source below
+    set(diagnostics["e"]["energy_source_extra"], fromFieldAligned(sheath_extra_e));
+  }
 
   // Set electron density and temperature, now with boundary conditions
   // Note: Clear parallel slices because they do not contain boundary conditions.
@@ -560,6 +574,8 @@ void SheathBoundarySimple::transform_impl(GuardedOptions& state) {
     // Initialise sheath ion heat flux. This will be created for each species
     // saved in diagnostics struct and then destroyed and re-created for next species
     Field3D hflux_i = zeroFrom(energy_source);
+    // just the energy_source part, same as for electrons
+    Field3D sheath_extra_i = zeroFrom(energy_source);
     Field3D particle_source = zeroFrom(energy_source);
     // Field to capture total sheath heat flux for diagnostics
     Field3D ion_sheath_power_ylow = zeroFrom(Ne);
@@ -620,6 +636,9 @@ void SheathBoundarySimple::transform_impl(GuardedOptions& state) {
           BoutReal power = heatflow / dv; // [Wm^-3]
           ASSERT2(std::isfinite(power));
           energy_source[i] += power; // Note: Sign negative because power > 0
+          if (diagnose) {
+            sheath_extra_i[i] += power;
+          }
           particle_source[i] -=
               nisheath * visheath * da / dv; // [m^-3s^-1] Diagnostics only
 
@@ -690,6 +709,9 @@ void SheathBoundarySimple::transform_impl(GuardedOptions& state) {
           BoutReal power = heatflow / dv; // [Wm^-3]
           ASSERT2(std::isfinite(power));
           energy_source[i] -= power; // Note: Sign negative because power > 0
+          if (diagnose) {
+            sheath_extra_i[i] -= power;
+          }
           particle_source[i] -=
               nisheath * visheath * da / dv; // [m^-3s^-1] Diagnostics only
 
@@ -731,6 +753,9 @@ void SheathBoundarySimple::transform_impl(GuardedOptions& state) {
 
     set(diagnostics[kv.first]["energy_source"], hflux_i);
     set(diagnostics[kv.first]["particle_source"], particle_source);
+    if (diagnose) {
+      set(diagnostics[kv.first]["energy_source_extra"], fromFieldAligned(sheath_extra_i));
+    }
   }
 }
 
@@ -755,6 +780,19 @@ void SheathBoundarySimple::outputVars(Options& state) {
                       {"conversion", Pnorm * Omega_ci},
                       {"standard_name", "energy source"},
                       {"long_name", species_name + " sheath energy source"},
+                      {"source", "sheath_boundary_simple"}});
+
+      // the part of E<sp>_sheath that isn't already carried out by fluid advection
+      set_with_attrs(state[{"E" + species_name + "_sheath_extra"}],
+                     getNonFinal<Field3D>(section["energy_source_extra"]),
+                     {{"time_dimension", "t"},
+                      {"units", "W / m^3"},
+                      {"conversion", Pnorm * Omega_ci},
+                      {"standard_name", "energy source"},
+                      {"long_name", species_name
+                                        + " sheath energy source on top of advection "
+                                          "(what goes into energy_source)"},
+                      {"species", species_name},
                       {"source", "sheath_boundary_simple"}});
 
       if (species_name != "e") {
