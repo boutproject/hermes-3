@@ -270,13 +270,26 @@ void EvolvePressure::finally(const Options& state) {
   T = get<Field3D>(species["temperature"]);
   N = get<Field3D>(species["density"]);
 
+  if (diagnose) {
+    // zero so every channel is saved even when its term is off
+    E_Div_VExB_32P = zeroFrom(P);
+    E_Div_Vpar_32P = zeroFrom(P);
+    E_numerical_P = zeroFrom(P);
+  }
+
   if (species.isSet("charge") and (fabs(get<BoutReal>(species["charge"])) > 1e-5)
       and state.isSection("fields") and state["fields"].isSet("phi")) {
     // Electrostatic potential set and species is charged -> include ExB flow
 
     const Field3D phi = get<Field3D>(state["fields"]["phi"]);
 
-    ddt(P) = -Div_n_bxGrad_f_B_XPPM(P, phi, bndry_flux, poloidal_flows, true);
+    const Field3D div_exb =
+        Div_n_bxGrad_f_B_XPPM(P, phi, bndry_flux, poloidal_flows, true);
+    ddt(P) = -div_exb;
+    if (diagnose) {
+      // 3/2 because this is thermal energy, not pressure
+      E_Div_VExB_32P = (-3. / 2) * div_exb;
+    }
   } else {
     ddt(P) = 0.0;
   }
@@ -295,8 +308,12 @@ void EvolvePressure::finally(const Options& state) {
 
     if (p_div_v) {
       // Use the P * Div(V) form
-      ddt(P) -= FV::Div_par_mod<hermes::Limiter>(P, V, fastest_wave, flow_ylow_advection,
-                                                 true, dissipative);
+      const Field3D div_par = FV::Div_par_mod<hermes::Limiter>(
+          P, V, fastest_wave, flow_ylow_advection, true, dissipative);
+      ddt(P) -= div_par;
+      if (diagnose) {
+        E_Div_Vpar_32P = (-3. / 2) * div_par;
+      }
 
       // Work done. This balances energetically a term in the momentum equation
       E_PdivV = -Pfloor * Div_par(V.asField3DParallel());
@@ -307,9 +324,13 @@ void EvolvePressure::finally(const Options& state) {
       // Note: A mixed form has been tried (on 1D neon example)
       //       -(4/3)*FV::Div_par(P,V) + (1/3)*(V * Grad_par(P) - P * Div_par(V))
       //       Caused heating of charged species near sheath like p_div_v
-      ddt(P) -= (5. / 3)
-                * FV::Div_par_mod<hermes::Limiter>(
-                    P, V, fastest_wave, flow_ylow_advection, true, dissipative);
+      const Field3D div_par = FV::Div_par_mod<hermes::Limiter>(
+          P, V, fastest_wave, flow_ylow_advection, true, dissipative);
+      ddt(P) -= (5. / 3) * div_par;
+      if (diagnose) {
+        // all of the 5/2 P V flow in this form, not just 3/2 of it
+        E_Div_Vpar_32P = (-3. / 2) * ((5. / 3) * div_par);
+      }
       E_VgradP = V * Grad_par(P.asField3DParallel());
       ddt(P) += (2. / 3) * E_VgradP;
     }
@@ -343,35 +364,57 @@ void EvolvePressure::finally(const Options& state) {
   if (species.isSet("low_n_coeff")) {
     // Low density parallel diffusion
     const Field3D low_n_coeff = get<Field3D>(species["low_n_coeff"]);
-    ddt(P) += FV::Div_par_K_Grad_par(low_n_coeff * T, N)
-              + FV::Div_par_K_Grad_par(low_n_coeff, P);
+    const Field3D low_n_par = FV::Div_par_K_Grad_par(low_n_coeff * T, N)
+                              + FV::Div_par_K_Grad_par(low_n_coeff, P);
+    ddt(P) += low_n_par;
+    if (diagnose) {
+      E_numerical_P += (3. / 2) * low_n_par;
+    }
   }
 
   if (low_n_diffuse_perp) {
-    ddt(P) +=
+    const Field3D low_n_perp =
         Div_Perp_Lap_FV_Index(density_floor / softFloor(N, 1e-3 * density_floor), P);
+    ddt(P) += low_n_perp;
+    if (diagnose) {
+      E_numerical_P += (3. / 2) * low_n_perp;
+    }
   }
 
   if (low_T_diffuse_perp) {
-    ddt(P) += 1e-4
-              * Div_Perp_Lap_FV_Index(
-                  floor(Field3D{temperature_floor / softFloor(T, 1e-3 * temperature_floor)
-                                - 1.0},
-                        0.0),
-                  T);
+    const Field3D low_T_perp = Div_Perp_Lap_FV_Index(
+        floor(Field3D{temperature_floor / softFloor(T, 1e-3 * temperature_floor) - 1.0},
+              0.0),
+        T);
+    ddt(P) += 1e-4 * low_T_perp;
+    if (diagnose) {
+      E_numerical_P += (3. / 2) * (1e-4 * low_T_perp);
+    }
   }
 
   if (low_p_diffuse_perp) {
     const Field3D Plim = softFloor(P, 1e-3 * pressure_floor);
-    ddt(P) += Div_Perp_Lap_FV_Index(pressure_floor / Plim, P);
+    const Field3D low_p_perp = Div_Perp_Lap_FV_Index(pressure_floor / Plim, P);
+    ddt(P) += low_p_perp;
+    if (diagnose) {
+      E_numerical_P += (3. / 2) * low_p_perp;
+    }
   }
 
   if (hyper_z > 0.) {
-    ddt(P) -= hyper_z * D4DZ4_Index(P);
+    const Field3D hyper_P = D4DZ4_Index(P);
+    ddt(P) -= hyper_z * hyper_P;
+    if (diagnose) {
+      E_numerical_P -= (3. / 2) * (hyper_z * hyper_P);
+    }
   }
 
   if (hyper_z_T > 0.) {
-    ddt(P) -= hyper_z_T * D4DZ4_Index(T);
+    const Field3D hyper_T = D4DZ4_Index(T);
+    ddt(P) -= hyper_z_T * hyper_T;
+    if (diagnose) {
+      E_numerical_P -= (3. / 2) * (hyper_z_T * hyper_T);
+    }
   }
 
   //////////////////////
@@ -404,7 +447,11 @@ void EvolvePressure::finally(const Options& state) {
   if (damp_p_nt) {
     // Term to force evolved P towards N * T
     // This is active when P < 0 or when N < density_floor
-    ddt(P) += N * T - P;
+    const Field3D damp = N * T - P;
+    ddt(P) += damp;
+    if (diagnose) {
+      E_numerical_P += (3. / 2) * damp;
+    }
   }
 
   // Scale time derivatives
@@ -516,6 +563,38 @@ void EvolvePressure::outputVars(Options& state) {
                         {"source", "evolve_pressure"}});
       }
     }
+
+    // energy channels, these plus 3/2 SP (and E_nvh, E_PdivV or E_VgradP) are 3/2 ddt(P)
+    set_with_attrs(state["E" + name + "_Div_VExB_32P"], E_Div_VExB_32P,
+                   {{"time_dimension", "t"},
+                    {"units", "W / m^3"},
+                    {"conversion", Pnorm * Omega_ci},
+                    {"standard_name", "energy source"},
+                    {"long_name", name + " energy source from ExB advection of pressure"},
+                    {"species", name},
+                    {"source", "evolve_pressure"}});
+
+    set_with_attrs(state["E" + name + "_Div_Vpar_32P"], E_Div_Vpar_32P,
+                   {{"time_dimension", "t"},
+                    {"units", "W / m^3"},
+                    {"conversion", Pnorm * Omega_ci},
+                    {"standard_name", "energy source"},
+                    {"long_name", name
+                                      + " energy source from parallel advection of "
+                                        "pressure (5/2 P V when p_div_v is off)"},
+                    {"species", name},
+                    {"source", "evolve_pressure"}});
+
+    set_with_attrs(state["E" + name + "_numerical_P"], E_numerical_P,
+                   {{"time_dimension", "t"},
+                    {"units", "W / m^3"},
+                    {"conversion", Pnorm * Omega_ci},
+                    {"standard_name", "energy source"},
+                    {"long_name", name
+                                      + " energy source from numerical diffusion and "
+                                        "damping in the pressure equation"},
+                    {"species", name},
+                    {"source", "evolve_pressure"}});
 
     if (flow_xlow.isAllocated()) {
       set_with_attrs(
