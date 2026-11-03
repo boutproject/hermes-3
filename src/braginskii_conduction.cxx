@@ -323,15 +323,27 @@ void BraginskiiConduction::transform_impl(GuardedOptions& state) {
     // is calculated and removed separately
     set(species["kappa_par"], kappa_par);
 
+    const bool diagnose = all_diagnose[name];
+    Field3D& E_conduction = all_E_conduction[name];
+
     // Petsc can be used to calculate the divergence of the heat flux
     if (use_petsc_operator) {
 #if BOUT_HAS_PETSC
-      add(species["energy_source"], petsc_parallel.Div_par_K_Grad_par(kappa_par, T));
+      const Field3D conduction = petsc_parallel.Div_par_K_Grad_par(kappa_par, T);
+      add(species["energy_source"], conduction);
+      if (diagnose) {
+        // a copy, since energy_source can share this data and get added to in place
+        E_conduction = copy(conduction);
+      }
 #endif
     } else {
-      add(species["energy_source"],
-          Div_par_K_Grad_par_mod(kappa_par, T, flow_ylow_conduction, false,
-                                 conduction_method));
+      const Field3D conduction = Div_par_K_Grad_par_mod(
+          kappa_par, T, flow_ylow_conduction, false, conduction_method);
+      add(species["energy_source"], conduction);
+      if (diagnose) {
+        // a copy, since energy_source can share this data and get added to in place
+        E_conduction = copy(conduction);
+      }
       add(species["energy_flow_ylow"], flow_ylow_conduction);
     }
     if (state.isSection("fields") and IS_SET(state["fields:Apar_flutter"])) {
@@ -346,9 +358,13 @@ void BraginskiiConduction::transform_impl(GuardedOptions& state) {
       mesh->communicate(db_dot_T, b0_dot_T);
       db_dot_T.applyBoundary("neumann");
       b0_dot_T.applyBoundary("neumann");
-      add(species["energy_source"],
+      const Field3D flutter =
           Div_par(kappa_par * db_dot_T)
-              - Div_n_g_bxGrad_f_B_XZ(kappa_par, db_dot_T + b0_dot_T, Apar_flutter));
+          - Div_n_g_bxGrad_f_B_XZ(kappa_par, db_dot_T + b0_dot_T, Apar_flutter);
+      add(species["energy_source"], flutter);
+      if (diagnose) {
+        E_conduction += flutter; // already our own copy, so in place is fine
+      }
     }
   }
 }
@@ -393,5 +409,16 @@ void BraginskiiConduction::outputVars(Options& state) {
                     {"long_name", name + " conduction through Y cell face."},
                     {"species", name},
                     {"source", "evolve_pressure"}});
+
+    set_with_attrs(state["E" + name + "_conduction"], all_E_conduction[name],
+                   {{"time_dimension", "t"},
+                    {"units", "W / m^3"},
+                    {"conversion", Pnorm * Omega_ci},
+                    {"standard_name", "energy source"},
+                    {"long_name", name
+                                      + " energy source from parallel heat conduction "
+                                        "(flutter terms included when on)"},
+                    {"species", name},
+                    {"source", "braginskii_conduction"}});
   }
 }

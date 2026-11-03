@@ -189,5 +189,134 @@ TEST_F(BraginskiiConductionTest, ConductionCollisionsMode) {
   }
 }
 
+namespace {
+// state for the energy channel tests, with an energy source already there or not
+Options conductionChannelState(const Options& base, const Field3D& T,
+                               bool with_source) {
+  Options state = base.copy();
+  state["species"]["test+"]["charge"] = 1;
+  state["species"]["test+"]["collision_frequencies"]["test+_test+_coll"] = 1.;
+  state["species"]["test+"]["collision_frequency"] = 1.;
+  state["species"]["test+"]["temperature"] = T;
+  if (with_source) {
+    state["species"]["test+"]["energy_source"] = 0.3 + 0.1 * T;
+  }
+  return state;
+}
+} // namespace
+
+TEST_F(BraginskiiConductionTest, ConductionChannelIsEnergySourceChange) {
+  BraginskiiConduction component = this->makeComponent(1.);
+  component.declareAllSpecies({"test+"});
+
+  // no source before, so the channel is the whole energy_source
+  Options state = conductionChannelState(this->state_base, this->temp1, false);
+  component.transform(state);
+  Options outputs = this->output_base.copy();
+  component.outputVars(outputs);
+  const Field3D E_cond = get<Field3D>(outputs["Etest+_conduction"]);
+  EXPECT_TRUE(IsFieldEqual(E_cond, this->getDeriv(state), "RGN_NOBNDRY", 0.0));
+  EXPECT_GT(max(abs(E_cond), false, "RGN_NOBNDRY"), 0.0);
+  ASSERT_EQ("test+", outputs["Etest+_conduction"].attributes["species"].as<std::string>());
+
+  // with a source already there it's the change (before from a fresh state, a copy
+  // would share data)
+  Options state2 = conductionChannelState(this->state_base, this->temp1, true);
+  const Field3D before = conductionChannelState(this->state_base, this->temp1, true)
+                             ["species"]["test+"]["energy_source"]
+                                 .as<Field3D>();
+  component.transform(state2);
+  Options outputs2 = this->output_base.copy();
+  component.outputVars(outputs2);
+  const Field3D change = this->getDeriv(state2) - before;
+  EXPECT_TRUE(IsFieldEqual(get<Field3D>(outputs2["Etest+_conduction"]), change,
+                           "RGN_NOBNDRY", 1e-12));
+}
+
+TEST_F(BraginskiiConductionTest, ConductionChannelIsACopy) {
+  BraginskiiConduction component = this->makeComponent(1.);
+  component.declareAllSpecies({"test+"});
+
+  Options state = conductionChannelState(this->state_base, this->temp1, false);
+  component.transform(state);
+  const Field3D expected = copy(this->getDeriv(state));
+
+  // a later component adding in place (like the sheath) mustn't change the channel
+  Field3D energy_source = state["species"]["test+"]["energy_source"].as<Field3D>();
+  BOUT_FOR_SERIAL(i, energy_source.getRegion("RGN_ALL")) { energy_source[i] += 1.0; }
+
+  Options outputs = this->output_base.copy();
+  component.outputVars(outputs);
+  EXPECT_TRUE(IsFieldEqual(get<Field3D>(outputs["Etest+_conduction"]), expected,
+                           "RGN_NOBNDRY", 0.0));
+}
+
+// the flutter operator communicates fluxes, so it needs two x guard cells
+using BraginskiiConductionFlutterTest = FakeMeshFixture_tmpl<6, 5, 7, false, 2>;
+
+TEST_F(BraginskiiConductionFlutterTest, ConductionChannelWithFlutter) {
+  Options opts{{"units",
+                {{"eV", 1.0}, {"meters", 1.0}, {"seconds", 1.0}, {"inv_meters_cubed", 1e19}}},
+               {"test+",
+                {{"type", "evolve_energy"},
+                 {"thermal_conduction", true},
+                 {"diagnose", true},
+                 {"conduction_collisions_mode", "braginskii"}}}};
+  const Options base{
+      {"fastest_wave", 0.},
+      {"species",
+       {{"test+", {{"velocity", 0.}, {"density", 1.}, {"pressure", 1.}, {"AA", 2.}}}}}};
+  const Field3D T = BraginskiiConductionTest::linearGradient(1., 0.1, 0., 1., 1., 0.2, 0.);
+
+  BraginskiiConduction component("test+", opts, nullptr);
+  component.declareAllSpecies({"test+"});
+  Options state = conductionChannelState(base, T, false);
+  Options state_no_flutter = state.copy();
+  state["fields"]["Apar_flutter"] =
+      BraginskiiConductionTest::linearGradient(0., 0.1, 0., 0., 0.05, 0.2, 0.);
+  component.transform(state);
+  Options outputs{{"Nnorm", 1e19}, {"Tnorm", 1.}, {"Omega_ci", 1.}, {"rho_s0", 1.}};
+  component.outputVars(outputs);
+
+  // both adds end up in the channel
+  const Field3D with_flutter = state["species"]["test+"]["energy_source"].as<Field3D>();
+  EXPECT_TRUE(IsFieldEqual(get<Field3D>(outputs["Etest+_conduction"]), with_flutter,
+                           "RGN_NOBNDRY", 0.0));
+
+  // and the flutter part isn't zero, or this tests nothing
+  BraginskiiConduction component2("test+", opts, nullptr);
+  component2.declareAllSpecies({"test+"});
+  component2.transform(state_no_flutter);
+  const Field3D without =
+      state_no_flutter["species"]["test+"]["energy_source"].as<Field3D>();
+  EXPECT_GT(max(abs(with_flutter - without), false, "RGN_NOBNDRY"), 0.0);
+}
+
+TEST_F(BraginskiiConductionTest, ConductionDiagnoseDoesNotChangeState) {
+  Options opts_off = options.copy();
+  opts_off["test+"]["diagnose"].force(false);
+  opts_off["test+"]["kappa_coefficient"] = 1.;
+  opts_off["test+"]["conduction_collisions_mode"] = "braginskii";
+  BraginskiiConduction component_off("test+", opts_off, nullptr);
+  component_off.declareAllSpecies({"test+"});
+  BraginskiiConduction component_on = this->makeComponent(1.);
+  component_on.declareAllSpecies({"test+"});
+
+  Options state_off = conductionChannelState(this->state_base, this->temp1, true);
+  Options state_on = conductionChannelState(this->state_base, this->temp1, true);
+  component_off.transform(state_off);
+  component_on.transform(state_on);
+
+  Options outputs_off = this->output_base.copy();
+  component_off.outputVars(outputs_off);
+  EXPECT_FALSE(outputs_off.isSet("Etest+_conduction"));
+
+  for (const std::string var : {"energy_source", "energy_flow_ylow", "kappa_par"}) {
+    const Field3D on = state_on["species"]["test+"][var].as<Field3D>();
+    const Field3D off = state_off["species"]["test+"][var].as<Field3D>();
+    EXPECT_TRUE(IsFieldEqual(on, off, "RGN_NOBNDRY", 0.0)) << var;
+  }
+}
+
 // TODO: Add tests for more types of collisions (e.g., electron-ion, charge-exchante, ion
 // neutral...)
