@@ -1,5 +1,6 @@
 #include <bout/bout_types.hxx>
 #include <bout/boutcomm.hxx>
+#include <bout/constants.hxx>
 #include <bout/boutexception.hxx>
 #include <bout/coordinates.hxx>
 #include <bout/derivs.hxx>
@@ -58,6 +59,10 @@ DiamagneticDrift::DiamagneticDrift(std::string name, Options& alloptions,
                         toString(boundary));
     }
   }
+
+  diagnose = options["diagnose"]
+                 .doc("Save additional output diagnostics")
+                 .withDefault<bool>(false);
 
   form = options["form"]
              .doc("Form of the diamagnetic sink: divergence or gradient. "
@@ -308,6 +313,8 @@ void DiamagneticDrift::transform_impl(GuardedOptions& state) {
   struct Source {
     GuardedOptions output;
     Field3D sink;
+    std::string species; ///< Species name, for the diagnostic
+    bool is_energy;      ///< True if this sink goes into energy_source
   };
   std::vector<Source> sources;
   std::vector<BoutReal> ring_sums;
@@ -337,7 +344,8 @@ void DiamagneticDrift::transform_impl(GuardedOptions& state) {
       if (average_core_active) {
         ring_sums.push_back(coreRingSum(sink));
       }
-      sources.push_back({species[output], std::move(sink)});
+      sources.push_back({species[output], std::move(sink), kv.first,
+                         std::string(output) == "energy_source"});
     };
     collect("density", "density_source", 1.0);
     collect("pressure", "energy_source", 5. / 2);
@@ -359,5 +367,32 @@ void DiamagneticDrift::transform_impl(GuardedOptions& state) {
       setCoreAverage(sources[i].sink, ring_sums[i]);
     }
     subtract(sources[i].output.getWritable(), sources[i].sink);
+    if (diagnose and sources[i].is_energy) {
+      // After the core averaging, so the channel is exactly what went into
+      // energy_source. Flipped so positive is a source.
+      all_E_Div_Vdia_52P[sources[i].species] = -sources[i].sink;
+    }
+  }
+}
+
+void DiamagneticDrift::outputVars(Options& state) {
+  if (!diagnose) {
+    return;
+  }
+  auto Nnorm = get<BoutReal>(state["Nnorm"]);
+  auto Tnorm = get<BoutReal>(state["Tnorm"]);
+  auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
+  BoutReal Pnorm = SI::qe * Tnorm * Nnorm; // Pressure normalisation
+
+  for (const auto& [species_name, E_Div_Vdia_52P] : all_E_Div_Vdia_52P) {
+    set_with_attrs(state[std::string("E") + species_name + "_Div_Vdia_52P"],
+                   E_Div_Vdia_52P,
+                   {{"time_dimension", "t"},
+                    {"units", "W / m^3"},
+                    {"conversion", Pnorm * Omega_ci},
+                    {"standard_name", "energy source"},
+                    {"long_name", species_name + " diamagnetic advection of 5/2 P"},
+                    {"species", species_name},
+                    {"source", "diamagnetic_drift"}});
   }
 }

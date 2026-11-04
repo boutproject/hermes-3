@@ -13,6 +13,7 @@
 #include <bout/options.hxx>
 #include <bout/vector2d.hxx>
 
+#include <map>
 #include <string>
 
 BOUT_ENUM_CLASS(DiamagneticForm, gradient, divergence);
@@ -21,6 +22,9 @@ BOUT_ENUM_CLASS(DiamagneticBoundary, open, closed, closed_average);
 /// Calculate diamagnetic flows
 struct DiamagneticDrift : public NamedComponent<DiamagneticDrift> {
   DiamagneticDrift(std::string name, Options& options, [[maybe_unused]] Solver* solver);
+
+  /// Save the energy channel for each species when diagnose is on
+  void outputVars(Options& state) override;
 
   static constexpr auto type = "diamagnetic_drift";
 
@@ -53,6 +57,10 @@ private:
   DiamagneticForm form;                ///< Form of the diamagnetic sink
   DiamagneticBoundary radial_boundary; ///< Treatment of radial boundary faces
   bool average_core_active;            ///< Average on this processor's core boundary?
+
+  bool diagnose; ///< Output additional diagnostics?
+  /// Diamagnetic advection of energy for each species, positive is a source
+  std::map<std::string, Field3D> all_E_Div_Vdia_52P;
 
   /// For every species, if it has:
   ///  - temperature

@@ -7,6 +7,7 @@
 #include <bout/coordinates.hxx>
 #include <bout/deriv_store.hxx>
 #include <bout/field.hxx>
+#include <bout/field_factory.hxx> // For generating functions
 #include <bout/field3d.hxx>
 #include <bout/globals.hxx>
 #include <bout/mesh.hxx>
@@ -1162,6 +1163,149 @@ TEST_F(UnsupportedDiamagneticDriftTest, GradientRejectsUnsupportedParallelTransf
       const std::string message = error.what();
       EXPECT_NE(message.find("gradient form is not supported"), std::string::npos);
       EXPECT_NE(message.find("field-aligned coordinates"), std::string::npos);
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Energy-channel diagnostic (diagnose = true): EX_Div_Vdia_52P must equal the
+// change this component makes to energy_source, for every form and radial
+// boundary (incl. closed_average, so the channel is taken after the core
+// averaging), and switching diagnose on must not change any source.
+
+namespace {
+Options channelOptions(bool diagnose, const std::string& form,
+                       const std::string& boundary) {
+  Options options;
+  options["units"]["Tesla"] = 1.0;
+  options["units"]["meters"] = 1.0;
+  options["diamagnetic_drift"]["diagnose"] = diagnose;
+  options["diamagnetic_drift"]["form"] = form;
+  options["diamagnetic_drift"]["radial_boundary"] = boundary;
+  return options;
+}
+
+// curvature that varies in every direction, so both forms are non zero
+void setChannelCurvature() {
+  mesh->getCoordinates()->setBxy(1.0);
+  static_cast<FakeMesh*>(mesh)->setGridDataSource(
+      new FakeGridDataSource{{{"bxcvx", "0.1 + 0.05 * y"},
+                              {"bxcvy", "0.02 * x"},
+                              {"bxcvz", "0.3 + 0.1 * x * y"}}});
+}
+
+// h+ and e have pressure, h is neutral so gets skipped
+Options channelState() {
+  Options field_options;
+  auto make = [&](const std::string& expr) {
+    return FieldFactory::get()->create3D(expr, &field_options, mesh);
+  };
+  const std::vector<std::pair<std::string, BoutReal>> charges{
+      {"h+", 1.0}, {"e", -1.0}, {"h", 0.0}};
+  Options state;
+  for (const auto& [name, charge] : charges) {
+    auto& species = state["species"][name];
+    species["charge"] = charge;
+    species["temperature"] = make("2 + 0.3 * x * x + 0.1 * y + 0.05 * sin(z)");
+    species["density"] = make("1 + y * (x - 0.5) + 0.1 * cos(z)");
+    species["pressure"] = make("2 + y * x + 0.2 * cos(z)");
+    species["momentum"] = make("0.2 * y + 0.1 * sin(z)");
+  }
+  return state;
+}
+
+Options channelOutputs() {
+  return Options{{"Nnorm", 1.0}, {"Tnorm", 1.0}, {"Omega_ci", 1.0}};
+}
+
+const std::vector<std::string> channel_forms{"divergence", "gradient"};
+const std::vector<std::string> channel_boundaries{"open", "closed", "closed_average"};
+} // namespace
+
+TEST_F(RadialDiamagneticDriftTest, ChannelIsEnergySource) {
+  for (const auto& form : channel_forms) {
+    for (const auto& boundary : channel_boundaries) {
+      setChannelCurvature();
+      Options options = channelOptions(true, form, boundary);
+      DiamagneticDrift component("diamagnetic_drift", options, nullptr);
+      component.declareAllSpecies({"e", "h+", "h"});
+      Options state = channelState();
+      component.transform(state);
+      Options outputs = channelOutputs();
+      component.outputVars(outputs);
+
+      EXPECT_FALSE(outputs.isSet("Eh_Div_Vdia_52P")) << form << " " << boundary;
+      for (const std::string name : {"h+", "e"}) {
+        const std::string ch = "E" + name + "_Div_Vdia_52P";
+        ASSERT_TRUE(outputs.isSet(ch)) << ch << " " << form << " " << boundary;
+        const Field3D E = get<Field3D>(outputs[ch]);
+        EXPECT_GT(max(abs(E), false, "RGN_NOBNDRY"), 0.0) << ch << " " << form;
+        EXPECT_EQ(name, outputs[ch].attributes["species"].as<std::string>());
+        // energy_source wasn't set before, so all of it came from here
+        EXPECT_TRUE(IsFieldEqual(E, get<Field3D>(state["species"][name]["energy_source"]),
+                                 "RGN_NOBNDRY", 0.0))
+            << ch << " " << form << " " << boundary;
+      }
+    }
+  }
+}
+
+TEST_F(RadialDiamagneticDriftTest, ChannelIgnoresEarlierEnergySource) {
+  setChannelCurvature();
+  Options options = channelOptions(true, "divergence", "closed_average");
+  DiamagneticDrift component("diamagnetic_drift", options, nullptr);
+  component.declareAllSpecies({"e", "h+", "h"});
+
+  Options state = channelState();
+  component.transform(state);
+  Options outputs = channelOutputs();
+  component.outputVars(outputs);
+  const Field3D expected = copy(get<Field3D>(outputs["Eh+_Div_Vdia_52P"]));
+
+  // something already in energy_source changes the total but not the channel
+  Options state_preset = channelState();
+  state_preset["species"]["h+"]["energy_source"] = Field3D(1.0);
+  component.transform(state_preset);
+  Options outputs_preset = channelOutputs();
+  component.outputVars(outputs_preset);
+  const Field3D E = get<Field3D>(outputs_preset["Eh+_Div_Vdia_52P"]);
+  EXPECT_TRUE(IsFieldEqual(E, expected, "RGN_NOBNDRY", 0.0));
+  const Field3D change =
+      get<Field3D>(state_preset["species"]["h+"]["energy_source"]) - 1.0;
+  EXPECT_TRUE(IsFieldEqual(change, E, "RGN_NOBNDRY"));
+}
+
+TEST_F(RadialDiamagneticDriftTest, DiagnoseDoesNotChangeState) {
+  for (const auto& form : channel_forms) {
+    for (const auto& boundary : channel_boundaries) {
+      setChannelCurvature();
+      Options options_off = channelOptions(false, form, boundary);
+      DiamagneticDrift component_off("diamagnetic_drift", options_off, nullptr);
+      component_off.declareAllSpecies({"e", "h+", "h"});
+      setChannelCurvature();
+      Options options_on = channelOptions(true, form, boundary);
+      DiamagneticDrift component_on("diamagnetic_drift", options_on, nullptr);
+      component_on.declareAllSpecies({"e", "h+", "h"});
+
+      Options state_off = channelState();
+      Options state_on = channelState();
+      component_off.transform(state_off);
+      component_on.transform(state_on);
+
+      Options outputs_off = channelOutputs();
+      component_off.outputVars(outputs_off);
+      EXPECT_FALSE(outputs_off.isSet("Eh+_Div_Vdia_52P"));
+      EXPECT_FALSE(outputs_off.isSet("Ee_Div_Vdia_52P"));
+
+      for (const std::string name : {"h+", "e"}) {
+        for (const std::string var :
+             {"density_source", "energy_source", "momentum_source"}) {
+          const Field3D on = get<Field3D>(state_on["species"][name][var]);
+          const Field3D off = get<Field3D>(state_off["species"][name][var]);
+          EXPECT_TRUE(IsFieldEqual(on, off, "RGN_NOBNDRY", 0.0))
+              << name << " " << var << " " << form << " " << boundary;
+        }
+      }
     }
   }
 }
