@@ -40,6 +40,10 @@ private:
 
   bool anomalous_sheath_flux; ///< Allow anomalous diffusion into sheath?
 
+  // energy channels, only filled when diagnose is on
+  Field3D E_anomalous_D;   ///< energy carried by particle diffusion (3/2 T D)
+  Field3D E_anomalous_chi; ///< thermal diffusion (chi N grad T)
+
   std::shared_ptr<FCI::dagp_fv> dagp_op; ///< Perp. diffusion operator for Fci
 
   /// Inputs

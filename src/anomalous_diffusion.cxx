@@ -2,6 +2,7 @@
 
 #include "../include/div_ops.hxx"
 
+#include <bout/constants.hxx>
 #include <bout/fv_ops.hxx>
 #include <bout/mesh.hxx>
 #include <bout/options.hxx>
@@ -165,13 +166,17 @@ void AnomalousDiffusion::transform_impl(GuardedOptions& state) {
     add(species["momentum_flow_xlow"], flow_xlow);
     add(species["momentum_flow_ylow"], flow_ylow);
 
+    Field3D energy_D;
     if (N.isFci()) {
-      add(species["energy_source"],
-          (*dagp_op)((3. / 2) * T * anomalous_D, N, flow_xlow, flow_ylow, false));
+      energy_D = (*dagp_op)((3. / 2) * T * anomalous_D, N, flow_xlow, flow_ylow, false);
     } else {
-      add(species["energy_source"],
-          Div_a_Grad_perp_upwind_flows((3. / 2) * T2D * anomalous_D, N2D, flow_xlow,
-                                       flow_ylow));
+      energy_D = Div_a_Grad_perp_upwind_flows((3. / 2) * T2D * anomalous_D, N2D,
+                                              flow_xlow, flow_ylow);
+    }
+    add(species["energy_source"], energy_D);
+    if (diagnose) {
+      // a copy, since energy_source can share this data and get added to in place
+      E_anomalous_D = copy(energy_D);
     }
     add(species["energy_flow_xlow"], flow_xlow);
     add(species["energy_flow_ylow"], flow_ylow);
@@ -179,12 +184,16 @@ void AnomalousDiffusion::transform_impl(GuardedOptions& state) {
 
   if (include_chi) {
     // Gradients in temperature that drive energy flows
+    Field3D energy_chi;
     if (N.isFci()) {
-      add(species["energy_source"],
-          (*dagp_op)(anomalous_chi * N, T, flow_xlow, flow_ylow, false));
+      energy_chi = (*dagp_op)(anomalous_chi * N, T, flow_xlow, flow_ylow, false);
     } else {
-      add(species["energy_source"],
-          Div_a_Grad_perp_upwind_flows(anomalous_chi * N2D, T2D, flow_xlow, flow_ylow));
+      energy_chi =
+          Div_a_Grad_perp_upwind_flows(anomalous_chi * N2D, T2D, flow_xlow, flow_ylow);
+    }
+    add(species["energy_source"], energy_chi);
+    if (diagnose) {
+      E_anomalous_chi = copy(energy_chi); // copy for the same reason as above
     }
     add(species["energy_flow_xlow"], flow_xlow);
     add(species["energy_flow_ylow"], flow_ylow);
@@ -239,5 +248,33 @@ void AnomalousDiffusion::outputVars(Options& state) {
                     {"standard_name", "anomalous momentum diffusion"},
                     {"long_name", std::string("Anomalous momentum diffusion of ") + name},
                     {"source", "anomalous_diffusion"}});
+
+    const auto Nnorm = get<BoutReal>(state["Nnorm"]);
+    const auto Tnorm = get<BoutReal>(state["Tnorm"]);
+    const BoutReal Pnorm = SI::qe * Tnorm * Nnorm; // Pressure normalisation
+
+    // only when the term is on, otherwise nothing went into energy_source
+    if (include_D) {
+      set_with_attrs(state["E" + name + "_anomalous_D"], E_anomalous_D,
+                     {{"time_dimension", "t"},
+                      {"units", "W / m^3"},
+                      {"conversion", Pnorm * Omega_ci},
+                      {"standard_name", "energy source"},
+                      {"long_name",
+                       name + " energy source from anomalous particle diffusion"},
+                      {"species", name},
+                      {"source", "anomalous_diffusion"}});
+    }
+    if (include_chi) {
+      set_with_attrs(state["E" + name + "_anomalous_chi"], E_anomalous_chi,
+                     {{"time_dimension", "t"},
+                      {"units", "W / m^3"},
+                      {"conversion", Pnorm * Omega_ci},
+                      {"standard_name", "energy source"},
+                      {"long_name",
+                       name + " energy source from anomalous thermal diffusion"},
+                      {"species", name},
+                      {"source", "anomalous_diffusion"}});
+    }
   }
 }
