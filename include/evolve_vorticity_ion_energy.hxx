@@ -13,6 +13,7 @@
 
 #include <memory>
 #include <string>
+#include <vector>
 
 namespace bout::ion_energy {
 struct PerpendicularFaceFluxes {
@@ -25,11 +26,60 @@ PerpendicularFaceFluxes perpendicularFaceFluxes(const Field3D& a, const Field3D&
 Field3D Div_a_Grad_perp_XZ(const Field3D& a, const Field3D& f, bool bndry_flux = true);
 /// Face-based energy density consistent with Div_a_Grad_perp_XZ.
 Field3D kineticEnergyPerp(const Field3D& a, const Field3D& f);
-/// Homogeneous midpoint Dirichlet DC and radial Neumann AC at physical X faces.
-void applyPolarisationBoundary(Field3D& chi);
-/// Deterministic auxiliary inverse: one spectral solve and N FV corrections.
+/// Estimate the inward wall derivative from an encoded arithmetic midpoint.
+///
+/// Reflection sets phi_guard = 2 * phi_midpoint - phi0, so this is the centred
+/// face derivative (phi0 - phi_guard) / dx0. With the guard centre mirrored
+/// across the face, it is second order and exact for quadratic profiles.
+///
+/// @param phi_midpoint Arithmetic mean of guard and interior potential, normally
+///                     averaged over Z; this is the value stored in Vort guards.
+/// @param phi0 Potential in the first interior cell, normally averaged over Z.
+/// @param dx0 Positive x-coordinate spacing of the first interior cell.
+/// @returns Potential derivative per unit x-coordinate distance, directed into
+///          the domain at either wall. The physical normal metric is not applied.
+BoutReal wallInwardDerivative(BoutReal phi_midpoint, BoutReal phi0, BoutReal dx0);
+
+/// Impose DC midpoint Dirichlet and AC radial Neumann conditions on chi.
+///
+/// Each radial guard layer reflects the corresponding interior layer's Z mean
+/// about the supplied DC value, while retaining its Z-dependent fluctuations.
+/// Interior cells are preserved. All local Y rows are processed at physical X
+/// boundaries; periodic X leaves the field unchanged.
+///
+/// @param[in,out] chi Auxiliary potential whose radial guard cells are updated.
+/// @param dc_inner Inner wall DC values in chi's units, indexed by local Y.
+///                 If supplied, the array must contain LocalNy entries;
+///                 nullptr specifies a zero DC midpoint.
+/// @param dc_outer Outer wall DC values, with the same convention as dc_inner.
+/// @throws BoutException If a nonperiodic X mesh lacks complete periodic Z lines.
+void applyPolarisationBoundary(Field3D& chi,
+                               const std::vector<BoutReal>* dc_inner = nullptr,
+                               const std::vector<BoutReal>* dc_outer = nullptr);
+
+/// Approximate the auxiliary potential with a fixed sequence of spectral solves.
+///
+/// Starting from zero, perform one initial solve plus the requested number of
+/// finite-volume defect corrections. DC wall values enter through the FV residual;
+/// spectral corrections use homogeneous boundaries. The result depends on these inputs
+/// and the mesh, with no initial guess retained from earlier RHS evaluations.
+///
+/// @param coefficient Boussinesq coefficient c in L(chi) = div(c grad_perp chi).
+/// @param rhs Physical vorticity rate to reproduce with L(chi), excluding encoded
+///            wall-state rates. Only physical interior cells supply the residual.
+/// @param[in,out] inverse Spectral approximate inverse configured for coefficient
+///                       and the appropriate homogeneous correction boundaries.
+/// @param corrections Nonnegative number of FV corrections after the first solve.
+/// @param dc_inner Optional inner wall DC values, as in applyPolarisationBoundary.
+/// @param dc_outer Optional outer wall DC values, as in applyPolarisationBoundary.
+/// @returns A new chi field with the requested radial guards imposed. A finite
+///          correction count can leave a nonzero FV residual; coefficient and rhs
+///          fields are preserved.
+/// @throws BoutException If corrections is negative or the boundary mesh is invalid.
 Field3D fixedPolarisationPotential(const Field3D& coefficient, const Field3D& rhs,
-                                   Laplacian& inverse, int corrections);
+                                   Laplacian& inverse, int corrections,
+                                   const std::vector<BoutReal>* dc_inner = nullptr,
+                                   const std::vector<BoutReal>* dc_outer = nullptr);
 } // namespace bout::ion_energy
 
 /// Evolves vorticity and ion total energy
@@ -58,6 +108,9 @@ struct EvolveVorticityIonEnergy : public NamedComponent<EvolveVorticityIonEnergy
   ///   - evolve_log           Evolve logarithm of pressure? Default is false
   ///   - hyper_z              Hyper-diffusion in Z
   ///   - poloidal_flows       Include poloidal ExB flows? Default is true
+  ///   - phi_boundary_relax   Evolve radial phi midpoints? Default is false
+  ///   - phi_boundary_velocity  Required relaxation velocity [m/s] when enabled
+  ///   - phi_core_averagey    Use J dy-weighted core wall averages? Default is false
   ///   - viscosity            Kinematic viscosity [m^2/s], default 0.0
   ///   - precon               Enable preconditioner? Note: solver may not use it even if
   ///   enabled.
@@ -127,9 +180,11 @@ private:
   BoutReal chi_residual{0.0};      ///< Max FV residual of the last chi calculation
   int polarisation_corrections{2}; ///< FV defect corrections after the spectral solve
 
-  bool phi_boundary_relax;         ///< Relax boundary to zero-gradient
-  BoutReal phi_boundary_timescale; ///< Relaxation timescale [normalised]
-  bool phi_core_averagey;          ///< Average phi core boundary in Y?
+  bool phi_boundary_relax;               ///< Relax mean wall-normal E-field
+  BoutReal phi_boundary_velocity{0.0};   ///< Relaxation velocity [normalised]
+  bool phi_core_averagey{false};         ///< Flux-surface-average core wall state?
+  std::vector<BoutReal> wall_rate_inner; ///< Current inner wall dphi/dt, by local y
+  std::vector<BoutReal> wall_rate_outer; ///< Current outer wall dphi/dt, by local y
 
   int phi_max_iterations; ///< Maximum number of Vort,E -> phi, Pi iterations
   BoutReal phi_atol;      ///< Absolute tolerance on phi
@@ -178,12 +233,48 @@ private:
   ///
   void transform_impl(GuardedOptions& state) override;
 
-  /// Initialise encoded boundary midpoints from phi, including old restarts.
+  /// Encode the initial or legacy-restart phi wall values in the solver state.
+  ///
+  /// Reads phi's interior and adjacent radial guard values and averages their
+  /// midpoints over Z. With phi_core_averagey, the inner core midpoint is also
+  /// averaged over the connected Y surface using wall-face J dy weights.
+  /// Writes that midpoint to every radial Vort guard column and Z cell at each
+  /// physical Y row, after zeroing all Vort boundary cells. Interior Vort is
+  /// preserved; Y boundary storage remains zero. Called only in relaxing mode.
   void initialiseBoundaryState();
-  /// Reimpose phi midpoints from the solver's boundary state during recovery.
+
+  /// Restore phi's radial midpoint conditions during potential recovery.
+  ///
+  /// Reads the Z mean of Vort's first radial guard column as the stored wall
+  /// value, using its J dy-weighted surface average at an averaged core wall.
+  /// Writes phi_guard = 2 * midpoint - phi_interior and copies that value into
+  /// the remaining radial guards at physical Y rows. Neither interior phi nor
+  /// solver Vort is modified. Does nothing for fixed boundaries or periodic X.
   void applyPotentialBoundary();
-  /// Relax encoded midpoints towards averages of the current recovered phi.
-  void boundaryRHS();
+
+  /// Compute the current relaxation rates before the auxiliary chi solve.
+  ///
+  /// Reads the encoded Vort midpoints, the converged phi in the first interior
+  /// cell, the normalised phi_boundary_velocity, and mesh dx/g11. Uses Z means
+  /// and the centred inward face derivative to compute kappa * grad_n(phi).
+  /// At an averaged core wall, both the midpoint and physical derivative use
+  /// wall-face J dy-weighted Y averages over the connected surface.
+  ///
+  /// Overwrites wall_rate_inner and wall_rate_outer, indexed by local Y, in
+  /// normalised potential/time units. Unused walls and Y guard entries are zero.
+  /// These rates supply chi's DC wall values and finally()'s boundary RHS.
+  /// Called in relaxing mode after applyPotentialBoundary(); preserves phi/Vort
+  /// and recomputes every rate without retaining earlier RHS results.
+  void computeWallRates();
+
+  /// Write the precomputed midpoint rates into the time solver's boundary RHS.
+  ///
+  /// Reads wall_rate_inner and wall_rate_outer from the current transform_impl()
+  /// evaluation. Writes each rate into every physical radial ddt(Vort) guard
+  /// column and Z cell at its local physical Y row. Preserves interior and Y
+  /// boundary derivatives, which finally() must initialise separately. No wall
+  /// physics or MPI reduction is performed here; periodic X leaves the RHS alone.
+  void writeWallRates();
 
   /// Shared viscous current, energy flux and heating, using physical vorticity guards.
   void calculateViscosity();
@@ -199,9 +290,17 @@ private:
   Field3D correctPotential(const Field3D& rhs, const Field3D& potential,
                            Laplacian& approximate_inverse) const;
 
-  /// Solve for the auxiliary potential chi with its mixed boundary conditions.
-  /// One spectral solve from zero followed by a fixed number of finite-volume
-  /// defect corrections: the result depends only on rhs, not on earlier calls.
+  /// Recover the auxiliary current potential and update its solver diagnostics.
+  ///
+  /// @param rhs Physical interior vorticity rate in normalised units, excluding
+  ///            the encoded radial wall-state rates.
+  ///
+  /// Reads boussinesq_coeff, polarisation_corrections and the configured inverse.
+  /// In relaxing mode it also reads the current wall_rate_inner/outer as chi's
+  /// DC midpoint values, approximating d(Phi)/dt by d(phi_b)/dt at the wall and
+  /// neglecting d(psi_bar_b)/dt. Fixed boundaries use zero DC values.
+  /// Overwrites chi, chi_iterations and chi_residual using a fixed solve sequence
+  /// from zero, so the result depends on current inputs rather than RHS history.
   void solvePolarisationPotential(const Field3D& rhs);
 
   /// Calculate ion perpendicular kinetic energy, K⊥ = 1/2 c |∇⊥Φ|^2

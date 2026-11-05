@@ -152,6 +152,20 @@ def test_resolutions_guards_and_cadence(runner):
     assert runner.configuration(args)["outputs"] == 20
 
 
+def test_relaxing_input_uses_formulation_boundary_parameter(runner):
+    config = runner.configuration(runner.parser().parse_args([]))
+    for formulation, expected, unused in (
+        ("total_energy", "phi_boundary_velocity", "phi_boundary_timescale"),
+        ("pressure", "phi_boundary_timescale", "phi_boundary_velocity"),
+    ):
+        text = runner.input_text(
+            config,
+            {"nx": 16, "nz": 16, "formulation": formulation, "boundary": "relax"},
+        )
+        assert expected + " = " in text
+        assert unused + " = " not in text
+
+
 def test_saved_time_lookup_rejects_nearest_output(runner):
     with pytest.raises(AuditError):
         runner.exact_index(np.arange(5), 2.2)

@@ -75,6 +75,37 @@ Editing documentation is much easier if you can compile it locally using the fol
    //marketplace.visualstudio.com/items?itemName=ms-vscode.live-server>`__ which
    can stream it to your browser.
 
+Ion-energy potential boundary state
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+When ``evolve_vorticity_ion_energy:phi_boundary_relax = true``, the solver
+field ``Vort`` stores physical vorticity in the interior and Z-uniform
+potential midpoints in its physical radial guards. The first guard column
+supplies the midpoint; initialisation duplicates it across radial guard
+columns, and the RHS writes the same rate to each. Ordinary vorticity
+boundary operators belong to the separate physical ``vorticity`` field
+and must not be applied to solver ``Vort``. Physical Y boundary derivatives
+remain zero.
+
+``applyPotentialBoundary()`` reflects the first potential guard about the
+stored midpoint. After the final pressure/potential recovery and boundary
+application, ``computeWallRates()`` computes the centred inward derivative
+and scales it by the normal metric and normalised relaxation velocity.
+The same rates supply the auxiliary chi DC midpoint conditions and are
+copied into ``ddt(Vort)`` by ``writeWallRates()`` during ``finally()``.
+Recomputing them during finalisation would make the two boundary conditions
+inconsistent. On a closed core surface, ``phi_core_averagey`` averages
+both the stored midpoint and the physical inward derivative with face
+``J dy`` weights over ``mesh->getYcomm(xstart)``, excluding Y guards.
+
+Version-1 restarts preserve the packed solver boundary state. Restarts
+without ``ion_energy_boundary_state_version`` initialise it once from
+the saved potential midpoints. Normal ``Vort`` output contains physical
+vorticity. Recovery guesses are promoted only by ``outputVars()`` and
+remain fixed between outputs, while chi starts with a zero interior on
+every RHS evaluation. See :ref:`sec-evolve_vorticity_ion_energy` for the
+wall law and auxiliary boundary conditions.
+
 Debugging: running for one iteration
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -1055,7 +1086,7 @@ the stoichiometry matrix would be:
 
 .. _fig-stoichiometry_matrix_eg:
 .. figure:: figs/stoichiometry_matrix_eg.*
-   :alt: Example of a stoichiometry matrix for the reactions configured in :numref:code-reactions_config_eg
+   :alt: Example stoichiometry matrix for the four configured reactions.
 
 In the `Reaction` base class, the constructor instantiates a `ReactionParser`, which assembles one
 column of this matrix from the reaction string.
@@ -1421,9 +1452,10 @@ observed convergence orders.
 This orthogonal curvature slab isolates the radial polarisation transport
 boundary. A pressure perturbation independent of X produces a pure AC
 current drive. The auxiliary potential uses midpoint Dirichlet conditions
-for its DC mode and radial Neumann conditions for AC modes. Its initial
-finite-correction response is known analytically: the unmasked AC normal current
-must vanish, including at the first and last physical cells.
+for its DC mode and radial Neumann conditions for AC modes. The DC midpoint
+is zero for fixed phi and equals the potential wall rate for relaxing phi.
+Its initial finite-correction response is known analytically: the unmasked
+AC normal current must vanish, including at the first and last physical cells.
 
 The test refines X at fixed Z, then both dimensions, with fixed and relaxing
 phi boundaries, diagnostics on/off, time-tolerance and correction-count pilots and two MPI
@@ -1437,6 +1469,41 @@ auxiliary inverse is checked against analytic DC/AC responses, including
 Nyquist and singleton Z. Separate higher-correction tests check small FV
 residuals on nonuniform meshes with ``g13``. Output-only warm starts are
 checked for bitwise repeatability between outputs and reuse at the output state.
+
+.. _subsec-2d-ion-energy-quadratic-wall-relaxation:
+
+2D-ion-energy-quadratic-wall-relaxation
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+This regression checks the centred wall derivative described in
+:ref:`sec-evolve_vorticity_ion_energy`. It reuses the orthogonal slab input
+from ``2D-ion-energy-polarisation-boundary``, disables curvature and starts
+uniform positive or negative vorticity with zero potential wall midpoints.
+It evolves four output intervals at 16, 32 and 64 interior X cells over
+the same physical width. Both walls have the analytic normalised rate
+
+.. math::
+
+   \frac{d\phi_b}{dt}
+      = -\widehat{\kappa}\sqrt{g^{11}}
+          \frac{\Omega L_x}{2c g^{11}},
+
+where :math:`\widehat{\kappa}` is the normalised relaxation velocity,
+:math:`L_x` is the normalised coordinate width and :math:`c` is the
+Boussinesq coefficient. The test compares the saved wall RHS, the change
+in reflected potential midpoints between outputs and the interior chi
+against this rate to relative tolerance :math:`10^{-6}`. Physical
+vorticity must remain constant to the same tolerance. The small vorticity
+amplitude limits pressure-potential feedback within this error budget.
+The former one-sided midpoint stencil fails with relative rate errors of
+4.17%, 2.08% and 1.04% at these resolutions.
+
+From the repository root, run:
+
+.. code-block:: bash
+
+   .venv/bin/python tests/integrated/2D-ion-energy-quadratic-wall-relaxation/runtest \
+     --exe build/hermes-3
 
 .. _subsec-2d-energy-comparison:
 
@@ -1474,9 +1541,15 @@ duration is 20000 normalised time units and the viscosity is 1 m\ :sup:`2`/s.
 ``--levels``, ``--base-nx``, ``--base-nz`` and ``--refinement`` change the grid
 sequence; ``--end-time`` and ``--outputs`` change the duration and cadence.
 ``--phi-boundary fixed`` or ``relax`` selects a single boundary policy.
-The relaxing boundary timescale, set by ``--phi-boundary-timescale``, is in
-seconds and does not change with resolution. All runs must share the same
-regular saved times, including zero and the final time.
+``--phi-boundary-timescale`` sets the legacy pressure formulation's
+relaxation timescale in seconds (default :math:`10^{-4}` s).
+``--phi-boundary-velocity`` sets the total-energy formulation's relaxation
+velocity in m/s (default 1000 m/s). Each parameter stays fixed across
+resolutions. The velocity gives a resolution-independent rigid-rotation
+relaxation law, whereas the legacy law's effective damping depends on
+boundary-cell width. These defaults do not imply equal relaxation strength
+between formulations. All runs must share the same regular saved times,
+including zero and the final time.
 
 The analysis reconstructs ion and electron thermal energies and perpendicular
 kinetic energy from ordinary state outputs, including when ``diagnose=false``.
@@ -1594,6 +1667,11 @@ The ``VorticityBoundaryTest`` unit tests check packing/unpacking the relaxing
 potential boundary state, repeated and earlier RHS evaluations, physical
 vorticity guards, the normalised boundary relaxation law, and migration of
 legacy restart files independently for each component instance.
+The ``EvolveVorticityIonEnergyTest`` and ``IonEnergyWallDerivative`` tests
+also check the centred midpoint derivative, velocity normalisation,
+weighted core midpoint and rate, relaxing chi DC boundary conditions,
+solver-state storage and restart migration, and repeatability under
+reordered RHS evaluations.
 
 2D-recycling
 ~~~~~~~~~~~~~~

@@ -1797,40 +1797,94 @@ and adjacent guard cell :math:`g`,
 This gives a Neumann condition for the DC pressure and a zero midpoint
 Dirichlet condition for its AC modes.
 
-Setting ``phi_boundary_relax = true`` (default ``false``) relaxes the radial
-boundary midpoint potential :math:`\phi_b` towards the Z average of the adjacent
-interior potential:
+Setting ``phi_boundary_relax = true`` (default ``false``) evolves the radial
+midpoint potential :math:`\phi_b` to relax the mean wall-normal electric field:
 
 .. math::
 
-   \frac{d\phi_b}{dt}
-      = \frac{\langle\phi_{\mathrm{interior}}\rangle_Z-\phi_b}{\tau}.
+   \frac{d\phi_b}{dt}=\kappa\,\partial_n\langle\phi\rangle_Z,
 
-The positive, finite timescale :math:`\tau` is set by
-``phi_boundary_timescale`` in seconds (default ``1e-4``). The boundary
-state is integrated by the time solver and saved in restarts. This mode
-requires two radial guard cells and automatically enables
-``Vort:evolve_bndry``; explicitly disabling it is an error.
-The stored midpoint potential is uniform in Z and may vary in Y.
-``phi_core_averagey = true`` (default ``false``) additionally averages the
-inner boundary target over physical Y cells on closed core field lines.
+where :math:`n` is the physical inward normal at each wall. The required option
+``phi_boundary_velocity`` specifies a finite positive :math:`\kappa` in m/s
+and has no default. Its normalised value is
+:math:`\widehat{\kappa}=\kappa/(L_{\mathrm{norm}}\Omega_{ci})`, where
+:math:`L_{\mathrm{norm}}\Omega_{ci}` is
+``units:meters / units:seconds``. This component does not read
+``phi_boundary_timescale``; that option still applies to the legacy
+``vorticity`` and ``relax_potential`` components. For a boundary cell of
+physical width :math:`h_b`, :math:`\kappa=h_b/(2\tau)` matches the local
+strength of the previous timescale law at that resolution. With a fixed
+velocity, the rigid-rotation relaxation time in a slab of physical width
+:math:`L` is :math:`L/(2\kappa)`.
+
+The wall state is the arithmetic midpoint of the reflected guard/interior pair,
+:math:`\phi_b=(\overline{\phi}_g+\overline{\phi}_0)/2`, rather than the exact
+face value of a curved profile. Here an overbar denotes the Z average,
+:math:`g` is the first radial guard and :math:`0` is the adjacent interior
+cell. In normalised coordinates, use the corresponding centred inward
+derivative at either wall:
+
+.. math::
+
+   D_n=\frac{\overline{\phi}_0-\overline{\phi}_g}{\overline{\Delta x}_0}
+      =\frac{2(\overline{\phi}_0-\phi_b)}{\overline{\Delta x}_0},
+   \qquad
+   M_b=\sqrt{\frac{\overline{g^{11}}_g+\overline{g^{11}}_0}{2}},
+   \qquad
+   \frac{d\phi_b}{dt}=\widehat{\kappa}M_b D_n.
+
+With the guard centre mirrored across the wall, this is second order and exact
+for quadratics. It uses the first interior cell spacing even on a nonuniform
+mesh. Treating the stored midpoint as a true face value in a one-sided stencil
+would introduce a first-order wall-rate error. Multiplication by
+:math:`M_b` converts the coordinate derivative to a normal derivative.
+For 3D metrics, the geometry is averaged over Z before taking this square root.
+The :ref:`quadratic wall-relaxation regression
+<subsec-2d-ion-energy-quadratic-wall-relaxation>` checks both the instantaneous
+rate and the integrated midpoint drift at several radial resolutions.
+The boundary state is integrated by the time solver and saved in restarts.
+This mode requires two radial guard cells and automatically enables
+``Vort:evolve_bndry``; explicitly disabling it is an error. Stored midpoint
+potentials are uniform in Z and may vary in Y. With ``phi_core_averagey = true``
+(default ``false``), the inner wall on closed core field lines uses
+:math:`J\,dy`-weighted flux-surface averages. Define
+
+.. math::
+
+   w_y=\frac{\overline{J}_{g,y}+\overline{J}_{0,y}}{2}
+             \overline{\Delta y}_{0,y},
+   \qquad
+   \langle f\rangle_w=\frac{\sum_y w_y f_y}{\sum_y w_y}.
+
+The sum includes physical Y cells over the complete closed field line.
+Initialisation and boundary application use :math:`\langle\phi_b\rangle_w`.
+The rate is :math:`\widehat{\kappa}\langle M_b D_n\rangle_w`, with
+:math:`D_n` evaluated using that averaged midpoint. All Y positions on
+that surface therefore receive the same applied midpoint and rate.
+The solver stores these midpoints in the physical radial guards of ``Vort``;
+ordinary physical vorticity boundary conditions act on a separate field.
+Physical Y boundary derivatives are zero. Version-1 restarts preserve this
+storage; older restarts initialise it once from the saved phi midpoints.
 
 The full polarisation current is retained in the vorticity/current solve.
 Normal polarisation transport of particles, momentum, enthalpy, parallel
 kinetic energy and electrical work is closed at physical radial faces,
 including cross-metric fluxes. This lets imposed sources and sheath
 boundary conditions determine the corresponding boundary fluxes.
-At physical X boundaries, with either fixed or relaxing phi, :math:`\chi`
-has homogeneous midpoint Dirichlet conditions for its Z average (DC) and radial Neumann
-conditions for its nonzero Z Fourier modes (AC), at both X boundaries.
+At physical X boundaries, :math:`\chi` has midpoint Dirichlet conditions for
+its Z average (DC) and radial Neumann conditions for its nonzero Z Fourier
+modes (AC). With fixed phi the DC value is zero; with relaxation it is
+:math:`d\phi_b/dt`, computed from the recovered potential before the auxiliary
+solve. This approximates :math:`\partial_t\Phi` at the wall by neglecting
+:math:`\partial_t\overline{\psi}_b`, whose rate is only known during finalisation.
 Let :math:`\mathcal{P}` denote the approximate inverse supplied by the
 auxiliary Laplacian solver, including the Boussinesq coefficient and its
-homogeneous mixed boundary conditions. Starting from zero at every RHS
-evaluation, the component performs
+homogeneous mixed boundary conditions. Starting with zero interior chi at
+every RHS evaluation, the component performs
 
 .. math::
 
-   \chi^{(0)}=0, \qquad
+   \left.\chi^{(0)}\right|_{\mathrm{interior}}=0, \qquad
    \chi^{(j+1)}=\chi^{(j)}
       +\mathcal{P}\left(\frac{\partial\Omega}{\partial t}
                         -\mathcal{L}(\chi^{(j)})\right),
@@ -1839,9 +1893,11 @@ evaluation, the component performs
 where :math:`N` is ``polarisation_corrections``. There are :math:`N+1`
 solver calls: one initial solve and :math:`N` FV defect corrections. The
 residual uses the full FV operator, retaining its physical boundary currents;
-only transport fluxes are closed. The mixed guards are imposed before
-evaluating each residual and after the final correction. This gives a
-deterministic auxiliary solve with no tolerance-dependent stopping criterion.
+only transport fluxes are closed. The mixed guards, including any nonzero
+DC wall rate, are imposed before every residual, including the first, and
+after the final correction. Each spectral correction uses homogeneous
+boundary conditions. This gives a deterministic auxiliary solve with no
+tolerance-dependent stopping criterion.
 With the usual Fourier-in-Z inverse, finite corrections leave a FV/spectral
 discretisation error; this is reported by ``ion_chi_residual``.
 
@@ -1850,8 +1906,13 @@ or solution.
 For orthogonal metrics and coefficients independent of Z, the AC normal
 potential-flow current is already zero; DC current and cross-metric current
 can remain and are closed in transport.
-Normal output ``Vort`` remains physical vorticity; restart
-files also store the potential boundary state.
+With ``diagnose = true``, ``ion_chi`` and ``ddt(Phi)`` record the same
+auxiliary potential in V/s, with conversion factor
+:math:`T_{\mathrm{norm}}\Omega_{ci}`. When relaxation is also enabled,
+``phi_wall_rate`` records the midpoint rates in V/s in physical radial
+guard cells, with zero interior and Y boundary values. Normal output
+``Vort`` remains physical vorticity; restart files also store the
+potential boundary state.
 
 Other options in ``[evolve_vorticity_ion_energy]`` are:
 
@@ -1897,9 +1958,9 @@ With ``diagnose = true``, the component also saves ``ion_KE_parallel``,
 divergences ``DivEExB``, ``DivEReynolds``, ``DivEelectric``, ``DivEparallel``
 and ``DivEpol``, and the exchange/source terms ``phi_Div_Je``,
 ``electron_exb_work`` and ``Eion_src``. ``DivJpol`` is the divergence of
-the closed polarisation transport current. The diagnostic ``ddt(Phi)``
-contains the auxiliary :math:`\chi`, which approximates the polarisation
-current rather than the exact time derivative of :math:`\phi+\psi`.
+the closed polarisation transport current. The auxiliary :math:`\chi`
+approximates the polarisation current rather than the exact time derivative
+of :math:`\phi+\psi`.
 ``ion_phi_iterations`` reports the last pressure/potential recovery iteration
 count. ``ion_chi_iterations`` is the number of auxiliary solver calls,
 ``1 + polarisation_corrections``; ``ion_chi_residual`` is the maximum absolute

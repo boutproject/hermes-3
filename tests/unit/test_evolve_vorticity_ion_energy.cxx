@@ -9,11 +9,29 @@
 #include "../../include/evolve_pressure.hxx"
 #include "../../include/evolve_vorticity_ion_energy.hxx"
 
+#include <limits>
+
 #include <bout/constants.hxx>
 #include <bout/derivs.hxx>
 #include <bout/difops.hxx>
 
 using bout::globals::mesh;
+
+TEST(IonEnergyWallDerivative, QuadraticsAreExactWithMirroredGuardSpacing) {
+  for (BoutReal dx0 : {0.1, 0.7, 2.0}) {
+    for (BoutReal curvature : {-0.2, 0.0, 0.3}) {
+      for (BoutReal slope : {-0.4, 0.0, 0.7}) {
+        const auto phi = [&](BoutReal inward) {
+          return 0.3 + slope * inward + curvature * inward * inward;
+        };
+        const BoutReal phi0 = phi(dx0 / 2.0);
+        const BoutReal midpoint = 0.5 * (phi(-dx0 / 2.0) + phi0);
+        EXPECT_NEAR(bout::ion_energy::wallInwardDerivative(midpoint, phi0, dx0), slope,
+                    3e-14);
+      }
+    }
+  }
+}
 
 class EvolveVorticityIonEnergyTest : public FakeMeshFixture_tmpl<10, 5, 8, false, 2> {
 protected:
@@ -37,6 +55,7 @@ protected:
               {"meters", 1.0}}},
             {"test",
              {{"average_atomic_mass", 1.5},
+              {"phi_boundary_velocity", 0.4},
               {"diagnose", true},
               {"phi_rtol", 1e-10},
               {"phi_max_iterations", 100}}}};
@@ -139,10 +158,10 @@ TEST_F(EvolveVorticityIonEnergyTest,
   FakeSolver solver;
   auto options = makeOptions();
   options["test"]["phi_boundary_relax"] = true;
-  options["test"]["phi_boundary_timescale"] = 0.4;
+  options["test"]["phi_boundary_velocity"] = 0.4;
   options["test"]["viscosity"] = 0.3;
   options["test"]["polarisation_corrections"] = 6;
-  options["units"]["seconds"].force(0.2); // Normalised timescale is 2.
+  options["units"]["seconds"].force(0.2); // Normalised velocity is 0.08.
   EvolveVorticityIonEnergy component("test", options, &solver);
   declareSpecies(component);
   ASSERT_TRUE(solver.evolvesBoundary("Vort"));
@@ -176,19 +195,39 @@ TEST_F(EvolveVorticityIonEnergyTest,
     for (const auto side : {std::pair{mesh->xstart, mesh->xstart - 1},
                             std::pair{mesh->xend, mesh->xend + 1}}) {
       const auto [interior, guard] = side;
-      BoutReal target = 0.0;
+      BoutReal phi0 = 0.0;
       for (int z = 0; z < nz; ++z) {
-        target += phi(interior, y, z) / nz;
+        phi0 += phi(interior, y, z) / nz;
       }
+      const BoutReal rate =
+          0.08 * bout::ion_energy::wallInwardDerivative(encoded(guard, y, 0), phi0, 1.0);
       for (int z = 0; z < nz; ++z) {
         EXPECT_NEAR(0.5 * (phi(guard, y, z) + phi(interior, y, z)), encoded(guard, y, z),
                     1e-12);
-        EXPECT_NEAR(before(guard, y, z), (target - encoded(guard, y, z)) / 2, 1e-12);
+        EXPECT_NEAR(before(guard, y, z), rate, 1e-12);
+        EXPECT_EQ(output["phi_wall_rate"].as<Field3D>()(guard, y, z),
+                  before(guard, y, z));
         EXPECT_NEAR(physical(guard, y, z), physical(interior, y, z), 1e-12);
       }
     }
   }
-  const Field3D chi = output["ddt(Phi)"].as<Field3D>();
+  const Field3D chi = output["ion_chi"].as<Field3D>();
+  EXPECT_TRUE(IsFieldEqual(chi, output["ddt(Phi)"].as<Field3D>(), "RGN_ALL", 0.0));
+  for (int y = mesh->ystart; y <= mesh->yend; ++y) {
+    for (const auto [interior, guard] : {std::pair{mesh->xstart, mesh->xstart - 1},
+                                         std::pair{mesh->xend, mesh->xend + 1}}) {
+      BoutReal midpoint = 0.0;
+      for (int z = 0; z < nz; ++z) {
+        midpoint += 0.5 * (chi(interior, y, z) + chi(guard, y, z)) / nz;
+      }
+      EXPECT_NEAR(midpoint, before(guard, y, 0), 1e-12);
+    }
+  }
+  for (const auto& i : before.getRegion("RGN_BNDRY")) {
+    if (i.y() < mesh->ystart || i.y() > mesh->yend) {
+      EXPECT_EQ(before[i], 0.0);
+    }
+  }
   const Field3D residual =
       bout::ion_energy::Div_a_Grad_perp_XZ(Field3D{1.5}, chi) - before;
   EXPECT_LT(max(abs(residual), true), 1e-10);
@@ -224,7 +263,7 @@ TEST_F(EvolveVorticityIonEnergyTest, CoreRelaxationAverageCountsOnlyPhysicalSamp
   auto options = makeOptions();
   options["test"]["phi_boundary_relax"] = true;
   options["test"]["phi_core_averagey"] = true;
-  options["test"]["phi_boundary_timescale"] = 2.0;
+  options["test"]["phi_boundary_velocity"].force(2.0);
   EvolveVorticityIonEnergy component("test", options, &solver);
   declareSpecies(component);
   const BoutReal kx = PI / (mesh->xend - mesh->xstart + 1);
@@ -241,15 +280,17 @@ TEST_F(EvolveVorticityIonEnergyTest, CoreRelaxationAverageCountsOnlyPhysicalSamp
   const Field3D phi = diagnostics(component)["phi"].as<Field3D>();
   BoutReal target = 0.0;
   for (int y = mesh->ystart; y <= mesh->yend; ++y) {
+    BoutReal phi0 = 0.0;
     for (int z = 0; z < nz; ++z) {
-      target += phi(mesh->xstart, y, z);
+      phi0 += phi(mesh->xstart, y, z) / nz;
     }
+    target += bout::ion_energy::wallInwardDerivative(0.0, phi0, 1.0);
   }
-  target /= (mesh->yend - mesh->ystart + 1) * nz;
+  target *= 2.0 / (mesh->yend - mesh->ystart + 1);
   EXPECT_GT(abs(target), 1e-3);
   const Field3D derivative = solver.getTimeDerivs()["Vort"].as<Field3D>();
   for (int y = mesh->ystart; y <= mesh->yend; ++y) {
-    EXPECT_NEAR(derivative(mesh->xstart - 1, y, 0), target / 2, 1e-10);
+    EXPECT_NEAR(derivative(mesh->xstart - 1, y, 0), target, 1e-10);
   }
 }
 
@@ -272,6 +313,7 @@ TEST_F(IonEnergySingletonYTest, RelaxationRecoveryWorksWithoutYGuards) {
                     {"meters", 1.0}}},
                   {"test",
                    {{"phi_boundary_relax", true},
+                    {"phi_boundary_velocity", 0.4},
                     {"viscosity", 0.1},
                     {"diagnose", true},
                     {"phi_rtol", 1e-10},
@@ -323,15 +365,150 @@ TEST_F(EvolveVorticityIonEnergyTest,
 }
 
 TEST_F(EvolveVorticityIonEnergyTest,
-       RelaxingBoundaryRejectsInvalidTimescaleAndDisabledEvolution) {
+       RelaxingBoundaryRejectsInvalidVelocityAndDisabledEvolution) {
   FakeSolver solver;
   auto options = makeOptions();
   options["test"]["phi_boundary_relax"] = true;
   Options::root()["Vort"]["evolve_bndry"] = false;
   EXPECT_THROW(EvolveVorticityIonEnergy("test", options, &solver), BoutException);
   Options::root()["Vort"]["evolve_bndry"].force(true);
-  options["test"]["phi_boundary_timescale"] = 0.0;
-  EXPECT_THROW(EvolveVorticityIonEnergy("test", options, &solver), BoutException);
+  for (BoutReal velocity : {0.0, -0.1, std::numeric_limits<BoutReal>::infinity(),
+                            std::numeric_limits<BoutReal>::quiet_NaN()}) {
+    options["test"]["phi_boundary_velocity"].force(velocity);
+    EXPECT_THROW(EvolveVorticityIonEnergy("test", options, &solver), BoutException);
+  }
+}
+
+TEST_F(EvolveVorticityIonEnergyTest, BoundaryVelocityIsRequiredOnlyForRelaxation) {
+  FakeSolver solver;
+  auto options = makeOptions();
+  options["test"]["phi_boundary_velocity"].force(-1.0);
+  EXPECT_NO_THROW(EvolveVorticityIonEnergy("test", options, &solver));
+  EXPECT_FALSE(options["test"]["phi_boundary_velocity"].valueUsed());
+  Options missing;
+  missing["units"] = options["units"].copy();
+  missing["test"]["phi_boundary_relax"] = true;
+  EXPECT_THROW(EvolveVorticityIonEnergy("test", missing, &solver), BoutException);
+}
+
+TEST_F(EvolveVorticityIonEnergyTest, LinearPotentialHasOppositePhysicalWallRates) {
+  auto* coord = mesh->getCoordinates();
+  coord->setDx(0.7);
+  coord->setContravariantMetricTensor(
+      ContravariantMetricTensor{4.0, 1.0, 1.0, 0.0, 0.0, 0.0});
+  FakeSolver solver;
+  auto options = makeOptions();
+  options["test"]["phi_boundary_relax"] = true;
+  options["units"]["seconds"].force(0.2);
+  options["units"]["meters"].force(0.5);
+  EvolveVorticityIonEnergy component("test", options, &solver);
+  declareSpecies(component);
+  constexpr BoutReal slope = 0.003;
+  const Field3D potential = makeField<Field3D>(
+      [&](const Ind3D& i) { return 0.02 + slope * 0.7 * (i.x() - mesh->xstart + 0.5); });
+  const Field3D coefficient{1.5};
+  Field3D encoded = bout::ion_energy::Div_a_Grad_perp_XZ(coefficient, potential);
+  for (const auto [interior, guard] : {std::pair{mesh->xstart, mesh->xstart - 1},
+                                       std::pair{mesh->xend, mesh->xend + 1}}) {
+    const BoutReal midpoint =
+        0.5 * (potential(interior, mesh->ystart, 0) + potential(guard, mesh->ystart, 0));
+    for (int x = 0; x < nx; ++x) {
+      if ((guard < mesh->xstart && x < mesh->xstart)
+          || (guard > mesh->xend && x > mesh->xend)) {
+        for (int y = mesh->ystart; y <= mesh->yend; ++y) {
+          for (int z = 0; z < nz; ++z) {
+            encoded(x, y, z) = midpoint;
+          }
+        }
+      }
+    }
+  }
+  solver.setState(
+      {{"Vort", encoded},
+       {"Eion",
+        Field3D{4.0} + bout::ion_energy::kineticEnergyPerp(coefficient, potential)}});
+  auto state = makeState();
+  component.transform(state);
+  component.finally(state);
+  const auto output = diagnostics(component);
+  EXPECT_TRUE(IsFieldEqual(output["phi"].as<Field3D>(), potential, "RGN_NOBNDRY", 1e-10));
+  const Field3D rate = solver.getTimeDerivs()["Vort"].as<Field3D>();
+  // kappa_hat = 0.4 / (0.5 * 5) = 0.16, and sqrt(g11_wall) = 2.
+  for (int y = mesh->ystart; y <= mesh->yend; ++y) {
+    for (int z = 0; z < nz; ++z) {
+      EXPECT_NEAR(rate(mesh->xstart - 1, y, z), 0.16 * 2 * slope, 1e-11);
+      EXPECT_NEAR(rate(mesh->xend + 1, y, z), -0.16 * 2 * slope, 1e-11);
+    }
+  }
+}
+
+TEST_F(EvolveVorticityIonEnergyTest, CoreWallUsesWeightedStateAndRate) {
+  auto* coord = mesh->getCoordinates();
+  coord->setJ(makeField<Coordinates::FieldMetric>(
+      [](const auto& i) { return 1.0 + 0.1 * i.x() + 0.3 * i.y(); }));
+  coord->setDy(makeField<Coordinates::FieldMetric>(
+      [](const auto& i) { return 0.5 + 0.2 * i.y(); }));
+  coord->setContravariantMetricTensor(
+      ContravariantMetricTensor{makeField<Coordinates::FieldMetric>(
+                                    [](const auto& i) { return 1.0 + 0.2 * i.y(); }),
+                                1.0, 1.0, 0.0, 0.0, 0.0});
+  FakeSolver solver;
+  auto options = makeOptions();
+  options["test"]["phi_boundary_relax"] = true;
+  options["test"]["phi_core_averagey"] = true;
+  EvolveVorticityIonEnergy component("test", options, &solver);
+  declareSpecies(component);
+  const Field3D restart_phi = makeField<Field3D>([&](const Ind3D& i) {
+    return i.y() < mesh->ystart || i.y() > mesh->yend ? 999.0 : 0.01 * (1 + i.y());
+  });
+  Options restart{{"phi", restart_phi}};
+  component.restartVars(restart);
+  const int interior = mesh->xstart, guard = interior - 1;
+  BoutReal expected_midpoint = 0.0, weight_sum = 0.0;
+  for (int y = mesh->ystart; y <= mesh->yend; ++y) {
+    const BoutReal weight = 0.5 * (coord->J()(guard, y, 0) + coord->J()(interior, y, 0))
+                            * coord->dy()(interior, y, 0);
+    expected_midpoint += weight * restart_phi(interior, y, 0);
+    weight_sum += weight;
+  }
+  expected_midpoint /= weight_sum;
+  const Field3D initial = solver.getState()["Vort"].as<Field3D>();
+  for (int y = mesh->ystart; y <= mesh->yend; ++y) {
+    EXPECT_NEAR(initial(guard, y, 0), expected_midpoint, 1e-15);
+  }
+  // A version-1 restart may contain per-Y differences. Recovery must apply
+  // only their flux-surface average, without altering the solver state.
+  Field3D encoded{0.0};
+  for (int x = 0; x < mesh->xstart; ++x) {
+    for (int y = mesh->ystart; y <= mesh->yend; ++y) {
+      for (int z = 0; z < nz; ++z) {
+        encoded(x, y, z) = restart_phi(interior, y, 0);
+      }
+    }
+  }
+  solver.setState({{"Vort", encoded}, {"Eion", Field3D{4.0}}});
+  auto packed = solver.packState();
+  auto state = makeState();
+  component.transform(state);
+  component.finally(state);
+  EXPECT_EQ(packed, solver.packState());
+  const auto output = diagnostics(component);
+  const Field3D phi = output["phi"].as<Field3D>();
+  const Field3D rates = output["phi_wall_rate"].as<Field3D>();
+  BoutReal expected_rate = 0.0;
+  for (int y = mesh->ystart; y <= mesh->yend; ++y) {
+    const BoutReal midpoint = 0.5 * (phi(guard, y, 0) + phi(interior, y, 0));
+    EXPECT_NEAR(midpoint, expected_midpoint, 1e-12);
+    const BoutReal weight = 0.5 * (coord->J()(guard, y, 0) + coord->J()(interior, y, 0))
+                            * coord->dy()(interior, y, 0);
+    const BoutReal phi0 = phi(interior, y, 0);
+    expected_rate += weight * 0.4 * sqrt(coord->g11()(interior, y, 0)) * 2.0
+                     * (phi0 - expected_midpoint);
+  }
+  expected_rate /= weight_sum;
+  for (int y = mesh->ystart; y <= mesh->yend; ++y) {
+    EXPECT_NEAR(rates(guard, y, 0), expected_rate, 1e-12);
+  }
 }
 
 TEST_F(EvolveVorticityIonEnergyTest,
@@ -793,6 +970,37 @@ TEST_F(EvolveVorticityIonEnergyTest, MixedPolarisationGuardsPreserveACAndFixDC) 
         EXPECT_NEAR(potential(pair.first, y, z), potential(pair.second, y, z) - 2 * mean,
                     1e-12);
       }
+    }
+  }
+}
+
+TEST_F(EvolveVorticityIonEnergyTest, MixedPolarisationGuardsApplySpecifiedDC) {
+  Field3D potential = makeField<Field3D>([&](const Ind3D& i) {
+    return 2.0 + 0.1 * i.x() * i.x() + cos(2 * PI * i.z() / nz) + 0.3 * cos(PI * i.z());
+  });
+  std::vector<BoutReal> inner(static_cast<size_t>(ny)), outer(static_cast<size_t>(ny));
+  for (int y = 0; y < ny; ++y) {
+    inner[static_cast<size_t>(y)] = 0.2 + 0.1 * y;
+    outer[static_cast<size_t>(y)] = -0.3 + 0.2 * y;
+  }
+  bout::ion_energy::applyPolarisationBoundary(potential, &inner, &outer);
+  for (int y = 0; y < ny; ++y) {
+    for (int guard = 0; guard < nx; ++guard) {
+      if (guard >= mesh->xstart && guard <= mesh->xend) {
+        continue;
+      }
+      const bool is_inner = guard < mesh->xstart;
+      const int interior =
+          is_inner ? 2 * mesh->xstart - 1 - guard : 2 * mesh->xend + 1 - guard;
+      const BoutReal dc = (is_inner ? inner : outer)[static_cast<size_t>(y)];
+      const BoutReal mean = 2.0 + 0.1 * interior * interior;
+      BoutReal midpoint = 0.0;
+      for (int z = 0; z < nz; ++z) {
+        midpoint += 0.5 * (potential(guard, y, z) + potential(interior, y, z)) / nz;
+        EXPECT_NEAR(potential(guard, y, z) - (2 * dc - mean),
+                    potential(interior, y, z) - mean, 1e-12);
+      }
+      EXPECT_NEAR(midpoint, dc, 1e-12);
     }
   }
 }
@@ -1332,7 +1540,10 @@ TEST_F(EvolveVorticityIonEnergyTest, MixedAuxiliaryConvergesWithNonuniformCrossM
             flux_dc += (x == mesh->xstart ? full.xm : full.xp) / nz;
           }
           for (int z = 0; z < nz; ++z) {
-            EXPECT_NEAR(potential(guard, y, z), potential(x, y, z) - 2 * dc, 1e-12);
+            const BoutReal wall_rate =
+                relax ? output["phi_wall_rate"].as<Field3D>()(guard, y, z) : 0.0;
+            EXPECT_NEAR(potential(guard, y, z),
+                        potential(x, y, z) - 2 * dc + 2 * wall_rate, 1e-12);
             const Ind3D i{(x * ny + y) * nz + z, ny, nz};
             const auto full =
                 bout::ion_energy::perpendicularFaceFluxes(coefficient, potential, i);

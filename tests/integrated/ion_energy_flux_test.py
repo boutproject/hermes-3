@@ -633,7 +633,7 @@ def main(inputs):
             ("solver-refined", ("solver:atol=1e-12", "solver:rtol=1e-10")),
             (
                 "faster-relaxation",
-                ("evolve_vorticity_ion_energy:phi_boundary_timescale=5e-7",),
+                ("evolve_vorticity_ion_energy:phi_boundary_velocity=3125",),
             ),
         ):
             folder = output / label

@@ -28,6 +28,7 @@
 #include "../include/permissions.hxx"
 
 #include <algorithm>
+#include <cmath>
 #include <memory>
 #include <string>
 #include <utility>
@@ -35,6 +36,83 @@
 using bout::globals::mesh;
 
 namespace {
+/// Average a local X-Y line over Z for wall-state and geometry calculations.
+///
+/// @param field Read-only potential, storage field or 2D/3D metric field.
+/// @param x Local radial cell index.
+/// @param y Local poloidal cell index.
+/// @returns Arithmetic mean over all LocalNz cells, in the input field's units.
+///          A 2D field is treated as constant in Z. Uses the global mesh and
+///          assumes a complete local Z line; no communication or mutation occurs.
+template <typename Field>
+BoutReal meanZ(const Field& field, int x, int y) {
+  BoutReal mean = 0.0;
+  for (int z = 0; z < mesh->LocalNz; ++z) {
+    mean += field(x, y, z);
+  }
+  return mean / mesh->LocalNz;
+}
+
+/// Average per-Y wall values over the connected flux surface with J dy weights.
+///
+/// @param values Read-only wall values indexed by local Y, with LocalNy entries.
+///               Only physical Y rows contribute to the average.
+/// @param interior Local index of the first interior radial cell at the wall.
+/// @param guard Local index of its adjacent radial guard cell.
+/// @returns Weighted surface mean in the input values' units, identical on all
+///          ranks in mesh->getYcomm(interior). The face weight is the mean of
+///          guard/interior J times interior dy, using Z-averaged geometry.
+///
+/// This MPI collective must be called by every rank in that Y communicator.
+/// Callers restrict it to a first-X core surface and assume positive weights.
+BoutReal fluxSurfaceAverage(const std::vector<BoutReal>& values, int interior,
+                            int guard) {
+  const auto* coord = mesh->getCoordinates();
+  BoutReal local[2]{0.0, 0.0};
+  for (int y = mesh->ystart; y <= mesh->yend; ++y) {
+    const BoutReal weight =
+        0.5 * (meanZ(coord->J(), guard, y) + meanZ(coord->J(), interior, y))
+        * meanZ(coord->dy(), interior, y);
+    local[0] += weight * values[static_cast<size_t>(y)];
+    local[1] += weight;
+  }
+  BoutReal global[2];
+  MPI_Allreduce(local, global, 2, MPI_DOUBLE, MPI_SUM, mesh->getYcomm(interior));
+  return global[0] / global[1];
+}
+
+/// Broadcast per-Y wall values into all physical radial guard columns and Z cells.
+///
+/// @param[in,out] field Destination storage, RHS or diagnostic field. Only radial
+///                     guards at physical Y rows on this rank's X walls are written;
+///                     interior cells and Y boundary cells retain their values.
+/// @param inner Read-only inner wall values in field's units, indexed by local Y.
+///              Must contain LocalNy entries when this rank owns the inner wall.
+/// @param outer Read-only outer wall values, with the same convention as inner.
+///
+/// Uses the global mesh without communication. Periodic X leaves field unchanged.
+void writeRadialValues(Field3D& field, const std::vector<BoutReal>& inner,
+                       const std::vector<BoutReal>& outer) {
+  if (mesh->periodicX) {
+    return;
+  }
+  const auto write = [&](int begin, int end, const std::vector<BoutReal>& values) {
+    for (int y = mesh->ystart; y <= mesh->yend; ++y) {
+      for (int x = begin; x < end; ++x) {
+        for (int z = 0; z < mesh->LocalNz; ++z) {
+          field(x, y, z) = values[static_cast<size_t>(y)];
+        }
+      }
+    }
+  };
+  if (mesh->firstX()) {
+    write(0, mesh->xstart, inner);
+  }
+  if (mesh->lastX()) {
+    write(mesh->xend + 1, mesh->LocalNx, outer);
+  }
+}
+
 /// Call a function with each ion species
 template <typename Function>
 void forAllIons(GuardedOptions allspecies, Function func) {
@@ -121,7 +199,14 @@ geometricPerpendicularFaceFluxes(const Field3D& a, const Field3D& f, const Ind3D
 } // namespace
 
 namespace bout::ion_energy {
-void applyPolarisationBoundary(Field3D& chi) {
+BoutReal wallInwardDerivative(BoutReal phi_midpoint, BoutReal phi0, BoutReal dx0) {
+  // The stored midpoint is the arithmetic mean of a mirrored guard/interior
+  // pair, so their centred face derivative is exact for quadratic profiles.
+  return 2.0 * (phi0 - phi_midpoint) / dx0;
+}
+
+void applyPolarisationBoundary(Field3D& chi, const std::vector<BoutReal>* dc_inner,
+                               const std::vector<BoutReal>* dc_outer) {
   auto* localmesh = chi.getMesh();
   if (localmesh->periodicX) {
     return;
@@ -131,7 +216,7 @@ void applyPolarisationBoundary(Field3D& chi) {
     throw BoutException(
         "Mixed polarisation boundaries require complete periodic Z lines");
   }
-  const auto reflect = [&](int guard, int interior) {
+  const auto reflect = [&](int guard, int interior, const std::vector<BoutReal>* dc) {
     for (int y = 0; y < localmesh->LocalNy; ++y) {
       BoutReal mean = 0.0;
       for (int z = 0; z < localmesh->LocalNz; ++z) {
@@ -140,17 +225,20 @@ void applyPolarisationBoundary(Field3D& chi) {
       mean /= localmesh->LocalNz;
       for (int z = 0; z < localmesh->LocalNz; ++z) {
         chi(guard, y, z) = chi(interior, y, z) - 2.0 * mean;
+        if (dc != nullptr) {
+          chi(guard, y, z) += 2.0 * (*dc)[static_cast<size_t>(y)];
+        }
       }
     }
   };
   if (localmesh->firstX()) {
     for (int x = 0; x < localmesh->xstart; ++x) {
-      reflect(x, 2 * localmesh->xstart - 1 - x);
+      reflect(x, 2 * localmesh->xstart - 1 - x, dc_inner);
     }
   }
   if (localmesh->lastX()) {
     for (int x = localmesh->xend + 1; x < localmesh->LocalNx; ++x) {
-      reflect(x, 2 * localmesh->xend + 1 - x);
+      reflect(x, 2 * localmesh->xend + 1 - x, dc_outer);
     }
   }
 }
@@ -223,6 +311,12 @@ EvolveVorticityIonEnergy::EvolveVorticityIonEnergy(std::string name, Options& al
 
   auto& options = alloptions[name];
 
+  const Options& units = alloptions["units"];
+  const BoutReal Tnorm = units["eV"];
+  const BoutReal Omega_ci = 1. / units["seconds"].as<BoutReal>();
+  const BoutReal Bnorm = units["Tesla"];
+  const BoutReal Lnorm = units["meters"];
+
   phi_boundary_relax = options["phi_boundary_relax"]
                            .doc("Relax x boundaries of phi towards Neumann?")
                            .withDefault<bool>(false);
@@ -236,13 +330,23 @@ EvolveVorticityIonEnergy::EvolveVorticityIonEnergy(std::string name, Options& al
     }
     // Set an effective value, rather than a different default from Solver::add.
     evolve_boundary.force(true, "evolve_vorticity_ion_energy");
-    phi_boundary_timescale = options["phi_boundary_timescale"]
-                                 .doc("Timescale for phi boundary relaxation [seconds]")
-                                 .withDefault(1e-4)
-                             / get<BoutReal>(alloptions["units"]["seconds"]);
-    if (!std::isfinite(phi_boundary_timescale) || phi_boundary_timescale <= 0.0) {
-      throw BoutException("phi_boundary_timescale must be finite and positive");
+    const BoutReal kappa_SI =
+        options["phi_boundary_velocity"]
+            .doc("Velocity relaxing the mean wall-normal E-field to zero [m/s]. "
+                 "For boundary-cell physical width h and an old relaxation "
+                 "timescale tau, kappa = h/(2*tau) matches at that resolution.")
+            .as<BoutReal>();
+    if (!std::isfinite(kappa_SI) || kappa_SI <= 0.0) {
+      throw BoutException("phi_boundary_velocity must be finite and positive");
     }
+    phi_boundary_velocity = kappa_SI / (Lnorm * Omega_ci);
+    phi_core_averagey =
+        options["phi_core_averagey"]
+            .doc("Use J dy-weighted flux-surface averages at the core wall?")
+            .withDefault<bool>(false)
+        && mesh->periodicY(mesh->xstart);
+    wall_rate_inner.resize(static_cast<size_t>(mesh->LocalNy), 0.0);
+    wall_rate_outer.resize(static_cast<size_t>(mesh->LocalNy), 0.0);
     // Own a no-op boundary configuration before moving the original Vort
     // boundary operators into the physical-vorticity field. Swap only the
     // FieldData metadata: solver pointers to Vort and ddt(Vort) stay valid.
@@ -260,12 +364,6 @@ EvolveVorticityIonEnergy::EvolveVorticityIonEnergy(std::string name, Options& al
     ddt(Vort).copyBoundary(Vort);
     initialiseBoundaryState();
   }
-
-  const Options& units = alloptions["units"];
-  const BoutReal Tnorm = units["eV"];
-  const BoutReal Omega_ci = 1. / units["seconds"].as<BoutReal>();
-  const BoutReal Bnorm = units["Tesla"];
-  const BoutReal Lnorm = units["meters"];
 
   const auto* coord = mesh->getCoordinates();
 
@@ -328,11 +426,6 @@ EvolveVorticityIonEnergy::EvolveVorticityIonEnergy(std::string name, Options& al
   }
 
   if (phi_boundary_relax) {
-    phi_core_averagey = options["phi_core_averagey"]
-                            .doc("Average phi core boundary in Y?")
-                            .withDefault<bool>(false)
-                        and mesh->periodicY(mesh->xstart);
-
     phiSolver->setInnerBoundaryFlags(INVERT_SET);
     phiSolver->setOuterBoundaryFlags(INVERT_SET);
   }
@@ -543,6 +636,9 @@ void EvolveVorticityIonEnergy::transform_impl(GuardedOptions& state) {
   }
   applyPotentialBoundary();
   have_solution = true; // phi and ion_KE_perp are converged for this state
+  if (phi_boundary_relax) {
+    computeWallRates();
+  }
 
   auto fields = state["fields"];
   set(fields["vorticity"], vorticity);
@@ -721,7 +817,7 @@ void EvolveVorticityIonEnergy::finally(const Options& state) {
     BOUT_FOR(i, Vort.getRegion("RGN_NOBNDRY")) {
       ddt(Vort)[i] = DivJReynolds[i] + DivJdia[i] + DivJviscous[i];
     }
-    boundaryRHS();
+    writeWallRates();
   } else {
     ddt(Vort) = DivJReynolds + DivJdia + DivJviscous;
   }
@@ -838,6 +934,25 @@ void EvolveVorticityIonEnergy::outputVars(Options& state) {
                   {"source", "evolve_vorticity_ion_energy"}});
 
   if (diagnose) {
+    set_with_attrs(
+        state["ion_chi"], chi,
+        {{"time_dimension", "t"},
+         {"units", "V s^-1"},
+         {"conversion", Tnorm * Omega_ci},
+         {"long_name", "Auxiliary polarisation current potential"},
+         {"description", "DC wall value is d(phi_b)/dt during relaxation; "
+                         "the wall rate of the pressure potential is neglected"}});
+    if (phi_boundary_relax) {
+      Field3D wall_rate = zeroFrom(phi);
+      writeRadialValues(wall_rate, wall_rate_inner, wall_rate_outer);
+      set_with_attrs(state["phi_wall_rate"], wall_rate,
+                     {{"time_dimension", "t"},
+                      {"units", "V s^-1"},
+                      {"conversion", Tnorm * Omega_ci},
+                      {"long_name", "Radial midpoint potential rate"},
+                      {"description", "Wall rates in physical radial guard cells; "
+                                      "zero in interior and Y boundary cells"}});
+    }
     if (include_viscosity) {
       set_with_attrs(state["kinematic_viscosity"], viscosity,
                      {{"units", "m^2 s^-1"},
@@ -932,25 +1047,30 @@ void EvolveVorticityIonEnergy::initialiseBoundaryState() {
   if (mesh->periodicX) {
     return;
   }
-  const auto initialise = [&](int interior, int guard, int begin, int end) {
+  const auto initialise = [&](int interior, int guard, int begin, int end,
+                              bool average_y) {
+    std::vector<BoutReal> midpoints(static_cast<size_t>(mesh->LocalNy), 0.0);
     for (int y = mesh->ystart; y <= mesh->yend; ++y) {
-      BoutReal midpoint = 0.0;
-      for (int z = 0; z < mesh->LocalNz; ++z) {
-        midpoint += 0.5 * (phi(guard, y, z) + phi(interior, y, z));
-      }
-      midpoint /= mesh->LocalNz;
+      midpoints[static_cast<size_t>(y)] =
+          0.5 * (meanZ(phi, guard, y) + meanZ(phi, interior, y));
+    }
+    if (average_y) {
+      const BoutReal average = fluxSurfaceAverage(midpoints, interior, guard);
+      std::fill(midpoints.begin(), midpoints.end(), average);
+    }
+    for (int y = mesh->ystart; y <= mesh->yend; ++y) {
       for (int x = begin; x < end; ++x) {
         for (int z = 0; z < mesh->LocalNz; ++z) {
-          Vort(x, y, z) = midpoint;
+          Vort(x, y, z) = midpoints[static_cast<size_t>(y)];
         }
       }
     }
   };
   if (mesh->firstX()) {
-    initialise(mesh->xstart, mesh->xstart - 1, 0, mesh->xstart);
+    initialise(mesh->xstart, mesh->xstart - 1, 0, mesh->xstart, phi_core_averagey);
   }
   if (mesh->lastX()) {
-    initialise(mesh->xend, mesh->xend + 1, mesh->xend + 1, mesh->LocalNx);
+    initialise(mesh->xend, mesh->xend + 1, mesh->xend + 1, mesh->LocalNx, false);
   }
 }
 
@@ -958,15 +1078,18 @@ void EvolveVorticityIonEnergy::applyPotentialBoundary() {
   if (!phi_boundary_relax || mesh->periodicX) {
     return;
   }
-  const auto apply = [&](int interior, int guard, int begin, int end) {
+  const auto apply = [&](int interior, int guard, int begin, int end, bool average_y) {
+    std::vector<BoutReal> midpoints(static_cast<size_t>(mesh->LocalNy), 0.0);
     for (int y = mesh->ystart; y <= mesh->yend; ++y) {
-      BoutReal midpoint = 0.0;
+      midpoints[static_cast<size_t>(y)] = meanZ(Vort, guard, y);
+    }
+    if (average_y) {
+      const BoutReal average = fluxSurfaceAverage(midpoints, interior, guard);
+      std::fill(midpoints.begin(), midpoints.end(), average);
+    }
+    for (int y = mesh->ystart; y <= mesh->yend; ++y) {
       for (int z = 0; z < mesh->LocalNz; ++z) {
-        midpoint += Vort(guard, y, z);
-      }
-      midpoint /= mesh->LocalNz;
-      for (int z = 0; z < mesh->LocalNz; ++z) {
-        phi(guard, y, z) = 2.0 * midpoint - phi(interior, y, z);
+        phi(guard, y, z) = 2.0 * midpoints[static_cast<size_t>(y)] - phi(interior, y, z);
         for (int x = begin; x < end; ++x) {
           phi(x, y, z) = phi(guard, y, z);
         }
@@ -974,53 +1097,58 @@ void EvolveVorticityIonEnergy::applyPotentialBoundary() {
     }
   };
   if (mesh->firstX()) {
-    apply(mesh->xstart, mesh->xstart - 1, 0, mesh->xstart - 1);
+    apply(mesh->xstart, mesh->xstart - 1, 0, mesh->xstart - 1, phi_core_averagey);
   }
   if (mesh->lastX()) {
-    apply(mesh->xend, mesh->xend + 1, mesh->xend + 2, mesh->LocalNx);
+    apply(mesh->xend, mesh->xend + 1, mesh->xend + 2, mesh->LocalNx, false);
   }
 }
 
-void EvolveVorticityIonEnergy::boundaryRHS() {
+void EvolveVorticityIonEnergy::computeWallRates() {
+  // Reset every RHS evaluation; no rate survives from a previous solver state.
+  std::fill(wall_rate_inner.begin(), wall_rate_inner.end(), 0.0);
+  std::fill(wall_rate_outer.begin(), wall_rate_outer.end(), 0.0);
   if (mesh->periodicX) {
     return;
   }
-  BoutReal core_average = 0.0;
-  if (mesh->firstX() && phi_core_averagey) {
-    BoutReal local[2]{
-        0.0, static_cast<BoutReal>((mesh->yend - mesh->ystart + 1) * mesh->LocalNz)};
-    for (int y = mesh->ystart; y <= mesh->yend; ++y) {
-      for (int z = 0; z < mesh->LocalNz; ++z) {
-        local[0] += phi(mesh->xstart, y, z);
+  const auto* coord = mesh->getCoordinates();
+  const auto compute = [&](int interior, int guard, bool average_y,
+                           std::vector<BoutReal>& rates) {
+    BoutReal core_midpoint = 0.0;
+    if (average_y) {
+      std::vector<BoutReal> midpoints(static_cast<size_t>(mesh->LocalNy), 0.0);
+      for (int y = mesh->ystart; y <= mesh->yend; ++y) {
+        midpoints[static_cast<size_t>(y)] = meanZ(Vort, guard, y);
       }
+      core_midpoint = fluxSurfaceAverage(midpoints, interior, guard);
     }
-    BoutReal global[2];
-    MPI_Allreduce(local, global, 2, MPI_DOUBLE, MPI_SUM, mesh->getYcomm(0));
-    core_average = global[0] / global[1];
-  }
-  const auto relax = [&](int interior, int begin, int end, bool average_y) {
     for (int y = mesh->ystart; y <= mesh->yend; ++y) {
-      BoutReal target = core_average;
-      if (!average_y) {
-        target = 0.0;
-        for (int z = 0; z < mesh->LocalNz; ++z) {
-          target += phi(interior, y, z);
-        }
-        target /= mesh->LocalNz;
-      }
-      for (int x = begin; x < end; ++x) {
-        for (int z = 0; z < mesh->LocalNz; ++z) {
-          ddt(Vort)(x, y, z) = (target - Vort(x, y, z)) / phi_boundary_timescale;
-        }
-      }
+      const BoutReal midpoint = average_y ? core_midpoint : meanZ(Vort, guard, y);
+      const BoutReal derivative = bout::ion_energy::wallInwardDerivative(
+          midpoint, meanZ(phi, interior, y), meanZ(coord->dx(), interior, y));
+      // For a 2D metric the mean g13 contribution vanishes on periodic Z.
+      // With BOUT_USE_METRIC_3D we use Z-averaged geometry, averaging g11
+      // before taking the square root to estimate the DC normal derivative.
+      const BoutReal normal_metric =
+          sqrt(0.5 * (meanZ(coord->g11(), guard, y) + meanZ(coord->g11(), interior, y)));
+      rates[static_cast<size_t>(y)] = phi_boundary_velocity * normal_metric * derivative;
+    }
+    if (average_y) {
+      const BoutReal average = fluxSurfaceAverage(rates, interior, guard);
+      // Y guard entries stay zero, including the DC values passed to chi.
+      std::fill(rates.begin() + mesh->ystart, rates.begin() + mesh->yend + 1, average);
     }
   };
   if (mesh->firstX()) {
-    relax(mesh->xstart, 0, mesh->xstart, phi_core_averagey);
+    compute(mesh->xstart, mesh->xstart - 1, phi_core_averagey, wall_rate_inner);
   }
   if (mesh->lastX()) {
-    relax(mesh->xend, mesh->xend + 1, mesh->LocalNx, false);
+    compute(mesh->xend, mesh->xend + 1, false, wall_rate_outer);
   }
+}
+
+void EvolveVorticityIonEnergy::writeWallRates() {
+  writeRadialValues(ddt(Vort), wall_rate_inner, wall_rate_outer);
 }
 
 void EvolveVorticityIonEnergy::restartVars(Options& state) {
@@ -1150,17 +1278,16 @@ Field3D EvolveVorticityIonEnergy::correctPotential(const Field3D& rhs,
   return potential + correction;
 }
 
-Field3D bout::ion_energy::fixedPolarisationPotential(const Field3D& coefficient,
-                                                     const Field3D& rhs,
-                                                     Laplacian& inverse,
-                                                     int corrections) {
+Field3D bout::ion_energy::fixedPolarisationPotential(
+    const Field3D& coefficient, const Field3D& rhs, Laplacian& inverse, int corrections,
+    const std::vector<BoutReal>* dc_inner, const std::vector<BoutReal>* dc_outer) {
   if (corrections < 0) {
     throw BoutException("polarisation_corrections must be >= 0");
   }
   Field3D chi = zeroFrom(rhs);
   const auto apply_boundary = [&]() {
     mesh->communicate(chi);
-    bout::ion_energy::applyPolarisationBoundary(chi);
+    bout::ion_energy::applyPolarisationBoundary(chi, dc_inner, dc_outer);
     mesh->communicate(chi);
   };
 
@@ -1190,8 +1317,14 @@ void EvolveVorticityIonEnergy::solvePolarisationPotential(const Field3D& rhs) {
   // Preserve the existing periodic inverse/gauge; physical X uses the
   // separate mixed-boundary inverse, matching applyPolarisationBoundary.
   Laplacian& inverse = mesh->periodicX ? *phiSolver : *chiSolver;
-  chi = bout::ion_energy::fixedPolarisationPotential(boussinesq_coeff, rhs, inverse,
-                                                     polarisation_corrections);
+  // The DC wall value approximates d(Phi)/dt by d(phi_b)/dt. The pressure
+  // potential's wall rate d(psi_bar_b)/dt is only known in finally(), so it is
+  // neglected here. Corrections retain homogeneous spectral boundaries; the
+  // inhomogeneous value enters through every FV residual, including the first.
+  chi = bout::ion_energy::fixedPolarisationPotential(
+      boussinesq_coeff, rhs, inverse, polarisation_corrections,
+      phi_boundary_relax ? &wall_rate_inner : nullptr,
+      phi_boundary_relax ? &wall_rate_outer : nullptr);
   chi_iterations = 1 + polarisation_corrections;
 
   // Diagnostic only: residual against the finite-volume operator

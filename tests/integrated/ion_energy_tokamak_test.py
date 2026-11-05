@@ -111,34 +111,51 @@ def read_ranks(folder):
 
 
 def boundary_rates(runs):
-    """Midpoints and rates, including only the connected core in its Y mean."""
-    values = []
-    core = []
+    """Reconstruct the velocity law with connected-core J dy weighting."""
+    values, core_gradients, core_weights = [], [], []
     meta = runs[0].data.metadata
     for run in runs:
-        y = slice(run.myg, -run.myg)
-        inner = run.data.phi.isel(x=run.mxg, y=y).mean("z")
-        outer = run.data.phi.isel(x=-run.mxg - 1, y=y).mean("z")
-        binner = (inner + run.data.phi.isel(x=run.mxg - 1, y=y).mean("z")) / 2
-        bouter = (outer + run.data.phi.isel(x=-run.mxg, y=y).mean("z")) / 2
+        ds = run.data.reset_coords().isel(y=slice(run.myg, -run.myg))
+        boundaries, gradients = [], []
+        for interior, guard in (
+            (run.mxg, run.mxg - 1),
+            (-run.mxg - 1, -run.mxg),
+        ):
+            phi0 = ds.phi.isel(x=interior, drop=True).mean("z")
+            midpoint = (phi0 + ds.phi.isel(x=guard, drop=True).mean("z")) / 2
+            derivative = 2 * (phi0 - midpoint) / ds.dx.isel(x=interior, drop=True)
+            normal = np.sqrt(
+                (ds.g11.isel(x=interior, drop=True) + ds.g11.isel(x=guard, drop=True))
+                / 2
+            )
+            boundaries.append(midpoint)
+            gradients.append(normal * derivative)
         global_y = int(run.data.metadata["PE_YIND"]) * int(meta["MYSUB"]) + np.arange(
-            inner.sizes["y"]
+            ds.sizes["y"]
         )
         selected = (global_y > meta["jyseps1_1"]) & (global_y <= meta["jyseps2_2"])
-        core.append(inner.isel(y=np.flatnonzero(selected)))
-        values.append((inner, outer, binner, bouter, selected))
-    mean = xr.concat(core, dim="y").mean("y")
+        weight = (
+            (ds.J.isel(x=run.mxg - 1, drop=True) + ds.J.isel(x=run.mxg, drop=True))
+            / 2
+            * ds.dy.isel(x=run.mxg, drop=True)
+        )
+        core_gradients.append((weight * gradients[0]).isel(y=np.flatnonzero(selected)))
+        core_weights.append(weight.isel(y=np.flatnonzero(selected)))
+        values.append((boundaries, gradients, selected))
+    mean = xr.concat(core_gradients, dim="y").sum("y") / xr.concat(
+        core_weights, dim="y"
+    ).sum("y")
     result = []
-    for run, (inner, outer, binner, bouter, selected) in zip(runs, values, strict=True):
-        use_mean = run.data.options[MODEL].get_bool("phi_core_averagey")
-        mask = xr.DataArray(selected, dims="y", coords={"y": inner.y})
-        target = xr.where(mask, mean, inner) if use_mean else inner
-        tau = (
-            run.data.options[MODEL].evaluate_scalar("phi_boundary_timescale")
-            * run.frequency
+    for run, (boundaries, gradients, selected) in zip(runs, values, strict=True):
+        if run.data.options[MODEL].get_bool("phi_core_averagey"):
+            mask = xr.DataArray(selected, dims="y", coords={"y": gradients[0].y})
+            gradients[0] = xr.where(mask, mean, gradients[0])
+        velocity = run.data.options[MODEL].evaluate_scalar("phi_boundary_velocity") / (
+            run.length_scale * run.frequency
         )
         result.extend(
-            [(binner, (target - binner) / tau), (bouter, (outer - bouter) / tau)]
+            (boundary, velocity * gradient)
+            for boundary, gradient in zip(boundaries, gradients, strict=True)
         )
     return result
 

@@ -662,6 +662,9 @@ def test_mixed_auxiliary_boundary_satisfies_full_forward_operator(dataset, relax
 
     dataset["g13"] *= 0
     dataset.options["evolve_vorticity_ion_energy:phi_boundary_relax"] = str(relax)
+    dataset.options["evolve_vorticity_ion_energy:phi_boundary_velocity"] = "1000"
+    dataset.options["evolve_vorticity_ion_energy:phi_core_averagey"] = "false"
+    dataset["phi"] = xr.zeros_like(dataset.phi)  # zero wall rate in this inverse test
     run = open_run(dataset)
     nx = dataset.sizes["x"] - 4
     x = dataset.x - 2 + 0.5
@@ -789,6 +792,31 @@ def test_auxiliary_singleton_z_is_dirichlet(dataset):
     assert_allclose(solved.isel(x=1), -solved.isel(x=2), atol=2e-14)
 
 
+def test_relaxing_auxiliary_dc_uses_wall_rate(dataset):
+    from energy_analysis.fluxes import solve_polarisation
+
+    dataset["g13"] *= 0
+    opts = dataset.options
+    opts["evolve_vorticity_ion_energy:phi_boundary_relax"] = "true"
+    opts["evolve_vorticity_ion_energy:phi_boundary_velocity"] = "1000"
+    opts["evolve_vorticity_ion_energy:phi_core_averagey"] = "false"
+    opts["evolve_vorticity_ion_energy:polarisation_corrections"] = 0
+    nx = dataset.sizes["x"] - 4
+    x = dataset.x - 2 + 0.5
+    slope = 0.003
+    dataset["phi"] = xr.ones_like(dataset.phi) * slope * x
+    run = open_run(dataset)
+    solved = solve_polarisation(run, xr.zeros_like(dataset.phi), False, True)
+    inner_rate = 1000 / (run.length_scale * run.frequency) * np.sqrt(1.2) * slope
+    expected = xr.ones_like(solved) * inner_rate * (1 - 2 * x / nx)
+    xr.testing.assert_allclose(run.interior(solved), run.interior(expected), atol=1e-15)
+    for guard, interior, rate in ((1, 2, inner_rate), (-2, -3, -inner_rate)):
+        midpoint = (
+            solved.isel(x=guard, drop=True) + solved.isel(x=interior, drop=True)
+        ) / 2
+        assert_allclose(midpoint.mean("z"), rate, atol=1e-15)
+
+
 def test_auxiliary_rejects_dc_removal_and_wrong_boundary_flags(dataset):
     from energy_analysis.fluxes import solve_polarisation
 
@@ -819,7 +847,7 @@ def test_boundary_relaxation_core_mean_excludes_y_guards(dataset):
     opts["evolve_vorticity_ion_energy:poloidal_flows"] = "false"
     opts["evolve_vorticity_ion_energy:phi_boundary_relax"] = "true"
     opts["evolve_vorticity_ion_energy:phi_core_averagey"] = "true"
-    opts["evolve_vorticity_ion_energy:phi_boundary_timescale"] = "2e-6"
+    opts["evolve_vorticity_ion_energy:phi_boundary_velocity"] = "1000"
     for name in ("e", "d+", "impurity"):
         opts[name]["use_div_par_fvv"] = "true"
     ds.attrs["metadata"].update(
@@ -840,12 +868,24 @@ def test_boundary_relaxation_core_mean_excludes_y_guards(dataset):
     run = open_run(ds)
     boundary = boundary_relaxation(run)
     assert_allclose(boundary.phi_boundary, 0.2)
-    assert_allclose(boundary.phi_boundary_target.sel(boundary="inner"), 1.35)
-    assert_allclose(boundary.phi_boundary_rate.sel(boundary="inner"), (1.35 - 0.2) / 2)
+    normal = np.sqrt(float(ds.g11.values.flat[0]))
+    dx = float(ds.dx.values.flat[0])
+    velocity = 1000 / (run.length_scale * run.frequency)
     assert_allclose(
-        boundary.phi_boundary_target.sel(boundary="outer"),
-        xr.ones_like(boundary.phi_boundary_target.sel(boundary="outer"))
-        * (1 + 0.1 * boundary.y),
+        boundary.phi_boundary_gradient.sel(boundary="inner"),
+        normal * 2 * (1.35 - 0.2) / dx,
+    )
+    assert_allclose(
+        boundary.phi_boundary_rate.sel(boundary="inner"),
+        velocity * normal * 2 * (1.35 - 0.2) / dx,
+    )
+    assert_allclose(
+        boundary.phi_boundary_gradient.sel(boundary="outer"),
+        xr.ones_like(boundary.phi_boundary_gradient.sel(boundary="outer"))
+        * normal
+        * 2
+        * (1 + 0.1 * boundary.y - 0.2)
+        / dx,
     )
 
 

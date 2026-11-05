@@ -323,7 +323,7 @@ def main():
             args.corrections if corrections is None else corrections
         )
         if relax:
-            opts["evolve_vorticity_ion_energy:phi_boundary_timescale"] = "1e-6"
+            opts["evolve_vorticity_ion_energy:phi_boundary_velocity"] = "1000"
             opts["evolve_vorticity_ion_energy:phi_core_averagey"] = "false"
         for name in ("e", "h+", "evolve_vorticity_ion_energy"):
             opts[name + ":diagnose"] = str(diagnose).lower()

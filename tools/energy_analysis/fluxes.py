@@ -373,13 +373,18 @@ def _solve_polarisation(run, rhs, periodic_x, periodic_y, corrections):
             result[-1] += shift * coefficients[-1]
         return result
 
-    def solve(values):
+    def solve(values, dc_inner, dc_outer):
         values = np.asarray(values)
         if not np.isfinite(values).all():
             raise AuditError("Polarisation RHS contains nonfinite physical values")
         if periodic_x and abs(values.mean()) > 1e-11 * max(1.0, abs(values).max()):
             raise AuditError("Periodic polarisation RHS has incompatible nonzero mean")
         b = np.fft.rfft(values, axis=-1)
+        if not periodic_x:
+            # Move the inhomogeneous FV wall contribution into the RHS. Each
+            # spectral correction still has homogeneous mixed boundaries.
+            b[0, 0] -= 2 * ax * nz * dc_inner
+            b[-1, 0] -= 2 * ax * nz * dc_outer
         coefficients = np.zeros_like(b)
         for _ in range(1 if corrections is None else corrections + 1):
             residual = b.copy() if corrections is None else b - forward(coefficients)
@@ -397,10 +402,21 @@ def _solve_polarisation(run, rhs, periodic_x, periodic_y, corrections):
     interior = run.interior(rhs).reset_coords(drop=True)
     if interior.chunks is not None:
         interior = interior.chunk({"x": -1, "z": -1})
+    dc_inner = dc_outer = xr.zeros_like(interior.isel(x=0, z=0, drop=True))
+    if (
+        not periodic_x
+        and "phi_boundary_relax" in run.data.options[run.model]
+        and run.data.options[run.model].get_bool("phi_boundary_relax")
+    ):
+        rates = _boundary_relaxation(run, periodic_y).phi_boundary_rate
+        dc_inner = rates.sel(boundary="inner", drop=True)
+        dc_outer = rates.sel(boundary="outer", drop=True)
     solved = xr.apply_ufunc(
         solve,
         interior,
-        input_core_dims=[["x", "z"]],
+        dc_inner,
+        dc_outer,
+        input_core_dims=[["x", "z"], [], []],
         output_core_dims=[["x", "z"]],
         vectorize=True,
         dask="parallelized",
@@ -409,10 +425,12 @@ def _solve_polarisation(run, rhs, periodic_x, periodic_y, corrections):
     result = solved.reindex(x=rhs.x, y=rhs.y).transpose(*rhs.dims)
     result = fill_transport_guards(result, run, periodic_x, periodic_y)
     if not periodic_x:
-        # Each radial layer is odd in DC and even in AC.
+        # Reflect DC about the wall rate and leave AC even.
         for guard in (*range(run.mxg), *range(ds.sizes["x"] - run.mxg, ds.sizes["x"])):
             layer = result.isel(x=guard, drop=True)
-            result[{"x": guard}] = layer - 2 * layer.mean("z")
+            dc = dc_inner if guard < run.mxg else dc_outer
+            dc = dc.reindex(y=result.y).fillna(0.0)
+            result[{"x": guard}] = layer - 2 * layer.mean("z") + 2 * dc
     return result
 
 
@@ -428,38 +446,94 @@ def boundary_relaxation(run):
         raise AuditError(
             "Boundary relaxation requires nonperiodic X and phi_boundary_relax"
         )
-    tau = run.scalar_option("phi_boundary_timescale") * run.frequency
-    if not np.isfinite(tau) or tau <= 0:
-        raise AuditError("Boundary relaxation requires a finite positive timescale")
-    phi = run.data.phi.isel(y=slice(run.myg, run.data.sizes["y"] - run.myg))
-    states, targets = [], []
+    return _boundary_relaxation(run, periodic_y)
+
+
+def _boundary_relaxation(run, periodic_y):
+    """Reconstruct midpoint states and velocity-law rates for the auxiliary inverse.
+
+    Parameters
+    ----------
+    run : EnergyRun
+        Supplies saved phi guards, dx/dy/g11/J, physical Y bounds, normalisation
+        scales, and the phi_boundary_velocity and phi_core_averagey options.
+        Fields must use Hermes normalised units and include an interior/guard pair
+        at each wall with mirrored spacing. The caller establishes the nonperiodic slab geometry.
+    periodic_y : bool
+        Whether Y field lines close on themselves. When true and core averaging
+        is enabled, the inner-wall derivative uses wall-face J dy weights.
+
+    Returns
+    -------
+    xarray.Dataset
+        phi_boundary (Z-mean midpoint), phi_boundary_gradient (physical inward
+        derivative in normalised potential/length units), and phi_boundary_rate
+        (normalised potential/time), indexed by inner/outer boundary and physical
+        Y, with any time dimension preserved. The input run is not modified.
+
+    Raises
+    ------
+    AuditError
+        If the relaxation velocity is not finite and positive or a saved
+        midpoint varies in Z.
+    """
+    velocity = run.scalar_option("phi_boundary_velocity") / (
+        run.length_scale * run.frequency
+    )
+    if not np.isfinite(velocity) or velocity <= 0:
+        raise AuditError("Boundary relaxation requires a finite positive velocity")
+    ds = run.data.reset_coords().isel(y=slice(run.myg, run.data.sizes["y"] - run.myg))
+    phi = ds.phi
+    geometry = ds[["dx", "dy", "g11", "J"]].mean("z") if "z" in ds.dx.dims else ds
+    states, gradients, rates = [], [], []
     for side, interior, guard in (
         ("inner", run.mxg, run.mxg - 1),
         ("outer", -run.mxg - 1, -run.mxg),
     ):
-        interior_value = phi.isel(x=interior, drop=True)
-        midpoint = (interior_value + phi.isel(x=guard, drop=True)) / 2
+        phi0 = phi.isel(x=interior, drop=True).mean("z")
+        midpoint = (phi.isel(x=interior, drop=True) + phi.isel(x=guard, drop=True)) / 2
         if float(abs(midpoint - midpoint.mean("z")).max()) > 1e-9:
             raise AuditError("Relaxing phi boundary midpoint must be uniform in Z")
-        target = interior_value.mean("z")
+        midpoint = midpoint.mean("z")
+        # The encoded midpoint is an arithmetic guard/interior average, so
+        # the reflected pair supplies a centred derivative at the wall face.
+        derivative = 2 * (phi0 - midpoint) / geometry.dx.isel(x=interior, drop=True)
+        normal = np.sqrt(
+            (
+                geometry.g11.isel(x=guard, drop=True)
+                + geometry.g11.isel(x=interior, drop=True)
+            )
+            / 2
+        )
+        gradient = normal * derivative
         if (
             side == "inner"
             and periodic_y
             and run.data.options[run.model].get_bool("phi_core_averagey")
         ):
-            target = xr.ones_like(target) * target.mean("y")
-        states.append(midpoint.mean("z").expand_dims(boundary=[side]))
-        targets.append(target.expand_dims(boundary=[side]))
-    state, target = xr.concat(states, "boundary"), xr.concat(targets, "boundary")
+            weight = (
+                (
+                    geometry.J.isel(x=guard, drop=True)
+                    + geometry.J.isel(x=interior, drop=True)
+                )
+                / 2
+                * geometry.dy.isel(x=interior, drop=True)
+            )
+            gradient = (
+                xr.ones_like(gradient) * (weight * gradient).sum("y") / weight.sum("y")
+            )
+        states.append(midpoint.expand_dims(boundary=[side]))
+        gradients.append(gradient.expand_dims(boundary=[side]))
+        rates.append((velocity * gradient).expand_dims(boundary=[side]))
     return xr.Dataset(
         {
-            "phi_boundary": state,
-            "phi_boundary_target": target,
-            "phi_boundary_rate": (target - state) / tau,
+            "phi_boundary": xr.concat(states, "boundary"),
+            "phi_boundary_gradient": xr.concat(gradients, "boundary"),
+            "phi_boundary_rate": xr.concat(rates, "boundary"),
         },
         attrs={
             "units_type": "hermes",
-            "provenance": "reconstructed phi guards and relaxation ODE",
+            "provenance": "reconstructed phi guards and velocity wall law",
         },
     )
 

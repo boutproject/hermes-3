@@ -115,7 +115,18 @@ def parser():
     p.add_argument(
         "--phi-boundary", choices=("fixed", "relax", "both"), default="fixed"
     )
-    p.add_argument("--phi-boundary-timescale", type=float, default=1e-4)
+    p.add_argument(
+        "--phi-boundary-timescale",
+        type=float,
+        default=1e-4,
+        help="Legacy vorticity relaxation timescale [s]",
+    )
+    p.add_argument(
+        "--phi-boundary-velocity",
+        type=float,
+        default=1000,
+        help="Total-ion-energy relaxation velocity [m/s]",
+    )
     p.add_argument("--viscosity", type=float, default=1)
     p.add_argument("--end-time", type=float, default=20000)
     p.add_argument("--outputs", type=int, default=200)
@@ -225,6 +236,7 @@ def configuration(args):
     for key in (
         "end_time",
         "phi_boundary_timescale",
+        "phi_boundary_velocity",
         "atol",
         "rtol",
         "phi_atol",
@@ -323,8 +335,17 @@ def input_text(config, row):
     text = re.sub(
         r"\[" + re.escape(section) + r"\]\n.*?(?=\n\[)", "", text, flags=re.DOTALL
     )
+    if not pressure:
+        text = re.sub(
+            r"^phi_boundary_timescale = .*\n",
+            f"phi_boundary_velocity = {c['phi_boundary_velocity']}\n",
+            text,
+            flags=re.MULTILINE,
+        )
     if row["boundary"] == "fixed":
-        text = re.sub(r"^phi_boundary_timescale = .*\n", "", text, flags=re.MULTILINE)
+        text = re.sub(
+            r"^phi_boundary_(timescale|velocity) = .*\n", "", text, flags=re.MULTILINE
+        )
         text = text.replace("phi_core_averagey = false\n", "")
     return text
 
@@ -744,12 +765,26 @@ def analyse_run(directory, config):
         b = [float(v.mean()) for v in mid]
         boundary_midpoints.append(b)
         target = [float(phi.isel(x=c).mean()) for c in (2, -3)]
-        boundary_rates.append(
-            [
-                (t - v) / (config["phi_boundary_timescale"] * run.frequency)
-                for t, v in zip(target, b)
-            ]
-        )
+        if run.formulation == "total_energy":
+            if run.data.options[run.model].get_bool("phi_boundary_relax"):
+                from energy_analysis.fluxes import boundary_relaxation
+
+                rates = boundary_relaxation(snapshot).phi_boundary_rate
+                boundary_rates.append(
+                    [
+                        float(rates.sel(boundary=side).mean())
+                        for side in ("inner", "outer")
+                    ]
+                )
+            else:
+                boundary_rates.append([0.0, 0.0])
+        else:
+            boundary_rates.append(
+                [
+                    (t - v) / (config["phi_boundary_timescale"] * run.frequency)
+                    for t, v in zip(target, b)
+                ]
+            )
     inventory = xr.concat(inventories, "t")
     write_netcdf(inventory, directory / "inventory.nc")
     native, common = (
