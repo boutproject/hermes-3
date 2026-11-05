@@ -232,14 +232,19 @@ def fill_transport_guards(field, run, periodic_x, periodic_y):
 
 
 @lru_cache(maxsize=32)
-def _polarisation_factors(nx, nz, ax, az, periodic_x):
-    """Reusable complex X factors for the finite-volume Z Fourier modes."""
+def _polarisation_factors(nx, nz, ax, az, periodic_x, spectral=False):
+    """Reusable X factors; spectral and FV Z responses are cached separately."""
     from scipy.sparse import diags
     from scipy.sparse.linalg import splu
 
     factors = []
     for k in range(nz // 2 + 1):
-        diagonal = np.full(nx, -2 * ax - 4 * az * np.sin(np.pi * k / nz) ** 2)
+        z_eigenvalue = (
+            -az * (2 * np.pi * k / nz) ** 2
+            if spectral
+            else -4 * az * np.sin(np.pi * k / nz) ** 2
+        )
+        diagonal = np.full(nx, -2 * ax + z_eigenvalue)
         if not periodic_x:
             # DC: negative reflected guard. AC: equal reflected guard.
             shift = -ax if k == 0 else ax
@@ -261,30 +266,112 @@ def _polarisation_factors(nx, nz, ax, az, periodic_x):
     return tuple(factors)
 
 
+def polarisation_corrections(run):
+    """Read the nonnegative integer correction count through bd.options."""
+    count = run.scalar_option("polarisation_corrections", 2)
+    if not np.isfinite(count) or count < 0 or count != int(count):
+        raise AuditError("polarisation_corrections must be a nonnegative integer")
+    return int(count)
+
+
+def _validate_polarisation_solver(run, periodic_x):
+    section = run.data.options[run.model]
+    key = "laplacian" if periodic_x else "polarisation_laplacian"
+    opts = section[key] if key in section else None  # noqa: SIM401 -- BoutOptions has no get()
+    # The C++ component inherits only the solver type from the phi subsection.
+    fallback = section["laplacian"] if "laplacian" in section else None  # noqa: SIM401
+    solver_type = (
+        str(opts["type"])
+        if opts is not None and "type" in opts
+        else str(fallback["type"])
+        if fallback is not None and "type" in fallback
+        else "cyclic"
+    )
+    if solver_type != "cyclic":
+        raise AuditError("Polarisation reconstruction requires the cyclic inverse")
+    if opts is None:
+        return
+    for name in ("inner_boundary_flags", "outer_boundary_flags"):
+        if not periodic_x and name in opts and opts.evaluate_scalar(name) != 2:
+            raise AuditError(
+                "Polarisation inversion requires DC Dirichlet/AC Neumann flags=2"
+            )
+    if "global_flags" in opts:
+        flags = opts.evaluate_scalar("global_flags")
+        if int(flags) & 17:
+            raise AuditError("Polarisation inversion must retain the DC solution")
+        if flags != 0:
+            raise AuditError("Polarisation reconstruction requires global_flags=0")
+    if "filter" in opts and opts.evaluate_scalar("filter") != 0:
+        raise AuditError("Polarisation reconstruction requires an unfiltered inverse")
+    if (
+        "maxmode" in opts
+        and opts.evaluate_scalar("maxmode") != run.data.sizes["z"] // 2
+    ):
+        raise AuditError("Polarisation reconstruction requires all Z modes")
+    if "dst" in opts and opts.get_bool("dst"):
+        raise AuditError("Polarisation reconstruction requires periodic Z, dst=false")
+
+
 def solve_polarisation(run, rhs, periodic_x, periodic_y):
-    """Independent FV inverse: DC Dirichlet and AC Neumann at X faces.
+    """One spectral solve and N FV defect corrections, starting from zero.
+
+    This reproduces the transport potential, rather than converging to the FV
+    inverse. Nonperiodic X uses midpoint Dirichlet DC and Neumann AC guards.
+    """
+    _validate_polarisation_solver(run, periodic_x)
+    return _solve_polarisation(
+        run, rhs, periodic_x, periodic_y, polarisation_corrections(run)
+    )
+
+
+def solve_polarisation_reference(run, rhs, periodic_x, periodic_y):
+    """Exact FV reference for accuracy measurements, never transport assembly.
 
     The nonperiodic DC value is fixed without a mean projection or an RHS
     compatibility condition. Periodic X retains a gauge-fixed constant mode.
     The Fourier eigenvalues include the FV Nyquist response. Time/Y slices
     remain lazy and matrix factors are cached for uniform orthogonal geometry.
     """
+    return _solve_polarisation(run, rhs, periodic_x, periodic_y, None)
+
+
+def _solve_polarisation(run, rhs, periodic_x, periodic_y, corrections):
     ds = run.data
-    section = ds.options[run.model]
-    if not periodic_x and "polarisation_laplacian" in section:
-        opts = section["polarisation_laplacian"]
-        for key in ("inner_boundary_flags", "outer_boundary_flags"):
-            if not periodic_x and key in opts and opts.evaluate_scalar(key) != 2:
-                raise AuditError(
-                    "Polarisation inversion requires DC Dirichlet/AC Neumann flags=2"
-                )
-        if "global_flags" in opts and int(opts.evaluate_scalar("global_flags")) & 17:
-            raise AuditError("Polarisation inversion must retain the DC solution")
+    for name in ("Bxy", "dx", "dz", "g11", "g33", "J"):
+        values = np.asarray(ds[name])
+        if (
+            not np.isfinite(values).all()
+            or np.any(values <= 0)
+            or not np.allclose(values, values.flat[0], rtol=1e-12, atol=1e-14)
+        ):
+            raise AuditError(f"Polarisation inversion requires uniform positive {name}")
+    if float(abs(ds.g13).max()) > 1e-14:
+        raise AuditError("Polarisation inversion requires orthogonal g13=0")
     nx, nz = ds.sizes["x"] - 2 * run.mxg, ds.sizes["z"]
     c = run.scalar_option("average_atomic_mass") / float(ds.Bxy.values.flat[0]) ** 2
     ax = c * float(ds.g11.values.flat[0]) / float(ds.dx.values.flat[0]) ** 2
     az = c * float(ds.g33.values.flat[0]) / float(ds.dz.values.flat[0]) ** 2
-    factors = _polarisation_factors(nx, nz, ax, az, periodic_x)
+    factors = _polarisation_factors(
+        nx, nz, ax, az, periodic_x, spectral=corrections is not None
+    )
+
+    def forward(coefficients):
+        # Full FV operator in Fourier Z, including the unmasked radial faces.
+        result = coefficients * (
+            -2 * ax - 4 * az * np.sin(np.pi * np.arange(nz // 2 + 1) / nz) ** 2
+        )
+        result[1:] += ax * coefficients[:-1]
+        result[:-1] += ax * coefficients[1:]
+        if periodic_x:
+            result[0] += ax * coefficients[-1]
+            result[-1] += ax * coefficients[0]
+        else:
+            shift = np.full(nz // 2 + 1, ax)
+            shift[0] = -ax
+            result[0] += shift * coefficients[0]
+            result[-1] += shift * coefficients[-1]
+        return result
 
     def solve(values):
         values = np.asarray(values)
@@ -293,11 +380,17 @@ def solve_polarisation(run, rhs, periodic_x, periodic_y):
         if periodic_x and abs(values.mean()) > 1e-11 * max(1.0, abs(values).max()):
             raise AuditError("Periodic polarisation RHS has incompatible nonzero mean")
         b = np.fft.rfft(values, axis=-1)
-        if periodic_x:
-            b[0, 0] = 0
-        coefficients = np.column_stack(
-            [factor.solve(b[:, k]) for k, factor in enumerate(factors)]
-        )
+        coefficients = np.zeros_like(b)
+        for _ in range(1 if corrections is None else corrections + 1):
+            residual = b.copy() if corrections is None else b - forward(coefficients)
+            if periodic_x:
+                residual[0, 0] = 0
+            correction = np.column_stack(
+                [factor.solve(residual[:, k]) for k, factor in enumerate(factors)]
+            )
+            if periodic_x:
+                correction[:, 0] -= correction[:, 0].mean()
+            coefficients += correction
         result = np.fft.irfft(coefficients, n=nz, axis=-1)
         return result - result.mean() if periodic_x else result
 

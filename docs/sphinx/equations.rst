@@ -1605,7 +1605,8 @@ be configured as:
 The equations below use normalised quantities, with ion atomic mass
 :math:`A_s`, charge number :math:`Z_s`, and a fixed Boussinesq reference
 mass :math:`\overline{A}` set by ``average_atomic_mass``. Sums over
-:math:`s` include charged ions only. Define
+:math:`s` include charged ions only; electrons and neutral species are
+excluded from the common-temperature ion mixture. Define
 
 .. math::
 
@@ -1630,18 +1631,37 @@ The evolved quantities and temperature recovery are
    T_i &= \frac{2(E_i-K_\parallel-K_\perp)}{3\sum_s n_s}.
    \end{aligned}
 
-In the implementation, the recovered thermal pressure is clipped to be
-non-negative and the total ion density in the temperature denominator is
-soft-floored using ``density_floor``. Potential and pressure are recovered
-iteratively, applying their boundary conditions separately. The Laplacian
-solver supplies approximate corrections; convergence is checked against
-the finite-volume vorticity operator, as well as changes in both
-:math:`\phi` and :math:`\psi`.
+These expressions describe the model before density floors and pressure
+clipping are applied. In the implementation, the recovered thermal pressure
+is clipped to be non-negative and the total ion density in the temperature
+denominator is soft-floored using ``density_floor``. The pressure potential
+uses this same temperature. When the density floor is significant, the sum
+of the assigned species pressures :math:`n_s T_i` can differ from the
+recovered thermal pressure used in the energy partition.
+
+Potential and pressure are recovered iteratively, applying their boundary
+conditions separately. The Laplacian solver supplies approximate corrections.
+Both the changes in :math:`\phi` and :math:`\psi` must satisfy
+
+.. math::
+
+   \max\frac{|f^{\mathrm{new}}-f^{\mathrm{old}}|}
+                  {|f^{\mathrm{new}}|+a_\phi}
+      \leq \epsilon_\phi, \qquad f\in\{\phi,\psi\},
+
+where :math:`a_\phi` is ``phi_atol`` converted from eV to normalised potential
+units and :math:`\epsilon_\phi` is ``phi_rtol``. The physical-cell FV residual
+must also satisfy
+
+.. math::
+
+   \|\Omega-\mathcal{L}(\Phi)\|_\infty
+      \leq \mathtt{vort\_atol}+\epsilon_\phi\|\Omega\|_\infty.
 
 The forward operator is ``bout::ion_energy::Div_a_Grad_perp_XZ``. Its
 X--Z face fluxes and the discrete :math:`K_\perp` share the same
-discretisation, including the cross metric :math:`g^{13}`, so that they
-obey discrete integration by parts with boundary work. For an energy
+discretisation at fixed Y, including the cross metric :math:`g^{13}`, so that
+they obey discrete integration by parts with boundary work. For an energy
 audit, use this discrete kinetic energy rather than spectral Z
 derivatives, even when the approximate Laplacian solver uses Fourier
 modes in Z.
@@ -1686,14 +1706,27 @@ The energy fluxes are
    \end{aligned}
 
 Parallel energy fluxes use each species' velocity and completed sheath
-boundary values. The electron current in the exchange term is
+boundary values. Electrical currents are calculated from the species
+momentum fields :math:`M_s=A_s n_s V_{\parallel s}`:
+
+.. math::
+
+   \mathbf{J}_{\parallel,i}
+      = \mathbf{b}\sum_s\frac{Z_s}{A_s}M_s,
+   \qquad \mathbf{J}_{\parallel,e}=-\mathbf{b}\frac{M_e}{A_e}.
+
+These parallel currents enter the electrical energy flux and electron
+exchange term. The vorticity RHS implemented here contains the Reynolds,
+diamagnetic and viscous current divergences shown above.
+The electron current in the exchange term is
 :math:`\mathbf{J}_e=\mathbf{J}_{\mathrm{dia},e}+\mathbf{J}_{\parallel,e}`.
 Electron thermal energy receives
 :math:`-\mathbf{J}_{\mathrm{dia},e}\cdot\nabla\phi`; parallel electrical
 work is accounted for by the electron momentum equation.
 
-Polarisation transport uses an auxiliary potential :math:`\chi`, solving
-:math:`\mathcal{L}(\chi)=\partial_t\Omega`, to approximate
+Polarisation transport uses an auxiliary potential :math:`\chi` obtained
+from an approximate solution of :math:`\mathcal{L}(\chi)=\partial_t\Omega`
+to calculate
 :math:`\mathbf{J}_{\mathrm{pol}}=-c\nabla_\perp\chi-\mathbf{G}`.
 Each ion species receives polarisation particle and momentum fluxes
 
@@ -1707,7 +1740,7 @@ Each ion species receives polarisation particle and momentum fluxes
 
 These weights use the local mixture mass density, with a floor of
 :math:`\overline{A}` times ``density_floor``. Shared, limited face fluxes
-preserve the species partition of the polarisation current.
+preserve the species partition of the polarisation current above that floor.
 
 All species ``energy_source`` fields supply thermal energy. Ion particle
 and momentum sources also change parallel kinetic energy, giving
@@ -1752,8 +1785,20 @@ This electron thermal source is subtracted from ``Eion`` as an internal
 transfer, conserving the combined ion and electron energy. The mass-density
 denominator is floored using ``average_atomic_mass * density_floor``.
 
-Setting ``phi_boundary_relax = true`` relaxes the radial boundary
-midpoint potential :math:`\phi_b` towards the Z average of the adjacent
+The recovered ion pressure uses homogeneous Neumann boundaries by default.
+With ``neumann_boundary_average_z = true``, its radial face value is instead
+the Z average of the adjacent interior pressure. For interior cell :math:`c`
+and adjacent guard cell :math:`g`,
+
+.. math::
+
+   \frac{P_{i,g}+P_{i,c}}{2}=\langle P_{i,c}\rangle_Z.
+
+This gives a Neumann condition for the DC pressure and a zero midpoint
+Dirichlet condition for its AC modes.
+
+Setting ``phi_boundary_relax = true`` (default ``false``) relaxes the radial
+boundary midpoint potential :math:`\phi_b` towards the Z average of the adjacent
 interior potential:
 
 .. math::
@@ -1766,22 +1811,45 @@ The positive, finite timescale :math:`\tau` is set by
 state is integrated by the time solver and saved in restarts. This mode
 requires two radial guard cells and automatically enables
 ``Vort:evolve_bndry``; explicitly disabling it is an error.
-``phi_core_averagey = true`` additionally averages the inner boundary
-target over physical Y cells on closed core field lines.
+The stored midpoint potential is uniform in Z and may vary in Y.
+``phi_core_averagey = true`` (default ``false``) additionally averages the
+inner boundary target over physical Y cells on closed core field lines.
 
 The full polarisation current is retained in the vorticity/current solve.
 Normal polarisation transport of particles, momentum, enthalpy, parallel
 kinetic energy and electrical work is closed at physical radial faces,
 including cross-metric fluxes. This lets imposed sources and sheath
 boundary conditions determine the corresponding boundary fluxes.
-With either fixed or relaxing phi boundaries, :math:`\chi` has homogeneous
-midpoint Dirichlet conditions for its Z average (DC) and radial Neumann
+At physical X boundaries, with either fixed or relaxing phi, :math:`\chi`
+has homogeneous midpoint Dirichlet conditions for its Z average (DC) and radial Neumann
 conditions for its nonzero Z Fourier modes (AC), at both X boundaries.
-A separate approximate inverse and finite-volume residual iteration enforce
-these conditions before polarisation transport is evaluated. The DC value
-fixes the constant mode without subtracting the mean source or solution.
-For orthogonal metrics the AC normal potential-flow current is already zero;
-DC current and cross-metric current can remain and are closed in transport.
+Let :math:`\mathcal{P}` denote the approximate inverse supplied by the
+auxiliary Laplacian solver, including the Boussinesq coefficient and its
+homogeneous mixed boundary conditions. Starting from zero at every RHS
+evaluation, the component performs
+
+.. math::
+
+   \chi^{(0)}=0, \qquad
+   \chi^{(j+1)}=\chi^{(j)}
+      +\mathcal{P}\left(\frac{\partial\Omega}{\partial t}
+                        -\mathcal{L}(\chi^{(j)})\right),
+   \qquad j=0,\ldots,N,
+
+where :math:`N` is ``polarisation_corrections``. There are :math:`N+1`
+solver calls: one initial solve and :math:`N` FV defect corrections. The
+residual uses the full FV operator, retaining its physical boundary currents;
+only transport fluxes are closed. The mixed guards are imposed before
+evaluating each residual and after the final correction. This gives a
+deterministic auxiliary solve with no tolerance-dependent stopping criterion.
+With the usual Fourier-in-Z inverse, finite corrections leave a FV/spectral
+discretisation error; this is reported by ``ion_chi_residual``.
+
+The DC value fixes the constant mode without subtracting the mean source
+or solution.
+For orthogonal metrics and coefficients independent of Z, the AC normal
+potential-flow current is already zero; DC current and cross-metric current
+can remain and are closed in transport.
 Normal output ``Vort`` remains physical vorticity; restart
 files also store the potential boundary state.
 
@@ -1793,17 +1861,21 @@ Other options in ``[evolve_vorticity_ion_energy]`` are:
   (default ``false``).
 - ``density_floor``: Normalised total ion density floor (default ``1e-7``).
 - ``viscosity``: Kinematic viscosity in m^2/s (default ``0.0``).
-- ``neumann_boundary_average_z``: Set radial ion-pressure boundary values
-  to the Z average of the adjacent interior values (default ``false``,
-  which applies Neumann pressure boundaries).
-- ``phi_max_iterations``: Maximum number of potential recovery or
-  auxiliary-current iterations (default ``100``). Failure to converge
+- ``neumann_boundary_average_z``: Set radial ion-pressure face values
+  to the Z average of the adjacent interior values (default ``false``).
+- ``phi_max_iterations``: Maximum number of pressure/potential recovery
+  iterations (default ``100``). Failure to converge
   raises an error.
-- ``phi_atol`` and ``phi_rtol``: Absolute and relative convergence
-  tolerances for both potential and pressure potential
-  (defaults ``1.0`` eV and ``1e-3``).
+- ``phi_atol`` and ``phi_rtol``: Potential scale :math:`a_\phi` and relative
+  change tolerance :math:`\epsilon_\phi` in the recovery criterion above
+  (defaults ``1.0`` eV and ``1e-3``). The same scale is used for phi and psi.
 - ``vort_atol``: Absolute tolerance for the normalised forward vorticity
   residual (default ``1e-10``); ``phi_rtol`` supplies its relative tolerance.
+- ``polarisation_corrections``: Nonnegative number of FV defect corrections
+  after the initial approximate auxiliary solve (default ``2``). Chi does not
+  use the recovery tolerances or raise an error for a nonzero residual.
+  More corrections reduce the FV/spectral discrepancy when the iteration
+  contracts; the default leaves appreciable error in grid-scale Z modes.
 - ``laplacian``: Subsection containing options for the approximate
   Laplacian solver.
 - ``polarisation_laplacian``: Independent auxiliary solver options, with
@@ -1813,6 +1885,13 @@ Other options in ``[evolve_vorticity_ion_energy]`` are:
 - ``diagnose``: Save additional energy and flux diagnostics (default ``false``).
 
 The default outputs are ``Eion``, ``Tion``, ``Vort`` and ``phi``.
+Pressure/potential recovery starts from the phi and perpendicular kinetic
+energy saved as guesses at the last output state. The initial thermal
+pressure for each RHS uses the current :math:`E_i` and :math:`K_\parallel`
+with that stored :math:`K_\perp`. The guesses remain fixed between outputs,
+including during Newton and Krylov evaluations. Before the first output,
+the kinetic-energy guess is zero; restart phi seeds the initial potential guess.
+
 With ``diagnose = true``, the component also saves ``ion_KE_parallel``,
 ``ion_KE_perp``, ``ion_pressure_potential``, ``ddt(Eion)``, the flux
 divergences ``DivEExB``, ``DivEReynolds``, ``DivEelectric``, ``DivEparallel``
@@ -1821,8 +1900,11 @@ and ``DivEpol``, and the exchange/source terms ``phi_Div_Je``,
 the closed polarisation transport current. The diagnostic ``ddt(Phi)``
 contains the auxiliary :math:`\chi`, which approximates the polarisation
 current rather than the exact time derivative of :math:`\phi+\psi`.
-``ion_chi_iterations`` and ``ion_chi_residual`` report the auxiliary solve's
-correction count and final normalised finite-volume residual.
+``ion_phi_iterations`` reports the last pressure/potential recovery iteration
+count. ``ion_chi_iterations`` is the number of auxiliary solver calls,
+``1 + polarisation_corrections``; ``ion_chi_residual`` is the maximum absolute
+normalised FV residual over physical cells. This residual measures approximation
+accuracy independently of the global energy balance.
 When viscosity is specified, diagnostics also include ``kinematic_viscosity``,
 ``kinematic_viscous_heating``, ``electron_viscous_heating``, ``DivJviscous`` and
 ``DivEviscous``. These additional outputs require ``diagnose = true``.

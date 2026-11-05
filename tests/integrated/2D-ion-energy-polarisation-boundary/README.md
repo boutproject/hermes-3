@@ -10,7 +10,10 @@ or potential boundary mismatch.
 
 Initially the Reynolds current vanishes and the curvature forcing is a pure
 AC mode independent of X. Its auxiliary potential must therefore also be
-independent of X, with the exact FV Fourier amplitude. The test checks all
+independent of X, with the finite-correction Fourier amplitude. If `q` is
+`1-lambda_FV/lambda_spectral` and `N=polarisation_corrections`, its amplitude
+is the exact FV amplitude multiplied by `1-q^(N+1)`. The particle RHS has
+the same factor. The test checks all
 physical cells, including both boundary-adjacent rows. Before transport is
 closed, the AC potential-flow normal flux must already be zero. A Dirichlet
 AC inverse followed by removal of its boundary flux fails this check and
@@ -25,18 +28,25 @@ Run using the repository environment:
 
 The CI matrix refines X at fixed Z (16, 32, 64 by 16), with fixed and relaxing
 phi boundaries. It also checks square refinement, a diagnostics-off pair,
-a tighter-tolerance pilot and a two-rank radial decomposition. `--profile
+a tighter-tolerance pilot, a six-correction sensitivity pilot and a two-rank
+radial decomposition. `--corrections` sets the main count (default two). `--profile
 smoke` uses the two coarsest X sizes and the diagnostics-off pair. `--sizes`
 allows additional X resolutions, including 128, and `--end-time` sets the
 normalised duration. Outputs remain regular. Each invocation writes isolated
 inputs, matched initial states, logs, execution metadata and `result.json`.
 
 The independent xhermes audit uses `bd.options` and the shared Python
-finite-volume inversion with DC Dirichlet/AC Neumann conditions. It checks
+finite sequence of spectral inversions and full FV defect corrections with
+DC Dirichlet/AC Neumann conditions. It checks
 partition and forward residuals, optional diagnostic divergences, closed
 particle/energy faces, face Gauss identities and source-free plasma energy
 and particle balance. Reports separate boundary/interior maxima and DC/AC
-current corrections. Initial analytic checks provide the regression gate;
+current corrections. An exact FV reference measures auxiliary approximation
+error separately from C++/Python agreement. The smooth short-time fixture
+requires relative chi error and residual below `1e-3`, and the two-versus-six
+correction history difference below `1e-7` in normalised fields. These are
+fixture accuracy budgets, not guarantees for nonlinear or Nyquist structure.
+Initial analytic checks provide the regression gate;
 evolved vorticity amplitudes are reported without assuming they must vanish.
 
 DC normal current remains permitted by the auxiliary Dirichlet condition and

@@ -254,6 +254,7 @@ EvolveVorticityIonEnergy::EvolveVorticityIonEnergy(std::string name, Options& al
   // Evolve the vorticity and ion energy in time
   solver->add(Vort, "Vort");
   solver->add(Eion, "Eion");
+
   if (phi_boundary_relax) {
     swap(static_cast<FieldData&>(Vort), static_cast<FieldData&>(vorticity));
     ddt(Vort).copyBoundary(Vort);
@@ -296,9 +297,6 @@ EvolveVorticityIonEnergy::EvolveVorticityIonEnergy(std::string name, Options& al
   // Add phi to restart files so that the value in the boundaries
   // is restored on restart. This is done even when phi is not evolving,
   // so that phi can be saved and re-loaded
-
-  // Set initial value. Will be overwritten if restarting
-  Pi_sum = (2. / 3) * Eion;
 
   // Coefficients for Boussinesq solve
   boussinesq_coeff = average_atomic_mass / SQ(coord->Bxy());
@@ -352,6 +350,14 @@ EvolveVorticityIonEnergy::EvolveVorticityIonEnergy(std::string name, Options& al
                   .doc("Absolute tolerance on the normalised forward vorticity residual")
                   .withDefault(1e-10);
 
+  polarisation_corrections =
+      options["polarisation_corrections"]
+          .doc("Finite-volume defect corrections after the spectral chi solve")
+          .withDefault(2);
+  if (polarisation_corrections < 0) {
+    throw BoutException("polarisation_corrections must be >= 0");
+  }
+
   // Read curvature vector
   try {
     Curlb_B.covariant = false; // Contravariant
@@ -387,9 +393,23 @@ EvolveVorticityIonEnergy::EvolveVorticityIonEnergy(std::string name, Options& al
       options["diagnose"].doc("Output additional diagnostics?").withDefault<bool>(false);
 }
 
+void EvolveVorticityIonEnergy::acceptWarmStart() {
+  if (!have_solution) {
+    return; // No converged recovery yet: keep the initial or restart guess
+  }
+  phi_guess = copy(phi);
+  ion_KE_perp_guess = copy(ion_KE_perp);
+}
+
 void EvolveVorticityIonEnergy::transform_impl(GuardedOptions& state) {
   mesh->communicate(Vort, Eion);
   vorticity = copy(Vort);
+
+  // Start from the guess stored at the last output state, not from whatever
+  // the previous RHS call (possibly a Jacobian probe or rejected stage) left.
+  // This keeps the RHS a deterministic function of the state within a step.
+  phi = copy(phi_guess);
+
   if (phi_boundary_relax) {
     // Assignment preserves vorticity's independently owned boundary rules.
     vorticity.applyBoundary();
@@ -434,12 +454,13 @@ void EvolveVorticityIonEnergy::transform_impl(GuardedOptions& state) {
   // Use the same density floor as the temperature recovery.
   const Field3D pressure_weight =
       mass_charge_density / (average_atomic_mass * Ni_sum_floor);
-  if (phi_boundary_relax) {
-    // Start from this stage's energy rather than a previous pressure iterate.
-    // Pressure guards must be consistent before the first Phi correction.
-    Pi_sum = floor((2. / 3) * (Eion - ion_KE_parallel), 0.0);
-    applyPressureBoundary(Pi_sum);
-  }
+  // Initial pressure: this state's E and K_|| with K⊥ from the last output
+  // state. Equivalent to reusing the previous Pi_sum corrected for the change in
+  // (E - K_||), so only the change in K⊥ is left for the iteration. Before the
+  // first output the guess is K⊥ = 0.
+  // Pressure guards must be consistent before the first Phi correction.
+  Pi_sum = floor((2. / 3) * (Eion - ion_KE_parallel - ion_KE_perp_guess), 0.0);
+  applyPressureBoundary(Pi_sum);
   psi = pressure_weight * Pi_sum;
   const BoutReal vort_tolerance = vort_atol + (phi_rtol * max(abs(Vort), true));
 
@@ -496,6 +517,7 @@ void EvolveVorticityIonEnergy::transform_impl(GuardedOptions& state) {
                           iteration, phi_err, vort_err, vort_tolerance);
     }
   } while (true);
+  phi_iterations = iteration;
   mesh->communicate(phi, Pi_sum, psi);
   applyPotentialBoundary();
 
@@ -520,6 +542,7 @@ void EvolveVorticityIonEnergy::transform_impl(GuardedOptions& state) {
     phi = fromFieldAligned(phi_fa);
   }
   applyPotentialBoundary();
+  have_solution = true; // phi and ion_KE_perp are converged for this state
 
   auto fields = state["fields"];
   set(fields["vorticity"], vorticity);
@@ -577,6 +600,7 @@ void EvolveVorticityIonEnergy::transform_impl(GuardedOptions& state) {
 
   //////////////////////////////////////////////////////////
   // Parallel current
+  // Note: This requires the sheath boundary conditions
 
   Field3D Jpar_e; // Electron current
   if (electrons.isSet("momentum")) {
@@ -767,6 +791,10 @@ void EvolveVorticityIonEnergy::calculateViscosity() {
 }
 
 void EvolveVorticityIonEnergy::outputVars(Options& state) {
+  // Outputs follow an RHS evaluation at the accepted output state.
+  // Update the recovery guess here so it remains fixed between outputs.
+  acceptWarmStart();
+
   // Normalisations
   auto Nnorm = get<BoutReal>(state["Nnorm"]);
   auto Tnorm = get<BoutReal>(state["Tnorm"]);
@@ -843,19 +871,28 @@ void EvolveVorticityIonEnergy::outputVars(Options& state) {
                     {"conversion", SI::qe * Nnorm * Omega_ci}});
     set_with_attrs(state["ion_pressure_potential"], psi,
                    {{"time_dimension", "t"}, {"units", "V"}, {"conversion", Tnorm}});
-    set_with_attrs(state["ddt(Phi)"], chi,
+    set_with_attrs(
+        state["ddt(Phi)"], chi,
+        {{"time_dimension", "t"},
+         {"units", "V s^-1"},
+         {"conversion", Tnorm * Omega_ci},
+         {"long_name", "Auxiliary polarisation current potential"},
+         {"description", "Fixed-correction approximation to L(chi)=physical ddt(Vort); "
+                         "nonperiodic X: midpoint Dirichlet DC, "
+                         "radial Neumann AC; "
+                         "approximate, not exact ddt(phi+psi)"}});
+    set_with_attrs(state["ion_phi_iterations"], phi_iterations,
                    {{"time_dimension", "t"},
-                    {"units", "V s^-1"},
-                    {"conversion", Tnorm * Omega_ci},
-                    {"long_name", "Auxiliary polarisation current potential"},
-                    {"description",
-                     "L(chi)=physical ddt(Vort); nonperiodic X: midpoint Dirichlet DC, "
-                     "radial Neumann AC; "
-                     "approximate, not exact ddt(phi+psi)"}});
-    state["ion_chi_iterations"] = chi_iterations;
-    state["ion_chi_iterations"].attributes["time_dimension"] = "t";
-    state["ion_chi_residual"] = chi_residual;
-    state["ion_chi_residual"].attributes["time_dimension"] = "t";
+                    {"description", "Iterations used in the last coupled pressure and "
+                                    "potential recovery"}});
+    set_with_attrs(state["ion_chi_iterations"], chi_iterations,
+                   {{"time_dimension", "t"},
+                    {"description", "Auxiliary chi solver calls: one initial solve plus "
+                                    "polarisation_corrections defect corrections"}});
+    set_with_attrs(state["ion_chi_residual"], chi_residual,
+                   {{"time_dimension", "t"},
+                    {"description", "Maximum absolute normalised finite-volume residual "
+                                    "of L(chi)=physical ddt(Vort) over physical cells"}});
     set_with_attrs(state["ion_KE_parallel"], ion_KE_parallel,
                    {{"time_dimension", "t"}, {"units", "J m^-3"}, {"conversion", Pnorm}});
     set_with_attrs(state["ion_KE_perp"], ion_KE_perp,
@@ -992,6 +1029,7 @@ void EvolveVorticityIonEnergy::restartVars(Options& state) {
     restore_phi_on_restart = false;
     if (state.isSet("phi")) {
       phi = state["phi"].as<Field3D>();
+      phi_guess = copy(phi);
     }
     if (phi_boundary_relax) {
       const int version = state["ion_energy_boundary_state_version"].withDefault(0);
@@ -1112,25 +1150,50 @@ Field3D EvolveVorticityIonEnergy::correctPotential(const Field3D& rhs,
   return potential + correction;
 }
 
-void EvolveVorticityIonEnergy::solvePolarisationPotential(const Field3D& rhs) {
-  const BoutReal tolerance = vort_atol + phi_rtol * max(abs(rhs), true);
-  chi_iterations = 0;
-  for (;;) {
+Field3D bout::ion_energy::fixedPolarisationPotential(const Field3D& coefficient,
+                                                     const Field3D& rhs,
+                                                     Laplacian& inverse,
+                                                     int corrections) {
+  if (corrections < 0) {
+    throw BoutException("polarisation_corrections must be >= 0");
+  }
+  Field3D chi = zeroFrom(rhs);
+  const auto apply_boundary = [&]() {
     mesh->communicate(chi);
     bout::ion_energy::applyPolarisationBoundary(chi);
     mesh->communicate(chi);
-    chi_residual = max(abs(rhs - Div_a_Grad_perp_XZ(boussinesq_coeff, chi)), true);
-    if (chi_residual <= tolerance) {
-      return;
+  };
+
+  // Start from zero every call, and use a fixed number of solves rather than a
+  // tolerance, so chi is a smooth function of rhs (and so of the state) and
+  // never depends on previous RHS evaluations. The first solve is the spectral
+  // inverse; the rest are defect corrections to the finite-volume operator.
+  for (int solve = 0; solve <= corrections; ++solve) {
+    apply_boundary();
+    Field3D residual{zeroFrom(rhs)};
+    const Field3D forward = Div_a_Grad_perp_XZ(coefficient, chi);
+    BOUT_FOR(i, residual.getRegion("RGN_NOBNDRY")) {
+      residual[i] = (rhs[i] - forward[i]) / coefficient[i];
     }
-    if (chi_iterations == phi_max_iterations) {
-      throw BoutException("Polarisation potential did not converge in {} iterations: "
-                          "vorticity residual {} (tolerance {})",
-                          chi_iterations, chi_residual, tolerance);
-    }
-    // Preserve the existing periodic inverse/gauge; physical X uses the
-    // separate mixed-boundary inverse. chi is only a warm-start guess.
-    chi = correctPotential(rhs, chi, mesh->periodicX ? *phiSolver : *chiSolver);
-    ++chi_iterations;
+    const Field3D approximate = inverse.solve(residual, zeroFrom(chi));
+    // Only copy solved X-Z planes; unused Y guards need deterministic values.
+    Field3D correction{zeroFrom(chi)};
+    BOUT_FOR(i, correction.getRegion("RGN_NOY")) { correction[i] = approximate[i]; }
+    mesh->communicate(correction);
+    chi += correction;
   }
+  apply_boundary();
+  return chi;
+}
+
+void EvolveVorticityIonEnergy::solvePolarisationPotential(const Field3D& rhs) {
+  // Preserve the existing periodic inverse/gauge; physical X uses the
+  // separate mixed-boundary inverse, matching applyPolarisationBoundary.
+  Laplacian& inverse = mesh->periodicX ? *phiSolver : *chiSolver;
+  chi = bout::ion_energy::fixedPolarisationPotential(boussinesq_coeff, rhs, inverse,
+                                                     polarisation_corrections);
+  chi_iterations = 1 + polarisation_corrections;
+
+  // Diagnostic only: residual against the finite-volume operator
+  chi_residual = max(abs(rhs - Div_a_Grad_perp_XZ(boussinesq_coeff, chi)), true);
 }

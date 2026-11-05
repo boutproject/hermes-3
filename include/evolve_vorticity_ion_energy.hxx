@@ -27,6 +27,9 @@ Field3D Div_a_Grad_perp_XZ(const Field3D& a, const Field3D& f, bool bndry_flux =
 Field3D kineticEnergyPerp(const Field3D& a, const Field3D& f);
 /// Homogeneous midpoint Dirichlet DC and radial Neumann AC at physical X faces.
 void applyPolarisationBoundary(Field3D& chi);
+/// Deterministic auxiliary inverse: one spectral solve and N FV corrections.
+Field3D fixedPolarisationPotential(const Field3D& coefficient, const Field3D& rhs,
+                                   Laplacian& inverse, int corrections);
 } // namespace bout::ion_energy
 
 /// Evolves vorticity and ion total energy
@@ -109,13 +112,20 @@ private:
   Field3D phi{0.0}; ///< Electrostatic potential ϕ
   Field3D chi{0.0}; ///< Auxiliary current potential with DC Dirichlet / AC Neumann
   Field3D Pi_sum;   ///< Total ion pressure
-  Field3D psi;      ///< Pressure potential Σ A_s p_s / (Abar Z_s)
-  Field3D Ti;       ///< Common ion temperature
+
+  // Starting guess for potential recovery, updated only at outputs
+  Field3D phi_guess{0.0};         ///< Potential at the last output state
+  Field3D ion_KE_perp_guess{0.0}; ///< K⊥ at the last output state
+  bool have_solution{false};      ///< phi and ion_KE_perp hold a converged solution
+  int phi_iterations{0};          ///< Iterations used in the last potential recovery
+  Field3D psi;                    ///< Pressure potential Σ A_s p_s / (Abar Z_s)
+  Field3D Ti;                     ///< Common ion temperature
   Coordinates::FieldMetric boussinesq_coeff; ///< c = mass / B^2
   std::unique_ptr<Laplacian> phiSolver;      ///< Laplacian solver in X-Z
   std::unique_ptr<Laplacian> chiSolver;      ///< Mixed-boundary auxiliary inverse
-  int chi_iterations{0};                     ///< Last auxiliary correction count
-  BoutReal chi_residual{0.0};                ///< Last physical FV residual
+  int chi_iterations{0};           ///< Spectral solves in the last chi calculation
+  BoutReal chi_residual{0.0};      ///< Max FV residual of the last chi calculation
+  int polarisation_corrections{2}; ///< FV defect corrections after the spectral solve
 
   bool phi_boundary_relax;         ///< Relax boundary to zero-gradient
   BoutReal phi_boundary_timescale; ///< Relaxation timescale [normalised]
@@ -189,7 +199,9 @@ private:
   Field3D correctPotential(const Field3D& rhs, const Field3D& potential,
                            Laplacian& approximate_inverse) const;
 
-  /// Converge the stored auxiliary iterate with its mixed boundary conditions.
+  /// Solve for the auxiliary potential chi with its mixed boundary conditions.
+  /// One spectral solve from zero followed by a fixed number of finite-volume
+  /// defect corrections: the result depends only on rhs, not on earlier calls.
   void solvePolarisationPotential(const Field3D& rhs);
 
   /// Calculate ion perpendicular kinetic energy, K⊥ = 1/2 c |∇⊥Φ|^2
@@ -199,6 +211,14 @@ private:
   /// gives the kinetic perpendicular energy plus boundary terms.
   ///
   Field3D calculateKEperp(const Field3D& phi, const Field3D& psi) const;
+
+  /// Store the most recent converged potential and perpendicular kinetic energy
+  /// as the starting guess for subsequent right-hand-side evaluations.
+  ///
+  /// Called from outputVars after an RHS evaluation at the accepted output state.
+  /// The guess remains fixed between outputs, including during each step's
+  /// nonlinear and linear iterations, so the RHS is deterministic within a step.
+  void acceptWarmStart();
 };
 
 namespace {

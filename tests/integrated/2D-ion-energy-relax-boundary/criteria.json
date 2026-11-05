@@ -32,6 +32,7 @@
   "tolerances": {
     "partition_absolute": 1e-09,
     "forward_absolute": 1e-09,
+    "chi_relative_residual": 1e-3,
     "diagnostic_absolute": 1e-10,
     "gauss_absolute": 1e-10,
     "balance_relative": 1e-06,

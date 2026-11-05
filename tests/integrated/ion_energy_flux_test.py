@@ -27,8 +27,10 @@ from energy_analysis.fluxes import (
     compare_flux_diagnostics,
     flux_power,
     net_face_flux,
+    polarisation_corrections,
     reconstruct_fluxes,
     reconstruct_sources,
+    solve_polarisation_reference,
     species_velocity,
 )
 from energy_analysis.report import inventory_report
@@ -127,10 +129,33 @@ def audit(run, manifest, diagnose):
         assertions["nonzero_boundary_relaxation"] = (
             relaxation_signal > manifest["minimum_signals"]["boundary_relaxation"]
         )
-        assertions["auxiliary_full_residual"] = (
-            float(abs(run.interior(full_current.divergence - flux["ddt(Vort)"])).max())
+        chi_residual = float(
+            abs(run.interior(full_current.divergence - flux["ddt(Vort)"])).max()
+        )
+        chi_relative_residual = chi_residual / max(
+            float(abs(run.interior(flux["ddt(Vort)"])).max()), np.finfo(float).tiny
+        )
+        assertions["auxiliary_approximation_residual"] = (
+            chi_relative_residual < tol["chi_relative_residual"]
+        )
+        reference = solve_polarisation_reference(run, flux["ddt(Vort)"], False, True)
+        reference_forward = fv_xz(
+            run.scalar_option("average_atomic_mass") / run.data.Bxy**2,
+            reference,
+            run.data,
+        )
+        assertions["auxiliary_reference_residual"] = (
+            float(
+                abs(
+                    run.interior(reference_forward.divergence - flux["ddt(Vort)"])
+                ).max()
+            )
             < tol["forward_absolute"]
         )
+        if diagnose:
+            assertions["auxiliary_solve_count"] = bool(
+                (run.data.ion_chi_iterations == 1 + polarisation_corrections(run)).all()
+            )
         assertions["polarisation_energy_split"] = (
             float(
                 abs(
@@ -145,6 +170,9 @@ def audit(run, manifest, diagnose):
             < tol["diagnostic_absolute"]
         )
         boundary_report = {
+            "polarisation_corrections": polarisation_corrections(run),
+            "chi_residual_normalised": chi_residual,
+            "chi_relative_residual": chi_relative_residual,
             "ode_max_error_normalised": ode_error,
             "relaxation_signal_normalised": relaxation_signal,
             "full_boundary_current_signal_normalised": current_signal,

@@ -35,6 +35,11 @@ Each run writes isolated outputs, logs and JSON assertions. `--profile smoke`
 uses the two finest cadences while retaining boundary and restart assertions.
 
 Diagnostic comparisons use tighter tolerances than the restart comparison.
+The auxiliary chi audit reproduces the fixed spectral corrections and reports
+its FV residual separately from reconstruction agreement. This smooth fixture
+uses a relative residual budget of `1e-3`; the exact FV reference must still
+satisfy the original forward tolerance. Boundary closure and power balance
+retain their independent strict checks.
 A restart resets CVODE history, so its comparison permits differences within
 the configured time solver accuracy (`rtol=1e-9`), using `1e-7` relative and
 `1e-8` absolute history tolerances. The midpoint ODE audit independently

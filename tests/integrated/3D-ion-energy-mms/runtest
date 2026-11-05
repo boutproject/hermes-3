@@ -116,6 +116,9 @@ def run_case(
         ]
     if diagnose:
         command += ["evolve_vorticity_ion_energy:diagnose=true"]
+    command += [
+        f"evolve_vorticity_ion_energy:polarisation_corrections={config['polarisation_corrections']}"
+    ]
     if not args.expression_sources:
         command += [
             "hermes:components=test_ion_energy_mms,i,j,e,evolve_vorticity_ion_energy,sound_speed"
@@ -174,6 +177,12 @@ def main():
     parser.add_argument("--axis", choices=("all", "x", "y", "z"), default="all")
     parser.add_argument("--end-time", type=float, default=0.1)
     parser.add_argument("--outputs", type=int, default=1)
+    parser.add_argument(
+        "--corrections",
+        type=int,
+        default=2,
+        help="Fixed FV corrections after the spectral chi solve",
+    )
     parser.add_argument("--output-root", type=Path)
     parser.add_argument("--resume", type=Path)
     parser.add_argument("--analyse-only", type=Path)
@@ -214,6 +223,7 @@ def main():
         args.nproc > 0 and args.nxpe > 0 and args.nproc % args.nxpe == 0,
         "NXPE must divide the MPI rank count",
     )
+    require(args.corrections >= 0, "--corrections must be nonnegative")
     base = args.sizes[0]
     grids = [
         tuple(n if args.axis == "all" or axis == args.axis else base for axis in "xyz")
@@ -231,6 +241,7 @@ def main():
         else None,
         "end_time": args.end_time,
         "outputs": args.outputs,
+        "polarisation_corrections": args.corrections,
         "input_sha256": hashlib.sha256(template.read_bytes()).hexdigest(),
     }
     folder = args.analyse_only or args.resume or args.output_root

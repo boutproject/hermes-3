@@ -153,6 +153,7 @@ def dataset():
         options[name]["type"] = "evolve_momentum"
         options[name]["density_floor"] = 1e-7
     options["evolve_vorticity_ion_energy:average_atomic_mass"] = "7/4"
+    options["evolve_vorticity_ion_energy:laplacian:type"] = "cyclic"
     options["evolve_vorticity_ion_energy"]["diagnose"] = "false"
     ds.attrs = {
         "options": options,
@@ -553,7 +554,10 @@ def test_parallel_face_flux_and_open_midpoints():
 
 
 def test_sparse_polarisation_solve_and_neumann_guards(dataset):
-    from energy_analysis.fluxes import fill_transport_guards, solve_polarisation
+    from energy_analysis.fluxes import (
+        fill_transport_guards,
+        solve_polarisation_reference,
+    )
 
     dataset["g13"] *= 0
     dataset["g_22"] = xr.ones_like(dataset.J)
@@ -562,8 +566,10 @@ def test_sparse_polarisation_solve_and_neumann_guards(dataset):
         2 * np.pi * (dataset.x - 2) / 8 + 2 * np.pi * dataset.z / 8
     )
     rhs = perpendicular_operator(1.75, phi, dataset).divergence
-    actual = solve_polarisation(run, rhs, True, True)
-    lazy = solve_polarisation(run, rhs.chunk({"t": 1, "x": 3, "z": 3}), True, True)
+    actual = solve_polarisation_reference(run, rhs, True, True)
+    lazy = solve_polarisation_reference(
+        run, rhs.chunk({"t": 1, "x": 3, "z": 3}), True, True
+    )
     xr.testing.assert_allclose(lazy.compute(), actual)
     xr.testing.assert_allclose(run.interior(actual), run.interior(phi), atol=2e-14)
     guarded = fill_transport_guards(phi, run, False, True)
@@ -571,7 +577,7 @@ def test_sparse_polarisation_solve_and_neumann_guards(dataset):
     xr.testing.assert_allclose(guarded.isel(x=0, drop=True), phi.isel(x=3, drop=True))
     rhs = rhs + 0.1
     with pytest.raises(AuditError, match="incompatible"):
-        solve_polarisation(run, rhs, True, True)
+        solve_polarisation_reference(run, rhs, True, True)
 
 
 def test_prescribed_source_conversion_and_coverage(dataset):
@@ -651,7 +657,7 @@ def test_open_rectangle_is_not_misclassified_as_tokamak(dataset):
 @pytest.mark.parametrize("relax", [False, True])
 @pytest.mark.parametrize("mode", [0, 1, 4, "mixed"])
 def test_mixed_auxiliary_boundary_satisfies_full_forward_operator(dataset, relax, mode):
-    from energy_analysis.fluxes import solve_polarisation
+    from energy_analysis.fluxes import solve_polarisation_reference
     from energy_analysis.transport import fv_xz
 
     dataset["g13"] *= 0
@@ -672,8 +678,10 @@ def test_mixed_auxiliary_boundary_satisfies_full_forward_operator(dataset, relax
         layer = potential.isel(x=physical, drop=True)
         potential[{"x": guard}] = layer - 2 * layer.mean("z")
     rhs = perpendicular_operator(1.75, potential, dataset).divergence
-    solved = solve_polarisation(run, rhs, False, True)
-    lazy = solve_polarisation(run, rhs.chunk({"t": 1, "x": 3, "z": 3}), False, True)
+    solved = solve_polarisation_reference(run, rhs, False, True)
+    lazy = solve_polarisation_reference(
+        run, rhs.chunk({"t": 1, "x": 3, "z": 3}), False, True
+    )
     xr.testing.assert_allclose(lazy.compute(), solved, atol=2e-13)
     xr.testing.assert_allclose(
         run.interior(solved), run.interior(potential), atol=2e-13
@@ -694,6 +702,78 @@ def test_mixed_auxiliary_boundary_satisfies_full_forward_operator(dataset, relax
     for weight in (1.0, 0.7, -0.2, 2.5, 0.03, 0.4):
         closed = fv_xz(weight, solved, dataset, boundary_flux=False)
         assert_allclose(closed.flux_x.isel(x=[1, -3]), 0)
+
+
+@pytest.mark.parametrize("periodic", [False, True])
+@pytest.mark.parametrize("mode", [1, 2, 4])
+@pytest.mark.parametrize("corrections", [0, 2, 6])
+def test_fixed_auxiliary_fourier_response(dataset, periodic, mode, corrections):
+    from energy_analysis.fluxes import solve_polarisation, solve_polarisation_reference
+
+    dataset["g13"] *= 0
+    dataset.options["evolve_vorticity_ion_energy:polarisation_corrections"] = (
+        "1+1" if corrections == 2 else str(corrections)
+    )
+    run = open_run(dataset)
+    k = 2 * np.pi * mode / dataset.sizes["z"]
+    kx = 2 * np.pi / 8 if periodic else 0
+    potential = xr.ones_like(dataset.phi) * np.cos(k * dataset.z + kx * (dataset.x - 2))
+    ax, az = 1.75 * 1.2, 1.75 * 1.4
+    lx = -4 * ax * np.sin(kx / 2) ** 2
+    lf = lx - 4 * az * np.sin(k / 2) ** 2
+    ls = lx - az * k**2
+    q = 1 - lf / ls
+    rhs = lf * potential
+    actual = solve_polarisation(run, rhs, periodic, True)
+    lazy = solve_polarisation(run, rhs.chunk({"t": 1, "x": 3, "z": 3}), periodic, True)
+    reference = solve_polarisation_reference(run, rhs, periodic, True)
+    expected = potential * (1 - q ** (corrections + 1))
+    xr.testing.assert_allclose(run.interior(actual), run.interior(expected), atol=2e-13)
+    xr.testing.assert_allclose(lazy.compute(), actual, atol=2e-13)
+    xr.testing.assert_allclose(
+        run.interior(reference), run.interior(potential), atol=2e-13
+    )
+    forward = perpendicular_operator(
+        1.75, actual, dataset, periodic_x=periodic
+    ).divergence
+    xr.testing.assert_allclose(
+        run.interior(rhs - forward),
+        run.interior(rhs * q ** (corrections + 1)),
+        atol=2e-13,
+    )
+
+
+@pytest.mark.parametrize("count", ["-1", "1/2", "1e999"])
+def test_auxiliary_rejects_invalid_correction_count(dataset, count):
+    from energy_analysis.fluxes import solve_polarisation
+
+    dataset["g13"] *= 0
+    dataset.options["evolve_vorticity_ion_energy:polarisation_corrections"] = count
+    with pytest.raises(AuditError, match="nonnegative integer"):
+        solve_polarisation(open_run(dataset), xr.zeros_like(dataset.phi), False, True)
+
+
+@pytest.mark.parametrize("periodic", [False, True])
+@pytest.mark.parametrize(
+    "key,value",
+    [
+        ("type", "petsc"),
+        ("filter", "0.1"),
+        ("maxmode", "2"),
+        ("dst", "true"),
+        ("global_flags", "8"),
+    ],
+)
+def test_auxiliary_rejects_unsupported_inverse(dataset, periodic, key, value):
+    from energy_analysis.fluxes import solve_polarisation
+
+    dataset["g13"] *= 0
+    section = "laplacian" if periodic else "polarisation_laplacian"
+    dataset.options[f"evolve_vorticity_ion_energy:{section}:{key}"] = value
+    with pytest.raises(AuditError, match="Polarisation reconstruction"):
+        solve_polarisation(
+            open_run(dataset), xr.zeros_like(dataset.phi), periodic, True
+        )
 
 
 def test_auxiliary_singleton_z_is_dirichlet(dataset):

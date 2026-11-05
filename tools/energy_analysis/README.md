@@ -210,8 +210,20 @@ The separate `2D-ion-energy-polarisation-boundary` test checks the initial
 analytic AC current, boundary-cell residuals, X refinement, fixed/relaxing phi,
 diagnostics-off reconstruction, MPI decomposition and power balance.
 
-The diagnostic named `ddt(Phi)` contains an auxiliary current potential solving
-`L(chi)=physical ddt(Vort)`, rather than the exact derivative of `phi+psi`.
+The diagnostic named `ddt(Phi)` contains an auxiliary current potential
+approximating `L(chi)=physical ddt(Vort)`. Each RHS starts chi from zero and
+performs one spectral solve followed by `polarisation_corrections` FV defect
+corrections (default two). `solve_polarisation` reconstructs that finite sequence
+from ordinary fields and `bd.options`, including when diagnostics are absent.
+The supported inverse is unfiltered cyclic on the existing uniform orthogonal
+slab geometry; unsupported inverse settings leave the flux audit incomplete.
+`solve_polarisation_reference` supplies the exact FV inverse only for independent
+accuracy measurements. Reconstruction agreement and approximation error are
+checked separately. At Nyquist, two corrections leave about 21% of a pure-mode
+residual, so smooth-mode agreement does not imply grid-scale accuracy.
+`ion_chi_iterations` counts spectral solves (one plus the correction count),
+and `ion_chi_residual` measures the absolute physical-cell FV residual.
+Chi is not the exact derivative of `phi+psi`.
 Saved-output finite differences of `phi+psi` should not be compared as exact
 χ diagnostics. Ordinary output `Vort` contains physical vorticity. New restart
 files carry a version marker: their solver `Vort` physical radial boundary

@@ -1422,17 +1422,21 @@ This orthogonal curvature slab isolates the radial polarisation transport
 boundary. A pressure perturbation independent of X produces a pure AC
 current drive. The auxiliary potential uses midpoint Dirichlet conditions
 for its DC mode and radial Neumann conditions for AC modes. Its initial
-finite-volume solution is known analytically: the unmasked AC normal current
+finite-correction response is known analytically: the unmasked AC normal current
 must vanish, including at the first and last physical cells.
 
 The test refines X at fixed Z, then both dimensions, with fixed and relaxing
-phi boundaries, diagnostics on/off, a tighter-tolerance pilot and two MPI
+phi boundaries, diagnostics on/off, time-tolerance and correction-count pilots and two MPI
 ranks. It checks independent Python reconstruction, closed transport faces,
 face Gauss identities, and global energy and particle balance. Reports retain
 boundary/interior maxima and DC/AC weighted-current corrections. Nonzero DC
 and mixed-metric normal currents remain explicitly closed in transport;
 the unit tests cover those cases, invalid solver flags and auxiliary
-warm-start independence under reordered RHS calls.
+warm-start independence under reordered RHS calls. The fixed-correction
+auxiliary inverse is checked against analytic DC/AC responses, including
+Nyquist and singleton Z. Separate higher-correction tests check small FV
+residuals on nonuniform meshes with ``g13``. Output-only warm starts are
+checked for bitwise repeatability between outputs and reuse at the output state.
 
 .. _subsec-2d-energy-comparison:
 

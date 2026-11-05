@@ -136,3 +136,12 @@ The [skew-metric](../3D-ion-energy-mms-skew/README.md) and
 READMEs and runners. Generate their compatible profiles with `mms.py --all
 --check`; changing metric or viscosity options in the baseline alone does not
 preserve its manufactured boundary problem.
+# Auxiliary inversion accuracy
+
+`--corrections N` selects the fixed FV correction count after the initial
+spectral chi solve (default two) and records it in the scan manifest. Repeat
+with `--corrections 6` to measure sensitivity without changing continuum MMS
+sources or pressure/potential recovery tolerances. With `--diagnose`, chi's
+continuum errors are convergence measurements; a nonzero discrete auxiliary
+residual is distinct from pressure/potential recovery and energy partition
+errors.

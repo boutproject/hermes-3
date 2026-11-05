@@ -4,6 +4,11 @@ Status: implemented. The production component uses an auxiliary polarisation
 potential `chi` and solver-managed phi midpoint state stored in physical
 radial boundary cells of `Vort`. The sections below record the design contract.
 
+The auxiliary chi boundary choice in section 2 is superseded by the implemented
+[mixed DC/AC polarisation advection](ion-energy-polarisation-advection-plan.md):
+DC midpoint Dirichlet and AC radial Neumann at both physical X boundaries.
+The solver-managed phi boundary state and transport face closures remain.
+
 Validation includes C++ storage/packing, recovery, restart and mixed-metric
 face tests; independent Python reconstruction tests; the separate slab
 diagnostic/refinement/MPI/restart matrix; and a six-rank COMPASS/sheath matrix.

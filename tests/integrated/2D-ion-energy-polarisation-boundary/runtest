@@ -22,7 +22,9 @@ from energy_analysis.fluxes import (
     PrescribedSources,
     flux_power,
     net_face_flux,
+    polarisation_corrections,
     reconstruct_fluxes,
+    solve_polarisation_reference,
 )
 from energy_analysis.operators import perpendicular_operator, spectral_ddz
 from energy_analysis.report import inventory_report
@@ -99,7 +101,11 @@ def audit(folder, tolerances, diagnose):
         * float(ds.g33.values.flat[0])
         / float(ds.dz.values.flat[0]) ** 2
     )
-    expected_chi = drive / (-4 * az * np.sin(np.pi / ds.sizes["z"]) ** 2)
+    corrections = polarisation_corrections(run)
+    wave = 2 * np.pi / ds.sizes["z"]
+    q = 1 - 4 * np.sin(wave / 2) ** 2 / wave**2
+    response = 1 - q ** (corrections + 1)
+    expected_chi = response * drive / (-4 * az * np.sin(wave / 2) ** 2)
     chi_error = float(
         abs(run.interior(flux["ddt(Phi)"].isel(t=0) - expected_chi)).max()
     )
@@ -107,15 +113,43 @@ def audit(folder, tolerances, diagnose):
     full = perpendicular_operator(
         run.scalar_option("average_atomic_mass") / ds.Bxy**2, flux["ddt(Phi)"], ds
     )
+    residual = full.divergence - flux["ddt(Vort)"]
+    relative_residual = float(abs(run.interior(residual)).max()) / max(
+        float(abs(run.interior(flux["ddt(Vort)"])).max()), np.finfo(float).tiny
+    )
     require(
-        float(abs(run.interior(full.divergence - flux["ddt(Vort)"])).max())
+        relative_residual < tolerances["chi_relative_residual"],
+        "Auxiliary approximation residual exceeds budget",
+    )
+    require(
+        float(abs(run.interior(full.divergence.isel(t=0) - response * drive)).max())
         < tolerances["forward"],
-        "Auxiliary residual at a physical boundary cell",
+        "Initial finite-correction response",
+    )
+    reference = solve_polarisation_reference(
+        run, flux["ddt(Vort)"], False, True
+    ).compute()
+    reference_forward = perpendicular_operator(
+        run.scalar_option("average_atomic_mass") / ds.Bxy**2, reference, ds
+    )
+    require(
+        float(abs(run.interior(reference_forward.divergence - flux["ddt(Vort)"])).max())
+        < tolerances["forward"],
+        "Exact FV reference residual",
+    )
+    relative_error = float(abs(run.interior(flux["ddt(Phi)"] - reference)).max()) / max(
+        float(abs(run.interior(reference)).max()), np.finfo(float).tiny
+    )
+    require(
+        relative_error < tolerances["chi_relative_error"],
+        "Auxiliary approximation error exceeds budget",
     )
     faces = [run.mxg - 1, ds.sizes["x"] - run.mxg - 1]
     initial_face = float(abs(full.flux_x.isel(t=0, x=faces)).max())
     require(initial_face < tolerances["face"], "Spurious initial AC normal current")
-    density_error = float(abs(run.interior(flux["ddt(Nh+)"].isel(t=0) - drive)).max())
+    density_error = float(
+        abs(run.interior(flux["ddt(Nh+)"].isel(t=0) - response * drive)).max()
+    )
     require(density_error < tolerances["forward"], "Initial particle boundary source")
     gauss = {}
     for name in (
@@ -204,6 +238,10 @@ def audit(folder, tolerances, diagnose):
             "ac_max": float(abs(unmasked - mean).max()),
         }
     result = {
+        "polarisation_corrections": corrections,
+        "chi_relative_residual": relative_residual,
+        "chi_relative_error": relative_error,
+        "chi_residual_maxima": maxima(run, residual),
         "initial_chi_error": chi_error,
         "initial_normal_current": initial_face,
         "initial_density_rhs_error": density_error,
@@ -217,6 +255,16 @@ def audit(folder, tolerances, diagnose):
         "closed_minus_full_weighted_flux": weighted_corrections,
     }
     if diagnose:
+        require(
+            bool((ds.ion_chi_iterations == corrections + 1).all()),
+            "Auxiliary spectral solve count",
+        )
+        actual_residual = abs(run.interior(residual)).max(("x", "y", "z"))
+        require(
+            float(abs(actual_residual - ds.ion_chi_residual).max())
+            < tolerances["diagnostic"],
+            "Auxiliary residual diagnostic",
+        )
         result["auxiliary_solver"] = {
             "maximum_iterations": int(ds.ion_chi_iterations.max()),
             "maximum_residual": float(ds.ion_chi_residual.max()),
@@ -236,10 +284,12 @@ def main():
     parser.add_argument("--sizes", type=int, nargs="+")
     parser.add_argument("--end-time", type=float)
     parser.add_argument("--timeout", type=float, default=120)
+    parser.add_argument("--corrections", type=int, default=2)
     args = parser.parse_args()
     criteria = json.loads((HERE / "criteria.json").read_text())
     sizes = args.sizes or criteria["x_sizes"][: 2 if args.profile == "smoke" else None]
     require(all(n >= 8 for n in sizes), "At least eight physical X cells required")
+    require(args.corrections >= 0, "--corrections must be nonnegative")
     end = args.end_time or criteria["end_time"]
     require(end > 0, "End time must be positive")
     parent = args.output_root or HERE / "results"
@@ -251,10 +301,14 @@ def main():
     scan.initial_state = matched_initial
     results, saved = {}, {}
 
-    def case(nx, nz, relax=False, diagnose=True, ranks=1, pilot=False):
+    def case(
+        nx, nz, relax=False, diagnose=True, ranks=1, pilot=False, corrections=None
+    ):
         key = f"{'relax' if relax else 'fixed'}-{nx}x{nz}-{'on' if diagnose else 'off'}-{ranks}mpi"
         if pilot:
             key += "-pilot"
+        if corrections is not None:
+            key += f"-corrections{corrections}"
         if key in results:
             return key
         folder = study / key
@@ -265,6 +319,9 @@ def main():
         opts["solver:nout"] = criteria["outputs"]
         opts["solver:output_step"] = end / criteria["outputs"]
         opts["evolve_vorticity_ion_energy:phi_boundary_relax"] = str(relax).lower()
+        opts["evolve_vorticity_ion_energy:polarisation_corrections"] = (
+            args.corrections if corrections is None else corrections
+        )
         if relax:
             opts["evolve_vorticity_ion_energy:phi_boundary_timescale"] = "1e-6"
             opts["evolve_vorticity_ion_energy:phi_core_averagey"] = "false"
@@ -300,6 +357,18 @@ def main():
                 (reference, case(sizes[-1], criteria["nz"], ranks=2)),
                 (reference, case(sizes[-1], criteria["nz"], pilot=True)),
             ]
+        )
+        correction_pilot = case(sizes[-1], criteria["nz"], corrections=6)
+        correction_error = max(
+            float(np.max(abs(saved[reference][name] - saved[correction_pilot][name])))
+            for name in saved[reference]
+        )
+        require(
+            correction_error < criteria["tolerances"]["correction_history"],
+            "Correction-count solution sensitivity",
+        )
+        results[correction_pilot]["maximum_history_difference_from_default"] = (
+            correction_error
         )
     for first, second in comparisons:
         error = max(
