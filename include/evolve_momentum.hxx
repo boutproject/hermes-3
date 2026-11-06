@@ -64,6 +64,18 @@ private:
   bool fix_momentum_boundary_flux; ///< Fix momentum flux to boundary condition?
   Field3D flow_xlow, flow_ylow;    ///< Momentum flow diagnostics
 
+  // energy channels, only filled when diagnose is on. Each is V times the exact term
+  // added to ddt(NV), so they sum to V ddt(NV)
+  Field3D E_Div_VExB_KE;   ///< ExB advection of momentum
+  Field3D E_Div_Vpar_KE;   ///< parallel advection of momentum
+  Field3D E_V_Gradpar_P;   ///< parallel pressure gradient
+  Field3D E_j_Gradpar_phi; ///< parallel electric field
+  Field3D E_numerical_V;   ///< all the numerical diffusion, plus the NV_err correction
+  // the same two advection terms as divergences of a 1/2 NV V flux (a second operator
+  // call, so these don't sum to V ddt(NV)), kept to compare against the ones above
+  Field3D E_Div_VExB_KE_flux; ///< ExB advection of 1/2 NV V
+  Field3D E_Div_Vpar_KE_flux; ///< parallel advection of 1/2 NV V
+
   BoutReal scale_momentum_ddt; ///< Scale time derivatives
 
   /// This takes as inputs

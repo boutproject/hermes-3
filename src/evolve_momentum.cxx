@@ -25,6 +25,8 @@
 
 #include <cmath>
 #include <string>
+#include <tuple>
+#include <vector>
 
 using bout::globals::mesh;
 
@@ -157,6 +159,16 @@ void EvolveMomentum::finally(const Options& state) {
   // Parallel flow
   V = get<Field3D>(species["velocity"]);
 
+  if (diagnose) {
+    E_Div_VExB_KE = zeroFrom(NV);
+    E_Div_Vpar_KE = zeroFrom(NV);
+    E_V_Gradpar_P = zeroFrom(NV);
+    E_j_Gradpar_phi = zeroFrom(NV);
+    E_numerical_V = zeroFrom(NV);
+    E_Div_VExB_KE_flux = zeroFrom(NV);
+    E_Div_Vpar_KE_flux = zeroFrom(NV);
+  }
+
   if (state.isSection("fields") and state["fields"].isSet("phi")
       and species.isSet("charge")) {
 
@@ -167,12 +179,23 @@ void EvolveMomentum::finally(const Options& state) {
 
       const Field3D phi = get<Field3D>(state["fields"]["phi"]);
 
-      ddt(NV) = -Div_n_bxGrad_f_B_XPPM(NV, phi, bndry_flux, poloidal_flows,
-                                       true); // ExB drift
+      const Field3D div_exb = Div_n_bxGrad_f_B_XPPM(NV, phi, bndry_flux, poloidal_flows,
+                                                    true); // ExB drift
+      ddt(NV) = -div_exb;
 
       // Parallel electric field
       // Force density = - Z N ∇ϕ
-      ddt(NV) -= Z * N * Grad_par(phi);
+      const Field3D force_phi = Z * N * Grad_par(phi);
+      ddt(NV) -= force_phi;
+
+      if (diagnose) {
+        E_Div_VExB_KE = -V * div_exb;
+        E_j_Gradpar_phi = -V * force_phi;
+        if (!NV.isFci()) {
+          E_Div_VExB_KE_flux = -Div_n_bxGrad_f_B_XPPM(0.5 * NV * V, phi, bndry_flux,
+                                                       poloidal_flows, true);
+        }
+      }
 
       if (state["fields"].isSet("Apar")) {
         // Include a correction term for electromagnetic simulations
@@ -213,12 +236,23 @@ void EvolveMomentum::finally(const Options& state) {
   //  - Density floor should be consistent with calculation of V
   //    otherwise energy conservation is affected
   //  - using the same operator as in density and pressure equations doesn't work
+  Field3D div_par;
   if (use_div_par_fvv) {
-    ddt(NV) -= AA
-               * FV::Div_par_fvv<hermes::Limiter>(Nlim, V, fastest_wave,
-                                                  fix_momentum_boundary_flux);
+    div_par = AA
+              * FV::Div_par_fvv<hermes::Limiter>(Nlim, V, fastest_wave,
+                                                 fix_momentum_boundary_flux);
   } else {
-    ddt(NV) -= Div_par(NV * V);
+    div_par = Div_par(NV * V);
+  }
+  ddt(NV) -= div_par;
+
+  if (diagnose) {
+    E_Div_Vpar_KE = -V * div_par;
+    if (!NV.isFci()) {
+      Field3D flow_ylow_KE; // not saved, the face flow is ef<sp>_visc_heat_ylow
+      E_Div_Vpar_KE_flux =
+          -FV::Div_par_mod<hermes::Limiter>(0.5 * NV * V, V, fastest_wave, flow_ylow_KE);
+    }
   }
 
   // Parallel pressure gradient
@@ -227,7 +261,11 @@ void EvolveMomentum::finally(const Options& state) {
     if (NV.isFci()) {
       ASSERT2(P.hasParallelSlices());
     }
-    ddt(NV) -= Grad_par(P.asField3DParallel());
+    const Field3D grad_p = Grad_par(P.asField3DParallel());
+    ddt(NV) -= grad_p;
+    if (diagnose) {
+      E_V_Gradpar_P = -V * grad_p;
+    }
   }
 
   if (state.isSection("fields") and state["fields"].isSet("Apar_flutter")) {
@@ -244,24 +282,40 @@ void EvolveMomentum::finally(const Options& state) {
   if (species.isSet("low_n_coeff")) {
     // Low density parallel diffusion
     const Field3D low_n_coeff = get<Field3D>(species["low_n_coeff"]);
-    ddt(NV) += FV::Div_par_K_Grad_par(low_n_coeff * V, N)
-               + FV::Div_par_K_Grad_par(low_n_coeff * Nlim, V);
+    const Field3D low_n_par = FV::Div_par_K_Grad_par(low_n_coeff * V, N)
+                              + FV::Div_par_K_Grad_par(low_n_coeff * Nlim, V);
+    ddt(NV) += low_n_par;
+    if (diagnose) {
+      E_numerical_V += V * low_n_par;
+    }
   }
 
   if (low_n_diffuse_perp) {
-    ddt(NV) +=
+    const Field3D low_n_perp =
         Div_Perp_Lap_FV_Index(density_floor / softFloor(N, 1e-3 * density_floor), NV);
+    ddt(NV) += low_n_perp;
+    if (diagnose) {
+      E_numerical_V += V * low_n_perp;
+    }
   }
 
   if (low_p_diffuse_perp) {
     const Field3D Plim =
         softFloor(get<Field3D>(species["pressure"]), 1e-3 * pressure_floor);
-    ddt(NV) += Div_Perp_Lap_FV_Index(pressure_floor / Plim, NV);
+    const Field3D low_p_perp = Div_Perp_Lap_FV_Index(pressure_floor / Plim, NV);
+    ddt(NV) += low_p_perp;
+    if (diagnose) {
+      E_numerical_V += V * low_p_perp;
+    }
   }
 
   if (hyper_z > 0.) {
     auto* coord = N.getCoordinates();
-    ddt(NV) -= hyper_z * SQ(SQ(coord->dz())) * D4DZ4(NV);
+    const Field3D hyper = hyper_z * SQ(SQ(coord->dz())) * D4DZ4(NV);
+    ddt(NV) -= hyper;
+    if (diagnose) {
+      E_numerical_V -= V * hyper;
+    }
   }
 
   // Other sources/sinks
@@ -275,6 +329,9 @@ void EvolveMomentum::finally(const Options& state) {
   // Note: This correction is calculated in transform()
   //       because NV may be modified by electromagnetic terms
   ddt(NV) += NV_err;
+  if (diagnose) {
+    E_numerical_V += V * NV_err;
+  }
 
   // Scale time derivatives
   if (state.isSet("scale_timederivs")) {
@@ -352,6 +409,29 @@ void EvolveMomentum::outputVars(Options& state) {
                     {"long_name", name + " momentum source"},
                     {"species", name},
                     {"source", "evolve_momentum"}});
+
+    // energy channels, V times the momentum equation terms
+    auto Tnorm = get<BoutReal>(state["Tnorm"]);
+    BoutReal Pnorm = SI::qe * Tnorm * Nnorm; // Pressure normalisation
+    for (const auto& [suffix, field, long_name] :
+         std::vector<std::tuple<std::string, Field3D, std::string>>{
+             {"Div_VExB_KE", E_Div_VExB_KE, "V times ExB advection of momentum"},
+             {"Div_Vpar_KE", E_Div_Vpar_KE, "V times parallel advection of momentum"},
+             {"V_Gradpar_P", E_V_Gradpar_P, "V times parallel pressure gradient"},
+             {"j_Gradpar_phi", E_j_Gradpar_phi, "V times parallel electric field"},
+             {"numerical_V", E_numerical_V, "V times numerical momentum terms"},
+             {"Div_VExB_KE_flux", E_Div_VExB_KE_flux, "ExB advection of 1/2 NV V"},
+             {"Div_Vpar_KE_flux", E_Div_Vpar_KE_flux,
+              "parallel advection of 1/2 NV V"}}) {
+      set_with_attrs(state[fmt::format("E{}_{}", name, suffix)], field,
+                     {{"time_dimension", "t"},
+                      {"units", "W / m^3"},
+                      {"conversion", Pnorm * Omega_ci},
+                      {"standard_name", "energy source"},
+                      {"long_name", name + " " + long_name},
+                      {"species", name},
+                      {"source", "evolve_momentum"}});
+    }
 
     // If fluxes have been set then add them to the output
     auto rho_s0 = get<BoutReal>(state["rho_s0"]);
