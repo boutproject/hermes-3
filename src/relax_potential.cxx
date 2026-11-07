@@ -581,7 +581,17 @@ Field3D RelaxPotential::calculateDivJdia(Field3D& phi, GuardedOptions allspecies
     }
 
     const Vector3D Jdia_species = P * Curlb_B;
-    subtract(species["energy_source"], Jdia_species * Grad_phi);
+    const Field3D Jdia_Grad_phi = Jdia_species * Grad_phi;
+    subtract(species["energy_source"], Jdia_Grad_phi);
+    if (diagnose) {
+      // flipped so positive is a source (the minus gives a new field, so no copy)
+      all_E_Jdia_Grad_phi[kv.first] = -Jdia_Grad_phi;
+      if (!mesh->isFci()) {
+        // the sum is only ever divided as a whole, so split it per species here
+        // (same operator, matches DivJdia to rounding)
+        all_DivJdia[kv.first] = Div(Jdia_species);
+      }
+    }
     Jdia += Jdia_species;
   }
 
@@ -699,7 +709,11 @@ Field3D RelaxPotential::calculateParallelCurrentSource(const Options& state) {
     ensure_initialised(NV);
     const BoutReal A = get<BoutReal>(species["AA"]);
     const Field3D jpar = (Z / A) * NV;
-    result += Div_par(jpar);
+    const Field3D div_jpar = Div_par(jpar);
+    result += div_jpar;
+    if (diagnose) {
+      all_Div_jpar[kv.first] = copy(div_jpar);
+    }
 
     if (state["fields"].isSet("Apar_flutter")) {
       const Field3D Apar_flutter = get<Field3D>(state["fields"]["Apar_flutter"]);
@@ -707,8 +721,12 @@ Field3D RelaxPotential::calculateParallelCurrentSource(const Options& state) {
       // Using the approximation for small delta-B/B
       // b dot Grad(jpar) = Grad_par(jpar) + [jpar, Apar]
 
-      result +=
+      const Field3D flutter =
           coord->Bxy() * bracket(jpar / coord->Bxy(), Apar_flutter, BRACKET_ARAKAWA);
+      result += flutter;
+      if (diagnose) {
+        all_Div_jpar[kv.first] += flutter; // same current along the perturbed field
+      }
     }
   }
 
@@ -851,13 +869,39 @@ void RelaxPotential::transform_impl(GuardedOptions& state) {
 void RelaxPotential::finally(const Options& state) {
   phi = get<Field3D>(state["fields"]["phi"]);
 
-  Vort_rhs += calculateExBAdvectionSource(Vort, phi, Pi_hat);
+  const Field3D exb_source = calculateExBAdvectionSource(Vort, phi, Pi_hat);
+  Vort_rhs += exb_source;
   Vort_rhs += calculateParallelCurrentSource(state);
-  Vort_rhs += calculateDissipationSource(state, Vort, phi);
+  const Field3D dissipation = calculateDissipationSource(state, Vort, phi);
+  Vort_rhs += dissipation;
   if (evolve_vorticity) {
     ddt(Vort) = Vort_rhs;
   }
   ddt(phi1) = calculatePhi1Source(Vort, Vort_rhs, Vort_from_phi);
+
+  if (diagnose) {
+    // diagnostics only, nothing in here feeds back into ddt
+    // (perpendicular flow energy takes -(phi + Pi_hat) times each Vort_rhs term)
+    const Field3D weight = -(phi + Pi_hat);
+
+    // the phi part of the current terms is the exchange with each species
+    Field3D DivJ = diamagnetic ? copy(DivJdia) : zeroFrom(Vort);
+    for (const auto& [name, div] : all_DivJdia) {
+      all_E_phi_Div_Jdia[name] = -phi * div;
+    }
+    for (const auto& [name, div] : all_Div_jpar) {
+      all_E_phi_Div_jpar[name] = -phi * div;
+      DivJ += div;
+    }
+    // the Pi_hat part, nothing hands this back to the ions on the vector path
+    Evort_Pi_DivJ = -Pi_hat * DivJ;
+
+    Evort_DivJcol = collisional_friction ? weight * DivJcol : zeroFrom(Vort);
+    Evort_ExB = weight * exb_source;
+    Evort_numerical = weight * dissipation;
+    Evort_relax = weight * Vort_rhs; // includes DivJextra, which has no channel of its own
+    Vort_mismatch = Vort_from_phi - Vort;
+  }
 }
 
 void RelaxPotential::outputVars(Options& state) {
@@ -908,6 +952,57 @@ void RelaxPotential::outputVars(Options& state) {
                       {"units", "A m^-3"},
                       {"conversion", SI::qe * Nnorm * Omega_ci},
                       {"long_name", "Divergence of collisional current"},
+                      {"source", "relax_potential"}});
+    }
+
+    // energy channels
+    const BoutReal Pnorm = SI::qe * Tnorm * Nnorm;
+    auto save_species = [&](const std::map<std::string, Field3D>& channels,
+                            const std::string& term, const std::string& long_name) {
+      for (const auto& [name, channel] : channels) {
+        set_with_attrs(state[std::string("E") + name + "_" + term], channel,
+                       {{"time_dimension", "t"},
+                        {"units", "W / m^3"},
+                        {"conversion", Pnorm * Omega_ci},
+                        {"standard_name", "energy source"},
+                        {"long_name", name + " " + long_name},
+                        {"species", name},
+                        {"source", "relax_potential"}});
+      }
+    };
+    save_species(all_E_Jdia_Grad_phi, "Jdia_Grad_phi",
+                 "-Jdia.Grad(phi) put into energy_source (ExB compression)");
+    save_species(all_E_phi_Div_Jdia, "phi_Div_Jdia",
+                 "-phi Div(Jdia), into the perpendicular flow energy");
+    save_species(all_E_phi_Div_jpar, "phi_Div_jpar",
+                 "-phi Div_par(jpar), into the perpendicular flow energy");
+
+    if (Evort_relax.isAllocated()) { // only once finally has run
+      auto save_field = [&](const std::string& field_name, const Field3D& channel,
+                            const std::string& long_name) {
+        set_with_attrs(state[field_name], channel,
+                       {{"time_dimension", "t"},
+                        {"units", "W / m^3"},
+                        {"conversion", Pnorm * Omega_ci},
+                        {"standard_name", "energy source"},
+                        {"long_name", long_name},
+                        {"source", "relax_potential"}});
+      };
+      save_field("Evort_DivJcol", Evort_DivJcol,
+                 "-(phi + Pi_hat) DivJcol, collisional damping of perpendicular flow");
+      save_field("Evort_ExB", Evort_ExB, "-(phi + Pi_hat) times the ExB advection of Vort");
+      save_field("Evort_numerical", Evort_numerical,
+                 "-(phi + Pi_hat) times the viscosity and dissipation terms in Vort");
+      save_field("Evort_Pi_DivJ", Evort_Pi_DivJ,
+                 "-Pi_hat (DivJdia + Div_par(jpar)), no ion partner on this path");
+      save_field("Evort_relax", Evort_relax,
+                 "-(phi + Pi_hat) Vort_rhs (relaxation residual if Vort isn't evolved, "
+                 "storage if it is)");
+      set_with_attrs(state["Vort_mismatch"], Vort_mismatch,
+                     {{"time_dimension", "t"},
+                      {"units", "C m^-3"},
+                      {"conversion", SI::qe * Nnorm},
+                      {"long_name", "Vort_from_phi - Vort, how far phi lags"},
                       {"source", "relax_potential"}});
     }
   }
