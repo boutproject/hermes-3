@@ -5,7 +5,10 @@
 #include "test_extras.hxx" // FakeMesh
 
 #include <bout/bout_types.hxx>
+#include <bout/constants.hxx>
 #include <bout/coordinates.hxx>
+#include <bout/difops.hxx>
+#include <bout/field_factory.hxx> // For generating functions
 #include <bout/mesh.hxx>
 
 #include "../../include/component.hxx"
@@ -458,4 +461,239 @@ TEST_F(RelaxPotentialTest, FinallyUsesExtractedSources) {
 
   Options ddt = solver.getTimeDerivs();
   ASSERT_TRUE(IsFieldEqual(ddt["Vort"].as<Field3D>(), 1.25, "RGN_NOBNDRY"));
+}
+
+namespace {
+// the ExB operator reaches two cells out in x, and it needs more than one interior x
+// cell (phi is zero on both x faces, so with one cell every ExB velocity vanishes)
+using RelaxPotentialChannelsTest = FakeMeshFixture_tmpl<9, 7, 8, false, 2>;
+
+constexpr BoutReal me_mp = 1. / 1836;
+
+// every term in Vort_rhs switched on, so each channel has something in it
+Options channelOptions(bool evolve_vorticity, bool diagnose) {
+  Options options = baseOptions();
+  auto& opt = options["test"];
+  opt["evolve_vorticity"] = evolve_vorticity;
+  opt["diagnose"] = diagnose;
+  opt["collisional_friction"] = true;
+  // the poloidal ExB part reads DDY(phi) in corner guard cells that are never set
+  opt["poloidal_flows"] = false;
+  opt["viscosity"] = 0.1;
+  opt["viscosity_par"] = 0.05;
+  opt["vort_dissipation"] = true;
+  opt["hyper_z"] = 0.01;
+  opt["lambda_1"] = 1.0;
+  opt["lambda_2"] = 2.0;
+  return options;
+}
+
+// curvature that varies in x and y, so Div(Jdia) isn't zero
+void setCurvature() {
+  dynamic_cast<FakeMesh*>(mesh)->setGridDataSource(
+      new FakeGridDataSource{{{"bxcvx", "0.1 + 0.05 * y"},
+                              {"bxcvy", "0.02 * x"},
+                              {"bxcvz", "0.3 + 0.1 * x * y"}}});
+}
+
+Field3D make(const std::string& expr) {
+  Options field_options;
+  return FieldFactory::get()->create3D(expr, &field_options, mesh);
+}
+
+Options channelState() {
+  return Options{
+      {"sound_speed", make("1 + 0.1 * x + 0.05 * y")},
+      {"fields", {{"DivJextra", make("0.01 * (1 + x * y)")}}},
+      {"species",
+       {{"d+",
+         {{"AA", 2.0},
+          {"charge", 1.0},
+          {"density", make("1 + 0.1 * x + 0.2 * y + 0.05 * sin(z)")},
+          {"pressure", make("2 + 0.3 * x * y + 0.1 * cos(z)")},
+          {"momentum", make("0.6 + 0.2 * y + 0.1 * x * cos(z)")},
+          {"collision_frequency", make("0.5 + 0.1 * y")}}},
+        {"e",
+         {{"AA", me_mp},
+          {"charge", -1.0},
+          {"density", make("1 + 0.1 * x + 0.2 * y + 0.05 * sin(z)")},
+          {"pressure", make("1.5 + 0.2 * x + 0.1 * y * y")},
+          {"temperature", make("1.2 + 0.1 * y")},
+          {"momentum", make("-0.002 + 0.001 * x * y")}}}}}};
+}
+
+struct ChannelRun {
+  Options state;
+  Options outputs;
+  Options ddt;
+};
+
+ChannelRun runChannels(bool evolve_vorticity, bool diagnose) {
+  setCurvature();
+  FakeSolver solver;
+  Options options = channelOptions(evolve_vorticity, diagnose);
+  RelaxPotential component("test", options, &solver);
+  component.declareAllSpecies(SpeciesInformation({"d+", "e"}));
+
+  Options init{{"phi1", make("0.5 * x * x + 0.3 * sin(z) + 0.4 * y * (1 + 0.1 * x)")}};
+  if (evolve_vorticity) {
+    init["Vort"] = make("0.2 + 0.1 * x * y + 0.05 * cos(z)");
+  }
+  solver.setState(init);
+
+  ChannelRun run{channelState(), {{"Nnorm", 1.0}, {"Tnorm", 1.0}, {"Omega_ci", 1.0}}, {}};
+  component.transform(run.state);
+  component.finally(run.state);
+  component.outputVars(run.outputs);
+  run.ddt = solver.getTimeDerivs();
+  return run;
+}
+
+// Pi_hat as calculatePihat builds it (average_atomic_mass is 2)
+Field3D piHat(const Options& state) {
+  return get<Field3D>(state["species"]["d+"]["pressure"]) * (2.0 / 2.0 / 1.0)
+         + get<Field3D>(state["species"]["e"]["pressure"]) * (me_mp / 2.0 / -1.0);
+}
+
+BoutReal scaleOf(const Field3D& f) { return max(abs(f), false, "RGN_NOBNDRY"); }
+
+const std::vector<std::string> species_names{"d+", "e"};
+} // namespace
+
+/// Closure D: each channel is its weight times the exact Vort_rhs term, the unweighted
+/// terms sum to Vort_rhs and the weighted ones to Evort_relax, in both modes
+TEST_F(RelaxPotentialChannelsTest, ChannelsCloseVorticity) {
+  for (const bool evolve_vorticity : {true, false}) {
+    SCOPED_TRACE(evolve_vorticity ? "evolve_vorticity" : "relax only");
+    setCurvature();
+    FakeSolver solver;
+    Options options = channelOptions(evolve_vorticity, true);
+    RelaxPotential component("test", options, &solver);
+    component.declareAllSpecies(SpeciesInformation({"d+", "e"}));
+    Options init{{"phi1", make("0.5 * x * x + 0.3 * sin(z) + 0.4 * y * (1 + 0.1 * x)")}};
+    if (evolve_vorticity) {
+      init["Vort"] = make("0.2 + 0.1 * x * y + 0.05 * cos(z)");
+    }
+    solver.setState(init);
+
+    Options state = channelState();
+    component.transform(state);
+    component.finally(state);
+    Options outputs{{"Nnorm", 1.0}, {"Tnorm", 1.0}, {"Omega_ci", 1.0}};
+    component.outputVars(outputs);
+    const Options ddt = solver.getTimeDerivs();
+
+    const Field3D phi = get<Field3D>(outputs["phi"]);
+    const Field3D vort = get<Field3D>(outputs["Vort"]);
+    const Field3D vort_rhs = get<Field3D>(outputs["ddt(Vort)"]);
+    const Field3D pi_hat = piHat(state);
+    const Field3D weight = -(phi + pi_hat);
+
+    // the unweighted terms, taken from the outputs or the component's own functions
+    const Field3D div_jdia = get<Field3D>(outputs["DivJdia"]);
+    const Field3D div_jcol = get<Field3D>(outputs["DivJcol"]);
+    const Field3D exb = component.calculateExBAdvectionSource(vort, phi, pi_hat);
+    const Field3D par = component.calculateParallelCurrentSource(state);
+    const Field3D diss = component.calculateDissipationSource(state, vort, phi);
+    const Field3D div_jextra = get<Field3D>(state["fields"]["DivJextra"]);
+
+    const BoutReal rhs_scale = scaleOf(vort_rhs);
+    ASSERT_GT(rhs_scale, 0.0);
+    for (const Field3D& term : {div_jdia, div_jcol, exb, par, diss}) {
+      EXPECT_GT(scaleOf(term), 0.0);
+    }
+    EXPECT_TRUE(IsFieldEqual(Field3D{div_jdia + div_jcol + exb + par + diss}, vort_rhs,
+                             "RGN_NOBNDRY", 1e-12 * rhs_scale));
+
+    // field level channels are the weight times exactly that term
+    auto expect_weighted = [&](const std::string& name, const Field3D& expected) {
+      const Field3D channel = get<Field3D>(outputs[name]);
+      EXPECT_GT(scaleOf(channel), 0.0) << name;
+      EXPECT_TRUE(IsFieldEqual(channel, expected, "RGN_NOBNDRY", 1e-12 * scaleOf(expected)))
+          << name;
+    };
+    expect_weighted("Evort_DivJcol", weight * div_jcol);
+    expect_weighted("Evort_ExB", weight * exb);
+    expect_weighted("Evort_numerical", weight * diss);
+    expect_weighted("Evort_relax", weight * vort_rhs);
+
+    // per species: the phi part of each current, and Jdia.Grad(phi) is all of energy_source
+    Field3D sum_phi_jdia{zeroFrom(phi)};
+    Field3D sum_phi_jpar{zeroFrom(phi)};
+    Field3D sum_div_jpar{zeroFrom(phi)};
+    for (const auto& sp : species_names) {
+      SCOPED_TRACE(sp);
+      const Options& species = state["species"][sp];
+      const Field3D jpar = (get<BoutReal>(species["charge"]) / get<BoutReal>(species["AA"]))
+                           * get<Field3D>(species["momentum"]);
+      // (calculateParallelCurrentSource skips the species at the moment, isSet on a section)
+      if (outputs.isSet("E" + sp + "_phi_Div_jpar")) {
+        const Field3D div_jpar = Div_par(jpar);
+        sum_div_jpar += div_jpar;
+        expect_weighted("E" + sp + "_phi_Div_jpar", -phi * div_jpar);
+        sum_phi_jpar += get<Field3D>(outputs["E" + sp + "_phi_Div_jpar"]);
+      }
+      sum_phi_jdia += get<Field3D>(outputs["E" + sp + "_phi_Div_Jdia"]);
+
+      const Field3D jdia_grad_phi = get<Field3D>(outputs["E" + sp + "_Jdia_Grad_phi"]);
+      EXPECT_GT(scaleOf(jdia_grad_phi), 0.0);
+      EXPECT_TRUE(IsFieldEqual(jdia_grad_phi, get<Field3D>(species["energy_source"]),
+                               "RGN_NOBNDRY", 0.0));
+      EXPECT_EQ(sp, outputs["E" + sp + "_phi_Div_Jdia"].attributes["species"].as<std::string>());
+    }
+    // the per species split of Div(Jdia) only matches the sum to rounding
+    expect_weighted("Evort_Pi_DivJ", -pi_hat * (div_jdia + sum_div_jpar));
+    EXPECT_TRUE(IsFieldEqual(sum_phi_jdia, Field3D{-phi * div_jdia}, "RGN_NOBNDRY",
+                             1e-12 * scaleOf(sum_phi_jdia)));
+
+    // weighted terms add up to the residual (DivJextra has no channel of its own)
+    const Field3D weighted_sum =
+        sum_phi_jdia + sum_phi_jpar + get<Field3D>(outputs["Evort_DivJcol"])
+        + get<Field3D>(outputs["Evort_ExB"]) + get<Field3D>(outputs["Evort_numerical"])
+        + get<Field3D>(outputs["Evort_Pi_DivJ"]) + weight * div_jextra;
+    const Field3D relax = get<Field3D>(outputs["Evort_relax"]);
+    EXPECT_TRUE(IsFieldEqual(weighted_sum, relax, "RGN_NOBNDRY", 1e-12 * scaleOf(relax)));
+
+    // Vort_mismatch is what drives phi1 when Vort evolves, and exactly zero when it doesn't
+    const BoutReal lambda_1 = 1.0 / (100.0 * 1.0 / SI::qe / 1e19); // as normalised
+    const Field3D ddt_phi1 = ddt["phi1"].as<Field3D>();
+    const Field3D mismatch = get<Field3D>(outputs["Vort_mismatch"]);
+    if (evolve_vorticity) {
+      EXPECT_GT(scaleOf(mismatch), 0.0);
+      EXPECT_TRUE(IsFieldEqual(Field3D{lambda_1 * mismatch}, ddt_phi1, "RGN_NOBNDRY",
+                               1e-12 * scaleOf(ddt_phi1)));
+    } else {
+      EXPECT_TRUE(IsFieldEqual(mismatch, 0.0, "RGN_NOBNDRY", 0.0));
+      // the residual is the weight on what drives phi1
+      EXPECT_TRUE(IsFieldEqual(relax, Field3D{(phi + pi_hat) * ddt_phi1 / lambda_1},
+                               "RGN_NOBNDRY", 1e-12 * scaleOf(relax)));
+    }
+  }
+}
+
+/// Channels don't touch ddt or energy_source, and nothing new is saved when off
+TEST_F(RelaxPotentialChannelsTest, DiagnoseDoesNotChangeDdt) {
+  for (const bool evolve_vorticity : {true, false}) {
+    SCOPED_TRACE(evolve_vorticity ? "evolve_vorticity" : "relax only");
+    const ChannelRun off = runChannels(evolve_vorticity, false);
+    const ChannelRun on = runChannels(evolve_vorticity, true);
+
+    EXPECT_TRUE(IsFieldEqual(off.ddt["phi1"].as<Field3D>(), on.ddt["phi1"].as<Field3D>(),
+                             "RGN_NOBNDRY", 0.0));
+    if (evolve_vorticity) {
+      EXPECT_TRUE(IsFieldEqual(off.ddt["Vort"].as<Field3D>(), on.ddt["Vort"].as<Field3D>(),
+                               "RGN_NOBNDRY", 0.0));
+    }
+    for (const auto& sp : species_names) {
+      EXPECT_TRUE(IsFieldEqual(get<Field3D>(off.state["species"][sp]["energy_source"]),
+                               get<Field3D>(on.state["species"][sp]["energy_source"]),
+                               "RGN_NOBNDRY", 0.0))
+          << sp;
+    }
+    for (const auto& name : {"Evort_relax", "Evort_Pi_DivJ", "Vort_mismatch",
+                             "Ed+_Jdia_Grad_phi", "Ee_phi_Div_Jdia"}) {
+      EXPECT_FALSE(off.outputs.isSet(name)) << name;
+      EXPECT_TRUE(on.outputs.isSet(name)) << name;
+    }
+  }
 }

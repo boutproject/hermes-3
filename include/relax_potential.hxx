@@ -178,6 +178,18 @@ private:
 
   bool diagnose; ///< Output additional diagnostics?
 
+  // Energy channels (only filled when diagnose is on). Positive is a source for the
+  // species, or for the perpendicular flow energy, which weights Vort_rhs by -(phi + Pi_hat)
+  std::map<std::string, Field3D> all_E_Jdia_Grad_phi; ///< -Jdia.Grad(phi) put into energy_source
+  std::map<std::string, Field3D> all_DivJdia; ///< Div(Jdia) of each species, unweighted
+  std::map<std::string, Field3D> all_Div_jpar; ///< Div_par(jpar) of each species, unweighted
+  std::map<std::string, Field3D> all_E_phi_Div_Jdia; ///< -phi Div(Jdia) for each species
+  std::map<std::string, Field3D> all_E_phi_Div_jpar; ///< -phi Div_par(jpar) for each species
+  Field3D Evort_DivJcol, Evort_ExB, Evort_numerical; ///< weighted Vort_rhs terms
+  Field3D Evort_Pi_DivJ; ///< Pi_hat part of the current terms (no ion partner on this path)
+  Field3D Evort_relax;   ///< -(phi + Pi_hat) Vort_rhs, the residual when Vort isn't evolved
+  Field3D Vort_mismatch; ///< Vort_from_phi - Vort (a vorticity, zero if Vort isn't evolved)
+
   std::shared_ptr<FCI::dagp_fv> dagp_op; ///< Perp. diffusion operator for Fci
   Coordinates::FieldMetric
       bracket_factor; ///< For non-Clebsch coordinate systems (e.g. FCI)
