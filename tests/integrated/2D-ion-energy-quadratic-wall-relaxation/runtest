@@ -40,9 +40,8 @@ def run_case(executable, output, nx, omega, timeout):
         "Pe:function": "1",
         "Eion:function": "3",
         "Vort:function": str(omega),
-        "evolve_vorticity_ion_energy:phi_boundary_relax": "true",
+        "evolve_vorticity_ion_energy:radial_boundary": "no_slip",
         "evolve_vorticity_ion_energy:phi_boundary_velocity": 1000,
-        "evolve_vorticity_ion_energy:phi_core_averagey": "false",
         # A tighter potential tolerance reaches pressure-subtraction roundoff
         # during CVODE probes; the FV residual remains independently constrained.
         "evolve_vorticity_ion_energy:phi_rtol": 1e-10,

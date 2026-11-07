@@ -100,7 +100,7 @@ source = 0
 bndry_all = neumann
 
 [Pe]
-function = 1 + 0.1*sin(2*pi*x-z)
+function = 1 + 0.1*sin(2*pi*x)*sin(2*pi*x-z)
 source = 0
 bndry_all = neumann
 
@@ -121,15 +121,12 @@ bndry_all = neumann
 average_atomic_mass = 1
 poloidal_flows = false
 viscosity = ${viscosity}
-phi_boundary_relax = ${relax}
-phi_boundary_timescale = ${tau}
-phi_core_averagey = false
+${boundary_options}
 diagnose = ${diagnose}
 ${model_options}
 
 [${model}:laplacian]
 type = cyclic
-inner_boundary_flags = 16
-outer_boundary_flags = 16
+${laplacian_boundary_options}
 
 ${polarisation_options}

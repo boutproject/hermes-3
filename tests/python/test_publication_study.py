@@ -148,6 +148,13 @@ def test_resolutions_guards_and_cadence(runner):
     assert "nx = 68" in text
     assert "type = evolve_density\n" in text
     assert "[Ph+]" not in text
+    assert "inner_boundary_flags" not in text
+    assert "outer_boundary_flags" not in text
+    pressure_text = runner.input_text(
+        config, {"nx": 64, "nz": 64, "formulation": "pressure", "boundary": "fixed"}
+    )
+    assert "inner_boundary_flags = 16" in pressure_text
+    assert "outer_boundary_flags = 16" in pressure_text
     args = runner.parser().parse_args(["--end-time", "120", "--outputs", "10"])
     assert runner.configuration(args)["outputs"] == 20
 
@@ -164,6 +171,81 @@ def test_relaxing_input_uses_formulation_boundary_parameter(runner):
         )
         assert expected + " = " in text
         assert unused + " = " not in text
+
+
+@pytest.mark.parametrize(
+    "boundary, radial_boundary", [("fixed", "fixed"), ("relax", "no_slip")]
+)
+def test_total_energy_input_uses_plan_c_boundary_options(
+    runner, boundary, radial_boundary
+):
+    config = runner.configuration(
+        runner.parser().parse_args(
+            [
+                "--levels",
+                "2",
+                "--base-nx",
+                "16",
+                "--base-nz",
+                "16",
+                "--phi-boundary",
+                boundary,
+                "--end-time",
+                "10000",
+                "--outputs",
+                "50",
+            ]
+        )
+    )
+    for row in runner.grid_rows(config):
+        text = runner.input_text(config, row)
+        if row["formulation"] == "pressure":
+            assert "radial_boundary =" not in text
+            assert "inner_boundary_flags = 16" in text
+            assert "outer_boundary_flags = 16" in text
+            continue
+        assert f"radial_boundary = {radial_boundary}\n" in text
+        for removed in (
+            "inner_boundary_flags",
+            "outer_boundary_flags",
+            "phi_boundary_relax",
+            "phi_boundary_timescale",
+            "phi_core_averagey",
+            "neumann_boundary_average_z",
+            "bndry_xin",
+            "bndry_xout",
+        ):
+            assert removed not in text
+        assert ("phi_boundary_velocity =" in text) == (radial_boundary == "no_slip")
+
+
+def test_tapered_initial_state_has_no_total_energy_perpendicular_flow(runner):
+    from types import SimpleNamespace
+
+    _, geometry = grid(nx=32, nz=32)
+    run = SimpleNamespace(
+        data=geometry,
+        mxg=2,
+        formulation="total_energy",
+        scalar_option=lambda name: 1,
+    )
+    initial = runner.initial_state(run)
+    interior = lambda field: field.isel(x=slice(2, -2))
+    np.testing.assert_allclose(initial["phi"] + initial["Ph+"], 1, atol=1e-15)
+    np.testing.assert_allclose(interior(initial["Vort"]), 0, atol=1e-12)
+    np.testing.assert_allclose(
+        interior(initial["Eion"] - 1.5 * initial["Ph+"]), 0, atol=1e-15
+    )
+    perturbation = interior(initial["Ph+"]) - 1
+    assert float(abs(perturbation.isel(x=0)).max()) < 0.25 * float(
+        abs(perturbation).max()
+    )
+    run.formulation = "pressure"
+    pressure_initial = runner.initial_state(run)
+    for name in ("Pe", "Ph+", "phi", "Nh+"):
+        np.testing.assert_array_equal(
+            interior(initial[name]), interior(pressure_initial[name])
+        )
 
 
 def test_saved_time_lookup_rejects_nearest_output(runner):
@@ -236,6 +318,137 @@ def test_reanalysis_preserves_saved_style_and_allows_overrides(runner, tmp_path)
         updated = json.loads(saved.read_text())["rcParams"]
         assert updated["font.size"] == 10
         assert updated["axes.labelsize"] == 11
+
+
+@pytest.mark.parametrize("energy_format", ["png", "pdf-panels"])
+def test_energy_format_is_plotting_only_and_reaches_reanalysis(
+    runner, tmp_path, monkeypatch, energy_format
+):
+    import json
+
+    default = runner.parser().parse_args([])
+    assert default.energy_format == "png"
+    argv = ["--analyse-only", str(tmp_path), "--energy-format", energy_format]
+    args = runner.parser().parse_args(argv)
+    assert runner.configuration(args) == runner.configuration(default)
+    (tmp_path / "manifest.json").write_text(
+        json.dumps({"schema_version": runner.SCHEMA})
+    )
+    calls = []
+    monkeypatch.setattr(runner, "analyse", lambda *a, **kw: calls.append(kw))
+    assert runner.main(argv) == 0
+    assert calls[0]["energy_format"] == energy_format
+
+
+def test_energy_exports_keep_panel_data_and_standalone_legends(
+    runner, tmp_path, monkeypatch
+):
+    import matplotlib.pyplot as plt
+    from matplotlib.figure import Figure
+
+    groups = {}
+    for form in ("pressure", "total_energy"):
+        groups[form] = []
+        for nx in (8, 16):
+            inv = xr.Dataset(
+                {
+                    "ion_thermal": ("t", [10, 11, 13]),
+                    "electron_thermal": ("t", [5, 4, 2]),
+                    "ion_perpendicular": ("t", [0, 2, 4]),
+                    "plasma_reconstructed": ("t", [15, 17, 19]),
+                    "plasma_native": ("t", [15, 16, 18]),
+                },
+                coords={"t": [0, 0.001, 0.002]},
+            )
+            groups[form].append(
+                (
+                    ("fixed", form, nx, nx),
+                    {
+                        "inventory": inv,
+                        "report": {
+                            "corrected_residual_J": [0, 0.3, 0.6]
+                            if form == "total_energy"
+                            else None
+                        },
+                    },
+                )
+            )
+
+    captured = {}
+    original_savefig = Figure.savefig
+
+    def capture(fig, path, **kw):
+        original_savefig(fig, path, **kw)
+        captured[Path(path).name] = [
+            {
+                "title": axis.get_title(),
+                "xlabel": axis.get_xlabel(),
+                "legend": axis.get_legend(),
+                "lines": [
+                    (
+                        np.asarray(line.get_xdata()).copy(),
+                        np.asarray(line.get_ydata()).copy(),
+                        line.get_color(),
+                        line.get_linestyle(),
+                        line.get_label(),
+                    )
+                    for line in axis.lines
+                ],
+            }
+            for axis in fig.axes
+        ]
+
+    monkeypatch.setattr(Figure, "savefig", capture)
+    combined, separate = tmp_path / "png", tmp_path / "pdf"
+    combined.mkdir()
+    separate.mkdir()
+    with plt.rc_context({"figure.constrained_layout.use": True}):
+        runner.energy_figures(combined, {"viscosity": 1}, "fixed", groups)
+        runner.energy_figures(
+            separate, {"viscosity": 1}, "fixed", groups, energy_format="pdf-panels"
+        )
+
+    assert [p.name for p in combined.iterdir()] == ["energy-fixed.png"]
+    assert (combined / "energy-fixed.png").read_bytes().startswith(b"\x89PNG\r\n\x1a\n")
+    names = (
+        "ion-thermal",
+        "electron-thermal",
+        "perpendicular-kinetic",
+        "shared-relative-change",
+        "model-relative-change",
+        "estimator-difference",
+    )
+    assert {p.name for p in separate.iterdir()} == {
+        f"energy-fixed-{name}.pdf" for name in names
+    }
+    expected = (
+        [0, 1, 3],
+        [0, -1, -3],
+        [0, 2, 4],
+        [0, 2 / 15, 4 / 15],
+        [0, 1 / 15, 3 / 15],
+        [0, 1, 1],
+    )
+    for panel, name, values in zip(captured["energy-fixed.png"], names, expected):
+        path = separate / f"energy-fixed-{name}.pdf"
+        assert path.read_bytes().startswith(b"%PDF-")
+        (standalone,) = captured[path.name]
+        assert standalone["title"] == panel["title"]
+        assert standalone["xlabel"] == panel["xlabel"] == "Time [ms]"
+        assert standalone["legend"] is not None
+        assert (
+            len(standalone["lines"])
+            == len(panel["lines"])
+            == (6 if name == "model-relative-change" else 4)
+        )
+        np.testing.assert_allclose(standalone["lines"][0][0], [0, 1, 2])
+        np.testing.assert_allclose(standalone["lines"][0][1], values)
+        for split_line, combined_line in zip(standalone["lines"], panel["lines"]):
+            np.testing.assert_array_equal(split_line[0], combined_line[0])
+            np.testing.assert_array_equal(split_line[1], combined_line[1])
+            assert split_line[2:] == combined_line[2:]
+        if name == "model-relative-change":
+            np.testing.assert_allclose(standalone["lines"][-1][1], [0, 0.02, 0.04])
 
 
 def write_publication_dump(directory, rank, times, *, bad_final=False, seed=False):

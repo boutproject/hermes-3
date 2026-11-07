@@ -754,6 +754,11 @@ struct ConcreteComponentTests : public ComponentTest,
   ConcreteComponentTests()
       : ComponentTest(), typname(GetParam()), options(base_options.copy()) {
     Options::root()["mesh:paralleltransform:type"] = "identity";
+    // The generic fixture has one radial guard. Dedicated ion-energy fixtures
+    // exercise wall models with two guards; use periodic X for this interface test.
+    if (typname == "evolve_vorticity_ion_energy") {
+      bout::globals::mesh->periodicX = true;
+    }
     if (required_params.isSection(typname)) {
       options[objname] = required_params[typname].copy();
     }

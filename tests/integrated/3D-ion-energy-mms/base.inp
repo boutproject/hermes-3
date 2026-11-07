@@ -114,8 +114,7 @@ bndry_xout = neumann
 [evolve_vorticity_ion_energy]
 average_atomic_mass = 2
 poloidal_flows = false
-phi_boundary_relax = false
-neumann_boundary_average_z = false
+radial_boundary = fixed
 density_floor = 1e-10
 # phi_atol is a denominator scale: effective absolute update tolerance is
 # phi_atol*phi_rtol. Avoid requesting sub-roundoff updates where phi crosses 0.
@@ -127,8 +126,6 @@ diagnose = false
 
 [evolve_vorticity_ion_energy:laplacian]
 type = cyclic
-inner_boundary_flags = 0
-outer_boundary_flags = 0
 
 [sound_speed]
 # Electrons have zero-current closure, with no independent electron momentum.

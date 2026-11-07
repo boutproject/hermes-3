@@ -12,6 +12,7 @@ from pathlib import Path
 
 import numpy as np
 from analysis import analyse_case, compare_cases, require, write_scan
+from boutdata.data import BoutOptionsFile
 from manufactured import EVOLVED, VARIANTS, preflight
 from mms import input_path
 from netCDF4 import Dataset
@@ -119,7 +120,10 @@ def run_case(
     command += [
         f"evolve_vorticity_ion_energy:polarisation_corrections={config['polarisation_corrections']}"
     ]
-    if not args.expression_sources:
+    if args.expression_sources:
+        source = BoutOptionsFile(str(input_path))["Vort:source"]
+        command += [f"Vort:source=where(x*(1-x),{source},0)"]
+    else:
         command += [
             "hermes:components=test_ion_energy_mms,i,j,e,evolve_vorticity_ion_energy,sound_speed"
         ]

@@ -54,6 +54,14 @@ def energy_densities(run):
         for s in ions
     }
     psi = sum(s.mass / s.charge * pressures[s.name] for s in ions) / abar
+    if (
+        run.formulation == "total_energy"
+        and "periodicX" in ds.options
+        and not ds.options.get_bool("periodicX")
+    ):
+        from .fluxes import fill_wall_guards
+
+        psi = fill_wall_guards(psi, run, "pressure")
     common_psi = psi
     if run.formulation == "pressure" and run.data.options[run.model].get_bool(
         "diamagnetic_polarisation"

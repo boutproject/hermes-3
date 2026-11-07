@@ -45,9 +45,12 @@ def matched_initial(run):
     p = xr.ones_like(ds.phi) * (1 + 0.1 * np.cos(phase))
     phi = xr.zeros_like(p)
     c = run.scalar_option("average_atomic_mass") / ds.Bxy**2
-    op = perpendicular_operator(c, p, ds)
+    from energy_analysis.fluxes import fill_wall_guards
+
+    ion_pressure = fill_wall_guards(p, run, "pressure")
+    op = perpendicular_operator(c, ion_pressure, ds)
     v = op.divergence.copy()
-    e = 1.5 * p + op.kperp
+    e = 1.5 * ion_pressure + op.kperp
     for guard, physical in [(0, 3), (1, 2), (-2, -3), (-1, -4)]:
         v[{"x": guard}] = v.isel(x=physical)
         e[{"x": guard}] = e.isel(x=physical)
@@ -318,13 +321,14 @@ def main():
         opts["mesh:nx"], opts["mesh:nz"] = nx + 4, nz
         opts["solver:nout"] = criteria["outputs"]
         opts["solver:output_step"] = end / criteria["outputs"]
-        opts["evolve_vorticity_ion_energy:phi_boundary_relax"] = str(relax).lower()
+        opts["evolve_vorticity_ion_energy:radial_boundary"] = (
+            "no_slip" if relax else "fixed"
+        )
         opts["evolve_vorticity_ion_energy:polarisation_corrections"] = (
             args.corrections if corrections is None else corrections
         )
         if relax:
             opts["evolve_vorticity_ion_energy:phi_boundary_velocity"] = "1000"
-            opts["evolve_vorticity_ion_energy:phi_core_averagey"] = "false"
         for name in ("e", "h+", "evolve_vorticity_ion_energy"):
             opts[name + ":diagnose"] = str(diagnose).lower()
         if pilot:

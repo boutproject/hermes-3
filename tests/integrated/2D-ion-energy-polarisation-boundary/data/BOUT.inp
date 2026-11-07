@@ -116,7 +116,7 @@ bndry_all = neumann
 average_atomic_mass = 1
 poloidal_flows = false
 viscosity = 0
-phi_boundary_relax = false
+radial_boundary = fixed
 diagnose = true
 phi_rtol = 1e-10
 phi_atol = 1e-3
@@ -125,5 +125,3 @@ phi_max_iterations = 200
 
 [evolve_vorticity_ion_energy:laplacian]
 type = cyclic
-inner_boundary_flags = 16
-outer_boundary_flags = 16

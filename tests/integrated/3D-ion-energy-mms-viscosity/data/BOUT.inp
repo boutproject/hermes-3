@@ -114,8 +114,7 @@ bndry_xout = neumann
 [evolve_vorticity_ion_energy]
 average_atomic_mass = 2
 poloidal_flows = false
-phi_boundary_relax = false
-neumann_boundary_average_z = false
+radial_boundary = fixed
 density_floor = 1e-10
 # phi_atol is a denominator scale: effective absolute update tolerance is
 # phi_atol*phi_rtol. Avoid requesting sub-roundoff updates where phi crosses 0.
@@ -128,8 +127,6 @@ viscosity = 0.02
 
 [evolve_vorticity_ion_energy:laplacian]
 type = cyclic
-inner_boundary_flags = 0
-outer_boundary_flags = 0
 
 [sound_speed]
 # Electrons have zero-current closure, with no independent electron momentum.
@@ -236,8 +233,6 @@ bndry_xout = neumann
 [Vort]
 solution = -6*mms:c39*(1 - cos(2*pi*x))^2*cos(2*pi*x)/25 - 12*mms:c39*(1 - cos(2*pi*x))*sin(2*pi*x)^2/25 + 2*pi^2*(1 - cos(2*pi*x))^3*(cos(t/5 + y)/1000 + 1/50)*sin(t/5 - z)/25
 source = -pi^2*mms:c145/62500 - 6*mms:c183*(1 - cos(2*pi*x))^2*cos(2*pi*x)/125 - 12*mms:c183*(1 - cos(2*pi*x))*sin(2*pi*x)^2/125 + pi^4*mms:c59*sin(t/5 - z)/15625 + 2*pi^2*mms:c59*cos(t/5 - z)/125 - 9*mms:c71*(1 - cos(2*pi*x))^2*cos(2*pi*x)/15625 - 36*mms:c71*(1 - cos(2*pi*x))*sin(2*pi*x)^2/15625 + 18*mms:c71*(1 - cos(2*pi*x))*cos(2*pi*x)^2/15625 + 36*mms:c71*sin(2*pi*x)^2*cos(2*pi*x)/15625 + 3*pi^2*(1 - cos(2*pi*x))^2*sin(t/5 + y)*sin(t/5 - z)*cos(2*pi*x)/62500 + 3*pi^2*(1 - cos(2*pi*x))*sin(2*pi*x)^2*sin(t/5 + y)*sin(t/5 - z)/31250
-bndry_xin = dirichlet_o2(Vort:solution)
-bndry_xout = dirichlet_o2(Vort:solution)
 
 [Eion]
 solution = 3*mms:c17*mms:c61/(2*(mms:c23 - mms:c53 + 19/8)) + mms:c22^2*(mms:c9 + 1) + mms:c28^2*(3/8 - mms:c53) + mms:c50*cos(t/5 - z)^2/25 + 9*pi^2*mms:c52*(cos(t/5 + y)/1000 + 1/50)^2/25 + 3*mms:c61*(mms:c9 + 1)/(2*(mms:c23 - mms:c53 + 19/8))

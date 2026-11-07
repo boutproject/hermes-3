@@ -43,6 +43,7 @@ from energy_analysis import (
     regular_timestep,
 )
 from energy_analysis.convergence import error_norms, global_differences, restrict
+from energy_analysis.fluxes import fill_wall_guards, radial_boundary_mode
 from energy_analysis.operators import perpendicular_operator
 from energy_analysis.pressure import legacy_operator, legacy_viscous_work
 from energy_analysis.report import revision
@@ -53,7 +54,7 @@ DIFFERENCES = [
     "Pressure polarisation potential includes electron pressure with its signed mass/charge weight; total energy includes ions only.",
     "Pressure native inversion uses FD X / spectral Z; total energy uses face/corner FV X-Z.",
     "Pressure retains cell-centred corner-gradient viscous heating; total energy uses conservative face work.",
-    "Initial sine pressure has incompatible homogeneous radial Neumann derivatives; boundary-adjacent cells remain in the error norms.",
+    "The pressure perturbation vanishes at both X faces. Pressure uses Neumann ion-pressure guards; total energy imposes mean-Neumann, zero-AC-midpoint pressure and psi guards. Physical initial fields are matched and boundary-adjacent cells remain in the error norms.",
     "Explicit SI metric pairs enforce the 5 cm box; the legacy recalculate_metric path produces inconsistent Z metric pairs for Bnorm=0.35 T.",
     "Common phi solves the continuum ion-only zero-vorticity problem; both discrete vorticities are initialized from this same sampled physical state.",
 ]
@@ -194,6 +195,12 @@ def parser():
     p.add_argument("--latex", action="store_true")
     p.add_argument("--style", type=Path, help="JSON Matplotlib rcParams overrides")
     p.add_argument(
+        "--energy-format",
+        choices=("png", "pdf-panels"),
+        default="png",
+        help="Energy histories: one six-panel PNG (default) or six standalone PDFs",
+    )
+    p.add_argument(
         "--smoke",
         action="store_true",
         help="Two 8/16 grids, both boundaries, inviscid, end time 12, 4 intervals",
@@ -227,6 +234,7 @@ def configuration(args):
             "analyse_only",
             "style",
             "latex",
+            "energy_format",
             "smoke",
             "timeout",
         )
@@ -289,7 +297,24 @@ def configuration(args):
 
 def input_text(config, row):
     pressure = row["formulation"] == "pressure"
+    relaxing = row["boundary"] == "relax"
     c = config
+    # The pressure component uses legacy flags; total ion energy owns its
+    # solver boundary flags through radial_boundary. Generate only the options
+    # each component accepts, including during time-zero startup.
+    if pressure:
+        boundary_options = f"phi_boundary_relax = {str(relaxing).lower()}"
+        if relaxing:
+            boundary_options += (
+                f"\nphi_boundary_timescale = {c['phi_boundary_timescale']}"
+                "\nphi_core_averagey = false"
+            )
+    else:
+        boundary_options = f"radial_boundary = {'no_slip' if relaxing else 'fixed'}"
+        if relaxing:
+            boundary_options += (
+                f"\nphi_boundary_velocity = {c['phi_boundary_velocity']}"
+            )
     values = {
         "mesh_nx": row["nx"] + 4,
         "nz": row["nz"],
@@ -301,8 +326,10 @@ def input_text(config, row):
         "max_timestep": c["max_timestep"],
         "viscosity": c["viscosity"],
         "diagnose": str(c["diagnose"]).lower(),
-        "relax": str(row["boundary"] == "relax").lower(),
-        "tau": c["phi_boundary_timescale"],
+        "boundary_options": boundary_options,
+        "laplacian_boundary_options": (
+            "inner_boundary_flags = 16\nouter_boundary_flags = 16" if pressure else ""
+        ),
         "model": "vorticity" if pressure else "evolve_vorticity_ion_energy",
         "components": "vorticity, polarisation_drift"
         if pressure
@@ -316,7 +343,7 @@ def input_text(config, row):
         "model_options": (
             "diamagnetic = true\ndiamagnetic_polarisation = true\nbndry_flux = false\nexb_advection = true\nexb_advection_simplified = false\nsplit_n0 = false\nphi_dissipation = false\nvort_dissipation = false\nsheath_boundary = false\nhyper_z = -1"
             if pressure
-            else f"density_floor = 1e-7\nneumann_boundary_average_z = false\nphi_atol = {c['phi_atol']}\nphi_rtol = {c['phi_rtol']}\nvort_atol = {c['vort_atol']}\nphi_max_iterations = 400"
+            else f"density_floor = 1e-7\nphi_atol = {c['phi_atol']}\nphi_rtol = {c['phi_rtol']}\nvort_atol = {c['vort_atol']}\nphi_max_iterations = 400"
         ),
         "polarisation_options": (
             "[polarisation_drift]\nboussinesq = true\naverage_atomic_mass = 1\ndiamagnetic_polarisation = true\nadvection = true\ndiagnose = "
@@ -335,18 +362,6 @@ def input_text(config, row):
     text = re.sub(
         r"\[" + re.escape(section) + r"\]\n.*?(?=\n\[)", "", text, flags=re.DOTALL
     )
-    if not pressure:
-        text = re.sub(
-            r"^phi_boundary_timescale = .*\n",
-            f"phi_boundary_velocity = {c['phi_boundary_velocity']}\n",
-            text,
-            flags=re.MULTILINE,
-        )
-    if row["boundary"] == "fixed":
-        text = re.sub(
-            r"^phi_boundary_(timescale|velocity) = .*\n", "", text, flags=re.MULTILINE
-        )
-        text = text.replace("phi_core_averagey = false\n", "")
     return text
 
 
@@ -508,11 +523,11 @@ def initial_state(run):
     x = (np.arange(nx + 4) - 2 + 0.5) / nx
     z = np.arange(nz) * 2 * np.pi / nz
     shape = (nx + 4, ds.sizes["y"], nz)
-    pressure = 1 + 0.1 * np.sin(2 * np.pi * x[:, None] - z[None, :])
-    harmonic = 1 - 0.1 * np.sin(z)[None, :] * np.cosh(
-        2 * np.pi * (x[:, None] - 0.5)
-    ) / np.cosh(np.pi)
-    potential = harmonic - pressure
+    pressure = 1 + 0.1 * np.sin(2 * np.pi * x[:, None]) * np.sin(
+        2 * np.pi * x[:, None] - z[None, :]
+    )
+    # Both pressure wall values are constant, so their harmonic extension is 1.
+    potential = 1 - pressure
     p = xr.DataArray(
         np.broadcast_to(pressure[:, None, :], shape).copy(),
         dims=("x", "y", "z"),
@@ -530,7 +545,10 @@ def initial_state(run):
     phi[{"x": -2}] = -phi.isel(x=-3)
     phi[{"x": 0}] = phi.isel(x=1)
     phi[{"x": -1}] = phi.isel(x=-2)
-    psi = p * (1 - 1 / 1836) if run.formulation == "pressure" else p
+    ion_pressure = (
+        p if run.formulation == "pressure" else fill_wall_guards(p, run, "pressure")
+    )
+    psi = p * (1 - 1 / 1836) if run.formulation == "pressure" else ion_pressure
     c = run.scalar_option("average_atomic_mass") / ds.Bxy**2
     op = (
         legacy_operator(c, phi + psi, ds)
@@ -541,13 +559,15 @@ def initial_state(run):
     for i in range(2):
         vort[{"x": i}] = vort.isel(x=3 - i)
         vort[{"x": -i - 1}] = vort.isel(x=-4 + i)
-    energy = 1.5 * p + op.kperp
+    if run.formulation == "total_energy":
+        vort = fill_wall_guards(vort, run, "neumann")
+    energy = 1.5 * ion_pressure + op.kperp
     for i in range(2):
         energy[{"x": i}] = energy.isel(x=3 - i)
         energy[{"x": -i - 1}] = energy.isel(x=-4 + i)
     return {
         "Pe": p,
-        "Ph+": p,
+        "Ph+": ion_pressure,
         "Nh+": xr.ones_like(p),
         "phi": phi,
         "Vort": vort,
@@ -563,7 +583,10 @@ def build_startup(exe, directory, config, timeout):
     execute(exe, seed, config, timeout, seed=True)
     run = open_run(seed)
     initial = initial_state(replace(run, data=run.data.isel(t=0, drop=True)))
-    relaxing = run.data.options[run.model].get_bool("phi_boundary_relax")
+    # Every nonperiodic total-energy run now stores phi midpoints in Vort guards.
+    relaxing = run.formulation == "total_energy" or run.data.options[
+        run.model
+    ].get_bool("phi_boundary_relax")
     nx = run.data.sizes["x"] - 4
     files = sorted(
         seed.glob("BOUT.restart.*.nc"), key=lambda f: int(f.name.split(".")[-2])
@@ -623,6 +646,12 @@ def exact_index(times, value):
 
 def field_array(run, index, field):
     ds = run.data
+    if field == "perpendicular_kinetic":
+        snapshot = replace(run, data=ds.isel(t=[index]).compute())
+        value = energy_densities(snapshot).ion_perpendicular.isel(t=0)
+        return np.asarray(
+            run.interior(value).squeeze("y").transpose("x", "z")
+        ) * run.energy_scale, "J m$^{-3}$"
     if field == "ion_pressure":
         value = ds["Ph+"] if run.formulation == "pressure" else ds["Nh+"] * ds.Tion
         scale = run.energy_scale
@@ -766,7 +795,7 @@ def analyse_run(directory, config):
         boundary_midpoints.append(b)
         target = [float(phi.isel(x=c).mean()) for c in (2, -3)]
         if run.formulation == "total_energy":
-            if run.data.options[run.model].get_bool("phi_boundary_relax"):
+            if str(run.data.options[run.model]["radial_boundary"]) == "no_slip":
                 from energy_analysis.fluxes import boundary_relaxation
 
                 rates = boundary_relaxation(snapshot).phi_boundary_rate
@@ -806,10 +835,7 @@ def analyse_run(directory, config):
     drift, common_drift = native - native[0], common - common[0]
     peak = float(np.ptp(np.asarray(inventory.ion_perpendicular)))
     bx = np.asarray(boundary_midpoints)
-    if (
-        not run.data.options[run.model].get_bool("phi_boundary_relax")
-        and float(abs(bx).max()) > 1e-9
-    ):
+    if radial_boundary_mode(run) == "fixed" and float(abs(bx).max()) > 1e-9:
         raise AuditError("Fixed phi boundary midpoint changed")
     ode = (
         np.diff(bx, axis=0)
@@ -864,6 +890,11 @@ def analyse_run(directory, config):
     save_json(directory / "analysis.json", report)
     x, z, lx, lz = coordinates(run)
     fields = [field_array(run, i, config["field"])[0] for i in snapshots]
+    kinetic_fields = (
+        [field_array(run, i, "perpendicular_kinetic")[0] for i in snapshots]
+        if run.formulation == "total_energy"
+        else []
+    )
     comparison, unit = field_array(run, convergence, config["field"])
     volume = np.asarray(
         run.interior(run.data.J * run.data.dx * run.data.dy * run.data.dz).squeeze("y")
@@ -880,6 +911,7 @@ def analyse_run(directory, config):
         "lx": lx,
         "lz": lz,
         "snapshots": fields,
+        "kinetic_snapshots": kinetic_fields,
         "comparison": comparison,
         "volume": volume,
         "unit": unit,
@@ -960,12 +992,104 @@ def write_tables(study, energies, convergence, config, *, latex=False):
             (study / (name + "-table.tex")).write_text(text)
 
 
-def figures(study, config, results, style=None):
+def energy_figures(study, config, boundary, groups, *, energy_format="png"):
+    """Draw the same energy histories in a combined image or standalone panels."""
+    import matplotlib.pyplot as plt
+
+    panels = (
+        ("ion-thermal", "Ion thermal change [J]"),
+        ("electron-thermal", "Electron thermal change [J]"),
+        ("perpendicular-kinetic", "Perpendicular kinetic change [J]"),
+        ("shared-relative-change", "Shared FV energy: relative change"),
+        (
+            "model-relative-change",
+            "Model energy: relative change\n(thin: boundary balance residual)",
+        ),
+        ("estimator-difference", "Shared FV energy − model energy [J]"),
+    )
+    separate = energy_format == "pdf-panels"
+    if separate:
+        canvases = [plt.subplots(figsize=(6, 4.5)) for _ in panels]
+        axes = [axis for _, axis in canvases]
+    else:
+        fig, grid = plt.subplots(3, 2, figsize=(11, 10))
+        canvases = [(fig, grid)]
+        axes = list(grid.flat)
+
+    colours = {"pressure": "tab:blue", "total_energy": "tab:orange"}
+    styles = ["--", "-.", ":"]
+    for form, rows in groups.items():
+        for level, (key, res) in enumerate(rows):
+            inv, rep = res["inventory"], res["report"]
+            t = np.asarray(inv.t) * 1e3
+            kw = {
+                "color": colours[form],
+                "linestyle": "-"
+                if level == len(rows) - 1
+                else styles[(len(rows) - 2 - level) % len(styles)],
+                "alpha": 0.5 + 0.5 * (level + 1) / len(rows),
+                "label": f"{form.replace('_', ' ')} {key[2]}×{key[3]}",
+            }
+            for axis, name in zip(
+                axes[:3], ("ion_thermal", "electron_thermal", "ion_perpendicular")
+            ):
+                axis.plot(t, inv[name] - inv[name].isel(t=0), **kw)
+            axes[3].plot(
+                t,
+                (inv.plasma_reconstructed - inv.plasma_reconstructed.isel(t=0))
+                / inv.plasma_reconstructed.isel(t=0),
+                **kw,
+            )
+            axes[4].plot(
+                t,
+                (inv.plasma_native - inv.plasma_native.isel(t=0))
+                / inv.plasma_native.isel(t=0),
+                **kw,
+            )
+            axes[5].plot(t, inv.plasma_reconstructed - inv.plasma_native, **kw)
+            if rep["corrected_residual_J"] is not None:
+                axes[4].plot(
+                    t,
+                    np.asarray(rep["corrected_residual_J"])
+                    / float(inv.plasma_native.isel(t=0)),
+                    color=colours[form],
+                    linestyle=kw["linestyle"],
+                    linewidth=0.8,
+                    alpha=0.5,
+                )
+    for axis, (_, title) in zip(axes, panels):
+        axis.set_title(title)
+        axis.set_xlabel("Time [ms]")
+        if separate:
+            axis.legend(fontsize=8, ncol=2)
+
+    context = f"{boundary} phi; viscosity {config['viscosity']:g} m²/s"
+    residual_note = (
+        "Corrected pressure residual unavailable: "
+        "incomplete legacy boundary/exchange coverage"
+    )
+    if separate:
+        for (fig, _), (name, _) in zip(canvases, panels):
+            title = f"{context}\nparallel kinetic energy = 0"
+            if name == "model-relative-change":
+                title += "\n" + residual_note.replace(": ", ":\n")
+            fig.suptitle(title)
+            fig.savefig(study / f"energy-{boundary}-{name}.pdf")
+            plt.close(fig)
+    else:
+        axes[0].legend(fontsize=6, ncol=2)
+        fig.suptitle(f"{context}; parallel kinetic energy = 0\n{residual_note}")
+        fig.savefig(study / f"energy-{boundary}.png", dpi=160)
+        plt.close(fig)
+
+
+def figures(study, config, results, style=None, *, energy_format="png"):
     os.environ.setdefault("MPLCONFIGDIR", str(study / ".matplotlib"))
     import matplotlib
 
     matplotlib.use("pdf")
     import matplotlib.pyplot as plt
+    from matplotlib.colors import Normalize
 
     rc = {
         "font.size": 9,
@@ -987,10 +1111,10 @@ def figures(study, config, results, style=None):
             "field": config["field"],
             "snapshot_times_normalised": config["snapshot_times"],
             "convergence_time_normalised": config["convergence_time"],
+            "energy_format": energy_format,
         },
     )
     colours = {"pressure": "tab:blue", "total_energy": "tab:orange"}
-    styles = ["--", "-.", ":"]
     for boundary in sorted({r[0] for r in results}):
         groups = {
             f: sorted(
@@ -1004,96 +1128,58 @@ def figures(study, config, results, style=None):
             for f in colours
         }
         finest = {f: rows[-1][1] for f, rows in groups.items()}
-        arrays = [a for res in finest.values() for a in res["snapshots"]]
-        vmin, vmax = min(a.min() for a in arrays), max(a.max() for a in arrays)
-        if config["field"] == "vorticity":
-            vmax = max(abs(vmin), abs(vmax))
-            vmin = -vmax
+        internal_energy = config["field"] == "ion_pressure"
+        upper_arrays = finest["pressure"]["snapshots"]
+        if internal_energy:
+            # Pressure in Pa and energy density in J/m^3 have the same SI scale.
+            upper_arrays = [1.5 * a for a in upper_arrays]
+        state_rows = (
+            (
+                finest["pressure"],
+                upper_arrays,
+                "Internal energy" if internal_energy else "Pressure",
+                r"$3P_i/2$ [J m$^{-3}$]"
+                if internal_energy
+                else f"{config['field'].replace('_', ' ')} [{finest['pressure']['unit']}]",
+            ),
+            (
+                finest["total_energy"],
+                finest["total_energy"]["kinetic_snapshots"],
+                r"$K_\perp$",
+                r"$K_\perp$ [J m$^{-3}$]",
+            ),
+        )
         fig, ax = plt.subplots(2, 4, figsize=(12, 5), sharex=True, sharey=True)
-        for row, (form, res) in enumerate(finest.items()):
-            for col, a in enumerate(res["snapshots"]):
+        for row, (res, arrays, row_label, colour_label) in enumerate(state_rows):
+            vmin, vmax = min(a.min() for a in arrays), max(a.max() for a in arrays)
+            signed = row == 0 and config["field"] == "vorticity"
+            if signed:
+                vmax = max(abs(vmin), abs(vmax))
+                vmin = -vmax
+            norm = Normalize(vmin=vmin, vmax=vmax)
+            for col, a in enumerate(arrays):
                 im = ax[row, col].pcolormesh(
                     res["x"] * 1e2,
                     res["z"] * 1e2,
                     a.T,
-                    vmin=vmin,
-                    vmax=vmax,
-                    cmap="RdBu_r" if config["field"] == "vorticity" else "viridis",
+                    norm=norm,
+                    cmap="RdBu_r" if signed else "viridis",
                     rasterized=True,
                     shading="nearest",
                 )
                 if row == 0:
-                    ax[row, col].set_title(f"t = {config['snapshot_times'][col]:g}")
+                    ax[row, col].set_title(
+                        rf"$t = {config['snapshot_times'][col]:g}/\omega_{{ci}}$"
+                    )
                 if row == 1:
                     ax[row, col].set_xlabel("X [cm]")
-            ax[row, 0].set_ylabel(f"{form.replace('_', ' ')}\nZ [cm]")
-        fig.colorbar(
-            im,
-            ax=ax,
-            label=f"{config['field'].replace('_', ' ')} [{next(iter(finest.values()))['unit']}]",
-        )
-        fig.suptitle(f"{boundary} phi; finest grid; normalised snapshot times")
+            ax[row, 0].set_ylabel(f"{row_label}\nZ [cm]")
+            fig.colorbar(im, ax=ax[row, :], label=colour_label)
         fig.savefig(study / f"state-{boundary}.pdf")
+        fig.savefig(study / f"state-{boundary}.png", dpi=160)
         plt.close(fig)
 
-        fig, axes = plt.subplots(3, 2, figsize=(11, 10))
-        for form, rows in groups.items():
-            for level, (key, res) in enumerate(rows):
-                inv, rep = res["inventory"], res["report"]
-                t = np.asarray(inv.t) * 1e3
-                kw = {
-                    "color": colours[form],
-                    "linestyle": "-"
-                    if level == len(rows) - 1
-                    else styles[(len(rows) - 2 - level) % len(styles)],
-                    "alpha": 0.5 + 0.5 * (level + 1) / len(rows),
-                    "label": f"{form.replace('_', ' ')} {key[2]}×{key[3]}",
-                }
-                for axis, name in zip(
-                    axes.flat[:3],
-                    ("ion_thermal", "electron_thermal", "ion_perpendicular"),
-                ):
-                    axis.plot(t, inv[name] - inv[name].isel(t=0), **kw)
-                axes.flat[3].plot(
-                    t,
-                    (inv.plasma_reconstructed - inv.plasma_reconstructed.isel(t=0))
-                    / inv.plasma_reconstructed.isel(t=0),
-                    **kw,
-                )
-                axes.flat[4].plot(
-                    t,
-                    (inv.plasma_native - inv.plasma_native.isel(t=0))
-                    / inv.plasma_native.isel(t=0),
-                    **kw,
-                )
-                axes.flat[5].plot(t, inv.plasma_reconstructed - inv.plasma_native, **kw)
-                if rep["corrected_residual_J"] is not None:
-                    axes.flat[4].plot(
-                        t,
-                        np.asarray(rep["corrected_residual_J"])
-                        / float(inv.plasma_native.isel(t=0)),
-                        color=colours[form],
-                        linestyle=kw["linestyle"],
-                        linewidth=0.8,
-                        alpha=0.5,
-                    )
-        titles = [
-            "Ion thermal change [J]",
-            "Electron thermal change [J]",
-            "Perpendicular kinetic change [J]",
-            "Shared FV energy: relative change",
-            "Model energy: relative change\n(thin: boundary balance residual)",
-            "Shared FV energy − model energy [J]",
-        ]
-        for axis, title in zip(axes.flat, titles):
-            axis.set_title(title)
-            axis.set_xlabel("Time [ms]")
-        axes.flat[0].legend(fontsize=6, ncol=2)
-        fig.suptitle(
-            f"{boundary} phi; viscosity {config['viscosity']:g} m²/s; parallel kinetic energy = 0\nCorrected pressure residual unavailable: incomplete legacy boundary/exchange coverage"
-        )
-        fig.savefig(study / f"energy-{boundary}.pdf")
-        plt.close(fig)
+        energy_figures(study, config, boundary, groups, energy_format=energy_format)
 
         fig, axes = plt.subplots(1, 3, figsize=(12, 3.5))
         for form, rows in groups.items():
@@ -1149,7 +1235,7 @@ def figures(study, config, results, style=None):
         plt.close(fig)
 
 
-def analyse(study, manifest, *, latex=False, style=None):
+def analyse(study, manifest, *, latex=False, style=None, energy_format="png"):
     config = manifest["configuration"]
     results, energy_rows, conv_rows = {}, [], []
     for row in manifest["runs"]:
@@ -1210,7 +1296,7 @@ def analyse(study, manifest, *, latex=False, style=None):
                 }
             )
     write_tables(study, energy_rows, conv_rows, config, latex=latex)
-    figures(study, config, results, style)
+    figures(study, config, results, style, energy_format=energy_format)
     return results
 
 
@@ -1668,7 +1754,13 @@ def main(argv=None):
         manifest = json.loads((study / "manifest.json").read_text())
         if manifest["schema_version"] != SCHEMA:
             raise AuditError("Unsupported manifest schema")
-        analyse(study, manifest, latex=args.latex, style=args.style)
+        analyse(
+            study,
+            manifest,
+            latex=args.latex,
+            style=args.style,
+            energy_format=args.energy_format,
+        )
         print(f"Figures and tables: {study}")
         return 0
     config = configuration(args)
@@ -1779,7 +1871,13 @@ def main(argv=None):
     ):
         print("Selected cases finished. Resume to complete the matrix before analysis.")
         return 0
-    results = analyse(study, manifest, latex=args.latex, style=args.style)
+    results = analyse(
+        study,
+        manifest,
+        latex=args.latex,
+        style=args.style,
+        energy_format=args.energy_format,
+    )
     if config["accuracy_pilot"]:
         evidence = pilot(study, manifest, exe, args.timeout, results)
         print(

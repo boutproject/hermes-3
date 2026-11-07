@@ -96,7 +96,7 @@ bndry_all = neumann
 [evolve_vorticity_ion_energy]
 average_atomic_mass = 1.75
 poloidal_flows = false
-phi_boundary_relax = false
+radial_boundary = fixed
 phi_rtol = 1e-8
 vort_atol = 1e-12
 phi_max_iterations = 200

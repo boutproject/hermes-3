@@ -147,7 +147,7 @@ def boundary_rates(runs):
     ).sum("y")
     result = []
     for run, (boundaries, gradients, selected) in zip(runs, values, strict=True):
-        if run.data.options[MODEL].get_bool("phi_core_averagey"):
+        if np.any(selected):
             mask = xr.DataArray(selected, dims="y", coords={"y": gradients[0].y})
             gradients[0] = xr.where(mask, mean, gradients[0])
         velocity = run.data.options[MODEL].evaluate_scalar("phi_boundary_velocity") / (
@@ -303,7 +303,7 @@ def audit(runs, manifest, diagnose):
             "Unsupported fixture decomposition",
         )
         require(
-            ds.options[MODEL].get_bool("phi_boundary_relax")
+            str(ds.options[MODEL]["radial_boundary"]) == "no_slip"
             and not ds.options[MODEL].get_bool("poloidal_flows"),
             "Expected axisymmetric relaxation fixture",
         )

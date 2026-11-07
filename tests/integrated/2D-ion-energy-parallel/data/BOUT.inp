@@ -75,7 +75,7 @@ AA = 2
 [evolve_vorticity_ion_energy]
 average_atomic_mass = 2
 poloidal_flows = false
-phi_boundary_relax = false
+radial_boundary = fixed
 phi_rtol = 1e-10
 vort_atol = 1e-13
 phi_max_iterations = 200

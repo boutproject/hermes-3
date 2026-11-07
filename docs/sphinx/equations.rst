@@ -1631,6 +1631,14 @@ The evolved quantities and temperature recovery are
    T_i &= \frac{2(E_i-K_\parallel-K_\perp)}{3\sum_s n_s}.
    \end{aligned}
 
+The ion internal energy density is :math:`U_i=3P_i/2`; ``Eion`` also contains
+the two kinetic-energy terms. In SI units these are densities in J/m\ :sup:`3`,
+while :math:`P_i` is in Pa. Perpendicular kinetic energy measures the combined
+E×B and ion diamagnetic flow through :math:`\nabla_\perp(\phi+\psi)`.
+Consequently, :math:`\phi+\psi=\mathrm{constant}` gives zero
+:math:`K_\perp` even when the pressure and electrostatic potential vary:
+the two drift contributions cancel.
+
 These expressions describe the model before density floors and pressure
 clipping are applied. In the implementation, the recovered thermal pressure
 is clipped to be non-negative and the total ion density in the temperature
@@ -1665,6 +1673,13 @@ they obey discrete integration by parts with boundary work. For an energy
 audit, use this discrete kinetic energy rather than spectral Z
 derivatives, even when the approximate Laplacian solver uses Fourier
 modes in Z.
+
+The kinetic energy in a physical cell beside a radial wall includes the
+guard-to-interior face gradient. Apply the potential and pressure-potential
+wall guards before evaluating :math:`K_\perp`, then exclude guard cells from
+plots and volume integrals. Closing a transport face removes its normal flux
+from that transport divergence; it does not remove the face gradient from
+the kinetic-energy operator.
 
 The time evolution is
 
@@ -1717,7 +1732,11 @@ momentum fields :math:`M_s=A_s n_s V_{\parallel s}`:
 
 These parallel currents enter the electrical energy flux and electron
 exchange term. The vorticity RHS implemented here contains the Reynolds,
-diamagnetic and viscous current divergences shown above.
+diamagnetic and viscous current divergences shown above; it does not include
+parallel-current divergence or ``fields:DivJextra``. Parallel electrical
+work is therefore present in the energy equation without the corresponding
+parallel-current drive of vorticity. This limits the present formulation
+for simulations in which parallel or sheath currents control the potential.
 The electron current in the exchange term is
 :math:`\mathbf{J}_e=\mathbf{J}_{\mathrm{dia},e}+\mathbf{J}_{\parallel,e}`.
 Electron thermal energy receives
@@ -1769,8 +1788,9 @@ The viscous current is included in both the vorticity RHS and the auxiliary
 current solve. Current, energy flux and heating use the same X--Z faces,
 including :math:`g^{13}`, and satisfy a discrete product rule. This heating
 differs from the cell-centred gradient product in ``vorticity`` at finite
-resolution. The coefficient has Dirichlet guards and a separate physical
-vorticity stencil has Neumann guards, including when potential boundaries relax.
+resolution. The radial viscosity coefficient is continued from the interior;
+the physical vorticity guards and normal face closure follow ``radial_boundary``
+as described below.
 
 Loss of perpendicular kinetic energy heats the ions through the recovered
 total-energy partition; :math:`H_\nu` is not added again as an ion energy
@@ -1785,19 +1805,64 @@ This electron thermal source is subtracted from ``Eion`` as an internal
 transfer, conserving the combined ion and electron energy. The mass-density
 denominator is floored using ``average_atomic_mass * density_floor``.
 
-The recovered ion pressure uses homogeneous Neumann boundaries by default.
-With ``neumann_boundary_average_z = true``, its radial face value is instead
-the Z average of the adjacent interior pressure. For interior cell :math:`c`
-and adjacent guard cell :math:`g`,
+For nonperiodic X, ``radial_boundary`` selects the wall model:
+
+.. list-table:: Radial wall conditions
+   :header-rows: 1
+   :widths: 15 23 23 19 20
+
+   * - ``radial_boundary``
+     - Mean potential midpoint :math:`\phi_b`
+     - Physical vorticity
+     - Normal viscous current and energy flux
+     - Chi DC midpoint
+   * - ``fixed`` (default)
+     - Held at its initial value
+     - Neumann
+     - Closed
+     - Zero
+   * - ``free_slip``
+     - Held at its initial value
+     - Zero midpoint
+     - Open
+     - Zero
+   * - ``no_slip``
+     - Evolves by the wall law below
+     - Neumann
+     - Closed
+     - :math:`d\phi_b/dt`
+
+Every mode holds the AC midpoint of both :math:`\phi` and :math:`\psi`
+at zero and explicitly closes normal E×B energy advection. Total ion pressure
+``Pi_sum`` and pressure potential ``psi`` independently have radial midpoint
+values equal to their adjacent interior Z means. For the first interior
+cell :math:`0` and adjacent guard cell :math:`g`,
 
 .. math::
 
-   \frac{P_{i,g}+P_{i,c}}{2}=\langle P_{i,c}\rangle_Z.
+   \frac{f_g+f_0}{2}=\langle f_0\rangle_Z,
+   \qquad f\in\{P_i,\psi\}.
 
-This gives a Neumann condition for the DC pressure and a zero midpoint
-Dirichlet condition for its AC modes.
+This gives a Neumann condition for the DC part and a zero midpoint Dirichlet
+condition for the AC part of each field. The condition on psi is reapplied
+after composition weighting. Its species-pressure identity above holds in
+physical cells; its radial guards are imposed independently because mixture
+weights can vary there. Individual species pressures and ``Tion`` need not
+satisfy this same simple AC condition. Potential, pressure and physical
+vorticity fill all remaining radial guard columns by copying the first guard;
+these wall helpers act only on physical Y rows.
 
-Setting ``phi_boundary_relax = true`` (default ``false``) evolves the radial
+Initial vorticity and total energy must use the same imposed wall guards as
+the recovery. A pressure-potential perturbation that retains a nonzero AC
+value at the wall creates a steep radial gradient when these guards are
+applied. A smooth perturbation that vanishes at the X faces avoids this
+initial mismatch. In the hydrogen
+:ref:`2D-energy comparison <subsec-2d-energy-comparison>`, the tapered pressure
+profile has :math:`\psi=P_i` and the initial :math:`\phi=1-P_i` gives
+:math:`\Phi=1`, zero vorticity and zero perpendicular kinetic energy under
+the component's wall conditions.
+
+Setting ``radial_boundary = no_slip`` evolves the radial
 midpoint potential :math:`\phi_b` to relax the mean wall-normal electric field:
 
 .. math::
@@ -1814,8 +1879,12 @@ and has no default. Its normalised value is
 ``vorticity`` and ``relax_potential`` components. For a boundary cell of
 physical width :math:`h_b`, :math:`\kappa=h_b/(2\tau)` matches the local
 strength of the previous timescale law at that resolution. With a fixed
-velocity, the rigid-rotation relaxation time in a slab of physical width
-:math:`L` is :math:`L/(2\kappa)`.
+velocity, fixed vorticity and negligible evolution of the mean pressure
+potential, the rigid-rotation relaxation time in a slab of physical width
+:math:`L` is :math:`L/(2\kappa)`. The
+:ref:`radial-boundary regression <subsec-2d-ion-energy-radial-boundary>`
+isolates this limit using cold, uniform ions. An evolving pressure potential
+can change the measured potential relaxation time in warm-ion runs.
 
 The wall state is the arithmetic midpoint of the reflected guard/interior pair,
 :math:`\phi_b=(\overline{\phi}_g+\overline{\phi}_0)/2`, rather than the exact
@@ -1843,10 +1912,12 @@ The :ref:`quadratic wall-relaxation regression
 <subsec-2d-ion-energy-quadratic-wall-relaxation>` checks both the instantaneous
 rate and the integrated midpoint drift at several radial resolutions.
 The boundary state is integrated by the time solver and saved in restarts.
-This mode requires two radial guard cells and automatically enables
-``Vort:evolve_bndry``; explicitly disabling it is an error. Stored midpoint
-potentials are uniform in Z and may vary in Y. With ``phi_core_averagey = true``
-(default ``false``), the inner wall on closed core field lines uses
+All wall modes require at least two radial guard cells, complete periodic Z
+lines on each rank, and evolving ``Vort`` boundaries. The component automatically
+enables ``Vort:evolve_bndry``; explicitly disabling it is an error. Initial wall
+midpoints are taken from the initial potential, which is zero on a fresh start.
+Stored midpoint potentials are uniform in Z and may vary in Y. The inner wall
+on closed core field lines automatically uses
 :math:`J\,dy`-weighted flux-surface averages. Define
 
 .. math::
@@ -1863,19 +1934,43 @@ The rate is :math:`\widehat{\kappa}\langle M_b D_n\rangle_w`, with
 that surface therefore receive the same applied midpoint and rate.
 The solver stores these midpoints in the physical radial guards of ``Vort``;
 ordinary physical vorticity boundary conditions act on a separate field.
-Physical Y boundary derivatives are zero. Version-1 restarts preserve this
-storage; older restarts initialise it once from the saved phi midpoints.
+Physical Y boundary derivatives of solver ``Vort`` are zero; the separate
+physical vorticity retains the user Y boundary operators. Version-1 restarts
+preserve this storage; version-zero and unversioned restarts initialise it
+once from the saved phi midpoints.
 
-The full polarisation current is retained in the vorticity/current solve.
-Normal polarisation transport of particles, momentum, enthalpy, parallel
-kinetic energy and electrical work is closed at physical radial faces,
-including cross-metric fluxes. This lets imposed sources and sheath
-boundary conditions determine the corresponding boundary fluxes.
-At physical X boundaries, :math:`\chi` has midpoint Dirichlet conditions for
-its Z average (DC) and radial Neumann conditions for its nonzero Z Fourier
-modes (AC). With fixed phi the DC value is zero; with relaxation it is
-:math:`d\phi_b/dt`, computed from the recovered potential before the auxiliary
-solve. This approximates :math:`\partial_t\Phi` at the wall by neglecting
+For ``fixed`` and ``free_slip``, the stored midpoint rate is zero.
+Physical vorticity has radial Neumann guards in ``fixed`` and ``no_slip``;
+``free_slip`` imposes zero midpoint vorticity. Viscous current and energy
+fluxes share the same faces: closed in ``fixed`` and ``no_slip``, open in
+``free_slip``. The viscosity coefficient retains its interior value at each
+radial face so that the free-slip condition permits diffusion. Reynolds
+current and energy fluxes and E×B energy fluxes are closed in every mode.
+The Reynolds intermediate :math:`Q=\mathbf{v}_E\cdot\nabla\psi` has zero
+wall midpoint; :math:`c\nabla_\perp^2\phi/2` uses linear radial extrapolation.
+
+The auxiliary solve uses the physical vorticity RHS and the full FV
+operator, including wall currents. Its transport faces are selected separately.
+``polarisation_ac_boundary`` selects the auxiliary AC wall condition:
+``neumann`` (default) sets :math:`\partial_x\widetilde{\chi}=0` and closes
+normal polarisation transport of particles, momentum and energy by setting
+the complete normal face flux to zero, including cross-metric terms. The
+boundary cells acquire a charge mismatch from that dropped wall flux, in
+addition to any error from the finite-correction auxiliary inverse.
+This choice generally permits larger timesteps. A Neumann derivative alone
+is not insulating when :math:`g^{13}\ne0`: the normal current also contains
+:math:`g^{13}\partial_z\widetilde{\chi}`. This term vanishes on orthogonal
+shifted-metric grids; explicit face closure removes it on other grids.
+
+``dirichlet`` sets :math:`\widetilde{\chi}=0` at the wall midpoint and opens
+the chi part of polarisation transport, allowing particle, momentum and energy
+exchange consistently with the current solve. The flux is signed and may
+enter or leave the plasma; no one-way loss constraint is imposed. Reynolds
+transport remains closed. Chi reflects each radial guard layer from the
+corresponding interior layer, evenly for Neumann AC and oddly for Dirichlet AC.
+The DC midpoint of chi is zero for ``fixed`` and ``free_slip``, and
+:math:`d\phi_b/dt` for ``no_slip``. This approximates
+:math:`\partial_t\Phi` at the wall by neglecting
 :math:`\partial_t\overline{\psi}_b`, whose rate is only known during finalisation.
 Let :math:`\mathcal{P}` denote the approximate inverse supplied by the
 auxiliary Laplacian solver, including the Boussinesq coefficient and its
@@ -1893,26 +1988,20 @@ every RHS evaluation, the component performs
 where :math:`N` is ``polarisation_corrections``. There are :math:`N+1`
 solver calls: one initial solve and :math:`N` FV defect corrections. The
 residual uses the full FV operator, retaining its physical boundary currents;
-only transport fluxes are closed. The mixed guards, including any nonzero
-DC wall rate, are imposed before every residual, including the first, and
-after the final correction. Each spectral correction uses homogeneous
-boundary conditions. This gives a deterministic auxiliary solve with no
+the AC option controls transport face closure. The selected guards, including
+any nonzero DC wall rate, are imposed before every residual, including the
+first, and after the final correction. Each spectral correction uses
+homogeneous boundary conditions. This gives a deterministic auxiliary solve with no
 tolerance-dependent stopping criterion.
 With the usual Fourier-in-Z inverse, finite corrections leave a FV/spectral
 discretisation error; this is reported by ``ion_chi_residual``.
 
 The DC value fixes the constant mode without subtracting the mean source
 or solution.
-For orthogonal metrics and coefficients independent of Z, the AC normal
-potential-flow current is already zero; DC current and cross-metric current
-can remain and are closed in transport.
-With ``diagnose = true``, ``ion_chi`` and ``ddt(Phi)`` record the same
-auxiliary potential in V/s, with conversion factor
-:math:`T_{\mathrm{norm}}\Omega_{ci}`. When relaxation is also enabled,
-``phi_wall_rate`` records the midpoint rates in V/s in physical radial
-guard cells, with zero interior and Y boundary values. Normal output
-``Vort`` remains physical vorticity; restart files also store the
-potential boundary state.
+With Neumann AC, orthogonal metrics and coefficients independent of Z,
+the AC normal potential-flow current is already zero. DC current can remain;
+on nonorthogonal grids cross-metric current can also remain. The Neumann
+transport choice closes all these normal wall contributions.
 
 Other options in ``[evolve_vorticity_ion_energy]`` are:
 
@@ -1922,8 +2011,6 @@ Other options in ``[evolve_vorticity_ion_energy]`` are:
   (default ``false``).
 - ``density_floor``: Normalised total ion density floor (default ``1e-7``).
 - ``viscosity``: Kinematic viscosity in m^2/s (default ``0.0``).
-- ``neumann_boundary_average_z``: Set radial ion-pressure face values
-  to the Z average of the adjacent interior values (default ``false``).
 - ``phi_max_iterations``: Maximum number of pressure/potential recovery
   iterations (default ``100``). Failure to converge
   raises an error.
@@ -1940,27 +2027,56 @@ Other options in ``[evolve_vorticity_ion_energy]`` are:
 - ``laplacian``: Subsection containing options for the approximate
   Laplacian solver.
 - ``polarisation_laplacian``: Independent auxiliary solver options, with
-  ``type`` defaulting to the phi solver type. For nonperiodic X both boundary
-  flags must be ``2`` (``INVERT_AC_GRAD``); DC-removal global flags are rejected.
-  Periodic X retains the existing potential inverse and gauge.
+  ``type`` defaulting to the phi solver type. This separate solver is created
+  only for nonperiodic X. The enums determine both solvers' radial flags:
+  ``INVERT_SET`` for phi, ``INVERT_AC_GRAD`` for Neumann chi AC and zero for
+  Dirichlet chi AC. DC-removal global flags are rejected for this auxiliary
+  inverse. Periodic X shares the potential inverse and its existing gauge.
 - ``diagnose``: Save additional energy and flux diagnostics (default ``false``).
+
+User-supplied ``inner_boundary_flags`` or ``outer_boundary_flags`` in either
+solver subsection, ``Vort:bndry_xin``, ``Vort:bndry_xout`` and explicit
+``Vort:evolve_bndry=false`` are rejected by the constructor, including for
+periodic X.
+
+The removed ion-energy options ``phi_boundary_relax``, ``phi_core_averagey``
+and ``neumann_boundary_average_z`` are not read and fail the unused-option
+check. ``phi_boundary_velocity`` is read only for ``no_slip``. Periodic X
+skips radial wall logic.
 
 The default outputs are ``Eion``, ``Tion``, ``Vort`` and ``phi``.
 Pressure/potential recovery starts from the phi and perpendicular kinetic
 energy saved as guesses at the last output state. The initial thermal
 pressure for each RHS uses the current :math:`E_i` and :math:`K_\parallel`
 with that stored :math:`K_\perp`. The guesses remain fixed between outputs,
-including during Newton and Krylov evaluations. Before the first output,
-the kinetic-energy guess is zero; restart phi seeds the initial potential guess.
+including during Newton and Krylov evaluations; they are promoted by
+``outputVars()`` rather than at every accepted internal step. The current
+stored wall midpoint is applied to the potential guess on every RHS call.
+Before the first output, the kinetic-energy guess is zero; restart phi seeds
+the initial potential guess.
 
 With ``diagnose = true``, the component also saves ``ion_KE_parallel``,
 ``ion_KE_perp``, ``ion_pressure_potential``, ``ddt(Eion)``, the flux
 divergences ``DivEExB``, ``DivEReynolds``, ``DivEelectric``, ``DivEparallel``
 and ``DivEpol``, and the exchange/source terms ``phi_Div_Je``,
-``electron_exb_work`` and ``Eion_src``. ``DivJpol`` is the divergence of
-the closed polarisation transport current. The auxiliary :math:`\chi`
-approximates the polarisation current rather than the exact time derivative
-of :math:`\phi+\psi`.
+``electron_exb_work`` and ``Eion_src``. ``DivJpol`` is the divergence of the
+selected polarisation transport current: the chi wall flux is closed for
+Neumann AC and open for Dirichlet AC, while the Reynolds wall flux is always
+closed. ``DivJReynolds`` records the Reynolds current divergence.
+``ion_chi`` and ``ddt(Phi)`` record the same auxiliary potential in V/s, with
+conversion factor :math:`T_{\mathrm{norm}}\Omega_{ci}`. It approximates the
+polarisation current rather than the exact time derivative of
+:math:`\phi+\psi`.
+
+For nonperiodic X in every wall mode, ``phi_wall_rate`` records the midpoint
+rates in V/s in physical radial guard cells, with zero interior and Y boundary
+values. It is zero for ``fixed`` and ``free_slip``. Normal output ``Vort``
+remains physical vorticity; restart files also store the potential boundary
+state. ``particle_pol_wall_loss_<species>`` gives the signed outward
+polarisation particle loss per cell volume (m\ :sup:`-3`/s), nonzero only next
+to radial walls and zero for Neumann AC. Its volume integral is the particle
+wall flux.
+
 ``ion_phi_iterations`` reports the last pressure/potential recovery iteration
 count. ``ion_chi_iterations`` is the number of auxiliary solver calls,
 ``1 + polarisation_corrections``; ``ion_chi_residual`` is the maximum absolute

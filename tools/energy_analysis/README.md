@@ -188,8 +188,9 @@ balances are independent of that gauge. Outer guard results are undefined.
 
 The polarisation inverse uses independent X tridiagonal systems for the
 finite-volume Z Fourier modes, with cached factors. Nonperiodic X has
-homogeneous midpoint Dirichlet DC and radial Neumann AC boundaries, for both
-fixed and relaxing phi. The DC field is retained without mean subtraction.
+midpoint Dirichlet DC and the selected `polarisation_ac_boundary` AC condition.
+The DC value is zero for `fixed` and `free_slip`, and the wall rate for
+`no_slip`. The DC field is retained without mean subtraction.
 Periodic X uses its existing fixed gauge. The solve is lazy across time/Y,
 with complete local X-Z planes, and includes the FV Nyquist response.
 Diagnostic comparison removes a free inversion gauge only for periodic X,
@@ -199,10 +200,11 @@ fluxes sum even with spatially varying composition.
 
 `boundary_relaxation(run)` reconstructs radial potential midpoints, adjacent
 Z-averaged targets and normalised rates from saved phi guards and `bd.options`.
-Core Y averages exclude guards. The separately reconstructed
+Closed-core Y averages are automatic and exclude guards. The separately reconstructed
 `DivEpol_enthalpy`, `DivEpol_parallel_kinetic` and `DivEpol_electric` face families
 expose each energy contribution's physical-face closure. Particle and momentum
-polarisation faces use the same mask. Full-current inversion permits normal
+polarisation faces use the same mask. The chi contribution opens only for
+Dirichlet AC; Reynolds transport stays closed in every wall mode. Full-current inversion permits normal
 DC current and mixed-metric current; closed transport omits them at physical
 boundaries. Orthogonal AC potential-flow current is zero before the mask.
 

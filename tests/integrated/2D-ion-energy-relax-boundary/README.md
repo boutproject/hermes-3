@@ -7,10 +7,10 @@ and parallel kinetic energy. Y is periodic and the initial fields are uniform
 in Y; Z is periodic. Two Y guards support the parallel transport stencils.
 
 The potential boundary midpoint relaxes towards the adjacent interior Z
-average on a 1 microsecond timescale. Its state is carried by the physical
+average using `radial_boundary = no_slip` and the Plan A velocity law. Its state is carried by the physical
 boundary cells of solver `Vort`, while ordinary output `Vort` and stencil
 inputs contain physical vorticity. The auxiliary current potential has
-homogeneous midpoint Dirichlet DC and radial Neumann AC boundaries.
+midpoint Dirichlet DC at the wall rate and radial Neumann AC boundaries.
 The full current operator permits DC and mixed-metric normal current, but
 particle, momentum, enthalpy, parallel kinetic and
 polarisation electrical fluxes are closed at physical radial faces.

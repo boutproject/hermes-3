@@ -2,6 +2,7 @@
 #ifndef EVOLVE_VORTICITY_ION_ENERGY_H
 #define EVOLVE_VORTICITY_ION_ENERGY_H
 
+#include <bout/bout_enum_class.hxx>
 #include <bout/bout_types.hxx>
 #include <bout/coordinates.hxx>
 #include <bout/field3d.hxx>
@@ -15,7 +16,31 @@
 #include <string>
 #include <vector>
 
+BOUT_ENUM_CLASS_NS(bout::ion_energy, RadialBoundary, fixed, free_slip, no_slip);
+BOUT_ENUM_CLASS_NS(bout::ion_energy, PolarisationACBoundary, neumann, dirichlet);
+
 namespace bout::ion_energy {
+/// All radial settings are derived once from the two boundary enums.
+struct RadialBoundaryModel {
+  bool walls{false};
+  RadialBoundary mode{RadialBoundary::fixed};
+  PolarisationACBoundary chi_ac{PolarisationACBoundary::neumann};
+  bool evolve_wall_potential{false};
+  bool vorticity_wall_zero{false};
+  bool viscous_wall_flux{false};
+  bool chi_wall_flux{false};
+  bool core_flux_surface_average{false};
+  BoutReal phi_boundary_velocity{0.0}; ///< Normalised velocity, only for no_slip
+  int phi_flags{INVERT_SET};
+  int chi_flags{INVERT_AC_GRAD};
+};
+
+/// Mean radial Neumann and zero AC midpoint, copied to all radial guards.
+/// Physical Y rows and X walls only; interior and periodic X are preserved.
+void applyWallPressureBoundary(Field3D& f);
+/// Neumann vorticity, or zero midpoint for a stress-free wall; all X guards.
+void applyVorticityWallBoundary(Field3D& w, bool midpoint_zero);
+
 struct PerpendicularFaceFluxes {
   BoutReal xp, xm, zp, zm;
 };
@@ -40,20 +65,22 @@ Field3D kineticEnergyPerp(const Field3D& a, const Field3D& f);
 ///          the domain at either wall. The physical normal metric is not applied.
 BoutReal wallInwardDerivative(BoutReal phi_midpoint, BoutReal phi0, BoutReal dx0);
 
-/// Impose DC midpoint Dirichlet and AC radial Neumann conditions on chi.
+/// Impose DC midpoint Dirichlet and the selected AC radial condition on chi.
 ///
 /// Each radial guard layer reflects the corresponding interior layer's Z mean
-/// about the supplied DC value, while retaining its Z-dependent fluctuations.
+/// about the supplied DC value. AC fluctuations are retained for Neumann
+/// or reflected for zero-midpoint Dirichlet.
 /// Interior cells are preserved. All local Y rows are processed at physical X
 /// boundaries; periodic X leaves the field unchanged.
 ///
 /// @param[in,out] chi Auxiliary potential whose radial guard cells are updated.
+/// @param ac Radial condition on Z-dependent fluctuations.
 /// @param dc_inner Inner wall DC values in chi's units, indexed by local Y.
 ///                 If supplied, the array must contain LocalNy entries;
 ///                 nullptr specifies a zero DC midpoint.
 /// @param dc_outer Outer wall DC values, with the same convention as dc_inner.
 /// @throws BoutException If a nonperiodic X mesh lacks complete periodic Z lines.
-void applyPolarisationBoundary(Field3D& chi,
+void applyPolarisationBoundary(Field3D& chi, PolarisationACBoundary ac,
                                const std::vector<BoutReal>* dc_inner = nullptr,
                                const std::vector<BoutReal>* dc_outer = nullptr);
 
@@ -70,6 +97,7 @@ void applyPolarisationBoundary(Field3D& chi,
 /// @param[in,out] inverse Spectral approximate inverse configured for coefficient
 ///                       and the appropriate homogeneous correction boundaries.
 /// @param corrections Nonnegative number of FV corrections after the first solve.
+/// @param ac Radial condition on Z-dependent fluctuations.
 /// @param dc_inner Optional inner wall DC values, as in applyPolarisationBoundary.
 /// @param dc_outer Optional outer wall DC values, as in applyPolarisationBoundary.
 /// @returns A new chi field with the requested radial guards imposed. A finite
@@ -78,6 +106,7 @@ void applyPolarisationBoundary(Field3D& chi,
 /// @throws BoutException If corrections is negative or the boundary mesh is invalid.
 Field3D fixedPolarisationPotential(const Field3D& coefficient, const Field3D& rhs,
                                    Laplacian& inverse, int corrections,
+                                   PolarisationACBoundary ac,
                                    const std::vector<BoutReal>* dc_inner = nullptr,
                                    const std::vector<BoutReal>* dc_outer = nullptr);
 } // namespace bout::ion_energy
@@ -92,35 +121,26 @@ Field3D fixedPolarisationPotential(const Field3D& coefficient, const Field3D& rh
 /// must be evolved by evolve_pressure; electron parallel electrical work is
 /// accounted for by the electron momentum equation.
 ///
-/// # Mesh inputs
-///
-/// P<name>_src   A source of pressure, in Pascals per second
-///               This can be over-ridden by the `source` option setting.
-///
 struct EvolveVorticityIonEnergy : public NamedComponent<EvolveVorticityIonEnergy> {
   ///
   /// # Inputs
   ///
   /// - <name>
-  ///   - bndry_flux           Allow flows through radial boundaries? Default is true
-  ///   - density_floor        Minimum density floor. Default 1e-5 normalised units.
-  ///   - diagnose             Output additional diagnostic fields?
-  ///   - evolve_log           Evolve logarithm of pressure? Default is false
-  ///   - hyper_z              Hyper-diffusion in Z
-  ///   - poloidal_flows       Include poloidal ExB flows? Default is true
-  ///   - phi_boundary_relax   Evolve radial phi midpoints? Default is false
-  ///   - phi_boundary_velocity  Required relaxation velocity [m/s] when enabled
-  ///   - phi_core_averagey    Use J dy-weighted core wall averages? Default is false
+  ///   - radial_boundary      fixed (default), free_slip or no_slip
+  ///   - phi_boundary_velocity  Required positive velocity [m/s] for no_slip
+  ///   - polarisation_ac_boundary  neumann (default) or dirichlet
+  ///   - average_atomic_mass  Boussinesq reference atomic mass, default 2.0
+  ///   - density_floor        Minimum normalised total ion density, default 1e-7
+  ///   - diagnose             Output additional diagnostic fields? Default false
+  ///   - poloidal_flows       Include poloidal ExB flows? Default false
   ///   - viscosity            Kinematic viscosity [m^2/s], default 0.0
-  ///   - precon               Enable preconditioner? Note: solver may not use it even if
-  ///   enabled.
-  ///
-  /// - E<name>  e.g. "Ee", "Ed+"
-  ///   - source     Source of energy [W / s].
-  ///                NOTE: This overrides mesh input P<name>_src
-  ///   - source_only_in_core         Zero the source outside the closed field-line
-  ///                                 region?
-  ///   - neumann_boundary_average_z  Apply Neumann boundaries with Z average?
+  ///   - phi_max_iterations   Recovery iteration limit, default 100
+  ///   - phi_atol             Potential convergence scale [eV], default 1.0
+  ///   - phi_rtol             Recovery relative tolerance, default 1e-3
+  ///   - vort_atol            Normalised vorticity residual tolerance, default 1e-10
+  ///   - polarisation_corrections  FV auxiliary defect corrections, default 2
+  ///   - laplacian            Approximate potential inverse options
+  ///   - polarisation_laplacian  Auxiliary inverse options; type defaults to laplacian
   ///
   EvolveVorticityIonEnergy(std::string name, Options& options, Solver* solver);
 
@@ -152,10 +172,9 @@ private:
   Field3D ion_KE_parallel; ///< Parallel ion kinetic energy K_||i
   Field3D ion_KE_perp;     ///< Perpendicular ion kinetic energy K⊥
 
-  BoutReal average_atomic_mass;    ///< Weighted average atomic mass
-  bool poloidal_flows;             ///< Include poloidal (Y) flows?
-  bool neumann_boundary_average_z; ///< Set pressure constant in Z, Neumann in X
-  BoutReal density_floor;          ///< Used to calculate Ti
+  BoutReal average_atomic_mass; ///< Weighted average atomic mass
+  bool poloidal_flows;          ///< Include poloidal (Y) flows?
+  BoutReal density_floor;       ///< Used to calculate Ti
 
   bool include_viscosity;                ///< Was kinematic viscosity specified?
   Coordinates::FieldMetric viscosity;    ///< Normalised kinematic viscosity
@@ -163,7 +182,7 @@ private:
   Field3D electron_viscous_heating{0.0}; ///< Electron mass fraction of viscous heating
 
   Field3D phi{0.0}; ///< Electrostatic potential ϕ
-  Field3D chi{0.0}; ///< Auxiliary current potential with DC Dirichlet / AC Neumann
+  Field3D chi{0.0}; ///< Auxiliary current potential with selected AC boundaries
   Field3D Pi_sum;   ///< Total ion pressure
 
   // Starting guess for potential recovery, updated only at outputs
@@ -180,9 +199,7 @@ private:
   BoutReal chi_residual{0.0};      ///< Max FV residual of the last chi calculation
   int polarisation_corrections{2}; ///< FV defect corrections after the spectral solve
 
-  bool phi_boundary_relax;               ///< Relax mean wall-normal E-field
-  BoutReal phi_boundary_velocity{0.0};   ///< Relaxation velocity [normalised]
-  bool phi_core_averagey{false};         ///< Flux-surface-average core wall state?
+  bout::ion_energy::RadialBoundaryModel radial_model;
   std::vector<BoutReal> wall_rate_inner; ///< Current inner wall dphi/dt, by local y
   std::vector<BoutReal> wall_rate_outer; ///< Current outer wall dphi/dt, by local y
 
@@ -200,7 +217,7 @@ private:
   // Divergence of currents
   Field3D DivJdia;      ///< Divergence of diamagnetic current
   Field3D DivJReynolds; ///< Divergence of Reynolds stress current
-  Field3D DivJpol;      ///< Polarisation transport divergence with closed physical faces
+  Field3D DivJpol; ///< Polarisation transport divergence with the selected wall closure
   Field3D DivJviscous{0.0}; ///< Divergence of nu grad_perp(Vort)
 
   // Divergence of energy fluxes
@@ -236,11 +253,11 @@ private:
   /// Encode the initial or legacy-restart phi wall values in the solver state.
   ///
   /// Reads phi's interior and adjacent radial guard values and averages their
-  /// midpoints over Z. With phi_core_averagey, the inner core midpoint is also
+  /// midpoints over Z (zero on a fresh start). The inner closed-core midpoint is also
   /// averaged over the connected Y surface using wall-face J dy weights.
   /// Writes that midpoint to every radial Vort guard column and Z cell at each
   /// physical Y row, after zeroing all Vort boundary cells. Interior Vort is
-  /// preserved; Y boundary storage remains zero. Called only in relaxing mode.
+  /// preserved; Y boundary storage remains zero. Used for every wall mode.
   void initialiseBoundaryState();
 
   /// Restore phi's radial midpoint conditions during potential recovery.
@@ -249,13 +266,13 @@ private:
   /// value, using its J dy-weighted surface average at an averaged core wall.
   /// Writes phi_guard = 2 * midpoint - phi_interior and copies that value into
   /// the remaining radial guards at physical Y rows. Neither interior phi nor
-  /// solver Vort is modified. Does nothing for fixed boundaries or periodic X.
+  /// solver Vort is modified. Does nothing for periodic X.
   void applyPotentialBoundary();
 
   /// Compute the current relaxation rates before the auxiliary chi solve.
   ///
   /// Reads the encoded Vort midpoints, the converged phi in the first interior
-  /// cell, the normalised phi_boundary_velocity, and mesh dx/g11. Uses Z means
+  /// cell, the model's normalised phi_boundary_velocity, and mesh dx/g11. Uses Z means
   /// and the centred inward face derivative to compute kappa * grad_n(phi).
   /// At an averaged core wall, both the midpoint and physical derivative use
   /// wall-face J dy-weighted Y averages over the connected surface.
@@ -263,7 +280,7 @@ private:
   /// Overwrites wall_rate_inner and wall_rate_outer, indexed by local Y, in
   /// normalised potential/time units. Unused walls and Y guard entries are zero.
   /// These rates supply chi's DC wall values and finally()'s boundary RHS.
-  /// Called in relaxing mode after applyPotentialBoundary(); preserves phi/Vort
+  /// Fixed and free-slip rates are zero. Preserves phi/Vort
   /// and recomputes every rate without retaining earlier RHS results.
   void computeWallRates();
 
@@ -278,9 +295,6 @@ private:
 
   /// Shared viscous current, energy flux and heating, using physical vorticity guards.
   void calculateViscosity();
-
-  /// Apply a boundary condition to given pressure field `P`
-  void applyPressureBoundary(Field3D& P) const;
 
   /// Sum thermal sources and kinetic energy changes from momentum and particle sources
   Field3D sumIonEnergySources(const Options& allspecies) const;

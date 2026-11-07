@@ -71,7 +71,11 @@ it compares the compiled and BOUT expression values at four interior/boundary
 and time-dependent points on every rank. A shared cache evaluates all seven
 sources once per cell and RHS time. BOUT still adds the MMS forcing and computes
 native errors. The original analytic source expressions are preserved in
-resolved settings under `test_ion_energy_mms`.
+resolved settings under `test_ion_energy_mms`. Physical vorticity forcing is
+masked outside the radial interior in both source backends: BOUT adds MMS
+sources after the component RHS, and radial `Vort` guards now store fixed phi
+midpoints. The audit checks Neumann physical vorticity guards and the
+mean-Neumann, zero-AC-midpoint pressure/potential guards from Plan C.
 
 CVODE uses the Adams method with fixed-point iteration. The BOUT change in this
 implementation prevents calls to linear-solver setup/statistics routines in

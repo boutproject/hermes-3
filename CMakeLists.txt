@@ -490,6 +490,7 @@ if(HERMES_TESTS)
     hermes_add_ion_energy_test(2D-ion-energy-equilibrium)
     hermes_add_ion_energy_test(2D-ion-energy-curvature)
     hermes_add_ion_energy_test(2D-ion-energy-polarisation-boundary)
+    hermes_add_ion_energy_test(2D-ion-energy-radial-boundary)
     set_tests_properties(2D-ion-energy-polarisation-boundary PROPERTIES TIMEOUT
                                                                         600)
     hermes_add_ion_energy_test(2D-ion-energy-multispecies)

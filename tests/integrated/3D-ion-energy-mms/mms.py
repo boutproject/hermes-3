@@ -152,6 +152,8 @@ def generate(destination, variant="baseline"):
     for (section, key), expression in zip(keys, reduced):
         options.getSection(section)[key] = exported(expression)
     for name in EVOLVED:
+        if name == "Vort":
+            continue  # Physical radial vorticity guards belong to radial_boundary
         boundary = (
             f"dirichlet_o2({name}:solution)" if name in ("Vort", "Eion") else "neumann"
         )

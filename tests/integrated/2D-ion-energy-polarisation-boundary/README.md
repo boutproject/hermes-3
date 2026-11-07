@@ -55,3 +55,8 @@ in orthogonal geometry. Mixed-metric currents, DC forcing and species weights
 are covered by the C++ and Python operator tests. The original publication
 sine initialisation and its long-time nonlinear boundary behaviour are
 separate checks.
+
+The ion pressure and its pressure potential use mean-Neumann, zero-AC-midpoint
+wall guards in every radial mode. The time-zero vorticity and energy are
+constructed with these guards, while electron pressure retains its species
+boundary condition. The `fixed` and `no_slip` cases use the enum options.

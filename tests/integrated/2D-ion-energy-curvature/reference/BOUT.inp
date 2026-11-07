@@ -69,7 +69,7 @@ AA = 1
 average_atomic_mass = 1.0   # Weighted average atomic mass, for polarisaion current
 poloidal_flows = false  # Include poloidal ExB flow
 
-phi_boundary_relax = false
+radial_boundary = fixed
 
 #viscosity = 1.0
 diagnose = true

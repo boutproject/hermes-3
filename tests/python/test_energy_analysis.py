@@ -661,9 +661,10 @@ def test_mixed_auxiliary_boundary_satisfies_full_forward_operator(dataset, relax
     from energy_analysis.transport import fv_xz
 
     dataset["g13"] *= 0
-    dataset.options["evolve_vorticity_ion_energy:phi_boundary_relax"] = str(relax)
+    dataset.options["evolve_vorticity_ion_energy:radial_boundary"] = (
+        "no_slip" if relax else "fixed"
+    )
     dataset.options["evolve_vorticity_ion_energy:phi_boundary_velocity"] = "1000"
-    dataset.options["evolve_vorticity_ion_energy:phi_core_averagey"] = "false"
     dataset["phi"] = xr.zeros_like(dataset.phi)  # zero wall rate in this inverse test
     run = open_run(dataset)
     nx = dataset.sizes["x"] - 4
@@ -797,9 +798,8 @@ def test_relaxing_auxiliary_dc_uses_wall_rate(dataset):
 
     dataset["g13"] *= 0
     opts = dataset.options
-    opts["evolve_vorticity_ion_energy:phi_boundary_relax"] = "true"
+    opts["evolve_vorticity_ion_energy:radial_boundary"] = "no_slip"
     opts["evolve_vorticity_ion_energy:phi_boundary_velocity"] = "1000"
-    opts["evolve_vorticity_ion_energy:phi_core_averagey"] = "false"
     opts["evolve_vorticity_ion_energy:polarisation_corrections"] = 0
     nx = dataset.sizes["x"] - 4
     x = dataset.x - 2 + 0.5
@@ -817,15 +817,15 @@ def test_relaxing_auxiliary_dc_uses_wall_rate(dataset):
         assert_allclose(midpoint.mean("z"), rate, atol=1e-15)
 
 
-def test_auxiliary_rejects_dc_removal_and_wrong_boundary_flags(dataset):
+def test_auxiliary_rejects_dc_removal_and_unknown_ac_mode(dataset):
     from energy_analysis.fluxes import solve_polarisation
 
     run = open_run(dataset)
     opts = dataset.options["evolve_vorticity_ion_energy"]
-    opts["polarisation_laplacian:inner_boundary_flags"] = "3"
-    with pytest.raises(AuditError, match="flags=2"):
+    opts["polarisation_ac_boundary"] = "unknown"
+    with pytest.raises(AuditError, match="polarisation_ac_boundary"):
         solve_polarisation(run, xr.ones_like(dataset.phi), False, True)
-    opts["polarisation_laplacian:inner_boundary_flags"] = "2"
+    opts["polarisation_ac_boundary"] = "neumann"
     opts["polarisation_laplacian:global_flags"] = "1"
     with pytest.raises(AuditError, match="retain the DC"):
         solve_polarisation(run, xr.ones_like(dataset.phi), False, True)
@@ -845,8 +845,7 @@ def test_boundary_relaxation_core_mean_excludes_y_guards(dataset):
     opts["mesh:bxcvz"] = 0
     opts["periodicX"] = "false"
     opts["evolve_vorticity_ion_energy:poloidal_flows"] = "false"
-    opts["evolve_vorticity_ion_energy:phi_boundary_relax"] = "true"
-    opts["evolve_vorticity_ion_energy:phi_core_averagey"] = "true"
+    opts["evolve_vorticity_ion_energy:radial_boundary"] = "no_slip"
     opts["evolve_vorticity_ion_energy:phi_boundary_velocity"] = "1000"
     for name in ("e", "d+", "impurity"):
         opts[name]["use_div_par_fvv"] = "true"

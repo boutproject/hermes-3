@@ -44,7 +44,7 @@ def open_case(folder):
         "MMS requires an identity parallel transform",
     )
     require(
-        not opts["evolve_vorticity_ion_energy"].get_bool("phi_boundary_relax"),
+        str(opts["evolve_vorticity_ion_energy"]["radial_boundary"]) == "fixed",
         "MMS requires fixed phi boundaries",
     )
     variant = opts["mms:variant"] if "mms:variant" in opts else "baseline"  # noqa: SIM401 -- BoutOptions has no get()
@@ -129,6 +129,13 @@ def fields_at(ds, index):
         phi=ds.phi.isel(t=index),
         psi=(2 * ni + 1.5 * nj) * ti / 2,
     )
+    # psi has its own impermeable-wall guards, independently of the density
+    # fractions used to reconstruct its interior from the common temperature.
+    psi = fields["psi"].copy()
+    for guard, cell in ((1, 2), (0, 2), (-2, -3), (-1, -3)):
+        interior = psi.isel(x=cell, drop=True)
+        psi[{"x": guard}] = 2 * interior.mean("z") - interior
+    fields["psi"] = psi
     if "ddt(Phi)" in ds:
         fields["chi"] = ds["ddt(Phi)"].isel(t=index)
     return fields
@@ -181,14 +188,18 @@ def analyse_case(folder, label=None):
                     f"Native/independent reference mismatch {name} at t={time}: {native_discrepancy}",
                 )
             boundary_value_error, boundary_derivative_error = None, None
-            if name in ("Vort", "Eion", "phi", "chi"):
+            if name in ("Eion", "phi", "chi", "Pi", "psi"):
                 differences = []
                 for guard, cell, face in (
                     (mxg - 1, mxg, 0),
                     (-mxg, -mxg - 1, float(LENGTH)),
                 ):
-                    target = reference_field(
-                        name, face, coordinates[1], coordinates[2], float(time)
+                    target = (
+                        numerical[cell].mean(axis=-1, keepdims=True)
+                        if name in ("Pi", "psi")
+                        else reference_field(
+                            name, face, coordinates[1], coordinates[2], float(time)
+                        )
                     )
                     differences.append(
                         np.abs((numerical[guard] + numerical[cell]) / 2 - target)
@@ -202,12 +213,12 @@ def analyse_case(folder, label=None):
                         np.max(np.abs(numerical[-mxg] - numerical[-mxg - 1])) / h,
                     )
                 )
-            if name in ("Vort", "Eion", "phi"):
+            if name in ("Eion", "phi", "Pi", "psi"):
                 require(
                     boundary_value_error < 2e-10,
                     f"Incorrect {name} X face value at t={time}: {boundary_value_error}",
                 )
-            elif name != "chi":
+            elif name not in ("chi", "pi", "pj", "Tion"):
                 require(
                     boundary_derivative_error < 2e-10,
                     f"Incorrect {name} Neumann X guards at t={time}: {boundary_derivative_error}",

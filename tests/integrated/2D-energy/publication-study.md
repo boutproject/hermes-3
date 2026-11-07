@@ -18,24 +18,40 @@ Use the repository environment from the repository root:
 # Recreate plots and tables without executing Hermes.
 .venv/bin/python tests/integrated/2D-energy/publication_scan.py \
   --analyse-only /path/to/results/interchange-TIMESTAMP --latex
+
+# Export each energy-history panel as a standalone PDF.
+.venv/bin/python tests/integrated/2D-energy/publication_scan.py \
+  --analyse-only /path/to/results/interchange-TIMESTAMP --energy-format pdf-panels
 ```
 
 The default is four physical grids (32², 64², 128², 256²), fixed phi boundaries,
 viscosity 1 m²/s, duration 20000 normalised time units and 200 output intervals.
 `--phi-boundary relax` selects solver-managed relaxation;
-`--phi-boundary both` runs both policies. The relaxation timescale defaults to
-1e-4 seconds and is independent of resolution. `--levels`, `--base-nx`,
+`--phi-boundary both` runs both policies. The pressure formulation uses
+`--phi-boundary-timescale` (default 1e-4 seconds); total ion energy uses
+`radial_boundary=no_slip` with `--phi-boundary-velocity` (default 1000 m/s).
+Each parameter stays fixed across resolutions. `--levels`, `--base-nx`,
 `--base-nz`, `--refinement`, `--nproc`, `--end-time`, `--outputs`, `--exe` and
 `--timeout` configure the simulation matrix. With singleton Y, MPI decomposes
 only X; each rank needs at least four physical X cells on the coarsest grid.
 The launcher uses the installed `mpiexec` and inherits its environment.
+
+Total-ion-energy inputs select the wall model through `radial_boundary`;
+Laplacian boundary flags are supplied only to the pressure formulation. When
+running the script from `build/tests/integrated/2D-energy`, refresh the copied
+script and template after source changes with `cmake -S . -B build` from the
+repository root.
 
 Four snapshot times default to fractions 0, 1/4, 1/2 and 1 of the duration;
 the convergence time defaults to half the duration. Explicit
 `--snapshot-times T0 T1 T2 T3` and `--convergence-time T` must be represented
 exactly on the output axis. The runner refines the requested regular cadence
 when necessary, then checks all actual saved times, including the first record
-at zero. `--field` selects `ion_pressure`, `density` or `vorticity`.
+at zero. `--field` selects `ion_pressure`, `density` or `vorticity` for the
+convergence analysis. With the default `ion_pressure`, the upper snapshot row
+shows ion internal energy density `3*Pi/2` from pressure evolution; other
+choices plot the selected field.
+The lower row shows perpendicular kinetic energy density from total ion energy.
 
 Every run gets its own generated `BOUT.inp` from `publication-input.inp`.
 The study manifest records configuration, input/executable/runner hashes,
@@ -170,10 +186,15 @@ when constructing its Z metric for this setup. Guard widths stay fixed when
 physical grid counts are refined.
 
 Initial density is uniform and both species have
-`P=1+0.1*sin(2*pi*x-z)`. The shared physical potential is sampled from the
-analytic continuum ion-only zero-vorticity solution: `Phi` is the harmonic
-extension of the pressure boundary values and `phi=Phi-P`. Apply the same
-homogeneous Neumann pressure guards and zero phi midpoints in both models.
+`P=1+0.1*sin(2*pi*x)*sin(2*pi*x-z)`, with `x` between 0 and 1. The perturbation
+vanishes at both X faces, making the initial pressure constant in Z there.
+The shared physical potential is sampled from the analytic continuum ion-only
+zero-vorticity solution: the harmonic extension is `Phi=1`, so `phi=1-P`.
+Both models have zero phi midpoints. The pressure formulation uses homogeneous Neumann
+ion-pressure guards; total ion energy imposes mean-Neumann, zero-AC-midpoint
+guards on ion pressure and its pressure potential. Electron pressure retains
+its species Neumann guards. These guard conditions leave the initial physical
+density, pressures and potential matched.
 Each model's initial `Vort` is obtained by applying its own forward operator
 to the sampled generalised potential. For total energy, initialise
 `Eion=1.5*Pi+Kperp_FV`; parallel kinetic energy is zero. A zero-output seed run
@@ -186,9 +207,10 @@ This is a comparison of two specified formulations. The pressure model uses
 an approximate potential-flow polarisation transport and includes electron
 pressure in its mass/charge-weighted generalised potential. The total-energy
 model uses an ion-current partition and ion-only pressure potential. Their
-native inversion and viscous heating discretisations also differ. The pressure
-sine is incompatible with homogeneous radial Neumann derivatives at startup;
-boundary-adjacent physical cells are retained in all primary error norms.
+native inversion and viscous heating discretisations also differ. The tapered
+pressure perturbation has constant X-face values, but its radial derivative
+need not satisfy the pressure formulation's homogeneous Neumann condition.
+Boundary-adjacent physical cells are retained in all primary error norms.
 These differences are recorded in every manifest.
 
 ## Energy and convergence analysis
@@ -243,12 +265,17 @@ A short smoke run does not validate temporal error for the full-duration study.
 
 ## Products
 
-Each boundary policy produces four PDFs:
+Each boundary policy produces state, energy-history and convergence figures:
 
-- `state-*.pdf`: both formulations at four common times on their finest grid,
-  with shared colour limits, physical coordinates and rasterised image artists.
-- `energy-*.pdf`: thermal and perpendicular kinetic changes, common and native
-  total drift, available corrected residuals and native/common discrepancy.
+- `state-*.pdf` and `state-*.png`: ion internal energy density `3*Pi/2` from
+  pressure evolution (or the selected density/vorticity field) above
+  perpendicular kinetic energy density from total ion energy, on each
+  formulation's finest grid at four common times labelled in units of
+  `1/omega_ci`. Each row has a separate colour scale shared across times,
+  linear for both rows, with physical coordinates and rasterised image artists.
+  Guard cells are excluded.
+- `energy-*.png` (default): six panels showing thermal and perpendicular kinetic changes,
+  common and native total drift, available corrected residuals and native/common discrepancy.
   Panel labels call these "shared FV energy" and "model energy"; the finest
   grid uses solid traces and coarser grids use distinct dash patterns.
 - `global-convergence-*.pdf`: common `Kperp`, adjacent differences and valid
@@ -256,11 +283,26 @@ Each boundary policy produces four PDFs:
 - `local-error-*.pdf`: absolute RMS and maximum error against each formulation's
   own finest reference.
 
+`--energy-format png` saves the energy histories in one six-panel PNG per
+boundary policy. `--energy-format pdf-panels` instead saves six standalone PDFs,
+each with its own labels and legend:
+
+- `energy-<boundary>-ion-thermal.pdf`
+- `energy-<boundary>-electron-thermal.pdf`
+- `energy-<boundary>-perpendicular-kinetic.pdf`
+- `energy-<boundary>-shared-relative-change.pdf`
+- `energy-<boundary>-model-relative-change.pdf`
+- `energy-<boundary>-estimator-difference.pdf`
+
+The export choice applies to the current invocation and can be changed with
+`--analyse-only` without rerunning simulations. State and convergence exports
+are the same in both modes; existing figure files are retained.
+
 `energy-table` and `convergence-table` are printed and saved as CSV and JSON.
 `--latex` adds tables from the same numeric data. Field units are retained in
 the convergence data. Each run also retains `inventory.nc` and `analysis.json`,
 including diagnostic comparisons and boundary/viscous audit information.
 `figure-config.json` records plotting settings; `--style FILE` accepts a JSON
-mapping of Matplotlib rcParams. Reanalysis reuses the saved settings; an explicit
+mapping of Matplotlib rcParams. Reanalysis reuses the saved rcParams; an explicit
 `--style` overrides them. Fonts are embedded in the PDF and traces/labels remain
 vector graphics.

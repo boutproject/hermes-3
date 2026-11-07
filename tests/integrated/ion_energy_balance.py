@@ -114,7 +114,7 @@ def audit(run, manifest, case, diagnose):
     for name in ("viscosity", "hyper_z"):
         require(run.scalar_option(name, 0) <= 0, f"Unaccounted model {name}")
     require(
-        not options[run.model].get_bool("phi_boundary_relax"),
+        str(options[run.model]["radial_boundary"]) != "no_slip",
         "Potential relaxation is outside coverage",
     )
     for name in (

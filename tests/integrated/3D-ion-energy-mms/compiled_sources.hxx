@@ -120,7 +120,12 @@ struct TestIonEnergyMms : public NamedComponent<TestIonEnergyMms> {
       factory->addGenerator(generator_name,
                             std::make_shared<IonEnergyMmsGenerator>(index, cache));
       alloptions[name][variables[index] + "_analytic_source"].force(expression);
-      section["source"].force(generator_name, "test_ion_energy_mms");
+      // BOUT adds MMS sources after finally(), including evolved guard cells.
+      // Vort's radial guards store phi midpoints, so physical vorticity forcing
+      // must be restricted to the interior rather than evolving that wall state.
+      const std::string source =
+          index == 5 ? "where(x*(1-x)," + generator_name + ",0)" : generator_name;
+      section["source"].force(source, "test_ion_energy_mms");
     }
     factory->cleanCache();
     output_info.write("Compiled ion-energy MMS sources agree with BOUT expressions\n");

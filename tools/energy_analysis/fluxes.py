@@ -231,8 +231,51 @@ def fill_transport_guards(field, run, periodic_x, periodic_y):
     return result
 
 
+def radial_boundary_mode(run):
+    section = run.data.options[run.model]
+    if run.formulation == "pressure":
+        return "no_slip" if section.get_bool("phi_boundary_relax") else "fixed"
+    return str(section["radial_boundary"]) if "radial_boundary" in section else "fixed"
+
+
+def polarisation_ac_boundary(run):
+    section = run.data.options[run.model]
+    return (
+        str(section["polarisation_ac_boundary"])
+        if "polarisation_ac_boundary" in section
+        else "neumann"
+    )
+
+
+def fill_wall_guards(field, run, condition):
+    """Apply the radial wall stencil, retaining the caller's Y guards."""
+    result = field.copy()
+    for interior, guards, step in (
+        (run.mxg, range(run.mxg - 1, -1, -1), -1),
+        (
+            field.sizes["x"] - run.mxg - 1,
+            range(field.sizes["x"] - run.mxg, field.sizes["x"]),
+            1,
+        ),
+    ):
+        first = field.isel(x=interior, drop=True)
+        for layer, guard in enumerate(guards, 1):
+            if condition == "pressure":
+                value = 2 * first.mean("z") - first
+            elif condition == "zero":
+                value = -first
+            elif condition == "free_o2":
+                value = first + layer * (
+                    first - field.isel(x=interior - step, drop=True)
+                )
+            else:
+                value = first
+            result[{"x": guard}] = value
+    return result
+
+
 @lru_cache(maxsize=32)
-def _polarisation_factors(nx, nz, ax, az, periodic_x, spectral=False):
+def _polarisation_factors(nx, nz, ax, az, periodic_x, spectral=False, ac="neumann"):
     """Reusable X factors; spectral and FV Z responses are cached separately."""
     from scipy.sparse import diags
     from scipy.sparse.linalg import splu
@@ -246,8 +289,8 @@ def _polarisation_factors(nx, nz, ax, az, periodic_x, spectral=False):
         )
         diagonal = np.full(nx, -2 * ax + z_eigenvalue)
         if not periodic_x:
-            # DC: negative reflected guard. AC: equal reflected guard.
-            shift = -ax if k == 0 else ax
+            # DC is odd; AC is even for Neumann and odd for Dirichlet.
+            shift = -ax if k == 0 or ac == "dirichlet" else ax
             diagonal[0] += shift
             diagonal[-1] += shift
         matrix = diags(
@@ -276,6 +319,8 @@ def polarisation_corrections(run):
 
 def _validate_polarisation_solver(run, periodic_x):
     section = run.data.options[run.model]
+    if polarisation_ac_boundary(run) not in ("neumann", "dirichlet"):
+        raise AuditError("Unknown polarisation_ac_boundary")
     key = "laplacian" if periodic_x else "polarisation_laplacian"
     opts = section[key] if key in section else None  # noqa: SIM401 -- BoutOptions has no get()
     # The C++ component inherits only the solver type from the phi subsection.
@@ -291,11 +336,6 @@ def _validate_polarisation_solver(run, periodic_x):
         raise AuditError("Polarisation reconstruction requires the cyclic inverse")
     if opts is None:
         return
-    for name in ("inner_boundary_flags", "outer_boundary_flags"):
-        if not periodic_x and name in opts and opts.evaluate_scalar(name) != 2:
-            raise AuditError(
-                "Polarisation inversion requires DC Dirichlet/AC Neumann flags=2"
-            )
     if "global_flags" in opts:
         flags = opts.evaluate_scalar("global_flags")
         if int(flags) & 17:
@@ -317,7 +357,7 @@ def solve_polarisation(run, rhs, periodic_x, periodic_y):
     """One spectral solve and N FV defect corrections, starting from zero.
 
     This reproduces the transport potential, rather than converging to the FV
-    inverse. Nonperiodic X uses midpoint Dirichlet DC and Neumann AC guards.
+    inverse. Nonperiodic X uses midpoint Dirichlet DC and the selected AC guards.
     """
     _validate_polarisation_solver(run, periodic_x)
     return _solve_polarisation(
@@ -353,7 +393,13 @@ def _solve_polarisation(run, rhs, periodic_x, periodic_y, corrections):
     ax = c * float(ds.g11.values.flat[0]) / float(ds.dx.values.flat[0]) ** 2
     az = c * float(ds.g33.values.flat[0]) / float(ds.dz.values.flat[0]) ** 2
     factors = _polarisation_factors(
-        nx, nz, ax, az, periodic_x, spectral=corrections is not None
+        nx,
+        nz,
+        ax,
+        az,
+        periodic_x,
+        spectral=corrections is not None,
+        ac=polarisation_ac_boundary(run),
     )
 
     def forward(coefficients):
@@ -367,7 +413,9 @@ def _solve_polarisation(run, rhs, periodic_x, periodic_y, corrections):
             result[0] += ax * coefficients[-1]
             result[-1] += ax * coefficients[0]
         else:
-            shift = np.full(nz // 2 + 1, ax)
+            shift = np.full(
+                nz // 2 + 1, -ax if polarisation_ac_boundary(run) == "dirichlet" else ax
+            )
             shift[0] = -ax
             result[0] += shift * coefficients[0]
             result[-1] += shift * coefficients[-1]
@@ -403,11 +451,7 @@ def _solve_polarisation(run, rhs, periodic_x, periodic_y, corrections):
     if interior.chunks is not None:
         interior = interior.chunk({"x": -1, "z": -1})
     dc_inner = dc_outer = xr.zeros_like(interior.isel(x=0, z=0, drop=True))
-    if (
-        not periodic_x
-        and "phi_boundary_relax" in run.data.options[run.model]
-        and run.data.options[run.model].get_bool("phi_boundary_relax")
-    ):
+    if not periodic_x and radial_boundary_mode(run) == "no_slip":
         rates = _boundary_relaxation(run, periodic_y).phi_boundary_rate
         dc_inner = rates.sel(boundary="inner", drop=True)
         dc_outer = rates.sel(boundary="outer", drop=True)
@@ -425,12 +469,16 @@ def _solve_polarisation(run, rhs, periodic_x, periodic_y, corrections):
     result = solved.reindex(x=rhs.x, y=rhs.y).transpose(*rhs.dims)
     result = fill_transport_guards(result, run, periodic_x, periodic_y)
     if not periodic_x:
-        # Reflect DC about the wall rate and leave AC even.
+        # Reflect DC about the wall rate and apply the selected AC parity.
         for guard in (*range(run.mxg), *range(ds.sizes["x"] - run.mxg, ds.sizes["x"])):
             layer = result.isel(x=guard, drop=True)
             dc = dc_inner if guard < run.mxg else dc_outer
             dc = dc.reindex(y=result.y).fillna(0.0)
-            result[{"x": guard}] = layer - 2 * layer.mean("z") + 2 * dc
+            result[{"x": guard}] = (
+                layer - 2 * layer.mean("z") + 2 * dc
+                if polarisation_ac_boundary(run) == "neumann"
+                else -layer + 2 * dc
+            )
     return result
 
 
@@ -442,9 +490,9 @@ def boundary_relaxation(run):
     or open Y everywhere; core averaging uses only physical Y/Z samples.
     """
     periodic_x, periodic_y = slab_contract(run)
-    if periodic_x or not run.data.options[run.model].get_bool("phi_boundary_relax"):
+    if periodic_x or radial_boundary_mode(run) != "no_slip":
         raise AuditError(
-            "Boundary relaxation requires nonperiodic X and phi_boundary_relax"
+            "Boundary relaxation requires nonperiodic X and radial_boundary=no_slip"
         )
     return _boundary_relaxation(run, periodic_y)
 
@@ -456,7 +504,7 @@ def _boundary_relaxation(run, periodic_y):
     ----------
     run : EnergyRun
         Supplies saved phi guards, dx/dy/g11/J, physical Y bounds, normalisation
-        scales, and the phi_boundary_velocity and phi_core_averagey options.
+        scales, and the phi_boundary_velocity option.
         Fields must use Hermes normalised units and include an interior/guard pair
         at each wall with mirrored spacing. The caller establishes the nonperiodic slab geometry.
     periodic_y : bool
@@ -506,11 +554,7 @@ def _boundary_relaxation(run, periodic_y):
             / 2
         )
         gradient = normal * derivative
-        if (
-            side == "inner"
-            and periodic_y
-            and run.data.options[run.model].get_bool("phi_core_averagey")
-        ):
+        if side == "inner" and periodic_y:
             weight = (
                 (
                     geometry.J.isel(x=guard, drop=True)
@@ -563,6 +607,10 @@ def reconstruct_fluxes(run, *, sources=None):
         neighbor(phi, "x") - 2 * phi + neighbor(phi, "x", -1)
     ) / ds.dx**2 + ds.g33 * spectral_d2z(phi, ds.dz)
     delp = fill_transport_guards(0.5 * c * lap, run, periodic_x, periodic_y)
+    if not periodic_x:
+        pi = fill_wall_guards(pi, run, "pressure")
+        bracket = fill_wall_guards(bracket, run, "zero")
+        delp = fill_wall_guards(delp, run, "free_o2")
     families = {}
 
     def combine(*terms):
@@ -577,7 +625,7 @@ def reconstruct_fluxes(run, *, sources=None):
 
     reynolds = combine(
         (-1, xppm(0.5 * ds.Vort, phi, ds)),
-        (-1, fv_xz(0.5 * c, bracket, ds, periodic_x=periodic_x)),
+        (-1, fv_xz(0.5 * c, bracket, ds, boundary_flux=False, periodic_x=periodic_x)),
         (-1, xppm(delp, Phi, ds)),
     )
     curl = (
@@ -588,11 +636,20 @@ def reconstruct_fluxes(run, *, sources=None):
     dia = spectral_ddz((ds.Pe + pi) * curl, ds.dz)
     nu = run.scalar_option("viscosity", 0) / (run.length_scale**2 * run.frequency)
     viscosity = xr.ones_like(phi) * nu
-    if not periodic_x:
-        viscosity[{"x": run.mxg - 1}] = -nu
-        viscosity[{"x": -run.mxg}] = -nu
     vort_visc = fill_transport_guards(ds.Vort, run, periodic_x, periodic_y)
-    viscous = fv_xz(viscosity, vort_visc, ds, periodic_x=periodic_x)
+    if not periodic_x:
+        vort_visc = fill_wall_guards(
+            vort_visc,
+            run,
+            "zero" if radial_boundary_mode(run) == "free_slip" else "neumann",
+        )
+    viscous = fv_xz(
+        viscosity,
+        vort_visc,
+        ds,
+        boundary_flux=radial_boundary_mode(run) == "free_slip",
+        periodic_x=periodic_x,
+    )
     families["DivJviscous"] = viscous
     families["DivEviscous"] = flux_dataset(
         {d: (Phi + neighbor(Phi, d)) / 2 * viscous["flux_" + d] for d in ("x", "z")}, ds
@@ -609,7 +666,13 @@ def reconstruct_fluxes(run, *, sources=None):
         return combine(
             (
                 -1,
-                fv_xz(weight * c, dphi, ds, boundary_flux=False, periodic_x=periodic_x),
+                fv_xz(
+                    weight * c,
+                    dphi,
+                    ds,
+                    boundary_flux=polarisation_ac_boundary(run) == "dirichlet",
+                    periodic_x=periodic_x,
+                ),
             ),
             (1, xppm(0.5 * ds.Vort, -phi, ds, weight=weight)),
             (
@@ -626,10 +689,8 @@ def reconstruct_fluxes(run, *, sources=None):
         )
 
     families["DivEExB"] = xppm(1.5 * pi + densities.ion_parallel, phi, ds)
-    # Match the component's existing Neumann stencil for Reynolds energy.
-    energy_phi = fill_transport_guards(Phi, run, periodic_x, periodic_y)
     families["DivEReynolds"] = fv_xz(
-        0.5 * c * bracket, energy_phi, ds, periodic_x=periodic_x
+        0.5 * c * bracket, Phi, ds, boundary_flux=False, periodic_x=periodic_x
     )
     advected = polarisation_energy_coefficient(run)
     families["DivEpol"] = pol(advected.total)
@@ -847,7 +908,7 @@ def reconstruct_fluxes(run, *, sources=None):
         "polarisation_boundary": (
             "periodic communication with fixed gauge"
             if periodic_x
-            else "homogeneous midpoint Dirichlet DC / radial Neumann AC"
+            else f"DC midpoint at wall rate / AC {polarisation_ac_boundary(run)}"
         ),
     }
     return output
@@ -980,6 +1041,10 @@ def closed_slab_outward_power(run, *, densities=None):
     if run.formulation != "total_energy":
         raise AuditError("Closed slab boundary audit requires total ion energy")
     periodic_x, periodic_y = slab_contract(run)
+    if not periodic_x and polarisation_ac_boundary(run) != "neumann":
+        raise AuditError(
+            "Closed slab boundary audit requires polarisation_ac_boundary=neumann"
+        )
     if run.data.sizes["y"] != 1 or run.myg:
         raise AuditError("Fast boundary audit requires singleton Y without guards")
     if any(bool((species_velocity(run, s) != 0).any().compute()) for s in run.species):
@@ -999,15 +1064,23 @@ def closed_slab_outward_power(run, *, densities=None):
         periodic_x,
         periodic_y,
     )
-    energy_phi = fill_transport_guards(Phi, run, periodic_x, periodic_y)
-    reynolds = fv_xz(0.5 * c * bracket, energy_phi, ds, periodic_x=periodic_x)
+    reynolds = fv_xz(
+        0.5 * c * bracket, Phi, ds, boundary_flux=False, periodic_x=periodic_x
+    )
     nu = run.scalar_option("viscosity", 0) / (run.length_scale**2 * run.frequency)
     viscosity = xr.ones_like(ds.phi) * nu
-    if not periodic_x:
-        viscosity[{"x": run.mxg - 1}] = -nu
-        viscosity[{"x": -run.mxg}] = -nu
     vort = fill_transport_guards(ds.Vort, run, periodic_x, periodic_y)
-    current = fv_xz(viscosity, vort, ds, periodic_x=periodic_x)
+    if not periodic_x:
+        vort = fill_wall_guards(
+            vort, run, "zero" if radial_boundary_mode(run) == "free_slip" else "neumann"
+        )
+    current = fv_xz(
+        viscosity,
+        vort,
+        ds,
+        boundary_flux=radial_boundary_mode(run) == "free_slip",
+        periodic_x=periodic_x,
+    )
     viscous = flux_dataset(
         {d: (Phi + neighbor(Phi, d)) / 2 * current["flux_" + d] for d in ("x", "z")}, ds
     )
