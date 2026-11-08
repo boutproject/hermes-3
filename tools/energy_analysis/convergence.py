@@ -6,6 +6,50 @@ from scipy.interpolate import CubicSpline
 from .dataset import AuditError
 
 
+def manufactured_errors(run, references):
+    """Volume-weighted MMS errors from committed solution expressions.
+
+    references maps saved/reconstructed field names to option keys. The
+    runtime path uses no symbolic algebra or plotting dependencies.
+    """
+    from .expressions import evaluate
+    from .inventory import energy_densities
+
+    ds = run.data
+    recovered = energy_densities(run)
+    fields = {name: ds[name] for name in references if name in ds}
+    if "psi" in references:
+        fields["psi"] = recovered.pressure_potential
+    for name, field in (("Pi", recovered.ion_thermal / 1.5),):
+        if name in references:
+            fields[name] = field
+    for species in run.species:
+        name = "p" + species.name
+        if name in references:
+            fields[name] = ds["N" + species.name] * ds.Tion
+    result = {}
+    volume = float(run.integrate(ds.Pe.isel(t=0) * 0 + 1))
+    for name, key in references.items():
+        reference = evaluate(run, key, float(ds.t.isel(t=-1)))
+        error = fields[name].isel(t=-1, drop=True) - reference
+        if not bool(np.isfinite(run.interior(error)).all()):
+            raise AuditError(f"Nonfinite MMS error for {name}")
+        native = "E_" + name
+        if native in ds:
+            difference = float(
+                abs(run.interior(error - ds[native].isel(t=-1, drop=True))).max()
+            )
+            if difference > 2e-11:
+                raise AuditError(
+                    f"Native MMS reference mismatch for {name}: {difference}"
+                )
+        result[name] = {
+            "l2": float(np.sqrt(run.integrate(error**2) / volume)),
+            "linf": float(abs(run.interior(error)).max()),
+        }
+    return result
+
+
 def overlap_matrix(source, target, *, source_width, target_width, period=None):
     """Conservative cell-average map, including shifted periodic cell faces.
 

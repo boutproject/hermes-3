@@ -43,4 +43,4 @@ docker/docker-compose.override.yaml
 dist/
 
 # Retained publication scans (raw data, PDFs, tables and manifests)
-/tests/integrated/2D-energy/publication-results/
+/examples/tokamak-2D-driftplane/2D-energy/publication-results/

@@ -1,0 +1,33 @@
+{
+  "energy": 1.6040433062206464e-15,
+  "particles": 4e-15,
+  "recovery": 6.661338147750939e-15,
+  "nontrivial": 0.0001,
+  "diagnostics": 0,
+  "diagnostic_error": 1.3628556833414351e-14,
+  "observed": {
+    "energy/True": 1.6040433062206464e-16,
+    "particles_e_relative_drift/True": 4e-16,
+    "particles_d+_relative_drift/True": 4e-16,
+    "particles_impurity_relative_drift/True": 4e-16,
+    "charge_relative_drift/True": 1.7142857142857143e-16,
+    "recovery/True": 6.661338147750939e-16,
+    "curvature_exchange_relative/True": 0.004168385636847277,
+    "ion_perpendicular_change_relative/True": 0.005575036514541206,
+    "ion_parallel_change_relative/True": 0.00011230092619233488,
+    "ion_KE_perp": 1.8041124150158794e-16,
+    "ion_KE_parallel": 0.0,
+    "ion_pressure_potential": 4.440892098500626e-16,
+    "energy/False": 1.6040433062206464e-16,
+    "particles_e_relative_drift/False": 4e-16,
+    "particles_d+_relative_drift/False": 4e-16,
+    "particles_impurity_relative_drift/False": 4e-16,
+    "charge_relative_drift/False": 1.7142857142857143e-16,
+    "recovery/False": 6.661338147750939e-16,
+    "curvature_exchange_relative/False": 0.004168385636847277,
+    "ion_perpendicular_change_relative/False": 0.005575036514541206,
+    "ion_parallel_change_relative/False": 0.00011230092619233488,
+    "diagnostics_state": 0.0,
+    "reconstructed_flux_diagnostic_max": 1.3628556833414351e-15
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "energy": 9.547505002558635e-09,
+  "particles": 1.0401505699658946e-14,
+  "diagnostics": 0,
+  "recovery": 4.440892098500626e-15,
+  "observed": {
+    "recovery/diagnostics": 4.440892098500626e-16,
+    "particles_e_relative_residual/diagnostics": 1.9999999999999997e-16,
+    "particles_d+_relative_residual/diagnostics": 1.0401505699658946e-15,
+    "particles_impurity_relative_residual/diagnostics": 7.68359375e-16,
+    "recovery/plain": 4.440892098500626e-16,
+    "particles_e_relative_residual/plain": 1.9999999999999997e-16,
+    "particles_d+_relative_residual/plain": 1.0401505699658946e-15,
+    "particles_impurity_relative_residual/plain": 7.68359375e-16,
+    "recovery/coarse": 2.220446049250313e-16,
+    "particles_e_relative_residual/coarse": 1.9999999999999997e-16,
+    "particles_d+_relative_residual/coarse": 6.40328333204336e-16,
+    "particles_impurity_relative_residual/coarse": 6.75e-16,
+    "source_balance/diagnostics": 9.547505002558635e-10,
+    "source_balance/plain": 9.547505002558635e-10,
+    "diagnostics_state": 0.0
+  }
+}

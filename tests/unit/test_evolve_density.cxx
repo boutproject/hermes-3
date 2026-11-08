@@ -27,6 +27,7 @@ TEST_F(EvolveDensityTest, MmsForcingDoesNotEnterPhysicalSourceBookkeeping) {
                   {"Ni", {{"source", 12.0}}},
                   {"i", {{"AA", 2.0}, {"charge", 1.0}}}};
   EvolveDensity component("i", options, &solver);
+  EXPECT_FALSE(options["Ni"]["source"].valueUsed());
   Options state;
   component.transform(state);
   Field3D prescribed = get<Field3D>(state["species"]["i"]["density_source"]);

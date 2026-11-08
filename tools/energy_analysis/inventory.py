@@ -141,7 +141,8 @@ def energy_inventory(run, *, densities=None):
         }
     result.attrs = {
         "source": run.source,
-        "coverage": "energy inventory; source/boundary powers require explicit reconstruction",
+        "coverage": "complete",
+        "missing_terms": [],
     }
     return result
 
@@ -174,4 +175,11 @@ def compare_diagnostics(run, *, densities=None):
                 abs(run.integrate(error)).max().compute()
             ),
         }
+    if "DivEpol" in run.data and run.formulation == "total_energy":
+        from .fluxes import compare_flux_diagnostics, reconstruct_fluxes
+
+        try:
+            result.update(compare_flux_diagnostics(run, reconstruct_fluxes(run)))
+        except AuditError as error:
+            result["flux_reconstruction"] = {"available": False, "reason": str(error)}
     return result

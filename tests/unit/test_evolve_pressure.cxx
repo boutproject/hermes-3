@@ -26,6 +26,7 @@ TEST_F(EvolvePressureTest, MmsForcingIsNotAddedAsPhysicalPressureSource) {
                   {"Pi", {{"source", 1.0}}},
                   {"i", {{"AA", 2.0}, {"charge", 1.0}, {"thermal_conduction", false}}}};
   EvolvePressure component("i", options, &solver);
+  EXPECT_FALSE(options["Pi"]["source"].valueUsed());
   Options state{{"species", {{"i", {{"density", 1.0}, {"energy_source", 0.75}}}}}};
   component.transform(state);
   component.finally(state);

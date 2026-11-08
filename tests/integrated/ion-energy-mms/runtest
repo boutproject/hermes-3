@@ -1,0 +1,97 @@
+#!/usr/bin/env python3
+"""All continuum MMS variants, using committed BOUT++ expression sources."""
+
+import sys
+from pathlib import Path
+
+import numpy as np
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "tools"))
+from energy_analysis import summary
+from energy_analysis.convergence import manufactured_errors
+from energy_analysis.testing import Study, parser, state_difference
+
+HERE = Path(__file__).resolve().parent
+EVOLVED = ("Ni", "Nj", "NVi", "NVj", "Pe", "Vort", "Eion")
+REFERENCES = {
+    **{name: name + ":solution" for name in EVOLVED},
+    "phi": "mms:potential",
+    "psi": "mms:pressure_potential",
+    "Tion": "mms:ion_temperature",
+    "Pi": "mms:total_pressure",
+    "pi": "mms:pressure_i",
+    "pj": "mms:pressure_j",
+}
+
+
+def main():
+    cli = parser(__doc__)
+    cli.set_defaults(timeout=600)
+    cli.add_argument("--profile", choices=("default", "long"), default="default")
+    args = cli.parse_args()
+    with Study(HERE, args) as study:
+        for variant in ("baseline", "skew", "viscosity"):
+            errors = []
+            sizes = (8, 16, 32) if args.profile == "long" else (8, 16)
+            for size in sizes:
+                run = study.run(
+                    f"{variant}-{size}",
+                    [
+                        "restart=false",
+                        f"mesh:nx={size + 4}",
+                        f"mesh:ny={2 * size}",
+                        f"mesh:nz={size}",
+                        "solver:nout=1",
+                        "solver:output_step=0.1",
+                        f"evolve_vorticity_ion_energy:diagnose={str(size == 8).lower()}",
+                    ],
+                    template=HERE / f"data-{variant}" / "BOUT.inp",
+                )
+                report = summary(run)
+                study.result["cases"][Path(run.source).name]["summary"] = report
+                errors.append(manufactured_errors(run, REFERENCES))
+                if variant == "baseline" and size == 8:
+                    diagnostic_reference = run
+                study.result["cases"][Path(run.source).name]["errors"] = errors[-1]
+                study.check(
+                    f"recovery/{variant}-{size}", report["recovery_error"], "recovery"
+                )
+            for index, size in enumerate(sizes[1:], start=1):
+                suffix = "" if size == 16 else f"/{size}"
+                for name in REFERENCES:
+                    order = np.log2(
+                        errors[index - 1][name]["l2"] / errors[index][name]["l2"]
+                    )
+                    study.check(
+                        f"order/{variant}/{name}{suffix}",
+                        order,
+                        "default_order" if size == 16 else "long_order",
+                        minimum=True,
+                    )
+                    study.check(
+                        f"error/{variant}/{name}{suffix}",
+                        errors[index][name]["l2"],
+                        limit=study.criteria["errors"][name],
+                    )
+        plain = study.run(
+            "baseline-8-plain",
+            [
+                "restart=false",
+                "mesh:nx=12",
+                "mesh:ny=16",
+                "mesh:nz=8",
+                "solver:nout=1",
+                "solver:output_step=0.1",
+                "evolve_vorticity_ion_energy:diagnose=false",
+            ],
+            template=HERE / "data-baseline/BOUT.inp",
+        )
+        study.check(
+            "diagnostics_state",
+            state_difference(diagnostic_reference, plain),
+            "diagnostics",
+        )
+
+
+if __name__ == "__main__":
+    main()

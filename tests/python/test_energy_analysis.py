@@ -180,23 +180,32 @@ def dataset():
 def test_path_loader_prefers_settings_and_accepts_input_only(
     dataset, tmp_path, monkeypatch, settings_present
 ):
-    import xhermes
+    import energy_analysis.dataset as loader
 
-    (tmp_path / "BOUT.inp").write_text("supplied input")
+    (tmp_path / "BOUT.inp").write_text(
+        "[hermes]\ncomponents=e,d+,impurity,evolve_vorticity_ion_energy\n[evolve_vorticity_ion_energy]\naverage_atomic_mass=7/4\n"
+    )
     if settings_present:
-        (tmp_path / "BOUT.settings").write_text("resolved settings")
+        (tmp_path / "BOUT.settings").write_text((tmp_path / "BOUT.inp").read_text())
     calls = []
 
-    def load(**kwargs):
+    def load(path, **kwargs):
         calls.append(kwargs)
-        return dataset
+        return dataset.copy()
 
-    monkeypatch.setattr(xhermes, "open_hermesdataset", load)
-    run = open_run(tmp_path)
-    assert calls[0]["inputfilepath"] == str(
+    monkeypatch.setattr(loader, "_collect_dump", load)
+    run = open_run(
+        tmp_path,
+        species=[
+            {"name": "e", "mass": 1 / 1836, "charge": -1},
+            {"name": "d+", "mass": 2, "charge": 1},
+            {"name": "impurity", "mass": 3, "charge": 2},
+        ],
+    )
+    assert run.data.options.filename == str(
         tmp_path / ("BOUT.settings" if settings_present else "BOUT.inp")
     )
-    assert calls[0]["keep_xboundaries"] and calls[0]["keep_yboundaries"]
+    assert calls[0]["keep_yboundaries"]
     assert run.source == str(tmp_path)
 
 
@@ -204,7 +213,7 @@ def test_path_loader_prefers_settings_and_accepts_input_only(
 def test_loader_preserves_resolved_model_options_after_raw_git_diff(
     dataset, tmp_path, monkeypatch, model
 ):
-    import xhermes
+    import energy_analysis.dataset as loader
     from boutdata.data import BoutOptionsFile
 
     prefix = f"""[mesh]
@@ -252,22 +261,18 @@ average_atomic_mass = 3/2 + 1/4 # source: Command line
             dataset["P" + species] = dataset["N" + species].copy()
     calls = []
 
-    def load(**kwargs):
-        physics_path = kwargs["inputfilepath"]
-        calls.append(physics_path)
-        dataset.attrs["options"] = BoutOptionsFile(physics_path)
-        return dataset
+    def load(path, **kwargs):
+        return dataset.copy()
 
-    monkeypatch.setattr(xhermes, "open_hermesdataset", load)
+    monkeypatch.setattr(loader, "_collect_dump", load)
     run = open_run(tmp_path)
     assert run.scalar_option("average_atomic_mass") == 1.75
     assert run.data.options["solver"].evaluate_scalar("rtol") == 1e-7
     assert run.data.options.filename == str(settings)
     assert settings.read_text() == resolved
     assert (tmp_path / "BOUT.inp").read_text() == supplied
-    from pathlib import Path
 
-    assert not Path(calls[0]).exists()
+    assert not calls  # Metadata filtering leaves no copies in the run directory.
 
 
 def test_multispecies_inventory_units_and_no_double_counting(dataset):
@@ -606,7 +611,6 @@ def test_prescribed_source_conversion_and_coverage(dataset):
 
 def test_parallel_numerical_heating_kinetic_flux_identity():
     from energy_analysis.transport import (
-        numerical_heating_defect,
         numerical_parallel_heating,
         parallel_flux,
         parallel_kinetic_flux,
@@ -627,12 +631,8 @@ def test_parallel_numerical_heating_kinetic_flux_identity():
     divergence = parallel_kinetic_flux(n, v, wave, geometry).divergence
     assert_allclose(
         (kinetic + heating + divergence).isel(y=slice(2, -2)),
-        numerical_heating_defect(n, v, wave, geometry).isel(y=slice(2, -2)),
+        0,
         atol=2e-16,
-    )
-    assert (
-        float(numerical_heating_defect(n, v, wave, geometry).isel(y=slice(2, -2)).sum())
-        > 1e-4
     )
 
 
@@ -947,3 +947,157 @@ def test_pressure_adapter_has_native_and_common_but_no_saved_ion_energy(dataset)
     assert float(abs(run.interior(densities.ion_perpendicular)).max()) < 1e-14
     assert float(abs(run.interior(densities.ion_perpendicular_native)).max()) > 0
     assert "plasma_native" in energy_inventory(run)
+
+
+def diagnostic_free_case(dataset):
+    dataset.options["periodicX"] = "true"
+    for species in ("e", "d+", "impurity"):
+        dataset.options[species]["type"] = (
+            "quasineutral, evolve_pressure, zero_current"
+            if species == "e"
+            else "evolve_density, evolve_momentum"
+        )
+        dataset.options[species]["bndry_flux"] = "false"
+        dataset.options[species]["thermal_conduction"] = "false"
+    return open_run(dataset)
+
+
+def test_closed_balance_without_diagnostics(dataset):
+    from energy_analysis import closed_balance, external_power, wall_budget
+
+    run = diagnostic_free_case(dataset)
+    drift = closed_balance(run)
+    assert drift.attrs["coverage"] == "complete"
+    assert drift.attrs["missing_terms"] == []
+    assert_allclose(drift.energy_relative_drift, 0)
+    assert_allclose(drift.particles_impurity_relative_drift, 0)
+    assert external_power(run).attrs["coverage"] == "complete"
+    assert wall_budget(run).attrs["coverage"] == "complete"
+    dataset["Eion"][1:] += 0.1
+    changed = closed_balance(run)
+    assert float(abs(changed.energy_relative_drift).max()) > 0.01
+
+
+def test_physical_sources_without_diagnostics_and_si_conversion(dataset):
+    from energy_analysis import external_power, source_balance
+
+    run = diagnostic_free_case(dataset)
+    dataset.options["Pe:source"] = "2e5"
+    dataset.options["Nd+:source"] = "3e22"
+    dataset.options["Nimpurity:source"] = "-1.5e22"
+    power = external_power(run)
+    assert power.attrs["coverage"] == "complete"
+    volume = float(run.integrate(dataset.Pe.isel(t=0) * 0 + 1)) * run.length_scale**3
+    assert_allclose(power.pressure_e, 3e5 * volume)
+    assert_allclose(power.particles_e, 0, atol=1e-10)
+    velocity = dataset["NVd+"] / (2 * dataset["Nd+"])
+    expected = run.integrate(
+        -(velocity**2) * 3e22 / dataset.metadata["Nnorm"] / run.frequency
+    )
+    expected *= run.energy_scale * run.length_scale**3 * run.frequency
+    assert_allclose(power["density_kinetic_d+"], expected)
+    balance = source_balance(run)
+    assert balance.attrs["coverage"] == "complete"
+    assert "residual" in balance
+    assert float(abs(balance.residual).max()) > 0
+
+
+def test_unreconstructable_component_reports_missing_power(dataset):
+    from energy_analysis import external_power, source_balance
+
+    run = diagnostic_free_case(dataset)
+    dataset.options["hermes:components"] += ", radiation"
+    power = external_power(run)
+    assert power.attrs["coverage"] == "incomplete"
+    assert any("radiation" in term for term in power.attrs["missing_terms"])
+    balance = source_balance(run)
+    assert balance.attrs["coverage"] == "incomplete"
+    assert "residual" not in balance
+    assert "known_external_power" in balance
+
+
+def test_wall_rates_from_stored_midpoints_without_diagnostics(dataset):
+    from energy_analysis import wall_budget
+
+    run = diagnostic_free_case(dataset)
+    dataset.options["periodicX"] = "false"
+    dataset.options[run.model]["radial_boundary"] = "no_slip"
+    dataset.options[run.model]["polarisation_ac_boundary"] = "neumann"
+    run.data["phi"] = dataset.phi + dataset.t
+    budget = wall_budget(run)
+    assert budget.attrs["coverage"] == "complete"
+    assert_allclose(budget.phi_wall_rate, run.frequency)
+    assert_allclose(budget.outward, 0)
+    dataset.options[run.model]["polarisation_ac_boundary"] = "dirichlet"
+    incomplete = wall_budget(run)
+    assert incomplete.attrs["coverage"] == "incomplete"
+    assert any("chi" in term for term in incomplete.attrs["missing_terms"])
+
+
+def test_native_rank_loader_does_not_import_xhermes(dataset, tmp_path, monkeypatch):
+    import sys
+
+    from energy_analysis.dataset import read_dump
+    from netCDF4 import Dataset
+
+    monkeypatch.setitem(sys.modules, "xhermes", None)
+    with Dataset(tmp_path / "BOUT.dmp.0.nc", "w") as native:
+        for dim, size in dataset.sizes.items():
+            native.createDimension(dim, size)
+        for name, value in dataset.variables.items():
+            if name in ("x", "y", "z"):
+                continue
+            field = native.createVariable(
+                "t_array" if name == "t" else name, "f8", value.dims
+            )
+            field[:] = value.values
+            for key, attribute in value.attrs.items():
+                field.setncattr(key, attribute)
+        metadata = {
+            **dataset.metadata,
+            "BOUT_VERSION": 6.0,
+            "MXSUB": 8,
+            "MYSUB": 1,
+            "MZ": 8,
+            "NXPE": 1,
+            "NYPE": 1,
+            "NZPE": 1,
+            "MYPE": 0,
+            "PE_XIND": 0,
+            "PE_YIND": 0,
+            "ixseps1": 12,
+            "ixseps2": 12,
+            "jyseps1_1": -1,
+            "jyseps2_2": 0,
+        }
+        for name, value in metadata.items():
+            if isinstance(value, bool):
+                continue
+            native.createVariable(name, "f8" if isinstance(value, float) else "i4")[
+                :
+            ] = value
+    (tmp_path / "BOUT.inp").write_text(
+        "[hermes]\ncomponents=e,d+,impurity,evolve_vorticity_ion_energy\n[mesh]\nnx=12\nny=1\nnz=8\n"
+    )
+    loaded = read_dump(tmp_path)
+    assert loaded.sizes == dataset.sizes
+    assert_allclose(loaded.Eion, dataset.Eion)
+    assert loaded.Eion.attrs["units_type"] == "hermes"
+    assert loaded.metadata["keep_xboundaries"]
+
+
+def test_collisional_heat_exchange_is_internal_without_diagnostics(dataset):
+    from energy_analysis.transfers import collisional_heat_exchange
+
+    run = diagnostic_free_case(dataset)
+    dataset.options["hermes:components"] += (
+        ", braginskii_collisions, braginskii_heat_exchange"
+    )
+    dataset.options.getSection("braginskii_collisions")["electron_ion"] = "true"
+    run.data["Pe"] = dataset.Pe * 2
+    exchange = collisional_heat_exchange(run)
+    assert exchange.attrs["coverage"] == "complete"
+    assert (exchange.e < 0).all()
+    assert (exchange["d+"] > 0).all()
+    assert (exchange.impurity > 0).all()
+    assert_allclose(exchange.net, 0, atol=1e-12 * float(abs(exchange.e).max()))

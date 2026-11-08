@@ -293,7 +293,6 @@ if(EXISTS ${CMAKE_SOURCE_DIR}/tests)
 endif()
 
 if(HERMES_TESTS)
-  target_compile_definitions(${PROJECT_NAME} PRIVATE HERMES_TEST_ENERGY_SOURCES)
   enable_testing()
 
   if(BOUT_ENABLE_METRIC_3D)
@@ -396,180 +395,79 @@ if(HERMES_TESTS)
                              BOUT_ENABLE_METRIC_3D)
   hermes_add_integrated_test(2D-production CONFLICTS BOUT_ENABLE_METRIC_3D)
   hermes_add_integrated_test(2D-energy CONFLICTS BOUT_ENABLE_METRIC_3D)
-  # Inventory audits use the same editable Python environment as standalone
-  # postprocessing. A different build environment can set this cache path.
+  find_package(Python3 COMPONENTS Interpreter)
   set(HERMES_ENERGY_PYTHON
-      "${CMAKE_CURRENT_SOURCE_DIR}/.venv/bin/python"
-      CACHE FILEPATH "Python interpreter for energy inventory analysis")
-  if(EXISTS "${HERMES_ENERGY_PYTHON}" AND NOT BOUT_ENABLE_METRIC_3D)
-    # Each ion-energy case owns its inputs, criteria, README and entry point.
-    # The driven cases share the audit implementation, not their test identity.
-    function(hermes_add_ion_energy_test TESTNAME)
+      "${Python3_EXECUTABLE}"
+      CACHE FILEPATH
+            "Python interpreter for energy analysis and integrated tests")
+  set(HERMES_ENERGY_MODULES_READY FALSE)
+  if(HERMES_ENERGY_PYTHON)
+    execute_process(
+      COMMAND "${HERMES_ENERGY_PYTHON}" -c
+              "import numpy, scipy, xarray, netCDF4, boutdata, pytest"
+      RESULT_VARIABLE ENERGY_IMPORT_STATUS
+      ERROR_VARIABLE ENERGY_IMPORT_ERROR)
+    if(ENERGY_IMPORT_STATUS EQUAL 0)
+      set(HERMES_ENERGY_MODULES_READY TRUE)
+    else()
+      message(
+        WARNING
+          "Energy tests skipped: ${HERMES_ENERGY_PYTHON} needs numpy, scipy, xarray, netCDF4, boutdata and pytest. ${ENERGY_IMPORT_ERROR}"
+      )
+    endif()
+  else()
+    message(WARNING "Energy tests skipped: no Python3 interpreter found")
+  endif()
+  if(HERMES_ENERGY_MODULES_READY AND NOT BOUT_ENABLE_METRIC_3D)
+    function(hermes_add_ion_energy_test TESTNAME DIRECTORY LABELS TIMEOUT)
       set(ENERGY_TEST_SRC
-          "${CMAKE_CURRENT_SOURCE_DIR}/tests/integrated/${TESTNAME}")
+          "${CMAKE_CURRENT_SOURCE_DIR}/tests/integrated/${DIRECTORY}")
       set(ENERGY_TEST_DEST "${ENERGY_TEST_SRC}")
       if(HERMES_COPY_TESTS_TO_BUILD)
         set(ENERGY_TEST_DEST
-            "${CMAKE_CURRENT_BINARY_DIR}/tests/integrated/${TESTNAME}")
-        foreach(ENERGY_FILE runtest README.md data/BOUT.inp criteria.json
-                            analysis.py reference/BOUT.inp)
-          if(EXISTS "${ENERGY_TEST_SRC}/${ENERGY_FILE}")
-            configure_file("${ENERGY_TEST_SRC}/${ENERGY_FILE}"
-                           "${ENERGY_TEST_DEST}/${ENERGY_FILE}" COPYONLY)
-          endif()
-        endforeach()
+            "${CMAKE_CURRENT_BINARY_DIR}/tests/integrated/${DIRECTORY}")
+        file(
+          COPY "${ENERGY_TEST_SRC}"
+          DESTINATION "${CMAKE_CURRENT_BINARY_DIR}/tests/integrated"
+          PATTERN "__pycache__" EXCLUDE)
       endif()
       add_test(NAME ${TESTNAME}
                COMMAND "${HERMES_ENERGY_PYTHON}" "${ENERGY_TEST_DEST}/runtest"
-                       --exe $<TARGET_FILE:${PROJECT_NAME}>)
+                       --exe $<TARGET_FILE:${PROJECT_NAME}> ${ARGN})
       set_tests_properties(
-        ${TESTNAME} PROPERTIES LABELS "integration;energy" TIMEOUT 300
+        ${TESTNAME} PROPERTIES LABELS "${LABELS}" TIMEOUT ${TIMEOUT}
                                WORKING_DIRECTORY "${ENERGY_TEST_DEST}")
     endfunction()
     if(HERMES_COPY_TESTS_TO_BUILD)
-      foreach(
-        ENERGY_SHARED_FILE
-        ion_energy_balance.py ion_energy_flux_test.py
-        ion_energy_tokamak_test.py ion-energy-analysis-plan.md
-        ion-energy-phi-boundary-relax-plan.md)
-        configure_file(
-          "${CMAKE_CURRENT_SOURCE_DIR}/tests/integrated/${ENERGY_SHARED_FILE}"
-          "${CMAKE_CURRENT_BINARY_DIR}/tests/integrated/${ENERGY_SHARED_FILE}"
-          COPYONLY)
-      endforeach()
-      configure_file(
-        "${CMAKE_CURRENT_SOURCE_DIR}/tests/integrated/2D-energy/README.md"
-        "${CMAKE_CURRENT_BINARY_DIR}/tests/integrated/2D-energy/README.md"
-        COPYONLY)
-      file(GLOB ENERGY_ANALYSIS_SOURCES CONFIGURE_DEPENDS
-           "${CMAKE_CURRENT_SOURCE_DIR}/tools/energy_analysis/*.py")
-      list(APPEND ENERGY_ANALYSIS_SOURCES
-           "${CMAKE_CURRENT_SOURCE_DIR}/tools/energy_analysis/README.md")
-      foreach(ENERGY_SOURCE IN LISTS ENERGY_ANALYSIS_SOURCES)
-        get_filename_component(ENERGY_FILENAME "${ENERGY_SOURCE}" NAME)
-        configure_file(
-          "${ENERGY_SOURCE}"
-          "${CMAKE_CURRENT_BINARY_DIR}/tools/energy_analysis/${ENERGY_FILENAME}"
-          COPYONLY)
-      endforeach()
-    endif()
-    if(HERMES_COPY_TESTS_TO_BUILD)
-      foreach(PUBLICATION_FILE publication_scan.py publication_remote.py
-                               publication-input.inp publication-study.md)
-        configure_file(
-          "${CMAKE_CURRENT_SOURCE_DIR}/tests/integrated/2D-energy/${PUBLICATION_FILE}"
-          "${CMAKE_CURRENT_BINARY_DIR}/tests/integrated/2D-energy/${PUBLICATION_FILE}"
-          COPYONLY)
-      endforeach()
       file(
-        WRITE
-        "${CMAKE_CURRENT_BINARY_DIR}/tests/integrated/2D-energy/source-root.txt"
-        "${CMAKE_CURRENT_SOURCE_DIR}\n")
-      foreach(PUBLICATION_FILE runtest README.md)
-        configure_file(
-          "${CMAKE_CURRENT_SOURCE_DIR}/tests/integrated/2D-energy-publication-smoke/${PUBLICATION_FILE}"
-          "${CMAKE_CURRENT_BINARY_DIR}/tests/integrated/2D-energy-publication-smoke/${PUBLICATION_FILE}"
-          COPYONLY)
-      endforeach()
-      set(PUBLICATION_SMOKE_DIR
-          "${CMAKE_CURRENT_BINARY_DIR}/tests/integrated/2D-energy-publication-smoke"
-      )
-    else()
-      set(PUBLICATION_SMOKE_DIR
-          "${CMAKE_CURRENT_SOURCE_DIR}/tests/integrated/2D-energy-publication-smoke"
-      )
+        COPY "${CMAKE_CURRENT_SOURCE_DIR}/tools/energy_analysis"
+        DESTINATION "${CMAKE_CURRENT_BINARY_DIR}/tools"
+        PATTERN "__pycache__" EXCLUDE)
     endif()
-    add_test(
-      NAME 2D-energy-publication-smoke
-      COMMAND "${HERMES_ENERGY_PYTHON}" "${PUBLICATION_SMOKE_DIR}/runtest"
-              --exe $<TARGET_FILE:${PROJECT_NAME}>)
-    set_tests_properties(
-      2D-energy-publication-smoke
-      PROPERTIES LABELS "integration;energy" TIMEOUT 300 WORKING_DIRECTORY
-                 "${PUBLICATION_SMOKE_DIR}")
-    hermes_add_ion_energy_test(2D-ion-energy-equilibrium)
-    hermes_add_ion_energy_test(2D-ion-energy-curvature)
-    hermes_add_ion_energy_test(2D-ion-energy-polarisation-boundary)
-    hermes_add_ion_energy_test(2D-ion-energy-radial-boundary)
-    set_tests_properties(2D-ion-energy-polarisation-boundary PROPERTIES TIMEOUT
-                                                                        600)
-    hermes_add_ion_energy_test(2D-ion-energy-multispecies)
-    set(ION_MMS_SOURCE
-        "${CMAKE_CURRENT_SOURCE_DIR}/tests/integrated/3D-ion-energy-mms")
-    set(ION_MMS_DEST "${ION_MMS_SOURCE}")
-    if(HERMES_COPY_TESTS_TO_BUILD)
-      set(ION_MMS_DEST
-          "${CMAKE_CURRENT_BINARY_DIR}/tests/integrated/3D-ion-energy-mms")
-      foreach(
-        ION_MMS_FILE
-        runtest
-        README.md
-        data/BOUT.inp
-        base.inp
-        criteria.json
-        manufactured.py
-        mms.py
-        analysis.py
-        compiled_sources.hxx
-        generated_sources.hxx
-        requirements.txt)
-        configure_file("${ION_MMS_SOURCE}/${ION_MMS_FILE}"
-                       "${ION_MMS_DEST}/${ION_MMS_FILE}" COPYONLY)
-      endforeach()
-    endif()
-    foreach(ION_MMS_VARIANT baseline skew viscosity)
-      set(ION_MMS_NAME "3D-ion-energy-mms")
-      if(NOT ION_MMS_VARIANT STREQUAL "baseline")
-        string(APPEND ION_MMS_NAME "-${ION_MMS_VARIANT}")
-        if(HERMES_COPY_TESTS_TO_BUILD)
-          foreach(ION_MMS_FILE runtest README.md data/BOUT.inp)
-            configure_file(
-              "${CMAKE_CURRENT_SOURCE_DIR}/tests/integrated/${ION_MMS_NAME}/${ION_MMS_FILE}"
-              "${CMAKE_CURRENT_BINARY_DIR}/tests/integrated/${ION_MMS_NAME}/${ION_MMS_FILE}"
-              COPYONLY)
-          endforeach()
-        endif()
-      endif()
-      add_test(
-        NAME "${ION_MMS_NAME}"
-        COMMAND
-          "${HERMES_ENERGY_PYTHON}" "${ION_MMS_DEST}/runtest" --exe
-          $<TARGET_FILE:${PROJECT_NAME}> --variant "${ION_MMS_VARIANT}" --sizes
-          8 16 32 --end-time 0.1 --outputs 1)
-      set_tests_properties(
-        "${ION_MMS_NAME}" PROPERTIES LABELS "integration;energy;mms" TIMEOUT
-                                     1200 WORKING_DIRECTORY "${ION_MMS_DEST}")
-    endforeach()
-    hermes_add_ion_energy_test(2D-ion-energy-fluxes)
-    hermes_add_ion_energy_test(2D-ion-energy-heating)
-    hermes_add_ion_energy_test(2D-ion-energy-sources)
-    hermes_add_ion_energy_test(2D-ion-energy-parallel)
-    hermes_add_ion_energy_test(2D-ion-energy-boundary)
-    hermes_add_ion_energy_test(2D-ion-energy-relax-boundary)
-    hermes_add_ion_energy_test(tokamak-ion-energy-relax-boundary)
-    if(HERMES_COPY_TESTS_TO_BUILD)
-      configure_file(
-        "${CMAKE_CURRENT_SOURCE_DIR}/examples/tokamak-2D/compass-36x48.grd.nc"
-        "${CMAKE_CURRENT_BINARY_DIR}/tests/integrated/tokamak-ion-energy-relax-boundary/data/compass-36x48.grd.nc"
-        COPYONLY)
-    endif()
-    set_tests_properties(tokamak-ion-energy-relax-boundary PROPERTIES PROCESSORS
-                                                                      6)
-    add_test(
-      NAME energy-analysis-python
-      COMMAND
-        "${HERMES_ENERGY_PYTHON}" -m pytest -q
-        "${CMAKE_CURRENT_SOURCE_DIR}/tests/python"
-        "${CMAKE_CURRENT_SOURCE_DIR}/external/xhermes/tests/test_energy_loading.py"
-    )
+    hermes_add_ion_energy_test(ion-energy-mms ion-energy-mms "energy;mms" 600)
+    hermes_add_ion_energy_test(
+      ion-energy-mms-long
+      ion-energy-mms
+      "energy;mms;long"
+      1800
+      --profile
+      long
+      --nproc
+      2)
+    set_tests_properties(ion-energy-mms-long PROPERTIES PROCESSORS 2)
+    hermes_add_ion_energy_test(ion-energy-closed ion-energy-closed "energy" 300)
+    hermes_add_ion_energy_test(ion-energy-sources ion-energy-sources "energy"
+                               300)
+    hermes_add_ion_energy_test(ion-energy-walls ion-energy-walls "energy" 300)
+    add_test(NAME energy-analysis-python
+             COMMAND "${HERMES_ENERGY_PYTHON}" -m pytest -q
+                     "${CMAKE_CURRENT_SOURCE_DIR}/tests/python")
     set_tests_properties(
       energy-analysis-python
-      PROPERTIES LABELS "unit;energy" WORKING_DIRECTORY
-                 "${CMAKE_CURRENT_SOURCE_DIR}" TIMEOUT 120)
-  else()
-    message(
-      STATUS
-        "Energy inventory tests need the workspace .venv and standard metrics")
+      PROPERTIES LABELS "unit;energy" TIMEOUT 120 WORKING_DIRECTORY
+                 "${CMAKE_CURRENT_SOURCE_DIR}")
+  elseif(BOUT_ENABLE_METRIC_3D)
+    message(STATUS "Energy analysis tests require standard metrics")
   endif()
   hermes_add_integrated_test(2D-recycling CONFLICTS BOUT_ENABLE_METRIC_3D)
   hermes_add_integrated_test(examples CONFLICTS BOUT_ENABLE_METRIC_3D)

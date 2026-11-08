@@ -1,0 +1,60 @@
+#!/usr/bin/env python3
+"""Conservation and nontrivial energy exchange in a periodic two-ion slab."""
+
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "tools"))
+from energy_analysis import summary
+from energy_analysis.testing import Study, parser, state_difference
+
+HERE = Path(__file__).resolve().parent
+
+
+def main():
+    args = parser(__doc__).parse_args()
+    with Study(HERE, args) as study:
+        runs = []
+        for diagnose in (True, False):
+            run = study.run(
+                "diagnostics-" + str(diagnose).lower(),
+                [
+                    "restart=false",
+                    "solver:nout=20",
+                    "solver:output_step=1",
+                    f"evolve_vorticity_ion_energy:diagnose={str(diagnose).lower()}",
+                ],
+            )
+            runs.append(run)
+            report = summary(run)
+            study.result["cases"][Path(run.source).name]["summary"] = report
+            drift = report["closed_balance"]
+            if drift["coverage"] != "complete":
+                raise ValueError(drift["missing_terms"])
+            study.check(
+                f"energy/{diagnose}", drift["maxima"]["energy_relative_drift"], "energy"
+            )
+            for name, value in drift["maxima"].items():
+                if name.startswith(("particles_", "charge_")):
+                    study.check(f"{name}/{diagnose}", value, "particles")
+            study.check(f"recovery/{diagnose}", report["recovery_error"], "recovery")
+            for name in (
+                "curvature_exchange_relative",
+                "ion_perpendicular_change_relative",
+                "ion_parallel_change_relative",
+            ):
+                study.check(
+                    f"{name}/{diagnose}", report[name], "nontrivial", minimum=True
+                )
+            for name, diagnostic in report["diagnostics"].items():
+                if diagnostic["available"]:
+                    study.check(
+                        name,
+                        diagnostic["max_absolute_error_normalised"],
+                        "diagnostic_error",
+                    )
+        study.check("diagnostics_state", state_difference(*runs), "diagnostics")
+
+
+if __name__ == "__main__":
+    main()

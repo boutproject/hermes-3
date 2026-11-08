@@ -1,3 +1,0 @@
--r ../../../tools/energy_analysis/requirements.txt
-sympy
-boutdata

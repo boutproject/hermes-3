@@ -138,6 +138,71 @@ def _manifest(ds, explicit):
     return species
 
 
+def read_dump(path, *, chunks=None, keep_yboundaries=True):
+    """Collect native BOUT++ rank dumps using boutdata, without xhermes.
+
+    BOUT++ writes normalised array values; conversion attributes describe how
+    to obtain SI values, rather than asserting that the stored values are SI.
+    boutdata handles MPI guard removal and topology; xarray labels the result.
+    """
+    from boutdata.data import BoutOptionsFile
+
+    path = Path(path).resolve()
+    options_path = path / "BOUT.settings"
+    if not options_path.is_file():
+        options_path = path / "BOUT.inp"
+    with physics_options_file(options_path) as physics_path:
+        options = BoutOptionsFile(str(physics_path))
+    options.filename = str(options_path)
+    ds = _collect_dump(path, keep_yboundaries=keep_yboundaries)
+    ds.attrs["options"] = options
+    return ds.chunk(chunks) if chunks else ds
+
+
+def _collect_dump(path, *, keep_yboundaries=True):
+    from boutdata.data import BoutOutputs
+    from netCDF4 import Dataset
+
+    path = Path(path)
+    files = sorted(path.glob("BOUT.dmp.*.nc"))
+    if not files:
+        raise AuditError(f"No BOUT++ dumps in {path}")
+    outputs = BoutOutputs(str(path), xguards=True, yguards=keep_yboundaries)
+    variables, metadata = {}, {}
+    with Dataset(files[0]) as native:
+        for name, variable in native.variables.items():
+            if np.dtype(variable.dtype).kind in "SUO":
+                if not variable.dimensions:
+                    metadata[name] = str(variable[...])
+                continue
+            value = np.asarray(outputs[name])
+            dims = tuple(variable.dimensions)
+            attrs = {key: variable.getncattr(key) for key in variable.ncattrs()}
+            attrs.pop("_FillValue", None)
+            attrs["units_type"] = "hermes"
+            if not dims:
+                metadata[name] = value.item()
+            else:
+                variables["t" if name == "t_array" else name] = (dims, value, attrs)
+        for key in native.ncattrs():
+            metadata[key] = native.getncattr(key)
+    ds = xr.Dataset(variables)
+    if "t" in ds:
+        ds = ds.set_coords("t")
+    for dim in ("x", "y", "z"):
+        if dim in ds.dims and dim not in ds.coords:
+            ds = ds.assign_coords({dim: np.arange(ds.sizes[dim])})
+    # Global extents, unlike nx/ny in a rank's dump, describe the collected grid.
+    metadata["nx"] = ds.sizes["x"]
+    metadata["ny"] = int(metadata.get("ny", ds.sizes["y"]))
+    metadata.update(
+        keep_xboundaries=True,
+        keep_yboundaries=keep_yboundaries and ds.sizes["y"] > metadata["ny"],
+    )
+    ds.attrs.update(metadata=metadata)
+    return ds
+
+
 def open_run(source, *, species=None, chunks=None):
     """Open a slab run or adapt a fully annotated xhermes Dataset.
 
@@ -150,23 +215,8 @@ def open_run(source, *, species=None, chunks=None):
         ds = source
         path = "dataset"
     else:
-        import xhermes
-
         path = str(Path(source).resolve())
-        options_path = Path(path) / "BOUT.settings"
-        if not options_path.is_file():
-            options_path = Path(path) / "BOUT.inp"
-        with physics_options_file(options_path) as physics_path:
-            ds = xhermes.open_hermesdataset(
-                datapath=str(Path(path) / "BOUT.dmp.*.nc"),
-                inputfilepath=str(physics_path),
-                unnormalise=False,
-                keep_xboundaries=True,
-                keep_yboundaries=True,
-                chunks={"t": 1, "y": 1} if chunks is None else chunks,
-            )
-        if ds.attrs.get("options") is not None and hasattr(ds.options, "filename"):
-            ds.options.filename = str(options_path)
+        ds = read_dump(path, chunks=chunks)
     ds = _normalised_view(ds)
     options = ds.attrs.get("options")
     if options is None:
@@ -217,7 +267,7 @@ def open_run(source, *, species=None, chunks=None):
     for name in required:
         if ds[name].attrs.get("units_type") != "hermes":
             raise AuditError(
-                f"Unknown normalisation for {name}; use xhermes annotated fields"
+                f"Unknown normalisation for {name}; annotate supplied datasets"
             )
     metadata = ds.attrs.get("metadata", {})
     rectangle = (

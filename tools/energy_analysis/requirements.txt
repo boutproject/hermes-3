@@ -1,7 +1,6 @@
 numpy
 scipy
 xarray
-xhermes
 pytest
-matplotlib
 netCDF4
+boutdata

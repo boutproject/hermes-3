@@ -220,7 +220,8 @@ def numerical_parallel_heating(density, velocity, wave, geometry):
     )
     area = geometry.J * geometry.dx * geometry.dz / np.sqrt(geometry.g_22)
     right = (
-        (ar + 0.5 * vr)
+        0.5
+        * (ar + vr)
         * nr
         * (velocity - yp(velocity))
         * (vr - (velocity + yp(velocity)) / 2)
@@ -228,7 +229,8 @@ def numerical_parallel_heating(density, velocity, wave, geometry):
         / 2
     )
     left = (
-        (al - 0.5 * vl)
+        0.5
+        * (al - vl)
         * nl
         * (velocity - ym(velocity))
         * (vl - (velocity + ym(velocity)) / 2)
@@ -257,41 +259,3 @@ def parallel_kinetic_flux(density, velocity, wave, geometry, *, myg=2):
     ) + 0.5 * yp(nl) * (yp(vl) - a) * (velocity * yp(vl) - 0.5 * velocity**2)
     area = geometry.J * geometry.dx * geometry.dz / np.sqrt(geometry.g_22)
     return flux_dataset({"y": flux * (area + yp(area)) / 2}, geometry)
-
-
-def numerical_heating_defect(density, velocity, wave, geometry):
-    """Excess heating in BOUT's current Div_par_fvv_heating implementation.
-
-    The split particle flux is n_edge*(a +/- v_edge)/2, whereas heating uses
-    n_edge*(a +/- v_edge/2). Their difference is n_edge*a/2. This is a tracked
-    discretisation contribution, not a prescribed external source.
-    """
-    ym, yp = lambda f: neighbor(f, "y", -1), lambda f: neighbor(f, "y")
-    nl, nr = mc_edges(density, "y")
-    vl, vr = mc_edges(velocity, "y")
-    ar = np.maximum(
-        np.maximum(wave, yp(wave)), np.maximum(abs(velocity), abs(yp(velocity)))
-    )
-    al = np.maximum(
-        np.maximum(wave, ym(wave)), np.maximum(abs(velocity), abs(ym(velocity)))
-    )
-    area = geometry.J * geometry.dx * geometry.dz / np.sqrt(geometry.g_22)
-    right = (
-        0.5
-        * ar
-        * nr
-        * (velocity - yp(velocity))
-        * (vr - (velocity + yp(velocity)) / 2)
-        * (area + yp(area))
-        / 2
-    )
-    left = (
-        0.5
-        * al
-        * nl
-        * (velocity - ym(velocity))
-        * (vl - (velocity + ym(velocity)) / 2)
-        * (area + ym(area))
-        / 2
-    )
-    return (right + left) / (geometry.J * geometry.dx * geometry.dy * geometry.dz)

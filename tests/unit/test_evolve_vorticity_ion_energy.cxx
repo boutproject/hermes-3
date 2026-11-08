@@ -110,6 +110,46 @@ TEST_F(EvolveVorticityIonEnergyTest, RecoveryCanBeScheduledBeforeSheath) {
   EXPECT_NO_THROW(ComponentScheduler::create(options, options, &solver));
 }
 
+TEST_F(EvolveVorticityIonEnergyTest, UniformStateHasZeroRHS) {
+  FakeSolver solver;
+  auto options = makeOptions();
+  options["components"] = "e, d+, he++, test";
+  options["test"]["type"] = "evolve_vorticity_ion_energy";
+  options["test"]["radial_boundary"] = "fixed";
+  options["e"]["type"] = "quasineutral, evolve_pressure, zero_current";
+  options["e"]["charge"] = -1.0;
+  options["e"]["AA"] = 1. / 1836;
+  options["e"]["thermal_conduction"] = false;
+  for (const auto& name : {"d+", "he++"}) {
+    options[name]["type"] = "evolve_density, evolve_momentum";
+    options[name]["charge"] = name == std::string{"d+"} ? 1.0 : 2.0;
+    options[name]["AA"] = name == std::string{"d+"} ? 2.0 : 4.0;
+  }
+  auto scheduler = ComponentScheduler::create(options, options, &solver);
+  solver.setState({{"Vort", Field3D{0.0}},
+                   {"Eion", Field3D{3.0}},
+                   {"Pe", Field3D{1.0}},
+                   {"Nd+", Field3D{0.5}},
+                   {"Nhe++", Field3D{0.25}},
+                   {"NVd+", Field3D{0.0}},
+                   {"NVhe++", Field3D{0.0}}});
+  Options state{{"time", 0.0}, {"fastest_wave", Field3D{1.0}}};
+  scheduler->transform(state);
+  const auto derivatives = solver.getTimeDerivs();
+  for (const auto& [name, value] : derivatives.getChildren()) {
+    EXPECT_TRUE(IsFieldEqual(value.as<Field3D>(), 0.0, "RGN_NOBNDRY", 1e-13)) << name;
+  }
+  for (const auto& [name, species] : state["species"].getChildren()) {
+    for (const auto& source : {"density_source", "momentum_source", "energy_source"}) {
+      if (species.isSet(source)) {
+        EXPECT_TRUE(
+            IsFieldEqual(species[source].as<Field3D>(), 0.0, "RGN_NOBNDRY", 1e-13))
+            << name << ":" << source;
+      }
+    }
+  }
+}
+
 TEST_F(EvolveVorticityIonEnergyTest, FreshStartRestartHookPreservesRecoveredPotential) {
   FakeSolver solver;
   auto options = makeOptions();
@@ -891,6 +931,16 @@ TEST_F(EvolveVorticityIonEnergyTest, PolarisationPotentialHasFixedCorrectionResp
     for (const auto& i : chi.getRegion("RGN_NOBNDRY")) {
       EXPECT_NEAR(forward[i], rhs[i] * (1 - pow(q, corrections + 1)), 2e-13);
       EXPECT_NEAR(chi[i], chi(mesh->xstart, i.y(), i.z()), 2e-13);
+    }
+    // An X-independent AC forcing must have zero normal AC wall current
+    // before any particle/energy transport boundary flux is suppressed.
+    for (int x : {mesh->xstart, mesh->xend}) {
+      const int guard = x == mesh->xstart ? x - 1 : x + 1;
+      for (int y = mesh->ystart; y <= mesh->yend; ++y) {
+        for (int z = 0; z < nz; ++z) {
+          EXPECT_NEAR(chi(guard, y, z), chi(x, y, z), 2e-13);
+        }
+      }
     }
   }
 }

@@ -147,7 +147,9 @@ between outputs.
 MMS forcing requires special care: BOUT adds it after ``finally()``,
 including in evolving solver guards. Mask manufactured ``Vort`` sources to
 physical X cells so that they cannot overwrite the prescribed wall rates.
-Both expression and compiled source backends in ``3D-ion-energy-mms`` do this.
+The committed ``ion-energy-mms`` inputs apply this mask to BOUT++ expression
+sources. Density and pressure components leave MMS source options unread so
+BOUT++ adds each forcing exactly once.
 
 Debugging: running for one iteration
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -1463,280 +1465,59 @@ and core/pfr boundaries. If the test fails, it will print the degree of error at
 The test file can be used to generate the test data if `gen_data` is set to `True` in the beginning
 of the script.
 
-3D-ion-energy-mms
-~~~~~~~~~~~~~~~~~
+.. _subsec-ion-energy-tests:
 
-This slab method of manufactured solutions (MMS) test evolves two ion
-densities and parallel momenta, electron pressure, vorticity and total ion
-energy. The ions share a temperature and have different mass-to-charge
-ratios. X uses ``radial_boundary = fixed``, with zero potential midpoints
-and mean-Neumann, zero-AC-midpoint guards for total pressure and pressure
-potential. Y and Z are periodic, with no sheaths. SymPy generates normalised
-analytic sources for BOUT's MMS forcing, including the auxiliary
-polarisation-current solve before forcing is added. Manufactured vorticity
-forcing is restricted to physical X cells so that the evolving solver guards
-keep their fixed potential state.
+Total ion energy tests
+~~~~~~~~~~~~~~~~~~~~~~
 
-The test reports volume-weighted L2 and Linf errors for all evolved fields
-and independently recovered total/species ion pressures, temperature and
-potential. It checks native MMS errors, X face conditions and discrete
-recovery residuals. CSV/JSON tables and PDF/PNG convergence plots retain all
-physical cells, including extrema and cells beside boundaries. Per-field
-criteria allow the reduced orders associated with the production limiters.
+Four integrated tests exercise ``evolve_vorticity_ion_energy``:
 
-The registered tests refine from :math:`8^3` to :math:`32^3` and evolve to
-normalised time 0.1. ``runtest`` also supports larger or directional scans,
-tighter-tolerance repeats and serial/X/Y/2x2 MPI comparisons. Separate
-``3D-ion-energy-mms-skew`` and ``3D-ion-energy-mms-viscosity`` directories
-test the mixed perpendicular metric and kinematic viscosity with compatible
-analytic X-boundary profiles. See the test READMEs for commands and the
-observed convergence orders.
+- ``ion-energy-closed`` checks energy, particles and charge in a periodic
+  two-ion curvature slab, including changing perpendicular and parallel
+  kinetic reservoirs.
+- ``ion-energy-sources`` checks physical electron heating and moving-ion
+  density sources, with collisional heat exchange and output-cadence refinement.
+- ``ion-energy-walls`` checks the three radial wall modes, both AC conditions,
+  rigid-rotation decay, uniform-vorticity drift and restart round trips.
+- ``ion-energy-mms`` checks continuum expression sources on two resolutions for
+  orthogonal, skew-metric and viscous curvature slabs. Periodic Y uses twice the
+  X/Z resolution and flat velocity extrema. The ``long`` profile adds size 32
+  and uses two MPI ranks.
 
-.. _subsec-2d-ion-energy-polarisation-boundary:
+All cases use zero parallel current and omit sheaths. Parallel-current and
+sheath coverage will be restored after those terms enter the ion-energy
+vorticity equation. Conservation gates do not assume a particular Reynolds
+stress discretisation.
 
-2D-ion-energy-polarisation-boundary
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+The runners use ``tools/energy_analysis`` for inventories, physical sources,
+wall powers and recovery checks. Analysis runs with diagnostics disabled;
+open polarisation wall fluxes report incomplete coverage when chi is absent.
+Inputs, hashes, execution status, check values and summaries are written to an
+isolated directory containing ``result.json``.
 
-This orthogonal curvature slab isolates the radial polarisation transport
-boundary. A pressure perturbation independent of X produces a pure AC
-current drive. The auxiliary potential uses midpoint Dirichlet conditions
-for its DC mode and radial Neumann conditions for AC modes. The DC midpoint
-is zero for ``radial_boundary = fixed`` and equals the potential wall rate
-for ``no_slip``. This test selects ``polarisation_ac_boundary = neumann``.
-Its initial finite-correction response is known analytically: the unmasked
-AC normal current must vanish, including at the first and last physical cells.
+Install ``tools/energy_analysis/requirements.txt`` in the Python environment
+used to configure CMake. The optional MMS generator and its Python identity
+checks additionally need ``tests/integrated/ion-energy-mms/requirements.txt``.
+CTest registration checks imports and reports missing dependencies; it does
+not require an environment in the source tree.
 
-The test refines X at fixed Z, then both dimensions, with fixed and no-slip
-radial boundaries, diagnostics on/off, time-tolerance and correction-count
-pilots and two MPI ranks. It checks independent Python reconstruction, closed
-transport faces, face Gauss identities, and global energy and particle balance.
-Reports retain boundary/interior maxima and DC/AC weighted-current corrections.
-Nonzero DC and mixed-metric normal currents remain explicitly closed in transport;
-the unit tests cover those cases, invalid solver flags and auxiliary
-warm-start independence under reordered RHS calls. The fixed-correction
-auxiliary inverse is checked against analytic DC/AC responses, including
-Nyquist and singleton Z. Separate higher-correction tests check small FV
-residuals on nonuniform meshes with ``g13``. Output-only warm starts are
-checked for bitwise repeatability between outputs and reuse at the output state.
+.. code-block:: sh
 
-.. _subsec-2d-ion-energy-radial-boundary:
+   ctest --test-dir build -L energy -LE long --output-on-failure -j 2
+   python tests/integrated/ion-energy-closed/runtest --exe build/hermes-3
+   python tests/integrated/ion-energy-mms/mms.py --all --check --check-files
 
-2D-ion-energy-radial-boundary
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+``energy-analysis-python`` covers synthetic inventories, discrete operators,
+coverage flags and generator identities. The uniform equilibrium and analytic
+AC wall assertions have C++ unit coverage in
+``EvolveVorticityIonEnergyTest.UniformStateHasZeroRHS``,
+``PolarisationPotentialHasFixedCorrectionResponse``, ``FixedAuxiliaryInverse*``
+and ``MixedPolarisationGuards*``.
 
-This seeded orthogonal X-Z slab checks all six combinations of
-``radial_boundary`` (``fixed``, ``free_slip``, ``no_slip``) and
-``polarisation_ac_boundary`` (``neumann``, ``dirichlet``), with no sources,
-curvature or parallel dynamics. Free-slip cases include viscosity. The
-test checks potential and physical vorticity guards, particle content against
-the signed ``particle_pol_wall_loss_h+`` diagnostic, energy against open
-polarisation and viscous face power, and vorticity against viscous diffusion.
-Each combination also has a native restart round trip.
-
-No-slip rigid-rotation cases use 16, 32 and 64 physical X cells. A linear
-vorticity profile gives a cubic potential plus a relaxing linear component.
-Cold, uniform ions suppress changes in the mean pressure potential and isolate
-the prescribed E×B wall law. The fitted time must agree with
-:math:`L_{\mathrm{phys}}/(2\kappa)` within 1%, with a resolution spread below
-0.5%. The test evolves the native solver boundary state rather than a
-separate wall ODE. The quadratic-wall regression below tests the centred
-stencil, and ``tokamak-ion-energy-relax-boundary`` tests automatic closed-core
-averaging.
-
-From the repository root, run:
-
-.. code-block:: bash
-
-   .venv/bin/python tests/integrated/2D-ion-energy-radial-boundary/runtest \
-     --exe build/hermes-3 --output-root /private/tmp
-
-Inputs, outputs and logs are retained, with ``result.json`` written after all
-checks pass.
-
-.. _subsec-2d-ion-energy-quadratic-wall-relaxation:
-
-2D-ion-energy-quadratic-wall-relaxation
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-This regression checks the centred wall derivative described in
-:ref:`sec-evolve_vorticity_ion_energy`. It reuses the orthogonal slab input
-from ``2D-ion-energy-polarisation-boundary``, disables curvature and starts
-uniform positive or negative vorticity with zero potential wall midpoints.
-It selects ``radial_boundary = no_slip`` and Neumann polarisation AC.
-It evolves four output intervals at 16, 32 and 64 interior X cells over
-the same physical width. Both walls have the analytic normalised rate
-
-.. math::
-
-   \frac{d\phi_b}{dt}
-      = -\widehat{\kappa}\sqrt{g^{11}}
-          \frac{\Omega L_x}{2c g^{11}},
-
-where :math:`\widehat{\kappa}` is the normalised relaxation velocity,
-:math:`L_x` is the normalised coordinate width and :math:`c` is the
-Boussinesq coefficient. The test compares the saved wall RHS, the change
-in reflected potential midpoints between outputs and the interior chi
-against this rate to relative tolerance :math:`10^{-6}`. Physical
-vorticity must remain constant to the same tolerance. The small vorticity
-amplitude limits pressure-potential feedback within this error budget.
-The former one-sided midpoint stencil fails with relative rate errors of
-4.17%, 2.08% and 1.04% at these resolutions.
-
-From the repository root, run:
-
-.. code-block:: bash
-
-   .venv/bin/python tests/integrated/2D-ion-energy-quadratic-wall-relaxation/runtest \
-     --exe build/hermes-3
-
-.. _subsec-2d-energy-comparison:
-
-2D-energy (energy comparison and resolution scan)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-``tests/integrated/2D-energy/publication_scan.py`` compares the ion pressure
-formulation (``vorticity``, ``polarisation_drift`` and ``evolve_pressure``)
-with ``evolve_vorticity_ion_energy``. Both evolve hydrogen density and electron
-pressure with quasineutral electrons and no parallel dynamics. The original
-``2D-energy/runtest`` checks the pressure formulation separately.
-
-The problem is interchange relaxation in a 5 cm by 5 cm X-Z slab, with
-curvature radius :math:`R=1.5` m and magnetic field :math:`B=0.35` T.
-Both species start at density :math:`n=2\times10^{18}` m\ :sup:`-3` with the
-same normalised pressure profile
-:math:`P_i=P_e=1+0.1\sin(2\pi\xi)\sin(2\pi\xi-\theta)`, where
-:math:`\xi=X/L_X\in[0,1]` and :math:`\theta=2\pi Z/L_Z`.
-The perturbation vanishes at both X faces, making the initial pressure
-constant in Z there. With hydrogen and ``average_atomic_mass = 1``,
-:math:`\psi=P_i`; the initial potential :math:`\phi=1-P_i` therefore gives
-:math:`\Phi=1`, :math:`\Omega=0` and :math:`K_\perp=0` for the total-energy
-formulation. The E×B and diamagnetic drifts initially cancel in its combined
-perpendicular flow. The runner prepares matched physical density, pressures
-and potential in native restarts, using each formulation's own forward
-operator and pressure guards to construct vorticity and kinetic energy.
-
-Curvature converts thermal energy into perpendicular kinetic energy;
-viscosity returns kinetic energy to heat. There are no prescribed sources,
-conduction or sheath losses. The pressure formulation retains its Neumann
-ion-pressure guards and signed electron contribution to the pressure
-potential, so its initial discrete vorticity and kinetic energy can differ.
-
-The figures below use :math:`16^2` and :math:`32^2` physical cells, fixed
-potential boundaries, viscosity 1 m\ :sup:`2`/s and 100 output intervals to
-normalised time :math:`10^4`. From the repository root, reproduce them with:
-
-.. code-block:: bash
-
-   .venv/bin/python tests/integrated/2D-energy/publication_scan.py \
-     --exe build/hermes-3 --levels 2 --base-nx 16 --base-nz 16 \
-     --phi-boundary fixed --end-time 10000 --outputs 100
-
-The runner also supports resolution scans: its defaults are four grids
-(:math:`32^2`, :math:`64^2`, :math:`128^2`, :math:`256^2`), duration 20000 and
-200 output intervals. ``--levels``, ``--base-nx``, ``--base-nz`` and
-``--refinement`` set the grids; ``--end-time`` and ``--outputs`` set the
-shared time axis. ``--accuracy-pilot`` checks tighter tolerances, smaller
-timesteps and finer output cadence against spatial differences.
-
-``--phi-boundary relax`` selects relaxing potential boundaries and ``both``
-runs both policies. The pressure formulation uses
-``--phi-boundary-timescale`` (default :math:`10^{-4}` s); total ion energy
-uses ``radial_boundary = no_slip`` with ``--phi-boundary-velocity`` (default
-1000 m/s). These parameters stay fixed across resolutions and do not imply
-equal relaxation strength. The total-energy cases use Neumann polarisation
-AC, with closed radial Reynolds, E×B, viscous and polarisation transport faces
-for both fixed and no-slip walls.
-
-Energy is integrated over physical cells in joules for the represented box.
-**Shared FV energy** uses the same ion-only pressure potential and
-finite-volume kinetic-energy estimator in both formulations, plus ion and
-electron thermal energy. **Model energy** uses saved ``Eion`` plus electron
-thermal energy for total ion energy, and the finite-difference-X, spectral-Z
-quadratic energy for pressure evolution. The pressure formulation includes
-its signed electron-pressure contribution to the generalised potential.
-Its polarisation transport and viscous heating also differ, so this comparison
-changes more than the evolved variable. State outputs suffice for the analysis;
-``--diagnose`` enables additional operator checks.
-
-The relative-change panels show :math:`[E(t)-E(0)]/E(0)`. The final panel
-shows :math:`E_{\rm shared}-E_{\rm model}` in joules, measuring the choice of
-kinetic-energy discretisation and pressure potential. The thin **boundary
-balance residual** in the model-energy panel is
-
-.. math::
-
-   \frac{R(t)}{E_{\rm model}(0)}, \qquad
-   R(t) = E_{\rm model}(t)-E_{\rm model}(0)
-          + \int_0^t P_{\rm outward}(t')\,dt'.
-
-Positive outward power removes energy. In these total-energy cases the radial
-transport faces are closed, so the residual equals the raw energy change.
-The pressure formulation retains its raw drift; its boundary balance residual
-is unavailable because the analysis does not cover all polarisation exchanges
-and time-dependent generalised-potential boundary work.
-
-The state figure shows local ion internal energy density :math:`3P_i/2`
-from pressure evolution above :math:`K_\perp` from total ion energy. Both are
-in J/m\ :sup:`3`, with separate linear colour scales held fixed across times.
-The kinetic energy includes the combined E×B and diamagnetic drift, as defined
-in :ref:`sec-evolve_vorticity_ion_energy`. Only physical cells are plotted;
-their kinetic-energy stencil still uses the imposed wall guards. The
-energy-history figure integrates these densities over the physical volume.
-
-Each boundary policy produces state PNG/PDF figures, convergence PDFs, and
-CSV/JSON energy and error tables. Energy histories use one six-panel PNG by
-default; ``--energy-format pdf-panels`` exports six separate PDFs, each with
-its own labels and legend. Inputs, outputs, logs and a manifest are retained
-for ``--resume`` or ``--analyse-only``. See
-``tests/integrated/2D-energy/publication-study.md`` for the full interface.
-
-.. figure:: figs/2D-energy-comparison-state.png
-   :name: energy-comparison-state
-   :alt: Ion internal energy density above perpendicular kinetic energy density at four shared times.
-   :width: 100%
-
-   Ion internal energy density :math:`3P_i/2` from pressure evolution (top)
-   and perpendicular kinetic energy density from total ion energy (bottom),
-   on the :math:`32^2` grid at
-   :math:`t=(0, 2500, 5000, 10000)/\omega_{ci}`, where :math:`\omega_{ci}`
-   is the cyclotron frequency used for time normalisation. The lower row
-   starts with zero kinetic energy; curvature generates the subsequent flow.
-
-.. figure:: figs/2D-energy-comparison-energy.png
-   :name: energy-comparison-energy
-   :alt: Thermal and kinetic energy changes, shared and model energy drift, boundary balance residual and estimator difference on two grids.
-   :width: 100%
-
-   Thermal and perpendicular kinetic energy changes, relative total-energy
-   changes and estimator differences. Solid traces use :math:`32^2` cells;
-   dashed traces use :math:`16^2`. Parallel kinetic energy is zero. The thin
-   boundary balance residual is shown only for total ion energy, which
-   conserves combined total ion energy and electron thermal energy to
-   roundoff in these runs.
-
-2D-energy-publication-smoke
-~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-``tests/integrated/2D-energy-publication-smoke`` checks the publication study
-runner on two small grids, with both pressure and total-ion-energy formulations
-and fixed or solver-managed relaxing potential boundaries. It validates matched
-time-zero physical fields, regular shared output times, energy inventories and
-PDF/table generation, then repeats analysis from retained outputs. The smoke
-case is inviscid and short; publication resolution and temporal accuracy scans
-are explicit longer runs in ``tests/integrated/2D-energy/publication_scan.py``.
-
-The ``VorticityBoundaryTest`` unit tests check packing/unpacking the relaxing
-potential boundary state, repeated and earlier RHS evaluations, physical
-vorticity guards, the normalised boundary relaxation law, and migration of
-legacy restart files independently for each component instance.
-The ion-energy unit tests, including ``EvolveVorticityIonEnergyTest``,
-``IonEnergyWallDerivative`` and ``IonEnergyManyGuardsTest``, also check the
-centred midpoint derivative, velocity normalisation,
-weighted core midpoint and rate, all radial and AC modes, independent
-pressure-potential guards, complete radial guard filling, viscosity face
-closure, chi DC boundary conditions, rejection of conflicting options,
-solver-state storage and restart migration, and repeatability under
-reordered RHS evaluations.
+The legacy ``2D-energy`` regression retains its existing registration. The
+publication refinement scan is an example in
+``examples/tokamak-2D-driftplane/2D-energy``; it is run manually and has no CTest
+smoke test. Its README describes plotting dependencies and remote execution.
 
 2D-recycling
 ~~~~~~~~~~~~~~

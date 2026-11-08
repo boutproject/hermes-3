@@ -75,9 +75,15 @@ def energy_balance(
             result[name].attrs["units"] = "J"
     result.attrs = {
         "complete": complete,
-        "coverage": "supplied source and boundary powers"
-        if complete
-        else "source/boundary coverage incomplete",
+        "coverage": "complete" if complete else "incomplete",
+        "missing_terms": [
+            name
+            for name, power in (
+                ("external power", source_power),
+                ("wall power", outward_power),
+            )
+            if power is None
+        ],
         "time_spacing_s": dt,
         "reservoir": reservoir,
     }

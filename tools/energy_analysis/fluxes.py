@@ -25,7 +25,6 @@ from .transport import (
     flux_dataset,
     fv_xz,
     neighbor,
-    numerical_heating_defect,
     numerical_parallel_heating,
     parallel_flux,
     parallel_kinetic_flux,
@@ -155,7 +154,6 @@ def slab_contract(run):
         "quasineutral",
         "zero_current",
         "fixed_velocity",
-        "test_energy_sources",
     }
     for s in run.species:
         if abs(s.charge) <= 1e-5:
@@ -861,11 +859,6 @@ def reconstruct_fluxes(run, *, sources=None):
                     / q.charge
                 )
         result["electron_numerical_heating"] = heating
-        result["electron_heating_defect"] = (
-            e.mass * numerical_heating_defect(ds.Ne, ve, we, ds)
-            if ds.options["e"].get_bool("numerical_viscous_heating") and run.myg
-            else xr.zeros_like(phi)
-        )
         if "evolve_momentum" in e.components and periodic_y:
             families["electron_parallel_kinetic"] = (
                 parallel_kinetic_flux(ds.Ne, ve, we, ds, myg=run.myg) * e.mass

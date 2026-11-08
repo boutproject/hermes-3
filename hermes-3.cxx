@@ -23,11 +23,6 @@
 #include "hermes-3.hxx"
 #include "revision.hxx"
 
-#ifdef HERMES_TEST_ENERGY_SOURCES
-#include "tests/integrated/3D-ion-energy-mms/compiled_sources.hxx"
-#include "tests/integrated/test_energy_sources.hxx"
-#endif
-
 #include "include/adas_carbon.hxx"
 #include "include/adas_lithium.hxx"
 #include "include/adas_neon.hxx"

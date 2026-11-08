@@ -1882,7 +1882,7 @@ strength of the previous timescale law at that resolution. With a fixed
 velocity, fixed vorticity and negligible evolution of the mean pressure
 potential, the rigid-rotation relaxation time in a slab of physical width
 :math:`L` is :math:`L/(2\kappa)`. The
-:ref:`radial-boundary regression <subsec-2d-ion-energy-radial-boundary>`
+:ref:`radial-boundary regression <subsec-ion-energy-tests>`
 isolates this limit using cold, uniform ions. An evolving pressure potential
 can change the measured potential relaxation time in warm-ion runs.
 
@@ -1909,8 +1909,8 @@ would introduce a first-order wall-rate error. Multiplication by
 :math:`M_b` converts the coordinate derivative to a normal derivative.
 For 3D metrics, the geometry is averaged over Z before taking this square root.
 The :ref:`quadratic wall-relaxation regression
-<subsec-2d-ion-energy-quadratic-wall-relaxation>` checks both the instantaneous
-rate and the integrated midpoint drift at several radial resolutions.
+<subsec-ion-energy-tests>` checks the integrated midpoint drift at 16 radial cells. C++ unit tests check
+the exact quadratic derivative and boundary rate.
 The boundary state is integrated by the time solver and saved in restarts.
 All wall modes require at least two radial guard cells, complete periodic Z
 lines on each rank, and evolving ``Vort`` boundaries. The component automatically
@@ -2039,10 +2039,9 @@ solver subsection, ``Vort:bndry_xin``, ``Vort:bndry_xout`` and explicit
 ``Vort:evolve_bndry=false`` are rejected by the constructor, including for
 periodic X.
 
-The removed ion-energy options ``phi_boundary_relax``, ``phi_core_averagey``
-and ``neumann_boundary_average_z`` are not read and fail the unused-option
-check. ``phi_boundary_velocity`` is read only for ``no_slip``. Periodic X
-skips radial wall logic.
+The ion-energy radial wall model is selected by ``radial_boundary``.
+``phi_boundary_velocity`` is read only for ``no_slip``. Periodic X skips radial
+wall logic.
 
 The default outputs are ``Eion``, ``Tion``, ``Vort`` and ``phi``.
 Pressure/potential recovery starts from the phi and perpendicular kinetic

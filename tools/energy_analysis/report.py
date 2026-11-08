@@ -3,7 +3,6 @@
 import subprocess
 import sys
 from dataclasses import asdict
-from importlib.metadata import version
 from pathlib import Path
 
 import numpy as np
@@ -25,6 +24,89 @@ def revision(path):
     }
 
 
+def summary(run):
+    """JSON-serialisable inventories, recovery, drift and power coverage."""
+    from scipy.integrate import cumulative_trapezoid
+
+    from .budgets import closed_balance, particle_inventory, source_balance
+    from .dataset import AuditError
+    from .sources import external_power
+    from .transfers import (
+        collisional_heat_exchange,
+        electron_curvature_work,
+        integrated_power,
+    )
+    from .walls import wall_budget
+
+    densities = energy_densities(run)
+    inventory = energy_inventory(run, densities=densities).compute()
+    particles = particle_inventory(run).compute()
+    drift, power, walls = closed_balance(run), external_power(run), wall_budget(run)
+    report = {
+        "source": run.source,
+        "time_s": inventory.t.values.tolist(),
+        "inventory_J": {name: inventory[name].values.tolist() for name in inventory},
+        "particles": {name: particles[name].values.tolist() for name in particles},
+        "closed_balance": {
+            "coverage": drift.attrs["coverage"],
+            "missing_terms": drift.attrs["missing_terms"],
+            "maxima": {
+                name: float(abs(drift[name]).max())
+                for name in drift
+                if name.endswith("relative_drift")
+            },
+        },
+        "external_power": {
+            "coverage": power.attrs["coverage"],
+            "missing_terms": power.attrs["missing_terms"],
+            "terms": {name: power[name].values.tolist() for name in power},
+        },
+        "wall_budget": {
+            "coverage": walls.attrs["coverage"],
+            "missing_terms": walls.attrs["missing_terms"],
+        },
+        "diagnostics": compare_diagnostics(run, densities=densities),
+    }
+    if run.formulation == "total_energy":
+        report["recovery_error"] = float(
+            abs(run.interior(densities.ion_reconstructed - run.data.Eion)).max()
+        )
+    for name in ("ion_perpendicular", "ion_parallel"):
+        report[name + "_change_relative"] = float(
+            abs(inventory[name] - inventory[name].isel(t=0)).max()
+            / max(abs(float(inventory.plasma_native.isel(t=0))), np.finfo(float).tiny)
+        )
+    try:
+        exchange = integrated_power(run, electron_curvature_work(run))
+        report["curvature_exchange_relative"] = float(
+            np.max(abs(cumulative_trapezoid(exchange, x=inventory.t, initial=0)))
+        ) / max(abs(float(inventory.plasma_native.isel(t=0))), np.finfo(float).tiny)
+    except AuditError as error:
+        report["curvature_exchange"] = {
+            "coverage": "incomplete",
+            "missing_terms": [str(error)],
+        }
+    exchange = collisional_heat_exchange(run)
+    if exchange:
+        report["collisional_heat_exchange"] = {
+            "coverage": exchange.attrs["coverage"],
+            "missing_terms": exchange.attrs["missing_terms"],
+            "power_W": {name: exchange[name].values.tolist() for name in exchange},
+        }
+    if inventory.sizes["t"] >= 2:
+        balance = source_balance(run)
+        report["source_balance"] = {
+            "coverage": balance.attrs["coverage"],
+            "missing_terms": balance.attrs["missing_terms"],
+            "maxima": {
+                name: float(abs(balance[name]).max())
+                for name in balance
+                if name.endswith("relative_residual")
+            },
+        }
+    return report
+
+
 def inventory_report(run):
     densities = energy_densities(run)
     inventory = energy_inventory(run, densities=densities).compute()
@@ -35,18 +117,10 @@ def inventory_report(run):
         else None
     )
     forward = run.interior(densities.vorticity_reconstructed - run.data.Vort)
-    import xhermes
-
-    checkout = Path(xhermes.__file__).resolve().parents[1]
     report = {
         "schema_version": 1,
         "source": run.source,
         "python": sys.executable,
-        "xhermes": {
-            "version": version("xhermes"),
-            "path": str(checkout),
-            **revision(checkout),
-        },
         "hermes_revision": run.data.metadata.get("HERMES_REVISION"),
         "analysis_checkout": revision(Path(__file__).resolve().parents[2]),
         "run_id": run.data.metadata.get("run_id"),

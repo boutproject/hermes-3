@@ -1,0 +1,3 @@
+sympy
+numpy
+boutdata

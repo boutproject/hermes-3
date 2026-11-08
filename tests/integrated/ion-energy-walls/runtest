@@ -1,0 +1,159 @@
+#!/usr/bin/env python3
+"""Radial wall budgets, analytic wall motion and restart round trips."""
+
+import sys
+from pathlib import Path
+
+import numpy as np
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "tools"))
+from energy_analysis import source_balance, summary, wall_budget
+from energy_analysis.budgets import particle_inventory
+from energy_analysis.testing import Study, parser, state_difference
+from energy_analysis.walls import rotation_decay, uniform_drift
+from scipy.integrate import cumulative_trapezoid
+
+HERE = Path(__file__).resolve().parent
+
+
+def overrides(mode, ac, *, nx=16, profile="perturbed", outputs=None):
+    args = [
+        "restart=false",
+        f"mesh:nx={nx + 4}",
+        f"evolve_vorticity_ion_energy:radial_boundary={mode}",
+        f"evolve_vorticity_ion_energy:polarisation_ac_boundary={ac}",
+        f"evolve_vorticity_ion_energy:viscosity={0.02 if mode == 'free_slip' else 0}",
+        f"evolve_vorticity_ion_energy:diagnose={str(mode == 'fixed' and ac == 'dirichlet').lower()}",
+    ]
+    if profile in ("rigid", "uniform"):
+        args += [
+            "mesh:nz=4",
+            "Pe:function=1e-6",
+            f"Eion:function=wall:{profile}_energy",
+            f"Vort:function=wall:{profile}_vort",
+            "solver:output_step=wall:rotation_step",
+            f"solver:nout={outputs if outputs is not None else 81}",
+        ]
+    else:
+        args += [
+            "solver:output_step=0.01",
+            f"solver:nout={outputs if outputs is not None else 2}",
+        ]
+    return args
+
+
+def audit(study, run, label):
+    report = summary(run)
+    study.result["cases"][label]["summary"] = report
+    study.check("recovery/" + label, report["recovery_error"], "recovery")
+    budget = wall_budget(run)
+    # Open AC faces have deliberately incomplete coverage without chi.
+    expect_complete = not ("dirichlet" in label and not label.startswith("fixed"))
+    study.check(
+        "coverage/" + label,
+        int((budget.attrs["coverage"] == "complete") != expect_complete),
+        limit=0,
+    )
+    if budget.attrs["coverage"] == "complete":
+        balance = source_balance(run)
+        study.check(
+            "energy/" + label, float(abs(balance.relative_residual).max()), "energy"
+        )
+        for name in balance:
+            if name.startswith("particles_") and name.endswith("relative_residual"):
+                study.check(
+                    name + "/" + label, float(abs(balance[name]).max()), "particles"
+                )
+    vort = particle_inventory(run).vorticity
+    supplied = cumulative_trapezoid(budget.vorticity_rate, x=vort.t, initial=0)
+    volume = float(run.integrate(run.data.Pe.isel(t=0) * 0 + 1))
+    study.check(
+        "vorticity/" + label,
+        float(np.max(abs(np.asarray(vort - vort.isel(t=0)) - supplied))) / volume,
+        "vorticity",
+    )
+    if "no_slip" not in label:
+        study.check(
+            "fixed_phi/" + label,
+            float(abs(budget.phi_boundary - budget.phi_boundary.isel(t=0)).max()),
+            "wall_fixed",
+        )
+    return budget
+
+
+def main():
+    args = parser(__doc__).parse_args()
+    with Study(HERE, args) as study:
+        runs, rotations = {}, []
+        for mode in ("fixed", "free_slip", "no_slip"):
+            for ac in ("neumann", "dirichlet"):
+                label = mode + "-" + ac
+                profile = (
+                    "rigid"
+                    if label == "no_slip-neumann"
+                    else "uniform"
+                    if label == "no_slip-dirichlet"
+                    else "perturbed"
+                )
+                runs[label] = study.run(label, overrides(mode, ac, profile=profile))
+                audit(study, runs[label], label)
+        rotations.append(rotation_decay(runs["no_slip-neumann"]))
+        fine = study.run(
+            "rigid-32", overrides("no_slip", "neumann", nx=32, profile="rigid")
+        )
+        rotations.append(rotation_decay(fine))
+        study.result["rotation_decay"] = rotations
+        for nx, rotation in zip((16, 32), rotations):
+            study.check(f"tau/{nx}", rotation["tau_relative_error"], "tau")
+        study.check(
+            "tau_spread",
+            np.ptp([r["fitted_tau"] / r["tau"] for r in rotations]),
+            "tau_spread",
+        )
+        study.check(
+            "amplitude_order",
+            np.log2(rotations[0]["amplitude_error"] / rotations[1]["amplitude_error"]),
+            "amplitude_order",
+            minimum=True,
+        )
+        study.check(
+            "uniform_drift", uniform_drift(runs["no_slip-dirichlet"]), "uniform_drift"
+        )
+        # Each reference above is uninterrupted. Stop an independent run one
+        # output earlier, then restart for one output to reach the same time.
+        for mode, profile, outputs in (
+            ("fixed", "perturbed", 1),
+            ("no_slip", "rigid", 80),
+        ):
+            short = study.run(
+                mode + "-checkpoint",
+                [
+                    *overrides(mode, "neumann", profile=profile, outputs=outputs),
+                    "evolve_vorticity_ion_energy:diagnose=true",
+                ],
+            )
+            audit(study, short, mode + "-checkpoint")
+            study.check(
+                "diagnostics_state/" + mode,
+                state_difference(runs[mode + "-neumann"], short, first_index=outputs),
+                "diagnostics",
+            )
+            resumed = study.run(
+                mode + "-restart",
+                [
+                    *overrides(mode, "neumann", profile=profile, outputs=1),
+                    "restart=true",
+                    "append=false",
+                    "dump_on_restart=true",
+                ],
+                restart=short.source,
+            )
+            study.check(
+                "restart/" + mode,
+                state_difference(runs[mode + "-neumann"], resumed),
+                "restart",
+            )
+
+
+if __name__ == "__main__":
+    main()

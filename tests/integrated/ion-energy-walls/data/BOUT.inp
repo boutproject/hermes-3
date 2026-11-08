@@ -1,0 +1,143 @@
+# Orthogonal slab with native initial profiles and finite-volume wall states.
+NXPE = 1
+MYG = 0
+MXG = 2
+periodicX = false
+ZMAX = 10 / (2*pi)
+restart = false
+append = false
+dump_on_restart = true
+
+[mesh]
+symmetricGlobalX = true
+dy = 1
+nx = 20
+ny = 1
+nz = 16
+dx = 10 / (nx - 4)
+dz = 10 / nz
+hthe = 1
+Bxy = 1
+bxcvx = 0
+bxcvy = 0
+bxcvz = 0
+# Explicit SI metric pairs avoid assumptions about B normalisation during
+# metric recalculation; both formulations normalise these identically.
+g11 = 1
+g22 = 1/hthe^2
+g33 = 1
+g12 = 0
+g13 = 0
+g23 = 0
+g_11 = 1/g11
+g_22 = 1
+g_33 = 1
+g_12 = 0
+g_13 = 0
+g_23 = 0
+J = 1
+
+[mesh:paralleltransform]
+type = identity
+
+[mesh:ddz]
+first = FFT
+fft_filter = 0
+
+[solver]
+type = cvode
+nout = 10
+output_step = 1
+atol = 1e-15
+rtol = 1e-12
+max_timestep = 1
+mxstep = 1e6
+
+[hermes]
+components = e, h+, evolve_vorticity_ion_energy
+recalculate_metric = false
+normalise_metric = false
+Nnorm = 2e18
+Bnorm = 1
+Tnorm = 1
+
+[e]
+type = quasineutral, evolve_pressure
+charge = -1
+AA = 1/1836
+bndry_flux = false
+poloidal_flows = false
+thermal_conduction = false
+density_floor = 1e-7
+low_p_diffuse_perp = false
+low_T_diffuse_perp = false
+damp_p_nt = false
+p_div_v = false
+numerical_viscous_heating = false
+hyper_z = -1
+evolve_log = false
+diagnose = true
+
+[h+]
+type = evolve_density
+charge = 1
+AA = 1
+bndry_flux = false
+poloidal_flows = false
+density_floor = 1e-7
+low_n_diffuse = false
+low_n_diffuse_perp = false
+hyper_z = -1
+evolve_log = false
+diagnose = true
+
+
+[Nh+]
+function = 1
+source = 0
+bndry_all = neumann
+
+[Pe]
+function = 1 + 0.1*cos(z)
+source = 0
+bndry_all = neumann
+
+[Vort]
+function = 1e-6 + 1e-5*sin(2*pi*x)*cos(z)
+bndry_all = neumann
+
+[Eion]
+function = 1.5*Pe:function
+bndry_all = neumann
+
+[evolve_vorticity_ion_energy]
+average_atomic_mass = 1
+poloidal_flows = false
+viscosity = 0
+radial_boundary = fixed
+diagnose = true
+phi_rtol = 1e-11
+phi_atol = 1e-3
+vort_atol = 1e-14
+phi_max_iterations = 200
+phi_boundary_velocity = 1000
+
+[evolve_vorticity_ion_energy:laplacian]
+type = cyclic
+
+[input]
+error_on_unused_options = false
+
+[wall]
+# Native geometry is a normalised, 10-unit Cartesian slab. Symmetric GlobalX
+# is the physical cell-centre fraction; these polynomial profiles give matched
+# finite-volume energy and vorticity, including arithmetic wall midpoints.
+h = 1 / (mesh:nx - 4)
+rigid_phi = 1e-4 * (x^3/6 - x^2/4 + x/12 + h^2*(1-2*x)/16)
+rigid_vort = 1e-6 * (x - 0.5)
+rigid_energy = 1.5e-6 + 0.25/(mesh:dx^2) * ((1e-4*((x+h)^3/6-(x+h)^2/4+(x+h)/12+h^2*(1-2*(x+h))/16)-rigid_phi)^2 + (rigid_phi-1e-4*((x-h)^3/6-(x-h)^2/4+(x-h)/12+h^2*(1-2*(x-h))/16))^2)
+uniform_phi = 5e-9 * (100*x*(x-1) - mesh:dx^2/4)
+uniform_vort = 1e-8
+uniform_energy = 1.5e-6 + 5e-17 * ((10*x-5)^2 + mesh:dx^2/4)
+# tau_normalised = L * Cs0 / (2*kappa); Cs0=sqrt(qe*Tnorm/mp).
+rotation_step = 10 * 9787.151425755137 / (2*1000) / 20

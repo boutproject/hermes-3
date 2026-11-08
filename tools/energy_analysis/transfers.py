@@ -1,5 +1,6 @@
 """Limited snapshot reconstruction of internal energy transfer in slab cases."""
 
+import numpy as np
 import xarray as xr
 
 from .dataset import AuditError
@@ -61,6 +62,102 @@ def integrated_power(run, density):
         "provenance": density.attrs.get("provenance", "supplied"),
     }
     return result
+
+
+def collisional_heat_exchange(run):
+    """Reconstruct Braginskii electron-ion heat transfer in a common-T slab.
+
+    Ion-ion heat transfer is exactly zero with a common ion temperature.
+    Frequencies use the component's NRL Coulomb logarithm and SI constants;
+    the returned per-species powers cancel in the plasma reservoir.
+    """
+    from scipy.constants import electron_mass as me
+    from scipy.constants import elementary_charge as qe
+    from scipy.constants import epsilon_0
+    from scipy.constants import proton_mass as mp
+
+    from .inventory import soft_floor
+    from .sources import components, coverage, option_bool
+
+    ds = run.data
+    zero = xr.zeros_like(ds.Pe)
+    fields = {s.name: zero.copy() for s in run.species}
+    collision = next(
+        (name for name, kind in components(run) if kind == "braginskii_collisions"),
+        None,
+    )
+    exchange = any(kind == "braginskii_heat_exchange" for _, kind in components(run))
+    if not collision or not exchange:
+        return coverage(xr.Dataset())
+    electron = next(s for s in run.species if s.name == "e")
+    if option_bool(ds.options[collision], "electron_ion", True):
+        temperature = ds.metadata["Tnorm"]
+        density = ds.metadata["Nnorm"]
+        te = ds.Pe / ds.Ne * temperature
+        ti = ds.Tion * temperature
+        ne = ds.Ne * density
+        multiplier = (
+            float(ds.options[collision].evaluate_scalar("ei_multiplier"))
+            if "ei_multiplier" in ds.options[collision]
+            else 1.0
+        )
+        for ion in run.species:
+            if ion.name == "e" or ion.charge <= 0:
+                continue
+            ni = ds["N" + ion.name] * density
+            ratio = me / (mp * ion.mass)
+            log = xr.where(
+                (te < 0.1) | (ni < 1e10) | (ne < 1e10),
+                10,
+                xr.where(
+                    te < ti * ratio,
+                    23
+                    - 0.5 * np.log(ni)
+                    + 1.5 * np.log(ti)
+                    - np.log(ion.charge**2 * ion.mass),
+                    xr.where(
+                        te < np.exp(2) * ion.charge**2,
+                        30 - 0.5 * np.log(ne) - np.log(ion.charge) + 1.5 * np.log(te),
+                        31 - 0.5 * np.log(ne) + np.log(te),
+                    ),
+                ),
+            )
+            ve2 = 2 * soft_floor(te, 0.1) * qe / me
+            vi2 = 2 * soft_floor(ti, 0.1) * qe / (mp * ion.mass)
+            frequency = (
+                qe**4
+                * ion.charge**2
+                * ni.clip(min=0)
+                * soft_floor(log, 1)
+                * (1 + ratio)
+                / (3 * (np.pi * (ve2 + vi2)) ** 1.5 * (epsilon_0 * me) ** 2)
+                * multiplier
+                / run.frequency
+            )
+            transfer = (
+                3
+                * electron.mass
+                / (electron.mass + ion.mass)
+                * frequency
+                * ds.Ne
+                * (ds.Tion - ds.Pe / ds.Ne)
+            )
+            fields["e"] = fields["e"] + transfer
+            fields[ion.name] = fields[ion.name] - transfer
+    result = xr.Dataset()
+    for name, field in fields.items():
+        field.attrs.update(
+            units_type="hermes", provenance="reconstructed Braginskii heat exchange"
+        )
+        result[name] = integrated_power(run, field)
+    result["net"] = sum(result.values())
+    result["net"].attrs["units"] = "W"
+    missing = (
+        ["neutral collisional heat exchange"]
+        if any(s.charge == 0 for s in run.species)
+        else []
+    )
+    return coverage(result, missing)
 
 
 def polarisation_energy_coefficient(run):
