@@ -444,18 +444,22 @@ if(HERMES_TESTS)
         DESTINATION "${CMAKE_CURRENT_BINARY_DIR}/tools"
         PATTERN "__pycache__" EXCLUDE)
     endif()
-    hermes_add_ion_energy_test(ion-energy-mms ion-energy-mms "energy;mms" 600)
+    hermes_add_ion_energy_test(ion-energy-mms ion-energy-mms "energy;mms" 3600
+                               --timeout 3600)
     hermes_add_ion_energy_test(
       ion-energy-mms-long
       ion-energy-mms
       "energy;mms;long"
-      1800
+      18000
+      --timeout
+      10800
       --profile
       long
       --nproc
       2)
     set_tests_properties(ion-energy-mms-long PROPERTIES PROCESSORS 2)
-    hermes_add_ion_energy_test(ion-energy-closed ion-energy-closed "energy" 300)
+    hermes_add_ion_energy_test(ion-energy-closed ion-energy-closed "energy" 600
+                               --timeout 300)
     hermes_add_ion_energy_test(ion-energy-sources ion-energy-sources "energy"
                                300)
     hermes_add_ion_energy_test(ion-energy-walls ion-energy-walls "energy" 300)

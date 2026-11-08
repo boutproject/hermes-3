@@ -11,16 +11,17 @@ dump_on_restart = true
 [mesh]
 symmetricGlobalX = true
 dy = 1
-nx = 20
+nx = 12
 ny = 1
-nz = 16
+nz = 8
 dx = 10 / (nx - 4)
 dz = 10 / nz
 hthe = 1
 Bxy = 1
 bxcvx = 0
 bxcvy = 0
-bxcvz = 0
+Rxy = 1.5
+bxcvz = 100 / Rxy^2
 # Explicit SI metric pairs avoid assumptions about B normalisation during
 # metric recalculation; both formulations normalise these identically.
 g11 = 1
@@ -46,10 +47,12 @@ fft_filter = 0
 
 [solver]
 type = cvode
+adams_moulton = true
+func_iter = true
 nout = 10
 output_step = 1
-atol = 1e-15
-rtol = 1e-12
+atol = 1e-10
+rtol = 1e-6
 max_timestep = 1
 mxstep = 1e6
 
@@ -98,12 +101,14 @@ source = 0
 bndry_all = neumann
 
 [Pe]
-function = 1 + 0.1*cos(z)
+function = 1 + 0.2*sin(pi*x)^2*cos(2*pi*z/10)
 source = 0
 bndry_all = neumann
 
 [Vort]
-function = 1e-6 + 1e-5*sin(2*pi*x)*cos(z)
+# A predominantly odd DC profile drives wall rotation, with a finite mean
+# inventory for the viscous-flux minimum and a nonlinear periodic perturbation.
+function = 0.15*sin(pi*x)^2*(0.05 + sin(2*pi*x) + 0.4*cos(2*pi*z/10))
 bndry_all = neumann
 
 [Eion]
@@ -116,7 +121,7 @@ poloidal_flows = false
 viscosity = 0
 radial_boundary = fixed
 diagnose = true
-phi_rtol = 1e-11
+phi_rtol = 1e-12
 phi_atol = 1e-3
 vort_atol = 1e-14
 phi_max_iterations = 200

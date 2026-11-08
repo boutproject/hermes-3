@@ -44,14 +44,16 @@ def main():
                     study.check(name + "/" + label, value, "particles")
         sampling = cadence_comparison(balances[-1], balances[1])
         study.result["cadence_comparison"] = sampling
-        for label, balance in zip(("diagnostics", "plain"), balances[:2]):
+        for label, balance, run in zip(
+            ("diagnostics", "plain"), balances[:2], runs[:2]
+        ):
             energy = max(float(abs(balance.source_energy).max()), np.finfo(float).tiny)
             error = max(
                 0,
                 float(abs(balance.residual).max())
                 - sampling["estimated_fine_sampling_error_J"],
             )
-            study.check("source_balance/" + label, error / energy, "energy")
+            study.check("source_balance/" + label, error / energy, "energy", run=run)
         study.check("diagnostics_state", state_difference(*runs[:2]), "diagnostics")
 
 

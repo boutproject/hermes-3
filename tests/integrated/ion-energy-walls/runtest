@@ -2,32 +2,39 @@
 """Radial wall budgets, analytic wall motion and restart round trips."""
 
 import sys
+from dataclasses import replace
 from pathlib import Path
 
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "tools"))
-from energy_analysis import source_balance, summary, wall_budget
+from energy_analysis import perpendicular_operator, source_balance, summary, wall_budget
 from energy_analysis.budgets import particle_inventory
+from energy_analysis.inventory import energy_inventory
 from energy_analysis.testing import Study, parser, state_difference
 from energy_analysis.walls import rotation_decay, uniform_drift
 from scipy.integrate import cumulative_trapezoid
 
 HERE = Path(__file__).resolve().parent
+OUTPUTS = 200
+OUTPUT_STEP = 2
 
 
-def overrides(mode, ac, *, nx=16, profile="perturbed", outputs=None):
+def overrides(mode, ac, *, nx=8, profile="perturbed", outputs=None):
     args = [
         "restart=false",
         f"mesh:nx={nx + 4}",
         f"evolve_vorticity_ion_energy:radial_boundary={mode}",
         f"evolve_vorticity_ion_energy:polarisation_ac_boundary={ac}",
         f"evolve_vorticity_ion_energy:viscosity={0.02 if mode == 'free_slip' else 0}",
-        f"evolve_vorticity_ion_energy:diagnose={str(mode == 'fixed' and ac == 'dirichlet').lower()}",
+        f"evolve_vorticity_ion_energy:diagnose={str(ac == 'dirichlet').lower()}",
     ]
     if profile in ("rigid", "uniform"):
         args += [
             "mesh:nz=4",
+            "mesh:bxcvz=0",
+            "solver:atol=1e-15",
+            "solver:rtol=1e-12",
             "Pe:function=1e-6",
             f"Eion:function=wall:{profile}_energy",
             f"Vort:function=wall:{profile}_vort",
@@ -36,33 +43,38 @@ def overrides(mode, ac, *, nx=16, profile="perturbed", outputs=None):
         ]
     else:
         args += [
-            "solver:output_step=0.01",
-            f"solver:nout={outputs if outputs is not None else 2}",
+            f"solver:output_step={OUTPUT_STEP}",
+            f"solver:nout={outputs if outputs is not None else OUTPUTS}",
         ]
     return args
 
 
-def audit(study, run, label):
+def audit(study, run, label, *, nonlinear=False):
     report = summary(run)
-    study.result["cases"][label]["summary"] = report
+    study.result["cases"][Path(run.source).name]["summary"] = report
     study.check("recovery/" + label, report["recovery_error"], "recovery")
     budget = wall_budget(run)
-    # Open AC faces have deliberately incomplete coverage without chi.
-    expect_complete = not ("dirichlet" in label and not label.startswith("fixed"))
     study.check(
         "coverage/" + label,
-        int((budget.attrs["coverage"] == "complete") != expect_complete),
-        limit=0,
+        int(budget.attrs["coverage"] != "complete"),
+        "coverage",
     )
+    open_faces = "dirichlet" in label or label.startswith("free_slip")
     if budget.attrs["coverage"] == "complete":
         balance = source_balance(run)
         study.check(
-            "energy/" + label, float(abs(balance.relative_residual).max()), "energy"
+            "energy/" + label,
+            float(abs(balance.relative_residual).max()),
+            "open_energy" if open_faces else "energy",
+            run=run,
         )
         for name in balance:
             if name.startswith("particles_") and name.endswith("relative_residual"):
                 study.check(
-                    name + "/" + label, float(abs(balance[name]).max()), "particles"
+                    name + "/" + label,
+                    float(abs(balance[name]).max()),
+                    "open_particles" if open_faces else "particles",
+                    run=run,
                 )
     vort = particle_inventory(run).vorticity
     supplied = cumulative_trapezoid(budget.vorticity_rate, x=vort.t, initial=0)
@@ -78,6 +90,81 @@ def audit(study, run, label):
             float(abs(budget.phi_boundary - budget.phi_boundary.isel(t=0)).max()),
             "wall_fixed",
         )
+    if nonlinear:
+        # The initial inverse ExB shear is a characteristic turnover time in
+        # this B=1 slab. Record the duration in those units as well as the
+        # inventory changes, rather than relying on output count alone.
+        shear = perpendicular_operator(
+            1, run.data.phi.isel(t=0), run.data, mxg=run.mxg
+        ).divergence
+        turns = float(run.data.t[-1] - run.data.t[0]) * float(
+            abs(run.interior(shear)).max()
+        )
+        study.check("eddy_turnovers/" + label, turns, "eddy_turnovers", minimum=True)
+        study.check(
+            "kperp_change/" + label,
+            report["ion_perpendicular_change_relative"],
+            "kperp_change",
+            minimum=True,
+        )
+        inventory = energy_inventory(run)
+        initial_energy = float(inventory.plasma_native.isel(t=0))
+        cumulative = lambda rate: float(
+            cumulative_trapezoid(rate, x=budget.t, initial=0)[-1]
+        )
+        if "dirichlet" in label:
+            study.check(
+                "chi_energy/" + label,
+                cumulative(budget.polarisation_absolute) / initial_energy,
+                "chi_energy",
+                minimum=True,
+            )
+            particles = particle_inventory(run)
+            for species in run.species:
+                key = "particles_absolute_" + species.name
+                if key in budget:
+                    study.check(
+                        "chi_particles/" + species.name + "/" + label,
+                        cumulative(budget[key])
+                        / float(particles["particles_" + species.name].isel(t=0)),
+                        "chi_particles",
+                        minimum=True,
+                    )
+        if label.startswith("free_slip"):
+            scale = float(abs(vort).max())
+            study.check(
+                "viscous_vorticity/" + label,
+                cumulative(budget.viscous_vorticity_absolute)
+                / max(scale, np.finfo(float).tiny),
+                "viscous_vorticity",
+                minimum=True,
+            )
+        if label.startswith("no_slip"):
+            mean_phi = run.interior(run.data.phi).mean("z")
+            scale = float(abs(mean_phi - mean_phi.isel(t=0)).max())
+            change = float(
+                abs(budget.phi_boundary - budget.phi_boundary.isel(t=0)).max()
+            )
+            study.check(
+                "wall_motion/" + label,
+                change / max(scale, np.finfo(float).tiny),
+                "wall_motion",
+                minimum=True,
+            )
+            if "dirichlet" in label:
+                chi, rate = run.data.ion_chi, run.data.phi_wall_rate
+                for side, cell, guard in (
+                    ("inner", run.mxg, run.mxg - 1),
+                    ("outer", -run.mxg - 1, -run.mxg),
+                ):
+                    midpoint = ((chi.isel(x=cell) + chi.isel(x=guard)) / 2).mean("z")
+                    saved = rate.isel(x=guard).mean("z")
+                    if run.myg:
+                        midpoint = midpoint.isel(y=slice(run.myg, -run.myg))
+                        saved = saved.isel(y=slice(run.myg, -run.myg))
+                    study.check(
+                        "chi_dc/" + side, float(abs(midpoint - saved).max()), "chi_dc"
+                    )
     return budget
 
 
@@ -88,27 +175,46 @@ def main():
         for mode in ("fixed", "free_slip", "no_slip"):
             for ac in ("neumann", "dirichlet"):
                 label = mode + "-" + ac
-                profile = (
-                    "rigid"
-                    if label == "no_slip-neumann"
-                    else "uniform"
-                    if label == "no_slip-dirichlet"
-                    else "perturbed"
-                )
-                runs[label] = study.run(label, overrides(mode, ac, profile=profile))
-                audit(study, runs[label], label)
-        rotations.append(rotation_decay(runs["no_slip-neumann"]))
-        fine = study.run(
-            "rigid-32", overrides("no_slip", "neumann", nx=32, profile="rigid")
+                runs[label] = study.run(label, overrides(mode, ac))
+                audit(study, runs[label], label, nonlinear=True)
+        diagnosed = runs["no_slip-dirichlet"]
+        diagnostic_names = [
+            name
+            for name in diagnosed.data
+            if name.startswith(("ion_", "Div", "ddt(", "particle_pol_", "S"))
+            or name
+            in (
+                "phi_wall_rate",
+                "kinematic_viscosity",
+                "kinematic_viscous_heating",
+                "electron_viscous_heating",
+                "Eion_src",
+            )
+        ]
+        stripped = replace(diagnosed, data=diagnosed.data.drop_vars(diagnostic_names))
+        incomplete = wall_budget(stripped)
+        study.check(
+            "coverage/stripped",
+            int(incomplete.attrs["coverage"] != "incomplete"),
+            "coverage",
         )
-        rotations.append(rotation_decay(fine))
+        study.result["stripped_wall_coverage"] = dict(incomplete.attrs)
+        rigid_runs = []
+        for nx in (16, 32):
+            rigid = study.run(
+                f"rigid-{nx}", overrides("no_slip", "neumann", nx=nx, profile="rigid")
+            )
+            rigid_runs.append(rigid)
+            audit(study, rigid, f"no_slip-rigid-{nx}")
+            rotations.append(rotation_decay(rigid))
         study.result["rotation_decay"] = rotations
-        for nx, rotation in zip((16, 32), rotations):
-            study.check(f"tau/{nx}", rotation["tau_relative_error"], "tau")
+        for nx, rotation, run in zip((16, 32), rotations, rigid_runs):
+            study.check(f"tau/{nx}", rotation["tau_relative_error"], "tau", run=run)
         study.check(
             "tau_spread",
             np.ptp([r["fitted_tau"] / r["tau"] for r in rotations]),
             "tau_spread",
+            run=rigid_runs[-1],
         )
         study.check(
             "amplitude_order",
@@ -116,14 +222,18 @@ def main():
             "amplitude_order",
             minimum=True,
         )
+        uniform = study.run(
+            "uniform-16", overrides("no_slip", "neumann", nx=16, profile="uniform")
+        )
+        audit(study, uniform, "no_slip-uniform-16")
         study.check(
-            "uniform_drift", uniform_drift(runs["no_slip-dirichlet"]), "uniform_drift"
+            "uniform_drift", uniform_drift(uniform), "uniform_drift", run=uniform
         )
         # Each reference above is uninterrupted. Stop an independent run one
         # output earlier, then restart for one output to reach the same time.
         for mode, profile, outputs in (
-            ("fixed", "perturbed", 1),
-            ("no_slip", "rigid", 80),
+            ("fixed", "perturbed", OUTPUTS - 1),
+            ("no_slip", "perturbed", OUTPUTS - 1),
         ):
             short = study.run(
                 mode + "-checkpoint",
@@ -152,6 +262,7 @@ def main():
                 "restart/" + mode,
                 state_difference(runs[mode + "-neumann"], resumed),
                 "restart",
+                run=resumed,
             )
 
 

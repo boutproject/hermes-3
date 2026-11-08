@@ -1,19 +1,18 @@
 # Physical sources and ion energy conversion
 
-A uniform periodic two-ion slab combines electron pressure heating, positive
-and negative density sources on moving ions, and Braginskii collisional heat
-exchange. The shared analysis reconstructs source powers from resolved options
-and saved state, checks energy and particle balances, and compares two output
-cadences to estimate trapezoidal sampling error. Diagnostics on/off runs must
-produce the same final state.
+A periodic two-ion slab combines electron heating, density injection/removal
+on moving ions and Braginskii heat exchange. Analysis reconstructs source
+powers from resolved options and saved state, and uses two output cadences to
+estimate trapezoidal sampling error. After subtracting that estimate, the
+energy residual uses `max(1e-10, rtol_factor * solver:rtol)`. Particle balances,
+recovery and diagnostics on/off state differences use a fixed `1e-10` limit.
 
 ```sh
 python tests/integrated/ion-energy-sources/runtest --exe build/hermes-3
 ```
 
-`result.json` contains source terms, coverage, cadence estimates, hashes, logs
-and all checks. `criteria.json` records limits and observations.
-No sheaths or parallel current are present. Friction is omitted because the
-zero-current electron closure has no evolved electron kinetic reservoir for
-its mechanical work. Existing C++ injection/removal unit tests cover momentum
-source conversion. Collisional heat exchange is an internal transfer.
+`result.json` contains effective limits, source coverage, cadence estimates,
+input hashes and execution times; `criteria.json` records observations.
+There are no sheaths or parallel current. Friction is omitted because the
+zero-current electron closure has no evolved kinetic reservoir for its work.
+Heat exchange is an internal transfer; C++ tests cover momentum-source conversion.

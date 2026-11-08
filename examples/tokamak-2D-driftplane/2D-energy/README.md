@@ -15,3 +15,7 @@ python -m pytest examples/tokamak-2D-driftplane/2D-energy
 This example is outside CTest. The legacy `2D-energy` regression remains in
 `tests/integrated/2D-energy`; total ion energy conservation gates are the four
 `ion-energy-*` integrated tests.
+
+The input template is `publication-input.inp.template`. See the
+[Sphinx comparison](https://hermes3.readthedocs.io/en/latest/examples.html#subsec-2d-energy-comparison)
+for the energy definitions and reproduced figures.

@@ -351,9 +351,9 @@ def input_text(config, row):
         if pressure
         else "",
     }
-    text = string.Template((HERE / "publication-input.inp").read_text()).substitute(
-        values
-    )
+    text = string.Template(
+        (HERE / "publication-input.inp.template").read_text()
+    ).substitute(values)
     # Only the formulation's evolving fields have initial-profile sections.
     import re
 
@@ -1770,7 +1770,7 @@ def main(argv=None):
         raise AuditError("Timeout must be positive")
     exe_hash = digest(exe)
     runtime_hashes = runtime_artifacts(exe)
-    template_hash = digest(HERE / "publication-input.inp")
+    template_hash = digest(HERE / "publication-input.inp.template")
     if args.resume:
         study = args.resume.resolve()
         manifest = json.loads((study / "manifest.json").read_text())
@@ -1810,8 +1810,6 @@ def main(argv=None):
         study.mkdir()
         from importlib.metadata import version
 
-        import xhermes
-
         rows = list(grid_rows(config))
         add_inputs(study, config, rows)
         manifest = {
@@ -1827,12 +1825,11 @@ def main(argv=None):
             "revisions": {
                 "hermes": revision(SOURCE_ROOT),
                 "bout": revision(SOURCE_ROOT / "external/BOUT-dev"),
-                "xhermes": revision(Path(xhermes.__file__).resolve().parents[1]),
+                "energy_analysis": revision(ROOT),
             },
             "environment": {
                 "python": sys.executable,
                 "version": platform.python_version(),
-                "xhermes": version("xhermes"),
                 "numpy": np.__version__,
                 "xarray": xr.__version__,
                 "scipy": version("scipy"),

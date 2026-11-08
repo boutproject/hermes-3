@@ -46,6 +46,22 @@ def common_temperature(psi, ni, nj):
     return 2 * psi / (2 * ni + s.Rational(3, 2) * nj)
 
 
+def chi_shape(a, theta):
+    """Analytic cosine particular satisfying both X face conditions.
+
+    For phi=sin(a)*cos(theta), psi=P(a)*sin(theta), kZ/kX=2:
+    (d_aa+4*d_theta_theta)chi = physical Reynolds divergence / c.
+    Multiply by kX^2 and the two amplitudes for physical chi.
+    """
+    return (
+        40 * s.cos(5 * a)
+        - s.Rational(792, 7) * s.cos(3 * a)
+        + s.Rational(512, 7) * s.cos(a)
+    ) / 41 + (84 * s.cos(5 * a) - 252 * s.cos(3 * a) + 168 * s.cos(a)) * s.sin(
+        theta
+    ) ** 2 / 41
+
+
 @lru_cache(maxsize=3)
 def model(variant="baseline"):
     """Return exact fields, physical RHS, forcing and separate term coverage."""
@@ -61,58 +77,92 @@ def model(variant="baseline"):
         raise ValueError(f"Unknown MMS variant: {variant}")
     H = metric(variant)
     nu = r(2, 100) if variant == "viscosity" else s.Integer(0)
-    shape = (1 - s.cos(2 * a)) ** 2
-    ni = 1 + r(5, 100) * s.cos(2 * a) + r(3, 400) * shape * s.cos(theta)
-    nj = ni / 4
-    # Small zero-mean parallel flows keep acoustic gradients active without
-    # making limiter errors at advected extrema dominate continuum convergence.
-    vi = r(1, 1000) * (s.sin(b - tau) + s.sin(3 * (b - tau)) / 9)
-    vj = r(1, 1000) * (s.cos(b + tau) - s.cos(3 * (b + tau)) / 9)
-    phi = s.Integer(0)
-    psi_mean = r(12, 10) + r(4, 1000) * s.cos(b - tau)
-    psi_fluctuation = r(2, 100) * shape * s.sin(theta)
-    psi = psi_mean + psi_fluctuation
+    ni = 1 + r(5, 100) * s.cos(2 * a) * s.cos(b - tau) + r(3, 100) * s.cos(d + tau)
+    nj = r(1, 4) * (1 + r(5, 100) * s.cos(2 * a) * s.sin(theta) * s.cos(b + tau))
+    vi = r(1, 10) + r(2, 100) * s.cos(2 * a) * s.sin(b - tau) * s.cos(theta)
+    vj = r(7, 100) + r(15, 1000) * s.cos(2 * a) * s.cos(b + tau) * s.sin(theta)
+    te = 1 + r(5, 100) * s.cos(2 * a) * s.sin(theta) * s.cos(b - tau)
+    amp_phi = r(2, 10) * (1 + r(1, 10) * s.sin(b + tau))
+    amp_psi = r(2, 100) * (1 + r(5, 100) * s.cos(b + tau))
+    phi = amp_phi * s.sin(a) * s.cos(theta)
+    shape = r(813, 287) - r(1100, 287) * s.cos(2 * a) + s.cos(4 * a)
+    psi = r(12, 10) + r(4, 100) * s.cos(b - tau) + amp_psi * shape * s.sin(theta)
+    if variant != "baseline":
+        # These focused recovery/viscosity cases vanish to sixth order at X
+        # faces: all mixed normal fluxes and Omega_X are compatible there.
+        phi = s.Integer(0)
+        psi = (
+            r(12, 10)
+            + r(4, 100) * s.cos(b - tau)
+            + amp_psi * (1 - s.cos(2 * a)) ** 3 * s.sin(theta)
+        )
     ti = common_temperature(psi, ni, nj)
     pi, pj = ni * ti, nj * ti
     ne = ni + 2 * nj
     ji = ni * vi + 2 * nj * vj
     ve, je = ji / ne, -ji
-    # Prescribe a closed curvature-driven auxiliary flow, then obtain the
-    # electron pressure from c Lap(chi)=curl_z d_Z(Pe+Pi). The antiderivative
-    # is analytic and both chi and its normal derivative vanish at each wall.
-    curl_z = r(1, 10)
-    chi_curvature = r(1, 100) * shape * s.cos(theta)
-    wave = 2 * s.pi / LENGTH
-    total_pressure_fluctuation = (
-        r(2, 1)
-        / curl_z
-        * r(1, 100)
-        * (
-            (s.diff(shape, X, 2) - H[1, 1] * wave**2 * shape) * s.sin(theta) / wave
-            + 2 * H[0, 1] * s.diff(shape, X) * s.cos(theta)
-        )
-    )
-    pe = 4 - r(20, 19) * psi_fluctuation + total_pressure_fluctuation
+    assert s.cancel(ji - ne * ve) == 0, "Zero total parallel current"
+    pe = ne * te
     mi, mj = 2 * ni * vi, 3 * nj * vj
     ki, kj = ni * vi**2, r(3, 2) * nj * vj**2
     rho, pressure, Phi, c = 2 * ni + 3 * nj, pi + pj, phi + psi, s.Integer(2)
-    lap_phi = lap(phi, H)
+    lap_phi = -5 * (s.pi / LENGTH) ** 2 * phi
     omega = c * (lap_phi + lap(psi, H))
     kperp = c * grad(Phi).dot(H * grad(Phi)) / 2
     energy = r(3, 2) * pressure + ki + kj + kperp
-    alpha = s.Integer(0)
-    reynolds = s.zeros(2, 1)
-    chi = chi_curvature + nu * omega / c
+    alpha = advection(psi, phi)
+    raw_reynolds = (
+        -omega * drift(phi) / 2 - c * grad(alpha) / 2 - c * lap_phi * drift(Phi) / 2
+    )
+    # Combine the analytic Reynolds terms before exporting them. This removes
+    # cancelling products without changing their continuum or boundary limit.
+    angular = s.Symbol("angular", real=True)
+    poly = r(813, 287) - r(1100, 287) * s.cos(2 * angular) + s.cos(4 * angular)
+    prime = s.diff(poly, angular).subs(angular, a)
+    second = s.diff(poly, angular, 2).subs(angular, a)
+    k = s.pi / LENGTH
+    reynolds = (
+        c
+        * k**3
+        * s.Matrix(
+            [
+                -10 * amp_phi**2 * s.sin(a) ** 2 * s.cos(theta) * s.sin(theta)
+                + amp_phi
+                * amp_psi
+                * (
+                    prime * s.cos(a)
+                    + (2 * second - 4 * shape) * s.sin(a) * s.sin(theta) ** 2
+                    + 4 * shape * s.sin(a) * s.cos(theta) ** 2
+                ),
+                -5 * amp_phi**2 * s.sin(a) * s.cos(a) * s.cos(theta) ** 2
+                + amp_phi
+                * amp_psi
+                * ((second / 2 - 6 * shape) * s.cos(a) + r(3, 2) * prime * s.sin(a))
+                * s.sin(theta)
+                * s.cos(theta),
+            ]
+        )
+    )
+    test_point = {X: 1.37, Y: 2.91, Z: 4.23, t: 0.73}
+    if variant == "baseline":
+        assert (
+            max(abs(float(q.subs(test_point))) for q in reynolds - raw_reynolds) < 1e-14
+        )
+    chi = (s.pi / LENGTH) ** 2 * amp_phi * amp_psi * chi_shape(a, theta)
+    if variant != "baseline":
+        reynolds = s.zeros(2, 1)
+        chi = nu * omega / c
     jnu = nu * H * grad(omega)
     jpol = -c * H * grad(chi) + reynolds
-    terms = {"Vort.curvature": curl_z * s.diff(pe + pressure, Z)}
-    # Use the verified auxiliary identity to avoid cancelling source terms.
+    terms = {"Vort.reynolds": div(reynolds)}
+    # The verified finite cosine inversion makes these expressions identical.
+    # Keeping the harmonic form avoids large cancelling terms in the source.
     rhs = {"Vort": c * lap(chi, H)}
     if nu:
         terms["Vort.viscosity"] = div(jnu)
 
     def polarisation(weight):
-        return -div(weight * jpol)
+        return -grad(weight).dot(jpol) if not nu else -div(weight * jpol)
 
     for name, n, v, m, p, mass, charge in (
         ("i", ni, vi, mi, pi, 2, 1),
@@ -146,7 +196,7 @@ def model(variant="baseline"):
             "Eion.parallel": -s.diff(
                 (r(5, 2) * pi + ki) * vi + (r(5, 2) * pj + kj) * vj, Y
             ),
-            # The auxiliary identity gives div(Jpol) = -physical ddt(Vort).
+            # Analytic div(Jpol)=0, as verified by the auxiliary-current identity.
             "Eion.polarisation": polarisation(
                 phi
                 + 2 / rho * (r(5, 2) * pi + ki)
@@ -189,25 +239,40 @@ def evaluate(name, x, y, z, time, variant="baseline"):
 
 def preflight(variant="baseline"):
     """Check the analytic elliptic, closure and boundary contracts."""
+    a, d = s.symbols("a d", real=True)
+    shape = s.Rational(813, 287) - s.Rational(1100, 287) * s.cos(2 * a) + s.cos(4 * a)
+    f, p = s.sin(a) * s.cos(d), shape * s.sin(d)
+    L = lambda q: s.diff(q, a, 2) + 4 * s.diff(q, d, 2)
+    D = lambda q, h: 2 * (s.diff(q, a) * s.diff(h, d) - s.diff(q, d) * s.diff(h, a))
+    alpha = D(p, f)
+    forcing = -(D(L(f + p), f) + L(alpha) + D(L(f), f + p)) / 2
+    chi = chi_shape(a, d)
+    residual = s.expand(s.expand_trig(L(chi) - forcing).rewrite(s.exp))
+    assert s.simplify(residual) == 0, "Analytic chi does not solve the physical RHS"
+    rx = -L(f + p) * s.diff(f, d) - s.diff(alpha, a) / 2 - L(f) * s.diff(f + p, d)
+    for face in (0, s.pi):
+        for q in (shape, s.diff(shape, a), chi, s.diff(chi, a), rx, s.diff(alpha, a)):
+            assert s.simplify(q.subs(a, face)) == 0
     fields, rhs, _, terms = model(variant)
     H = metric(variant)
-    assert s.trigsimp(2 * lap(fields["chi"], H) - rhs["Vort"]) == 0
-    residual = 2 * lap(fields["chi"], H) - sum(
-        value for key, value in terms.items() if key.startswith("Vort.")
-    )
-    assert s.simplify(s.expand(residual)) == 0, "Auxiliary current identity"
+    if variant != "baseline":
+        for face in (0, LENGTH):
+            for name in ("psi", "Vort", "chi"):
+                assert s.simplify(s.diff(fields[name], X).subs(X, face)) == 0
+            for name in ("chi", "Vort"):
+                assert s.simplify(fields[name].subs(X, face)) == 0
+            assert s.simplify((H * grad(fields["psi"]))[0].subs(X, face)) == 0
+        assert s.simplify(2 * lap(fields["chi"], H) - rhs["Vort"]) == 0
     for face in (0, LENGTH):
-        for name in (*EVOLVED, *RECOVERED):
+        assert s.simplify(fields["phi"].subs(X, face)) == 0
+        for name in ("Ni", "Nj", "NVi", "NVj", "Pe", "Pi", "pi", "pj", "Tion", "psi"):
             assert s.simplify(s.diff(fields[name], X).subs(X, face)) == 0, name
-        for name in ("phi", "Vort", "chi"):
-            assert s.simplify(fields[name].subs(X, face)) == 0, name
-        assert s.simplify((H * grad(fields["chi"]))[0].subs(X, face)) == 0
-    # Analytic amplitude bounds for density, psi and electron pressure.
-    psi_amplitude = s.Rational(2, 100)
-    assert 1 - s.Rational(5, 100) - s.Rational(3, 400) * 4 > 0
-    assert s.Rational(12, 10) - s.Rational(4, 1000) - psi_amplitude * 4 > 0
+    # Rigorous primitive bounds (|P| <= 2200/287); density floors stay inactive.
     assert (
-        4 - s.Rational(80, 19) * psi_amplitude - s.Rational(39, 10) * s.pi / LENGTH > 0
+        s.Rational(12, 10)
+        - s.Rational(4, 100)
+        - s.Rational(2, 100) * s.Rational(2200, 287) * s.Rational(105, 100)
+        > 0
     )
     sample = (1.37, 2.91, 4.23, 0.73)
     magnitudes = {
@@ -215,19 +280,19 @@ def preflight(variant="baseline"):
         for k, v in terms.items()
     }
     assert all(np.isfinite(v) for v in magnitudes.values()), magnitudes
-    for key in (
-        "Vort.curvature",
-        "Ni.parallel",
-        "Ni.polarisation",
-        "NVj.pressure",
-        "Pe.compression",
-        "Eion.parallel",
-        "Eion.polarisation",
-    ):
-        assert magnitudes[key] > 1e-12, key
-    if variant == "viscosity":
-        for key in ("Vort.viscosity", "Eion.viscous_flux", "Pe.viscous_heating"):
+    if variant == "baseline":
+        assert all(v > 1e-12 for v in magnitudes.values()), magnitudes
+    else:
+        for key in ("Ni.parallel", "NVj.pressure", "Pe.compression", "Eion.parallel"):
             assert magnitudes[key] > 1e-12, key
+        if variant == "viscosity":
+            for key in (
+                "Vort.viscosity",
+                "Ni.polarisation",
+                "Eion.viscous_flux",
+                "Pe.viscous_heating",
+            ):
+                assert magnitudes[key] > 1e-12, key
     return {
         "variant": variant,
         "elliptic_and_X_boundaries": "verified symbolically",

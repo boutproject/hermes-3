@@ -3,16 +3,14 @@
 `publication_scan.py` runs matched pressure and total-ion-energy formulations
 and retains the inputs, time-zero restart files, raw dumps, logs and scalar
 analysis. Energy drift and spatial self-convergence are separate measurements:
-conserving total energy does not establish spatial accuracy. The original
-`data/BOUT.inp` and `runtest` remain the historical pressure-sign regression.
+conserving total energy does not establish spatial accuracy. The historical pressure-sign regression remains in
+`tests/integrated/2D-energy/data/BOUT.inp` and its `runtest`.
 
-Use the repository `.venv` with editable xhermes and the numerical/plotting
-dependencies. From the repository root, install these into an existing
-environment:
+Install the packages in `tools/energy_analysis/requirements.txt` plus
+`matplotlib` into your Python environment:
 
 ```sh
-uv pip install --python python -e external/xhermes \
-  -r tools/energy_analysis/requirements.txt
+python -m pip install -r tools/energy_analysis/requirements.txt matplotlib
 ```
 
 Run the study from the repository root:
@@ -108,7 +106,7 @@ shows ion internal energy density `3*Pi/2` from pressure evolution; other
 choices plot the selected field.
 The lower row shows perpendicular kinetic energy density from total ion energy.
 
-Every run gets its own generated `BOUT.inp` from `publication-input.inp`.
+Every run gets its own generated `BOUT.inp` from `publication-input.inp.template`.
 The study manifest records configuration, input/executable/runner hashes,
 hashes of separately built Hermes/BOUT libraries, checkout revisions and dirty
 state, Python environment and MPI layout.

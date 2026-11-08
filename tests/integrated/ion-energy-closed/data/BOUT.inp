@@ -67,12 +67,12 @@ poloidal_flows = false
 diagnose = false
 
 [Nd+]
-function = 0.5 * (1 + 0.1 * sin(2*pi*x - z) + 0.04 * cos(4*pi*x + 2*z))
+function = initial:nd
 source = 0
 bndry_all = neumann
 
 [NVd+]
-function = 0.8 * (1 + 0.3*cos(2*pi*x + z))
+function = initial:nvd
 
 [Vd+]
 bndry_all = neumann
@@ -86,12 +86,12 @@ poloidal_flows = false
 diagnose = false
 
 [Nimpurity]
-function = 0.25 * (1 - 0.05 * sin(2*pi*x - z) + 0.03 * sin(4*pi*x + z))
+function = initial:nj
 source = 0
 bndry_all = neumann
 
 [NVimpurity]
-function = -0.4 * (1 + 0.3*sin(2*pi*x - z))
+function = initial:nvj
 
 [Vimpurity]
 bndry_all = neumann
@@ -107,7 +107,16 @@ phi_max_iterations = 200
 diagnose = false
 
 [Eion]
-function = 1.2 * Pe:function
+# Include the prescribed parallel kinetic energy so the stronger Y flows
+# start with positive thermal energy everywhere.
+function = 1.2 * Pe:function + initial:nvd^2/(4*initial:nd) + initial:nvj^2/(6*initial:nj)
 
 [Vort]
 function = 0.04 * sin(2*pi*x + 2*z)
+
+[initial]
+# Shared expressions also provide positive initial thermal energy.
+nd = 0.5 * (1 + 0.1 * sin(2*pi*x - z) + 0.04 * cos(4*pi*x + 2*z))
+nj = 0.25 * (1 - 0.05 * sin(2*pi*x - z) + 0.03 * sin(4*pi*x + z))
+nvd = 0.8 * (1 + 0.3*cos(2*pi*x + z)) * (1 + 0.6*cos(y))
+nvj = -0.4 * (1 + 0.3*sin(2*pi*x - z)) * (1 + 0.6*cos(y))

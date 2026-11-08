@@ -1465,6 +1465,182 @@ and core/pfr boundaries. If the test fails, it will print the degree of error at
 The test file can be used to generate the test data if `gen_data` is set to `True` in the beginning
 of the script.
 
+.. _subsec-2d-energy-test:
+
+2D-energy (interchange energy and entropy)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Evolves vorticity, electron density, and electron and ion pressure in a 2D
+(32 x 32) X-Z box with magnetic curvature. Includes kinematic viscosity and the
+ion polarisation compression term. The input selects ``e, h+, vorticity,
+polarisation_drift``, with ``phi_boundary_relax = true``,
+``diamagnetic_polarisation = true`` and ``viscosity = 1.0`` m²/s.
+There is no parallel dynamics (``ny = 1``,
+``MYG = 0``), no sources, and no sheath: apart from the radial potential boundary
+relaxation, the box is energetically closed.
+
+Mechanism
+`````````
+
+The initial pressure perturbation, ``1 + 0.1 * sin(2*pi*x - z)``, is unstable to
+interchange modes. The curvature (``bxcvz = 1/R^2``) plays the role that gravity
+plays in the Rayleigh-Taylor instability. The instability grows, drives
+perpendicular E x B flows, and saturates. Kinematic viscosity then damps the
+flows and returns their energy to the plasma as heat, so that the system relaxes
+towards a stable state with a flattened pressure profile.
+
+Unlike gravitational Rayleigh-Taylor, there is no separate potential energy
+reservoir. The "potential energy" released by the instability is part of the
+thermal energy itself. Curvature enters the model through two terms that are
+exact energetic partners:
+
+- the divergence of the diamagnetic current in the vorticity equation,
+  :math:`\nabla\cdot\mathbf{J}_d = \nabla\cdot\left[(p_e + p_i)\nabla\times(\mathbf{b}/B)\right]`;
+- the compression of the E x B flow in the pressure equations,
+  :math:`-p_s\nabla\cdot\mathbf{v}_E = -p_s\nabla\phi\cdot\nabla\times(\mathbf{b}/B)`,
+  applied by the ``vorticity`` component as :math:`-\mathbf{J}_{d,s}\cdot\nabla\phi`.
+
+The second term describes adiabatic expansion of flux tubes: in a torus, plasma
+interchanged outward moves into larger flux-tube volume and cools. The constant
+curvature in this slab represents that through :math:`\nabla\cdot\mathbf{v}_E\neq 0`, even
+though the slab metric is uniform. The instability therefore converts thermal
+energy of both species into perpendicular kinetic energy; viscosity converts it
+back into heat.
+
+Conserved energy
+````````````````
+
+For the corresponding closed, continuum Oberbeck-Boussinesq model, the energy
+
+.. math::
+
+   E = \int\left[\frac{3}{2}\left(p_e + p_i\right) + K_\perp\right]dV,
+   \qquad
+   K_\perp = \frac{1}{2}\frac{\bar{A}}{B^2}\left|\nabla_\perp\Phi\right|^2
+
+
+is conserved when the full Reynolds stress and consistent energy exchanges are used, where :math:`\Phi = \phi + \hat{p}` is the generalised potential,
+:math:`\hat{p} = \sum_s A_s p_s/(\bar{A}Z_s)` is the pressure contribution to the
+vorticity (``Pi_hat`` in ``src/vorticity.cxx``), and :math:`\bar{A}` is
+``average_atomic_mass``. The energy exchange channels in this test are:
+
+.. list-table:: Energy exchange channels
+   :header-rows: 1
+   :widths: 22 53 25
+
+   * - Channel
+     - Terms
+     - Pairing
+   * - Curvature (interchange drive)
+     - :math:`\phi\nabla\cdot\mathbf{J}_d` in vorticity; :math:`-p_s\nabla\cdot\mathbf{v}_E` in pressures
+     - :math:`\phi` half of the diamagnetic current work
+   * - Polarisation compression
+     - :math:`\hat{p}\,\nabla\cdot\mathbf{J}_d` in vorticity; :math:`(A_s p_s/\bar{A}Z_s)\nabla\cdot\mathbf{J}_d` in pressures (``polarisation_drift``)
+     - :math:`\hat{p}` half of the diamagnetic current work
+   * - Reynolds stress
+     - Nonlinear E x B advection of vorticity
+     - Redistributes :math:`K_\perp`; no net work in the continuum, *only for the full form* (see below)
+   * - Viscosity
+     - :math:`\nabla\cdot(\nu\nabla_\perp\omega)` in vorticity; ``kinematic_viscous_heating`` :math:`= -\nu\nabla_\perp\omega\cdot\nabla_\perp\Phi` in pressures
+     - Dissipation of :math:`K_\perp` into heat, distributed by mass density (almost all to ions)
+   * - Magnetic drift advection
+     - :math:`\nabla\cdot(\tfrac52 p_s\mathbf{v}_{mag,s})`, :math:`\nabla\cdot(n\mathbf{v}_{mag,e})`
+     - Divergence; periodic in z, so no net contribution
+   * - Radial potential boundary
+     - ``phi_boundary_relax``
+     - Does work through the boundary; not conserved (see below)
+
+In an exactly conserving model, therefore,
+
+.. math::
+
+   \frac{3}{2}\int\left(p_e + p_i\right)dV\Big|_{\rm end}
+   = \frac{3}{2}\int\left(p_e + p_i\right)dV\Big|_{0} + K_\perp(0) - K_\perp(\rm end).
+
+
+The thermal energy first falls as the flows grow, then recovers as viscosity
+heats the plasma. It ends at its initial value plus whatever perpendicular
+kinetic energy has been removed overall. The initial :math:`K_\perp` is not zero: the
+initial vorticity is zero, so :math:`\Phi` is harmonic with boundary values set by
+:math:`\hat{p}`, giving a combined E x B and diamagnetic flow at :math:`t = 0`. It is small,
+of order :math:`(k\rho_s\,\delta p/p)^2\sim 10^{-5}` of the thermal energy for these
+parameters (:math:`\delta p/p = 0.1`, 5 eV, 0.35 T, 5 cm box, :math:`k\rho_s\approx 0.08`).
+
+Entropy
+```````
+
+In the ideal closed model, a relaxed state has the same total energy. What the
+instability releases is the *available* energy: the difference between the
+initial energy and the lowest energy reachable by ideal, entropy-preserving
+rearrangements of the plasma, here flattening the pressure across the curvature
+direction. Viscosity, and the numerical dissipation of the upwind E x B
+advection, then convert this into heat irreversibly. The relaxed state is
+approximately the state of maximum entropy at fixed total energy and particle
+number. With entropy
+
+.. math::
+
+   S = \sum_s\int n_s\ln\left(\frac{p_s^{3/2}}{n_s^{5/2}}\right)dV,
+
+
+the E x B advection and compression preserve the specific entropy
+:math:`p_s/n_s^{5/3}` of each fluid element, so they rearrange entropy without
+producing it. A positive viscous heating rate :math:`Q_\nu` produces entropy at the rate
+:math:`\int Q_\nu/T_i\,dV`. The implemented gradient-product heating need not be positive pointwise. The magnetic drift fluxes are reversible but do not
+preserve specific entropy pointwise, so entropy is not a strict Lyapunov
+function of the discrete model; it is a useful diagnostic rather than an acceptance condition. Electrons
+receive almost none of the viscous heating, so their entropy should change much
+less than that of the ions.
+
+Expected results
+````````````````
+
+- Electron thermal energy falls, because electrons lose energy to the flows by
+  compression but receive almost none of the viscous heating.
+- Ion thermal energy rises, because the ions receive the viscous heating.
+- The total energy :math:`E` is constant, apart from the relaxation work at the radial
+  boundaries and numerical dissipation.
+- The total thermal energy changes by no more than :math:`K_\perp(0) - K_\perp(\rm end)`.
+  A larger rise indicates an energy source in the discrete model.
+- Ion entropy increases.
+
+Known non-conservative terms
+````````````````````````````
+
+The following terms are present in this test as configured and are not expected
+to conserve energy exactly. They explain why quantitative energy diagnostics can differ from the continuum expectation; the runner checks only pressure-change signs.
+
+1. **Simplified Reynolds stress.** ``exb_advection_simplified`` defaults to ``true``,
+   which advects :math:`\omega` with :math:`\mathbf{v}_E` only. With
+   ``diamagnetic_polarisation = true`` the work done by this term is
+   :math:`\int\omega\,\mathbf{v}_E\cdot\nabla\hat{p}\,dV`, which is not a divergence. The full
+   form (``exb_advection_simplified = false``) conserves :math:`K_\perp` in the continuum.
+2. **Potential boundary relaxation.** ``phi_boundary_relax = true`` (default
+   timescale :math:`\tau = 10^{-4}` s) relaxes the boundary potential towards zero radial
+   gradient, doing work :math:`P_{\rm relax}\simeq -(\Delta x/2\tau)\oint(\bar{A}/B^2)\,
+   g^{xx}\partial_x\bar\phi\,\partial_x\bar\Phi\,dS` through the radial boundaries.
+3. **Viscous heating discretisation.** The viscous term in the vorticity equation
+   is a finite-volume flux, while ``kinematic_viscous_heating`` is a cell-centred
+   product of gradients; the two cancel only to the truncation error of the
+   discretisation.
+4. **Upwind E x B advection.** The limited (XPPM) advection of vorticity
+   dissipates :math:`K_\perp` at small scales, and this energy is not returned as heat.
+   The same limited advection of density and pressure is in flux form, so it
+   conserves thermal energy.
+
+What the test checks
+````````````````````
+
+The ``runtest`` script currently checks the signs of the changes in electron,
+ion and total pressure. The total-pressure check (total pressure higher at the
+end than at the start) is consistent with energy conservation only if the rise
+is no larger than :math:`K_\perp(0) - K_\perp(\rm end)`, which is very small here.
+Passing it does not distinguish physical heating from an energy leak.
+
+The runner does not assert quantitative energy or entropy bounds, or check convergence.
+
+See :ref:`subsec-2d-energy-comparison` for the publication resolution scan, and :ref:`subsec-ion-energy-tests` for the total ion energy tests.
+
 .. _subsec-ion-energy-tests:
 
 Total ion energy tests
@@ -1478,10 +1654,16 @@ Four integrated tests exercise ``evolve_vorticity_ion_energy``:
 - ``ion-energy-sources`` checks physical electron heating and moving-ion
   density sources, with collisional heat exchange and output-cadence refinement.
 - ``ion-energy-walls`` checks the three radial wall modes, both AC conditions,
-  rigid-rotation decay, uniform-vorticity drift and restart round trips.
+  nonlinear perturbed budgets in every mode, absolute wall-flux and kinetic-energy
+  minimum checks, rigid-rotation decay, uniform-vorticity drift and perturbed restarts.
 - ``ion-energy-mms`` checks continuum expression sources on two resolutions for
-  orthogonal, skew-metric and viscous curvature slabs. Periodic Y uses twice the
-  X/Z resolution and flat velocity extrema. The ``long`` profile adds size 32
+  orthogonal, skew-metric and viscous slabs. The baseline includes nonzero
+  potential, E×B transport and Reynolds stress; all variants have varying
+  composition and finite parallel flows. The focused skew and viscosity
+  variants retain wall-compatible zero potential. Periodic Y uses twice the
+  X/Z resolution. Known convergence failures remain enabled and are listed in
+  the MMS README. Restoring these fields conflicts with the prescribed analytic
+  curvature inversion; the MMS retains the original curvature-free physics. The ``long`` profile adds size 32
   and uses two MPI ranks.
 
 All cases use zero parallel current and omit sheaths. Parallel-current and
@@ -1492,6 +1674,12 @@ stress discretisation.
 The runners use ``tools/energy_analysis`` for inventories, physical sources,
 wall powers and recovery checks. Analysis runs with diagnostics disabled;
 open polarisation wall fluxes report incomplete coverage when chi is absent.
+All upper limits have a floor of ``1e-10``. Solver-sensitive limits resolve
+as ``max(floor, rtol_factor * solver:rtol)`` from each run's options; linear
+invariants, recovery and diagnostic comparisons use fixed roundoff floors.
+MMS truncation errors, convergence orders and magnitude minima retain their
+separate criteria. Every effective limit is saved with its check.
+
 Inputs, hashes, execution status, check values and summaries are written to an
 isolated directory containing ``result.json``.
 

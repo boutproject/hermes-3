@@ -72,6 +72,7 @@ def main():
                         f"error/{variant}/{name}{suffix}",
                         errors[index][name]["l2"],
                         limit=study.criteria["errors"][name],
+                        truncation=True,
                     )
         plain = study.run(
             "baseline-8-plain",

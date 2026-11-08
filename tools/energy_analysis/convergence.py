@@ -47,6 +47,18 @@ def manufactured_errors(run, references):
             "l2": float(np.sqrt(run.integrate(error**2) / volume)),
             "linf": float(abs(run.interior(error)).max()),
         }
+        # Separate wall errors without changing the convergence checks. Two
+        # physical cells are omitted next to each radial face, in addition to
+        # the guards already excluded from the all-cell norm.
+        physical = run.interior(error)
+        if physical.sizes["x"] <= 4:
+            raise AuditError("Interior MMS norm requires more than four X cells")
+        weights = run.interior(ds.J * ds.dx * ds.dy * ds.dz)
+        interior = physical.isel(x=slice(2, -2))
+        weights = weights.isel(x=slice(2, -2)).broadcast_like(interior)
+        result[name]["l2_interior"] = float(
+            np.sqrt((interior**2 * weights).sum() / weights.sum())
+        )
     return result
 
 

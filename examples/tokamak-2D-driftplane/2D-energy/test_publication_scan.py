@@ -295,6 +295,45 @@ def test_native_library_changes_are_part_of_runtime_hash(runner, tmp_path):
     assert before[str(library)] != after[str(library)]
 
 
+def test_new_study_uses_shared_analysis_without_xhermes(runner, tmp_path, monkeypatch):
+    import json
+
+    monkeypatch.setitem(sys.modules, "xhermes", None)
+    executable = tmp_path / "hermes-3"
+    executable.write_bytes(b"simulation")
+    executable.chmod(0o755)
+
+    def startup(exe, directory, config, timeout):
+        (directory / "initial-state.nc").write_bytes(b"matched state")
+        for rank in range(config["nproc"]):
+            (directory / f"BOUT.restart.{rank}.nc").write_bytes(b"restart")
+
+    monkeypatch.setattr(runner, "ensure_startup", startup)
+    output = tmp_path / "results"
+    assert (
+        runner.main(
+            [
+                "--exe",
+                str(executable),
+                "--output-root",
+                str(output),
+                "--smoke",
+                "--prepare-only",
+                "--nproc",
+                "1",
+            ]
+        )
+        == 0
+    )
+    study = next(output.glob("interchange-*"))
+    manifest = json.loads((study / "manifest.json").read_text())
+    assert "energy_analysis" in manifest["revisions"]
+    assert "xhermes" not in manifest["environment"]
+    for case in manifest["runs"]:
+        assert "${" not in (study / case["directory"] / "BOUT.inp").read_text()
+        assert (study / case["directory"] / "remote-case.json").is_file()
+
+
 def test_reanalysis_preserves_saved_style_and_allows_overrides(runner, tmp_path):
     import json
 
@@ -582,7 +621,9 @@ def resume_case(runner, tmp_path, monkeypatch):
         "configuration": runner.configuration(runner.parser().parse_args(argv)),
         "executable": {"sha256": runner.digest(executable)},
         "runtime_artifacts": runner.runtime_artifacts(executable),
-        "template_sha256": runner.digest(runner.HERE / "publication-input.inp"),
+        "template_sha256": runner.digest(
+            runner.HERE / "publication-input.inp.template"
+        ),
         "runner_sha256": "original-runner",
         "runs": [],
     }
@@ -656,7 +697,9 @@ def portable_study(runner, tmp_path):
         "configuration": config,
         "executable": {"path": str(exe), "sha256": runner.digest(exe)},
         "runtime_artifacts": runner.runtime_artifacts(exe),
-        "template_sha256": runner.digest(runner.HERE / "publication-input.inp"),
+        "template_sha256": runner.digest(
+            runner.HERE / "publication-input.inp.template"
+        ),
         "runner_sha256": runner.digest(runner.__file__),
         "revisions": {"hermes": {"revision": "expected-source"}},
         "runs": rows,

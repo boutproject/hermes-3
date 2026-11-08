@@ -11,6 +11,14 @@ from .transfers import polarisation_energy_coefficient
 from .transport import flux_dataset, fv_xz, neighbor
 
 
+def absolute_wall_flux(run, transport):
+    """Sum magnitudes on both X faces before integrating in time."""
+    faces = transport.flux_x.isel(x=[run.mxg - 1, -run.mxg - 1])
+    if run.myg:
+        faces = faces.isel(y=slice(run.myg, -run.myg))
+    return abs(faces).sum(("x", "y", "z"), skipna=False)
+
+
 def wall_budget(run):
     """Return outward energy/particle fluxes and the measured wall rate.
 
@@ -25,9 +33,12 @@ def wall_budget(run):
         "viscous_outward": zero.copy(),
         "polarisation_outward": zero.copy(),
         "vorticity_rate": zero.copy(),
+        "viscous_vorticity_absolute": zero.copy(),
+        "polarisation_absolute": zero.copy(),
     }
     ions = [s for s in run.species if s.name != "e" and abs(s.charge) > 1e-5]
     fields.update({"particles_" + s.name: zero.copy() for s in ions})
+    fields.update({"particles_absolute_" + s.name: zero.copy() for s in ions})
     missing = []
     periodic = option_bool(ds.options, "periodicX")
     for name, kind in components(run):
@@ -75,7 +86,7 @@ def wall_budget(run):
                     run.length_scale**2 * run.frequency
                 )
                 vort = fill_wall_guards(ds.Vort, run, "zero")
-                current = fv_xz(nu, vort, ds, boundary_flux=True)
+                current = fv_xz(nu, vort, ds, mxg=run.mxg, boundary_flux=True)
                 energy = flux_dataset(
                     {
                         d: (Phi + neighbor(Phi, d)) / 2 * current["flux_" + d]
@@ -87,6 +98,9 @@ def wall_budget(run):
                 fields["vorticity_rate"] = (
                     run.integrate(current.divergence) * run.frequency
                 )
+                fields["viscous_vorticity_absolute"] = (
+                    absolute_wall_flux(run, current) * run.frequency
+                )
             if polarisation_ac_boundary(run) == "dirichlet":
                 chi = ds.get("ion_chi", ds.get("ddt(Phi)"))
                 if chi is None:
@@ -94,9 +108,12 @@ def wall_budget(run):
                 else:
                     c = run.scalar_option("average_atomic_mass") / ds.Bxy**2
                     advected = polarisation_energy_coefficient(run).total
-                    pol = fv_xz(-c * advected, chi, ds, boundary_flux=True)
+                    pol = fv_xz(-c * advected, chi, ds, mxg=run.mxg, boundary_flux=True)
                     fields["polarisation_outward"] = (
                         run.integrate(pol.divergence) * scale
+                    )
+                    fields["polarisation_absolute"] = (
+                        absolute_wall_flux(run, pol) * scale
                     )
                     rho = sum(s.mass * ds["N" + s.name] for s in ions)
                     for s in ions:
@@ -104,11 +121,18 @@ def wall_budget(run):
                             -c * s.mass * ds["N" + s.name] / (s.charge * rho),
                             chi,
                             ds,
+                            mxg=run.mxg,
                             boundary_flux=True,
                         )
                         fields["particles_" + s.name] = run.integrate(
                             particle.divergence
                         ) * (ds.metadata["Nnorm"] * run.length_scale**3 * run.frequency)
+                        fields["particles_absolute_" + s.name] = (
+                            absolute_wall_flux(run, particle)
+                            * ds.metadata["Nnorm"]
+                            * run.length_scale**3
+                            * run.frequency
+                        )
         except AuditError as error:
             missing.append(str(error))
         fields["outward"] = fields["viscous_outward"] + fields["polarisation_outward"]
@@ -123,7 +147,7 @@ def wall_budget(run):
             else "hermes potential/s"
             if name == "phi_wall_rate"
             else "normalised volume/s"
-            if name == "vorticity_rate"
+            if name in ("vorticity_rate", "viscous_vorticity_absolute")
             else "W"
         )
     return coverage(result, missing)

@@ -32,6 +32,39 @@ def write_json(path, value):
     Path(path).write_text(json.dumps(value, indent=2, allow_nan=False) + "\n")
 
 
+def resolve_limit(criterion, run=None, *, minimum=False, truncation=False):
+    """Resolve a numeric floor or a solver-relative limit from run options."""
+    if minimum or truncation:
+        limit = float(criterion)
+    else:
+        specification = (
+            criterion if isinstance(criterion, dict) else {"floor": criterion}
+        )
+        if set(specification) - {"floor", "rtol_factor"}:
+            raise AuditError(f"Unknown limit fields: {specification}")
+        floor = float(specification["floor"])
+        factor = float(specification.get("rtol_factor", 0))
+        if not np.isfinite(floor) or not np.isfinite(factor) or factor < 0:
+            raise AuditError(f"Invalid limit: {specification}")
+        if factor:
+            if run is None:
+                raise AuditError("An rtol-scaled limit requires a run")
+            try:
+                rtol = float(run.data.options["solver"].evaluate_scalar("rtol"))
+            except (KeyError, ValueError, TypeError, NameError, SyntaxError) as error:
+                raise AuditError(f"Cannot resolve solver:rtol: {error}") from error
+            if not np.isfinite(rtol) or rtol <= 0:
+                raise AuditError(f"Invalid solver:rtol: {rtol}")
+            limit = max(floor, factor * rtol)
+        else:
+            limit = floor
+        if limit < 1e-10:
+            raise AuditError(f"Effective limit {limit} is below 1e-10")
+    if not np.isfinite(limit) or limit < 0:
+        raise AuditError(f"Invalid threshold: {limit}")
+    return limit
+
+
 class Study:
     def __init__(self, here, args):
         self.here, self.args = Path(here), args
@@ -48,6 +81,7 @@ class Study:
             "analysis": revision(Path(__file__).resolve().parents[2]),
         }
         self.start = time.monotonic()
+        self.current_run = None
         print(f"Results: {self.output}", flush=True)
 
     def __enter__(self):
@@ -64,9 +98,21 @@ class Study:
         if kind is None and not self.result["passed"]:
             raise AuditError("Criteria failed; see " + str(self.output / "result.json"))
 
-    def check(self, name, value, criterion=None, *, minimum=False, limit=None):
+    def check(
+        self,
+        name,
+        value,
+        criterion=None,
+        *,
+        minimum=False,
+        limit=None,
+        run=None,
+        truncation=False,
+    ):
         if limit is None:
             limit = self.criteria[criterion or name]
+        run = run if run is not None else self.current_run
+        limit = resolve_limit(limit, run, minimum=minimum, truncation=truncation)
         value = float(value)
         passed = bool(
             np.isfinite(value) and (value >= limit if minimum else value <= limit)
@@ -77,6 +123,11 @@ class Study:
                 "value": value,
                 "limit": limit,
                 "comparison": ">=" if minimum else "<=",
+                "kind": "minimum"
+                if minimum
+                else "truncation"
+                if truncation
+                else "limit",
                 "passed": passed,
             }
         )
@@ -94,7 +145,11 @@ class Study:
             for file in Path(restart).glob("BOUT.restart.*.nc"):
                 shutil.copyfile(file, folder / file.name)
         self.launch(folder, overrides)
-        return open_run(folder)
+        self.current_run = open_run(folder)
+        self.result["cases"][name]["solver_rtol"] = float(
+            self.current_run.data.options["solver"].evaluate_scalar("rtol")
+        )
+        return self.current_run
 
     def launch(self, folder, overrides=()):
         args = self.args

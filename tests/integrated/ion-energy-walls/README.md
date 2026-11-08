@@ -1,22 +1,30 @@
 # Radial ion energy walls
 
-An orthogonal slab has physical radial walls and periodic Z, with hydrogen and
-quasineutral electrons and no parallel flow. Six small cases cover `fixed`,
-`free_slip` and `no_slip`, each with Neumann and Dirichlet AC conditions. They
-check wall powers, particles, energy, vorticity and stored wall potentials from
-ordinary outputs. An open AC wall without chi reports incomplete coverage.
-The no-slip cases also test rigid-rotation decay and exact uniform-vorticity
-drift; a 32-cell case measures second-order asymptotic amplitude convergence.
-Fixed and no-slip runs have advancing restart round trips.
-Their checkpoint segments also check diagnostics on/off against the matching
-records of uninterrupted runs; every fresh run saves its initial state.
+Six nonlinear budgets cover `fixed`, `free_slip` and `no_slip` with both
+Neumann and Dirichlet AC conditions. Pressure and vorticity perturbations
+vanish at the X faces; curvature drives the finite-amplitude flow. Each 8×8 budget
+runs to time 400 with 200 outputs, spanning several initial shear times. Minimum checks enforce perpendicular-energy
+change (calibrated to `1e-5`, with observed changes above `1e-4`), absolute open chi particle/energy flux, free-slip viscous vorticity
+flux and no-slip wall motion. Absolute face fluxes are summed before time
+integration, so cancellation cannot hide an inactive test.
+
+All Dirichlet runs save diagnostics. The no-slip chi DC midpoint is compared
+with saved `phi_wall_rate` at each wall. Removing diagnostics from one retained
+run must produce incomplete wall coverage. Separate analytic runs check rigid
+rotation at 16/32 and uniform drift at 16; perturbed fixed/no-slip checkpoint
+and restart runs compare with uninterrupted histories (13 executions total).
 
 ```sh
 python tests/integrated/ion-energy-walls/runtest --exe build/hermes-3
 ```
 
-The default uses 11 executions: seven budget/analytic references and four
-checkpoint/restart segments. Separate restart segments are necessary for a
-comparison with uninterrupted evolution. All results and limits appear in
-`result.json` and `criteria.json`. The validated profile took 21 seconds.
-No sheaths or parallel current are present.
+Recovery, vorticity, fixed wall potentials and diagnostic state comparisons
+use `1e-10`. Open budgets, restart and analytic rates use limits resolved from
+each run's `solver:rtol`, with a `1e-10` floor. The analytic profiles retain
+tighter solver tolerances. `criteria.json` records observations; isolated
+`result.json` files contain effective limits and times. No parallel current
+or sheaths are present. Physics failures remain enabled.
+
+Known failures: free-slip Neumann/Dirichlet vorticity residuals are
+`3.244e-8` / `2.593e-8` against `1e-10`. The cumulative snapshot-flux checks
+remain enabled; all magnitude, chi-hook, analytic and restart checks pass.

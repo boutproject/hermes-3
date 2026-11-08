@@ -43,7 +43,10 @@ g_13 = 0
 g_23 = 0
 bxcvx = 0
 bxcvy = 0
-bxcvz = 0.1/(2*units:meters^2)
+# Restoring the full 3831b4d fields precludes the prescribed-curvature chi
+# inversion: Pe + Pi now contains composition-dependent rational expressions.
+# Keep its exact expression-only Reynolds/viscosity solution (see README).
+bxcvz = 0
 
 [mesh:ddz]
 first = FFT
