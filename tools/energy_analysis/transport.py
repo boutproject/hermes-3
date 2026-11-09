@@ -57,11 +57,20 @@ def flux_dataset(fluxes, geometry):
 
 
 def xppm_faces(
-    field, stream, geometry, *, mxg=2, boundary_flux=False, weight=1, limiter="mc"
+    field,
+    stream,
+    geometry,
+    *,
+    mxg=2,
+    boundary_flux=False,
+    weight=1,
+    limiter="mc",
+    periodic_x=False,
 ):
     """Hermes X-Z MC ExB transport, with weights applied after limiting.
 
-    Matches the current firstX/lastX boundary switch even for periodic X.
+    By default matches the shared firstX/lastX switch even for periodic X.
+    Central Reynolds transport requests periodic_x=True to retain seam flow.
     Uniform geometry in X-Z is required by the orchestration layer, because
     the C++ Z scatter uses the donor cell's volume for both neighbors.
     """
@@ -86,7 +95,9 @@ def xppm_faces(
     fz = vz * (right_z if limiter is None else xr.where(vz > 0, right_z, zp(left_z)))
     ix = xr.DataArray(np.arange(field.sizes["x"]), dims="x", coords={"x": field.x})
     low, high = mxg - 1, field.sizes["x"] - mxg - 1
-    if boundary_flux:
+    if periodic_x:
+        pass  # Complete periodic faces, including the firstX/lastX seam.
+    elif boundary_flux:
         midpoint = (field + xp(field)) / 2
         fx = xr.where(ix == low, vx * xr.where(vx < 0, xp(left_x), midpoint), fx)
         fx = xr.where(ix == high, vx * xr.where(vx > 0, right_x, midpoint), fx)
@@ -122,8 +133,8 @@ def face_work(fluxes, potential, geometry):
     return work / (2 * geometry.J * geometry.dx * geometry.dy * geometry.dz)
 
 
-def solenoidal_reynolds_faces(c, phi, Phi, geometry):
-    """Corner curl of -c J grad(phi).grad(Phi)/2, including cross metric."""
+def solenoidal_reynolds_faces(c, phi, Phi, geometry, *, mxg=2, walls=False):
+    """Corner curl, with constant Z wall corners when physical walls are present."""
     xp, zp = lambda f: neighbor(f, "x"), lambda f: neighbor(f, "z")
     avg = lambda f: (f + xp(f) + zp(f) + xp(zp(f))) / 4
     gradient = lambda f: (
@@ -141,10 +152,37 @@ def solenoidal_reynolds_faces(c, phi, Phi, geometry):
             + avg(geometry.g33) * pz * hz
         )
     )
+    if walls:
+        if mxg < 1 or phi.sizes["x"] <= 2 * mxg or phi.sizes["z"] < 1:
+            raise AuditError(
+                "Pinned Reynolds walls require guards and complete Z lines"
+            )
+        stream = stream.copy()
+        for face in (mxg - 1, phi.sizes["x"] - mxg - 1):
+            stream[{"x": face}] = stream.isel(x=face).mean("z", skipna=False)
     return {
         "x": (stream - neighbor(stream, "z", -1)) * geometry.dy,
         "z": -(stream - neighbor(stream, "x", -1)) * geometry.dy,
     }
+
+
+def reynolds_lambda(c, phi, geometry, *, mxg=2, periodic_x=False):
+    """Metric rotation scalar, before communication and physical guard filling."""
+    D = geometry.g11 * geometry.g33 - geometry.g13**2
+    return (
+        c
+        * D
+        * geometry.J
+        / 2
+        * perpendicular_operator(
+            1 / (geometry.J * D),
+            phi,
+            geometry,
+            mxg=mxg,
+            boundary_flux=True,
+            periodic_x=periodic_x,
+        ).divergence
+    )
 
 
 def reynolds_face_fluxes(
@@ -159,29 +197,20 @@ def reynolds_face_fluxes(
     periodic_x=False,
     limiter="mc",
     fill_guards=None,
+    reconstruction=None,
 ):
-    """Skew X-Z Reynolds faces; closed split wall flux retains the corner curl.
+    """Skew X-Z Reynolds faces with impermeable pinned wall corners.
 
     The orchestration layer supplies communication/Y guard filling; standalone
     tests can supply analytic periodic halos. Physical X scalar guards follow
     the component's midpoint-zero Q and linear-extrapolated Lambda rules.
     """
+    if reconstruction is not None:
+        if reconstruction not in ("xppm", "central"):
+            raise ValueError(f"Unknown Reynolds reconstruction: {reconstruction}")
+        limiter = "mc" if reconstruction == "xppm" else None
     Phi = phi + psi
-    D = geometry.g11 * geometry.g33 - geometry.g13**2
-    lam = (
-        c
-        * D
-        * geometry.J
-        / 2
-        * perpendicular_operator(
-            1 / (geometry.J * D),
-            phi,
-            geometry,
-            mxg=mxg,
-            boundary_flux=True,
-            periodic_x=periodic_x,
-        ).divergence
-    )
+    lam = reynolds_lambda(c, phi, geometry, mxg=mxg, periodic_x=periodic_x)
     Q = arakawa(phi, psi, geometry.dx, geometry.dz)
     if fill_guards is not None:
         Q, lam = fill_guards(Q), fill_guards(lam)
@@ -194,10 +223,27 @@ def reynolds_face_fluxes(
                 lam[{"x": cell + step * layer}] = lam.isel(x=cell) + layer * (
                     lam.isel(x=cell) - lam.isel(x=cell - step)
                 )
-    omega = xppm_faces(vorticity / 2, phi, geometry, mxg=mxg, limiter=limiter)
-    rotation = xppm_faces(lam, Phi, geometry, mxg=mxg, limiter=limiter)
+    periodic_faces = periodic_x and limiter is None
+    omega = xppm_faces(
+        vorticity / 2,
+        phi,
+        geometry,
+        mxg=mxg,
+        limiter=limiter,
+        periodic_x=periodic_faces,
+    )
+    rotation = xppm_faces(
+        lam,
+        Phi,
+        geometry,
+        mxg=mxg,
+        limiter=limiter,
+        periodic_x=periodic_faces,
+    )
     q = fv_xz(c / 2, Q, geometry, mxg=mxg, boundary_flux=False, periodic_x=periodic_x)
-    curl = solenoidal_reynolds_faces(c, phi, Phi, geometry)
+    curl = solenoidal_reynolds_faces(
+        c, phi, Phi, geometry, mxg=mxg, walls=walls and not periodic_x
+    )
     split = {d: omega[d] + rotation[d] + q["flux_" + d] for d in ("x", "z")}
     if walls and not periodic_x:
         ix = xr.DataArray(np.arange(phi.sizes["x"]), dims="x", coords={"x": phi.x})

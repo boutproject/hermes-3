@@ -337,7 +337,8 @@ BoutReal streamCorner(const Field3D& f, const Ind3D& i) {
   return 0.25 * (f[i] + f[i.xp()] + f[i.zp()] + f[i.xp().zp()]);
 }
 
-XZFaceFluxes advectionFaces(const Field3D& n, const Field3D& f, bool limited) {
+XZFaceFluxes advectionFaces(const Field3D& n, const Field3D& f, bool limited,
+                            bool close_radial_faces = true) {
   auto* m = f.getMesh();
   const auto* coord = f.getCoordinates();
   XZFaceFluxes flux{zeroFrom(f), zeroFrom(f)};
@@ -357,7 +358,8 @@ XZFaceFluxes advectionFaces(const Field3D& n, const Field3D& f, bool limited) {
         const Ind3D i =
             Ind3D((x * m->LocalNy + y) * m->LocalNz + z, m->LocalNy, m->LocalNz);
         const auto r = i.xp();
-        if (!((x == m->xstart - 1 && m->firstX()) || (x == m->xend && m->lastX()))) {
+        if (!(close_radial_faces
+              && ((x == m->xstart - 1 && m->firstX()) || (x == m->xend && m->lastX())))) {
           const BoutReal velocity = 0.5 * (coord->J()[i] + coord->J()[r])
                                     * (streamCorner(f, i) - streamCorner(f, i.zm()))
                                     / coord->dz()[i];
@@ -431,7 +433,8 @@ Field3D faceWork(const XZFaceFluxes& flux, const Field3D& f) {
 }
 
 XZFaceFluxes reynoldsFaceFluxes(const Field3D& c, const Field3D& vort, const Field3D& phi,
-                                const Field3D& psi, const RadialBoundaryModel& model) {
+                                const Field3D& psi, const RadialBoundaryModel& model,
+                                ReynoldsReconstruction reconstruction) {
   auto* m = phi.getMesh();
   const auto* coord = phi.getCoordinates();
   const Field3D Phi = phi + psi;
@@ -439,8 +442,15 @@ XZFaceFluxes reynoldsFaceFluxes(const Field3D& c, const Field3D& vort, const Fie
   Q.applyBoundary("neumann_o2");
   applyVorticityWallBoundary(Q, true);
   m->communicate(Q);
-  const auto omega = xppmFaceFluxes(0.5 * vort, phi);
-  const auto lambda = xppmFaceFluxes(reynoldsLambda(c, phi), Phi);
+  const auto advection = [&](const Field3D& n, const Field3D& stream) {
+    // The shared XPPM helper closes firstX/lastX even on periodic meshes.
+    // Central Reynolds transport needs the periodic seam for skew pairing.
+    return reconstruction == ReynoldsReconstruction::central
+               ? advectionFaces(n, stream, false, !m->periodicX)
+               : xppmFaceFluxes(n, stream);
+  };
+  const auto omega = advection(0.5 * vort, phi);
+  const auto lambda = advection(reynoldsLambda(c, phi), Phi);
   XZFaceFluxes flux{omega.x + lambda.x, omega.z + lambda.z};
   const Field3D half_c = 0.5 * c;
   BOUT_FOR(i, phi.getRegion("RGN_NOBNDRY")) {
@@ -451,7 +461,7 @@ XZFaceFluxes reynoldsFaceFluxes(const Field3D& c, const Field3D& vort, const Fie
     }
     flux.z[i] += q.zp * coord->dy()[i];
   }
-  const auto curl = solenoidalReynoldsFaceFluxes(c, phi, Phi);
+  const auto curl = solenoidalReynoldsFaceFluxes(c, phi, Phi, model.walls);
   BOUT_FOR(i, phi.getRegion("RGN_NOBNDRY")) {
     flux.x[i] += curl.x[i];
     flux.z[i] += curl.z[i];
@@ -461,9 +471,11 @@ XZFaceFluxes reynoldsFaceFluxes(const Field3D& c, const Field3D& vort, const Fie
     if (model.walls && !m->periodicX) {
       if (m->firstX() && i.x() == m->xstart) {
         flux.x[i.xm()] = curl.x[i.xm()];
+        ASSERT2(flux.x[i.xm()] == 0.0);
       }
       if (m->lastX() && i.x() == m->xend) {
         flux.x[i] = curl.x[i];
+        ASSERT2(flux.x[i] == 0.0);
       }
     }
   }
@@ -471,7 +483,7 @@ XZFaceFluxes reynoldsFaceFluxes(const Field3D& c, const Field3D& vort, const Fie
 }
 
 XZFaceFluxes solenoidalReynoldsFaceFluxes(const Field3D& c, const Field3D& phi,
-                                          const Field3D& Phi) {
+                                          const Field3D& Phi, bool walls) {
   auto* m = phi.getMesh();
   const auto* coord = phi.getCoordinates();
   XZFaceFluxes flux{zeroFrom(phi), zeroFrom(phi)};
@@ -480,6 +492,9 @@ XZFaceFluxes solenoidalReynoldsFaceFluxes(const Field3D& c, const Field3D& phi,
     return 0.25 * (f[i] + f[i.xp()] + f[i.zp()] + f[i.xp().zp()]);
   };
   const Field3D cJ = c * coord->J();
+  if (walls && !m->periodicX) {
+    ASSERT0(m->getNZPE() == 1 && m->zstart == 0 && m->zend + 1 == m->LocalNz);
+  }
   for (int x = m->xstart - 1; x <= m->xend; ++x) {
     for (int y = m->ystart; y <= m->yend; ++y) {
       for (int z = 0; z < m->LocalNz; ++z) {
@@ -499,6 +514,28 @@ XZFaceFluxes solenoidalReynoldsFaceFluxes(const Field3D& c, const Field3D& phi,
                + average(coord->g13(), i) * (p.first * h.second + p.second * h.first)
                + average(coord->g33(), i) * p.second * h.second);
       }
+    }
+  }
+  if (walls && !m->periodicX) {
+    const auto pin = [&](int x) {
+      for (int y = m->ystart; y <= m->yend; ++y) {
+        BoutReal mean = 0.0;
+        for (int z = 0; z < m->LocalNz; ++z) {
+          mean += stream(x, y, z);
+        }
+        mean /= m->LocalNz;
+        for (int z = 0; z < m->LocalNz; ++z) {
+          stream(x, y, z) = mean;
+        }
+      }
+    };
+    // Constant wall corners eliminate each normal flux, including all weights,
+    // while the corner curl still telescopes in every physical cell.
+    if (m->firstX()) {
+      pin(m->xstart - 1);
+    }
+    if (m->lastX()) {
+      pin(m->xend);
     }
   }
   for (int x = m->xstart - 1; x <= m->xend; ++x) {
@@ -643,6 +680,11 @@ EvolveVorticityIonEnergy::EvolveVorticityIonEnergy(std::string name, Options& al
 
   poloidal_flows =
       options["poloidal_flows"].doc("Include poloidal ExB flow").withDefault<bool>(false);
+
+  reynolds_reconstruction =
+      options["reynolds_reconstruction"]
+          .doc("X-Z Reynolds face reconstruction: xppm (MC limited) or central")
+          .withDefault(bout::ion_energy::ReynoldsReconstruction::xppm);
 
   density_floor = options["density_floor"].doc("Minimum density floor").withDefault(1e-7);
 
@@ -926,8 +968,9 @@ void EvolveVorticityIonEnergy::transform_impl(GuardedOptions& state) {
   // Reynolds stress
 
   const Field3D Phi = phi + psi;
-  const auto reynolds = bout::ion_energy::reynoldsFaceFluxes(
-      Field3D{boussinesq_coeff}, vorticity, phi, psi, radial_model);
+  const auto reynolds =
+      bout::ion_energy::reynoldsFaceFluxes(Field3D{boussinesq_coeff}, vorticity, phi, psi,
+                                           radial_model, reynolds_reconstruction);
   DivJReynolds = -bout::ion_energy::divergence(reynolds);
   // Preserve the shared poloidal X-Y terms; the skew construction is X-Z only.
   Field3D lambda;

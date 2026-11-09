@@ -3,6 +3,7 @@
 
 import sys
 from dataclasses import replace
+from functools import partial
 from pathlib import Path
 
 import numpy as np
@@ -10,7 +11,7 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "tools"))
 from energy_analysis import perpendicular_operator, source_balance, summary, wall_budget
 from energy_analysis.budgets import particle_inventory
-from energy_analysis.inventory import energy_inventory
+from energy_analysis.inventory import energy_densities, energy_inventory
 from energy_analysis.testing import Study, parser, state_difference
 from energy_analysis.walls import rotation_decay, uniform_drift
 from scipy.integrate import cumulative_trapezoid
@@ -20,12 +21,15 @@ OUTPUTS = 200
 OUTPUT_STEP = 2
 
 
-def overrides(mode, ac, *, nx=8, profile="perturbed", outputs=None):
+def overrides(
+    mode, ac, *, nx=8, profile="perturbed", outputs=None, reconstruction="xppm"
+):
     args = [
         "restart=false",
         f"mesh:nx={nx + 4}",
         f"evolve_vorticity_ion_energy:radial_boundary={mode}",
         f"evolve_vorticity_ion_energy:polarisation_ac_boundary={ac}",
+        f"evolve_vorticity_ion_energy:reynolds_reconstruction={reconstruction}",
         f"evolve_vorticity_ion_energy:viscosity={0.02 if mode == 'free_slip' else 0}",
         f"evolve_vorticity_ion_energy:diagnose={str(ac == 'dirichlet').lower()}",
     ]
@@ -50,6 +54,25 @@ def overrides(mode, ac, *, nx=8, profile="perturbed", outputs=None):
 
 
 def audit(study, run, label, *, nonlinear=False):
+    densities = energy_densities(run)
+    thermal = run.interior(
+        run.data.Eion - densities.ion_parallel - densities.ion_perpendicular
+    )
+    study.check(
+        "minimum_thermal/" + label,
+        float(thermal.min()) / float(thermal.isel(t=0).mean()),
+        "minimum_thermal",
+        minimum=True,
+    )
+    for species in run.species:
+        if species.name != "e" and abs(species.charge) > 1e-5:
+            density = run.interior(run.data["N" + species.name])
+            study.check(
+                "minimum_density/" + species.name + "/" + label,
+                float(density.min()) / float(density.isel(t=0).mean()),
+                "minimum_density",
+                minimum=True,
+            )
     report = summary(run)
     study.result["cases"][Path(run.source).name]["summary"] = report
     study.check("recovery/" + label, report["recovery_error"], "recovery")
@@ -80,7 +103,7 @@ def audit(study, run, label, *, nonlinear=False):
         int(budget.attrs["coverage"] != "complete"),
         "coverage",
     )
-    open_faces = "dirichlet" in label or label.startswith("free_slip")
+    open_faces = "dirichlet" in label
     if budget.attrs["coverage"] == "complete":
         balance = source_balance(run)
         study.check(
@@ -195,13 +218,17 @@ def audit(study, run, label, *, nonlinear=False):
 def main():
     cli = parser(__doc__)
     cli.set_defaults(timeout=600)
+    cli.add_argument(
+        "--reynolds-reconstruction", choices=("xppm", "central"), default="xppm"
+    )
     args = cli.parse_args()
+    run_overrides = partial(overrides, reconstruction=args.reynolds_reconstruction)
     with Study(HERE, args) as study:
         runs, rotations = {}, []
         for mode in ("fixed", "free_slip", "no_slip"):
             for ac in ("neumann", "dirichlet"):
                 label = mode + "-" + ac
-                runs[label] = study.run(label, overrides(mode, ac))
+                runs[label] = study.run(label, run_overrides(mode, ac))
                 audit(study, runs[label], label, nonlinear=True)
         diagnosed = runs["no_slip-dirichlet"]
         diagnostic_names = [
@@ -230,7 +257,8 @@ def main():
         rigid_runs = []
         for nx in (16, 32):
             rigid = study.run(
-                f"rigid-{nx}", overrides("no_slip", "neumann", nx=nx, profile="rigid")
+                f"rigid-{nx}",
+                run_overrides("no_slip", "neumann", nx=nx, profile="rigid"),
             )
             rigid_runs.append(rigid)
             audit(study, rigid, f"no_slip-rigid-{nx}")
@@ -251,7 +279,7 @@ def main():
             minimum=True,
         )
         uniform = study.run(
-            "uniform-16", overrides("no_slip", "neumann", nx=16, profile="uniform")
+            "uniform-16", run_overrides("no_slip", "neumann", nx=16, profile="uniform")
         )
         audit(study, uniform, "no_slip-uniform-16")
         study.check(
@@ -266,7 +294,7 @@ def main():
             short = study.run(
                 mode + "-checkpoint",
                 [
-                    *overrides(mode, "neumann", profile=profile, outputs=outputs),
+                    *run_overrides(mode, "neumann", profile=profile, outputs=outputs),
                     "evolve_vorticity_ion_energy:diagnose=true",
                 ],
             )
@@ -279,7 +307,7 @@ def main():
             resumed = study.run(
                 mode + "-restart",
                 [
-                    *overrides(mode, "neumann", profile=profile, outputs=1),
+                    *run_overrides(mode, "neumann", profile=profile, outputs=1),
                     "restart=true",
                     "append=false",
                     "dump_on_restart=true",

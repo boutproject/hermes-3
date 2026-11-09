@@ -12,6 +12,10 @@ from energy_analysis.convergence import manufactured_errors
 from energy_analysis.testing import Study, parser, state_difference
 
 HERE = Path(__file__).resolve().parent
+PROFILES = {
+    "default": ("baseline", "curvature"),
+    "long": ("baseline", "skew", "viscosity", "curvature"),
+}
 EVOLVED = ("Ni", "Nj", "NVi", "NVj", "Pe", "Vort", "Eion")
 REFERENCES = {
     **{name: name + ":solution" for name in EVOLVED},
@@ -28,9 +32,19 @@ def main():
     cli = parser(__doc__)
     cli.set_defaults(timeout=600)
     cli.add_argument("--profile", choices=("default", "long"), default="default")
+    cli.add_argument(
+        "--variants",
+        nargs="+",
+        choices=PROFILES["long"],
+        help="Override the profile with any subset of variants",
+    )
     args = cli.parse_args()
+    variants = args.variants if args.variants is not None else PROFILES[args.profile]
     with Study(HERE, args) as study:
-        for variant in ("baseline", "skew", "viscosity", "curvature"):
+        study.result["profile"] = args.profile
+        study.result["variants"] = list(variants)
+        study.result["variant_seconds"] = {}
+        for variant in variants:
             errors = []
             sizes = (8, 16, 32) if args.profile == "long" else (8, 16)
             for size in sizes:
@@ -74,24 +88,29 @@ def main():
                         limit=study.criteria["errors"][name],
                         truncation=True,
                     )
-        plain = study.run(
-            "baseline-8-plain",
-            [
-                "restart=false",
-                "mesh:nx=12",
-                "mesh:ny=16",
-                "mesh:nz=8",
-                "solver:nout=1",
-                "solver:output_step=0.1",
-                "evolve_vorticity_ion_energy:diagnose=false",
-            ],
-            template=HERE / "data-baseline/BOUT.inp",
-        )
-        study.check(
-            "diagnostics_state",
-            state_difference(diagnostic_reference, plain),
-            "diagnostics",
-        )
+            study.result["variant_seconds"][variant] = sum(
+                study.result["cases"][f"{variant}-{size}"]["elapsed_seconds"]
+                for size in sizes
+            )
+        if "baseline" in variants:
+            plain = study.run(
+                "baseline-8-plain",
+                [
+                    "restart=false",
+                    "mesh:nx=12",
+                    "mesh:ny=16",
+                    "mesh:nz=8",
+                    "solver:nout=1",
+                    "solver:output_step=0.1",
+                    "evolve_vorticity_ion_energy:diagnose=false",
+                ],
+                template=HERE / "data-baseline/BOUT.inp",
+            )
+            study.check(
+                "diagnostics_state",
+                state_difference(diagnostic_reference, plain),
+                "diagnostics",
+            )
 
 
 if __name__ == "__main__":

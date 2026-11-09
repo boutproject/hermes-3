@@ -1996,17 +1996,29 @@ fluxes share the same faces: closed in ``fixed`` and ``no_slip``, open in
 ``free_slip``. The viscosity coefficient retains its interior value at each
 radial face so that the free-slip condition permits diffusion. Reynolds
 energy flux and E×B energy flux are closed in every mode. At physical X walls,
-the split Reynolds flux is set to zero and the corner curl is retained:
-:math:`F_x=\Delta_z\Psi`. Its sum over each periodic Z wall line is zero,
-so it carries no net charge. The wall midpoint conditions give
-:math:`v_E^x=U^x=Q=0`; the kinetic-energy wall flux is therefore zero.
+the split Reynolds flux is set to zero. At each physical wall and local Y,
+the corner stream function is replaced by its periodic Z mean:
+:math:`\Psi_{b,k+1/2}=\langle\Psi_b\rangle_z`. Thus
+:math:`F_x=\Delta_z\Psi=0` on every wall face. An impermeable Reynolds
+contribution requires zero normal polarisation transport for every species,
+since ions carry the polarisation current. A zero unweighted wall sum would
+still permit local particle, momentum and energy exchange after face weighting.
+Pinning closes each weighted face, preserves the solenoidal corner curl and
+leaves its vorticity divergence unchanged to roundoff. Only the Z faces of the
+boundary cells change. The work identity remains exact, but the discrete
+kinetic-energy identity acquires a wall-layer residual whose volume integral
+is :math:`O(\Delta x)`, visible in ``reynolds_heating``.
 :math:`Q` has zero wall midpoint and :math:`\Lambda` uses linear radial
-extrapolation for reconstruction. Species and energy weights still multiply
-the retained curl, so their signed wall budgets include it.
-The pressure part of :math:`E_{\mathrm{adv}}` is
-:math:`5\overline{A}\psi/(2\rho)`, which varies with mass density even where
-:math:`\psi` is uniform. This permits polarisation energy exchange through
-the retained curl with Neumann chi as well as with Dirichlet chi.
+extrapolation for reconstruction.
+
+``reynolds_reconstruction`` selects ``xppm`` (default, MC-limited face values)
+or ``central`` (central face averages) for the X-Z advection of vorticity and
+:math:`\Lambda`. Central reconstruction supplies the non-dissipative skew
+alternative for assessing limiter-induced energy transfer. Physical viscosity
+is unchanged. On periodic X meshes, central Reynolds reconstruction includes
+the seam faces; closing them would break its skew work pairing. The additional
+poloidal X-Y transport, when enabled, continues
+to use the shared XPPM operator.
 
 The auxiliary solve uses the physical vorticity RHS and the full FV
 operator, including wall currents. Its transport faces are selected separately.
@@ -2014,7 +2026,7 @@ operator, including wall currents. Its transport faces are selected separately.
 ``neumann`` (default) sets :math:`\partial_x\widetilde{\chi}=0` and closes
 the chi contribution to normal polarisation transport of particles, momentum
 and energy by setting its complete face flux to zero, including cross-metric
-terms. The Reynolds corner curl is retained. The boundary cells acquire a
+terms. Pinned Reynolds corners close its weighted wall fluxes. The boundary cells acquire a
 charge mismatch from the dropped chi wall flux, in
 addition to any error from the finite-correction auxiliary inverse.
 This choice generally permits larger timesteps. A Neumann derivative alone
@@ -2026,7 +2038,7 @@ shifted-metric grids; explicit face closure removes it on other grids.
 the chi part of polarisation transport, allowing particle, momentum and energy
 exchange consistently with the current solve. The flux is signed and may
 enter or leave the plasma; no one-way loss constraint is imposed. Reynolds
-transport retains its corner curl. Chi reflects each radial guard layer from the
+transport remains impermeable. Chi reflects each radial guard layer from the
 corresponding interior layer, evenly for Neumann AC and oddly for Dirichlet AC.
 The DC midpoint of chi is zero for ``fixed`` and ``free_slip``, and
 :math:`d\phi_b/dt` for ``no_slip``. This approximates
@@ -2120,15 +2132,16 @@ divergences ``DivEExB``, ``DivEReynolds``, ``DivEelectric``, ``DivEparallel``
 and ``DivEpol``, and the exchange/source terms ``phi_Div_Je``,
 ``electron_exb_work`` and ``Eion_src``. ``DivJpol`` is the divergence of the
 selected polarisation transport current: the chi wall flux is closed for
-Neumann AC and open for Dirichlet AC. The Reynolds corner curl is retained
-at walls in both cases. ``DivJReynolds`` records the Reynolds current divergence.
+Neumann AC and open for Dirichlet AC. The Reynolds wall flux is zero
+in both cases. ``DivJReynolds`` records the Reynolds current divergence.
 ``reynolds_work`` is the cell sum of current face flux times the potential jump,
 divided by twice the cell volume. Its volume integral equals
 :math:`-\int\Phi\nabla\cdot\boldsymbol{\Gamma}\,dV` with the wall conditions
 above. ``reynolds_heating = reynolds_work - DivEReynolds`` records the signed
 transfer from perpendicular kinetic energy into ion heat through the
 total-energy partition. Limiting and discretisation contribute to this transfer;
-negative values indicate a kinetic-energy gain. Both diagnostics have units
+negative values indicate a kinetic-energy gain. The pinned-corner wall layer
+contributes an :math:`O(\Delta x)` volume-integrated residual. Both diagnostics have units
 W m\ :sup:`-3`.
 ``ion_chi`` and ``ddt(Phi)`` record the same auxiliary potential in V/s, with
 conversion factor :math:`T_{\mathrm{norm}}\Omega_{ci}`. It approximates the

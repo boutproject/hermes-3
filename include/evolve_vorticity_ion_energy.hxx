@@ -18,6 +18,7 @@
 
 BOUT_ENUM_CLASS_NS(bout::ion_energy, RadialBoundary, fixed, free_slip, no_slip);
 BOUT_ENUM_CLASS_NS(bout::ion_energy, PolarisationACBoundary, neumann, dirichlet);
+BOUT_ENUM_CLASS_NS(bout::ion_energy, ReynoldsReconstruction, xppm, central);
 
 namespace bout::ion_energy {
 /// All radial settings are derived once from the two boundary enums.
@@ -64,14 +65,16 @@ XZFaceFluxes xppmFaceFluxes(const Field3D& n, const Field3D& stream);
 /// Radial firstX/lastX faces are closed.
 XZFaceFluxes centralAdvectionFaceFluxes(const Field3D& n, const Field3D& stream);
 /// Skew Reynolds current: split terms plus a corner curl. At physical walls
-/// only the corner curl remains. Inputs must carry their physical wall guards.
-XZFaceFluxes reynoldsFaceFluxes(const Field3D& c, const Field3D& vorticity,
-                                const Field3D& phi, const Field3D& psi,
-                                const RadialBoundaryModel& model);
+/// the wall corners are pinned, closing transport for every face weight.
+/// Inputs must carry their physical wall guards.
+XZFaceFluxes
+reynoldsFaceFluxes(const Field3D& c, const Field3D& vorticity, const Field3D& phi,
+                   const Field3D& psi, const RadialBoundaryModel& model,
+                   ReynoldsReconstruction reconstruction = ReynoldsReconstruction::xppm);
 /// Corner curl contribution to the Reynolds current, with the same face indices.
 /// Its divergence vanishes to roundoff; Y-plane widths must be uniform in X-Z.
 XZFaceFluxes solenoidalReynoldsFaceFluxes(const Field3D& c, const Field3D& phi,
-                                          const Field3D& Phi);
+                                          const Field3D& Phi, bool walls = false);
 /// Conservative divergence on physical cells. Optional weights are averaged
 /// across each face after reconstruction; the supplied fluxes are preserved.
 Field3D divergence(const XZFaceFluxes& flux, const Field3D* weight = nullptr);
@@ -229,6 +232,7 @@ private:
   int polarisation_corrections{2}; ///< FV defect corrections after the spectral solve
 
   bout::ion_energy::RadialBoundaryModel radial_model;
+  bout::ion_energy::ReynoldsReconstruction reynolds_reconstruction;
   std::vector<BoutReal> wall_rate_inner; ///< Current inner wall dphi/dt, by local y
   std::vector<BoutReal> wall_rate_outer; ///< Current outer wall dphi/dt, by local y
 

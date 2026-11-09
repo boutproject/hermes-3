@@ -22,7 +22,7 @@ def absolute_wall_flux(run, transport):
 def wall_budget(run):
     """Return outward energy/particle fluxes and the measured wall rate.
 
-    The Reynolds wall curl is retained with face weights. Open chi faces require saved chi;
+    Reynolds faces are impermeable for every weight. Open chi faces require saved chi;
     this missing term is reported independently of reconstructable viscosity.
     Time is SI; potential and midpoint rates use Hermes potential units.
     """
@@ -33,8 +33,6 @@ def wall_budget(run):
         "viscous_outward": zero.copy(),
         "polarisation_outward": zero.copy(),
         "vorticity_rate": zero.copy(),
-        "reynolds_vorticity_rate": zero.copy(),
-        "reynolds_vorticity_absolute": zero.copy(),
         "viscous_vorticity_absolute": zero.copy(),
         "polarisation_absolute": zero.copy(),
     }
@@ -105,19 +103,14 @@ def wall_budget(run):
                 )
             c = run.scalar_option("average_atomic_mass") / ds.Bxy**2
             advected = polarisation_energy_coefficient(run).total
-            curl = solenoidal_reynolds_faces(c, ds.phi, Phi, ds)
+            curl = solenoidal_reynolds_faces(
+                c, ds.phi, Phi, ds, mxg=run.mxg, walls=True
+            )
             ix = xr.DataArray(np.arange(ds.sizes["x"]), dims="x", coords={"x": ds.x})
             wall_curl = curl["x"].where(
                 (ix == run.mxg - 1) | (ix == ds.sizes["x"] - run.mxg - 1), 0
             )
-            reynolds_wall = flux_dataset({"x": -wall_curl}, ds)
-            fields["reynolds_vorticity_rate"] = (
-                run.integrate(reynolds_wall.divergence) * run.frequency
-            )
-            fields["vorticity_rate"] += fields["reynolds_vorticity_rate"]
-            fields["reynolds_vorticity_absolute"] = (
-                absolute_wall_flux(run, reynolds_wall) * run.frequency
-            )
+            assert bool((wall_curl == 0).all()), "Reynolds wall flux is not zero"
             chi_open = polarisation_ac_boundary(run) == "dirichlet"
             chi = ds.get("ion_chi", ds.get("ddt(Phi)"))
             if chi_open and chi is None:
@@ -125,7 +118,7 @@ def wall_budget(run):
             else:
 
                 def wall_transport(weight):
-                    faces = {"x": -wall_curl * (weight + neighbor(weight, "x")) / 2}
+                    faces = {"x": xr.zeros_like(wall_curl)}
                     if chi_open:
                         current = fv_xz(
                             -c * weight, chi, ds, mxg=run.mxg, boundary_flux=True
@@ -168,8 +161,6 @@ def wall_budget(run):
             in (
                 "vorticity_rate",
                 "viscous_vorticity_absolute",
-                "reynolds_vorticity_rate",
-                "reynolds_vorticity_absolute",
             )
             else "W"
         )

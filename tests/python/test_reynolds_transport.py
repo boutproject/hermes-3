@@ -2,6 +2,7 @@
 
 import importlib.util
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -9,6 +10,7 @@ import xarray as xr
 from numpy.testing import assert_allclose
 
 s = pytest.importorskip("sympy")
+from energy_analysis.fluxes import fill_wall_guards
 from energy_analysis.operators import perpendicular_operator
 from energy_analysis.transport import (
     arakawa,
@@ -138,12 +140,34 @@ def test_curl_work_and_wall_identities():
             phi[{"x": cell + step * layer}] = -phi.isel(x=cell)
             psi[{"x": cell + step * layer}] = -psi.isel(x=cell)
     Phi = phi + psi
-    curl = solenoidal_reynolds_faces(v["c"], phi, Phi, g)
-    assert_allclose(face_divergence(curl, g).isel(x=slice(2, -2)), 0, atol=1e-13)
+    unpinned = solenoidal_reynolds_faces(v["c"], phi, Phi, g)
+    curl = solenoidal_reynolds_faces(v["c"], phi, Phi, g, walls=True)
+    volume = g.J * g.dx * g.dy * g.dz
+    scale = max(
+        1.0,
+        float((abs(curl["x"]) + abs(curl["z"])).isel(x=slice(1, -2)).max())
+        / float(volume.min()),
+    )
+    assert_allclose(
+        face_divergence(curl, g).isel(x=slice(2, -2)) / scale, 0, atol=1e-13
+    )
     faces = reynolds_face_fluxes(v["c"], v["omega"], phi, psi, g)
+    rng = np.random.default_rng(1729)
+    weight = xr.DataArray(rng.uniform(0.1, 2, phi.shape), dims=phi.dims)
     for face in (1, phi.sizes["x"] - 3):
-        assert_allclose(faces["x"].isel(x=face), curl["x"].isel(x=face), atol=1e-13)
-        assert abs(float(faces["x"].isel(x=face).sum())) < 1e-13
+        assert_allclose(faces["x"].isel(x=face), 0, atol=0)
+        for w in (xr.ones_like(phi), weight):
+            from energy_analysis.transport import neighbor
+
+            weighted = faces["x"] * (w + neighbor(w, "x")) / 2
+            assert_allclose(weighted.isel(x=face), 0, atol=1e-14)
+    before = {d: faces[d] - curl[d] + unpinned[d] for d in faces}
+    assert_allclose(
+        face_divergence(faces, g).isel(x=slice(2, -2)),
+        face_divergence(before, g).isel(x=slice(2, -2)),
+        atol=1e-13 * scale,
+        rtol=1e-13,
+    )
     volume = g.J * g.dx * g.dy * g.dz
     integral = lambda f: float((f * volume).isel(x=slice(2, -2)).sum())
     assert_allclose(
@@ -200,3 +224,58 @@ def test_flat_slab_agrees_with_legacy_split_interior():
         err = face_divergence(new, g) - face_divergence(old, g)
         errors.append(float(np.sqrt((err.isel(x=slice(5, -5)) ** 2).mean())))
     assert np.all(np.log2(np.asarray(errors[:-1]) / errors[1:]) > 1.8), errors
+
+
+def test_pinned_wall_heating_converges_in_sheared_annulus():
+    integrals = []
+    for n in (16, 32, 64):
+        v, g = sample("annulus", n)
+        wall = SimpleNamespace(mxg=2)
+        phi = fill_wall_guards(v["phi"], wall, "zero")
+        psi = fill_wall_guards(v["psi"], wall, "pressure")
+        omega = fill_wall_guards(v["omega"], wall, "neumann")
+        Phi = phi + psi
+        faces = reynolds_face_fluxes(
+            v["c"],
+            omega,
+            phi,
+            psi,
+            g,
+            reconstruction="central",
+        )
+        from energy_analysis.transport import central_advection_faces
+
+        kinetic = perpendicular_operator(v["c"], Phi, g).kperp
+        heating = face_work(faces, Phi, g) - face_divergence(
+            central_advection_faces(kinetic, phi, g), g
+        )
+        volume = g.J * g.dx * g.dy * g.dz
+        integrals.append(abs(float((heating * volume).isel(x=[2, -3]).sum())))
+    orders = np.log2(np.asarray(integrals[:-1]) / integrals[1:])
+    assert np.all(orders >= 0.8), (integrals, orders)
+
+
+@pytest.mark.parametrize("n", (32, 64))
+def test_central_periodic_current_has_zero_integrated_work(n):
+    v, g = sample("periodic", n)
+    for name, value in {"J": 1.0, "g11": 1.0, "g33": 1.0, "g13": 0.0}.items():
+        g[name] = value
+    # Include nonzero normal flow at the periodic seam. Closing it previously
+    # gave work -0.01726 / -0.009094 on 32/64 (approximately first order).
+    phi, psi = periodic_halos(v["phi"]), periodic_halos(v["psi"])
+    c, Phi = xr.ones_like(phi), phi + psi
+    omega = periodic_halos(perpendicular_operator(c, Phi, g).divergence)
+    faces = reynolds_face_fluxes(
+        c,
+        omega,
+        phi,
+        psi,
+        g,
+        walls=False,
+        periodic_x=True,
+        reconstruction="central",
+        fill_guards=periodic_halos,
+    )
+    volume = g.J * g.dx * g.dy * g.dz
+    work = (face_work(faces, Phi, g) * volume).isel(x=slice(2, -2))
+    assert abs(float(work.sum())) <= 1e-13 * max(1.0, float(abs(work).sum()))

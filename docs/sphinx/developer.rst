@@ -1655,16 +1655,20 @@ Four integrated tests exercise ``evolve_vorticity_ion_energy``:
   density sources, with collisional heat exchange and output-cadence refinement.
 - ``ion-energy-walls`` checks the three radial wall modes, both AC conditions,
   nonlinear perturbed budgets in every mode, absolute wall-flux and kinetic-energy
-  minimum checks, rigid-rotation decay, uniform-vorticity drift and perturbed restarts.
+  minimum checks, density and local thermal-energy minima above ``1e-3`` of
+  their initial means at every output, rigid-rotation decay, uniform-vorticity
+  drift and perturbed restarts.
 - ``ion-energy-mms`` checks continuum expression sources on two resolutions for
-  orthogonal, skew-metric, viscous and curvature slabs. The baseline includes nonzero
+  baseline and curvature slabs. ``ion-energy-mms-long`` runs baseline,
+  skew-metric, viscous and curvature variants at 8, 16 and 32; ``--variants``
+  selects any subset. The baseline includes nonzero
   potential, E×B transport and Reynolds stress; all variants have varying
   composition and finite parallel flows. The focused skew and viscosity
   variants retain wall-compatible zero potential. Periodic Y uses twice the
   X/Z resolution. Known convergence failures remain enabled and are listed in
   the MMS README. The added curvature variant uses a finite cosine total-pressure
   mode and its analytic chi inverse while retaining nonzero potential. The
-  ``long`` profile adds size 32 and uses two MPI ranks.
+  ``long`` profile uses two MPI ranks.
 
 All cases use zero parallel current and omit sheaths. Parallel-current and
 sheath coverage will be restored after those terms enter the ion-energy
@@ -1680,11 +1684,11 @@ invariants, recovery and diagnostic comparisons use fixed roundoff floors.
 Free-slip vorticity budgets use ``open_vorticity`` because time integration of
 sampled viscous wall fluxes introduces a cadence error. The perturbed walls
 use ``rtol = 1e-7`` and ``atol = 1e-10``; analytic cases retain tighter tolerances.
-The Reynolds corner curl has zero net wall charge, but its enthalpy-weighted
-wall sum need not vanish even with Neumann chi. These sampled energy exchanges
-use ``open_energy``. The new free-slip runs reach density floors and nonphysical
-local energy before completing the budget; increasing chi corrections to 8 and
-20 did not resolve this acceptance failure. The walls README records it.
+Pinned Reynolds corners close the normal flux for every face weight; Neumann
+particle budgets therefore use the closed-wall floor. Free-slip viscous wall
+power still introduces output-sampling error in energy balances. Central
+Reynolds reconstruction is available for comparing free-slip stability without
+changing the default MC limiter. The walls README records the measured results.
 MMS truncation errors, convergence orders and magnitude minima retain their
 separate criteria. Every effective limit is saved with its check.
 
@@ -1702,6 +1706,15 @@ not require an environment in the source tree.
    ctest --test-dir build -L energy -LE long --output-on-failure -j 2
    python tests/integrated/ion-energy-closed/runtest --exe build/hermes-3
    python tests/integrated/ion-energy-mms/mms.py --all --check --check-files
+   python tests/integrated/ion-energy-mms/operator_convergence.py --output /tmp/operator-orders.json
+
+``operator_convergence.py`` samples analytic MMS fields on X-Z planes at
+16/32/64, applies the component wall guards, and reports all-cell and interior
+L2 orders and error maxima for each Reynolds term and each species/energy
+weight. It compares both reconstructions and needs SymPy, but no Hermes run.
+``--y`` and ``--time`` select the analytic plane; ``--run`` checks the mirror
+against saved C++ diagnostics with a ``1e-10`` limit. The diagnostic is not a
+CTest convergence gate and does not change the manufactured physics.
 
 ``energy-analysis-python`` covers synthetic inventories, discrete operators,
 coverage flags and generator identities. The uniform equilibrium and analytic
@@ -1709,7 +1722,7 @@ AC wall assertions have C++ unit coverage in
 ``EvolveVorticityIonEnergyTest.UniformStateHasZeroRHS``,
 ``PolarisationPotentialHasFixedCorrectionResponse``, ``FixedAuxiliaryInverse*``
 and ``MixedPolarisationGuards*``. ``XPPMFacesMatchSharedDivergenceAndWeights``
-checks the shared XPPM reconstruction and ``ReynoldsCurlIsSolenoidalAndWallsRetainIt``
+checks the shared XPPM reconstruction and ``ReynoldsCurlIsSolenoidalAndWallsImpermeable``
 checks the curl, wall and work identities. ``test_reynolds_transport.py`` compares
 central and limited transport with an independent covariant SymPy reference on
 wavy metrics and a sheared annulus, including varying c, J and D. It also checks

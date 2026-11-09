@@ -1,4 +1,5 @@
 #include "gtest/gtest.h"
+#include <random>
 
 #include "fake_mesh_fixture.hxx"
 #include "fake_solver.hxx"
@@ -1825,7 +1826,7 @@ TEST_F(EvolveVorticityIonEnergyTest, WallModelsPairParticleChargeAndEnergyBudget
         EXPECT_NEAR(integral(state["species"][species]["density_source"].as<Field3D>()),
                     -integral(loss), 1e-12);
         if (std::string{ac} == "neumann") {
-          EXPECT_GT(max(abs(loss), true), 0.0); // weighted wall curl is retained
+          EXPECT_DOUBLE_EQ(max(abs(loss), true), 0.0); // every Reynolds weight is closed
         }
       }
       EXPECT_NEAR(integral(solver.getTimeDerivs()["Vort"].as<Field3D>()),
@@ -1863,7 +1864,7 @@ TEST_F(EvolveVorticityIonEnergyTest, XPPMFacesMatchSharedDivergenceAndWeights) {
   }
 }
 
-TEST_F(EvolveVorticityIonEnergyTest, ReynoldsCurlIsSolenoidalAndWallsRetainIt) {
+TEST_F(EvolveVorticityIonEnergyTest, ReynoldsCurlIsSolenoidalAndWallsImpermeable) {
   using namespace bout::ion_energy;
   auto* coord = mesh->getCoordinates();
   coord->setJ(makeField<Coordinates::FieldMetric>(
@@ -1879,26 +1880,39 @@ TEST_F(EvolveVorticityIonEnergyTest, ReynoldsCurlIsSolenoidalAndWallsRetainIt) {
   applyWallPressureBoundary(psi);
   const Field3D c = makeField<Field3D>(
       [](const Ind3D& i) { return 1.0 + 0.1 * cos(i.x() + 2 * PI * i.z() / nz); });
-  const auto curl = solenoidalReynoldsFaceFluxes(c, phi, phi + psi);
+  const auto unpinned = solenoidalReynoldsFaceFluxes(c, phi, phi + psi, false);
+  const auto curl = solenoidalReynoldsFaceFluxes(c, phi, phi + psi, true);
+  EXPECT_LT(max(abs(divergence(curl) - divergence(unpinned))), 1e-13);
   EXPECT_LT(max(abs(divergence(curl))), 1e-13);
   RadialBoundaryModel model;
   model.walls = true;
   const auto flux =
       reynoldsFaceFluxes(c, Div_a_Grad_perp_XZ(c, phi + psi), phi, psi, model);
-  BoutReal signal = 0.0;
+  // Positive weights include independent guard values: global cancellation
+  // of the unweighted wall current is insufficient for impermeability.
+  std::mt19937 generator(1729);
+  std::uniform_real_distribution<BoutReal> distribution(0.1, 2.0);
+  const Field3D weight =
+      makeField<Field3D>([&](const Ind3D&) { return distribution(generator); });
+  const Field3D one = 1.0 + zeroFrom(phi);
+  const BoutReal scale = std::max(1.0, max(abs(flux.x)));
   for (int x : {mesh->xstart - 1, mesh->xend}) {
     for (int y = mesh->ystart; y <= mesh->yend; ++y) {
-      BoutReal sum = 0.0;
       for (int z = 0; z < nz; ++z) {
-        EXPECT_DOUBLE_EQ(flux.x(x, y, z), curl.x(x, y, z));
-        sum += flux.x(x, y, z);
-        signal += abs(flux.x(x, y, z));
+        EXPECT_DOUBLE_EQ(flux.x(x, y, z), 0.0);
+        for (const auto* w : {&one, &weight}) {
+          EXPECT_LE(std::abs(flux.x(x, y, z) * 0.5 * ((*w)(x, y, z) + (*w)(x + 1, y, z)))
+                        / scale,
+                    1e-14);
+        }
       }
-      EXPECT_NEAR(sum, 0.0, 1e-13);
     }
   }
-  EXPECT_GT(signal, 1e-3);
-  // The wall midpoint of Phi is uniform in Z, so the open curl does no net work.
+  // Compare the complete pinned current with the same split and unpinned curl.
+  const XZFaceFluxes before{flux.x - curl.x + unpinned.x, flux.z - curl.z + unpinned.z};
+  EXPECT_LT(max(abs(divergence(flux) - divergence(before)))
+                / std::max(1.0, max(abs(divergence(before)))),
+            1e-13);
   const BoutReal work = integral(faceWork(flux, phi + psi));
   const BoutReal adjoint_work = -integral((phi + psi) * divergence(flux));
   ASSERT_GT(std::abs(work), 1e-6);
@@ -1910,6 +1924,34 @@ TEST_F(EvolveVorticityIonEnergyTest, ReynoldsCurlIsSolenoidalAndWallsRetainIt) {
       "Reynolds fixture max |D/Bxy^2 - 1| = {}\n",
       max(abs((coord->g11() * coord->g33() - SQ(coord->g13())) / SQ(coord->Bxy())
               - 1.0)));
+}
+
+TEST_F(EvolveVorticityIonEnergyTest, CentralReynoldsKeepsPeriodicSeamFlow) {
+  using namespace bout::ion_energy;
+  mesh->periodicX = true;
+  auto* coord = mesh->getCoordinates();
+  coord->setJ(1.0);
+  coord->setDy(1.0);
+  const Field3D phi =
+      makeField<Field3D>([](const Ind3D& i) { return sin(2 * PI * i.z() / nz); });
+  // Phi=0 isolates omega advection, including nonzero normal seam velocity.
+  const Field3D psi = -phi;
+  const Field3D one = 1.0 + zeroFrom(phi);
+  RadialBoundaryModel model;
+  const auto central =
+      reynoldsFaceFluxes(one, one, phi, psi, model, ReynoldsReconstruction::central);
+  const auto limited = reynoldsFaceFluxes(one, one, phi, psi, model);
+  for (int x : {mesh->xstart - 1, mesh->xend}) {
+    for (int y = mesh->ystart; y <= mesh->yend; ++y) {
+      for (int z = 0; z < nz; ++z) {
+        const BoutReal expected =
+            0.25 * (sin(2 * PI * (z + 1) / nz) - sin(2 * PI * (z - 1) / nz));
+        EXPECT_NEAR(central.x(x, y, z), expected, 1e-13);
+        EXPECT_DOUBLE_EQ(limited.x(x, y, z), 0.0);
+      }
+    }
+  }
+  EXPECT_GT(max(abs(central.x)), 0.1);
 }
 
 // The analytic reference is generated from covariant derivatives with

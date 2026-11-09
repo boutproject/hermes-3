@@ -628,6 +628,11 @@ def reconstruct_fluxes(run, *, sources=None):
         mxg=run.mxg,
         walls=not periodic_x,
         periodic_x=periodic_x,
+        reconstruction=(
+            str(ds.options[run.model]["reynolds_reconstruction"])
+            if "reynolds_reconstruction" in ds.options[run.model]
+            else "xppm"
+        ),
         fill_guards=lambda f: fill_transport_guards(f, run, periodic_x, periodic_y),
     )
     reynolds = flux_dataset({d: -f for d, f in reynolds_faces.items()}, ds)
@@ -1038,8 +1043,8 @@ def closed_slab_outward_power(run, *, densities=None):
     """Global SI face powers without solving for an interior auxiliary flow.
 
     In this singleton-Y contract, chi and species ExB radial faces are closed
-    and Z is periodic. The retained Reynolds corner curl contributes to weighted
-    polarisation wall power. Kinetic advection and viscous energy faces are
+    and Z is periodic. Pinned Reynolds corners close every weighted wall flux.
+    Kinetic advection and viscous energy faces are
     reconstructed separately. No interior auxiliary solve or regional divergence
     is supplied.
     """
@@ -1086,17 +1091,16 @@ def closed_slab_outward_power(run, *, densities=None):
     viscous = flux_dataset(
         {d: (Phi + neighbor(Phi, d)) / 2 * current["flux_" + d] for d in ("x", "z")}, ds
     )
-    weight = polarisation_energy_coefficient(run).total
-    curl = solenoidal_reynolds_faces(c, ds.phi, Phi, ds)
-    pol = flux_dataset(
-        {d: -f * (weight + neighbor(weight, d)) / 2 for d, f in curl.items()}, ds
+    curl = solenoidal_reynolds_faces(
+        c, ds.phi, Phi, ds, mxg=run.mxg, walls=not periodic_x
     )
+    if not periodic_x:
+        assert bool((curl["x"].isel(x=[run.mxg - 1, -run.mxg - 1]) == 0).all())
     powers = {}
     scale = run.energy_scale * run.length_scale**3 * run.frequency
     for name, family in (
         ("Reynolds", reynolds),
         ("viscous", viscous),
-        ("polarisation_curl", pol),
     ):
         faces = xr.Dataset(
             {
@@ -1114,7 +1118,7 @@ def closed_slab_outward_power(run, *, densities=None):
             "provenance": "reconstructed global closed-slab faces",
         }
     result.attrs = {
-        "coverage": "global outward power; closed species ExB/chi faces, retained Reynolds wall curl, no parallel flow, periodic Z",
+        "coverage": "global outward power; closed species ExB/chi/Reynolds faces, no parallel flow, periodic Z",
         "local_transport_coverage": False,
     }
     return result
