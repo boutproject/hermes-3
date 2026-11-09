@@ -1,0 +1,269 @@
+# Template; regenerate committed variants using python mms.py --all.
+periodicX = false
+NXPE = 1
+MXG = 2
+MYG = 2
+ZMIN = 0
+ZMAX = 10/(2*pi)
+TwistShift = false
+
+[input]
+# Recovered-field analytic references are intentionally read by Python only.
+error_on_unused_options = false
+
+[mesh]
+nx = 20
+ny = 16
+nz = 16
+symmetricGlobalX = true
+symmetricGlobalY = true
+ixseps1 = nx
+ixseps2 = nx
+jyseps1_1 = -1
+jyseps2_1 = ny/2-1
+jyseps1_2 = ny/2-1
+jyseps2_2 = ny-1
+ny_inner = ny/2
+dx = 10/(nx-4)
+dy = 10/ny
+dz = 10/nz
+J = 1
+Bxy = 1
+g11 = 1
+g22 = 1
+g33 = 1
+g12 = 0
+g13 = 0
+g23 = 0
+g_11 = 1
+g_22 = 1
+g_33 = 1
+g_12 = 0
+g_13 = 0
+g_23 = 0
+bxcvx = 0
+bxcvy = 0
+# Baseline, skew and viscosity retain their original zero curvature.
+# The curvature variant uses a finite total-pressure mode and an analytic chi
+# inverse (see README).
+bxcvz = (1/10)*1.602176634e-19/(2*1.672621898e-27)
+
+[mesh:ddz]
+first = FFT
+fft_filter = 0
+
+[mesh:paralleltransform]
+type = identity
+
+[solver]
+type = cvode
+adams_moulton = true
+func_iter = true
+mms = true
+mms_initialise = true
+nout = 5
+output_step = 1
+atol = 1e-12
+rtol = 1e-10
+max_timestep = 0.05
+mxstep = 10000
+
+[hermes]
+components = i, j, e, evolve_vorticity_ion_energy, sound_speed
+recalculate_metric = false
+normalise_metric = false
+Nnorm = 1e+18
+Tnorm = 1
+Bnorm = 1
+
+[i]
+type = evolve_density, evolve_momentum
+AA = 2
+charge = 1
+bndry_flux = false
+poloidal_flows = false
+use_div_par_fvv = true
+density_floor = 1e-10
+diagnose = false
+
+[j]
+type = evolve_density, evolve_momentum
+AA = 3
+charge = 2
+bndry_flux = false
+poloidal_flows = false
+use_div_par_fvv = true
+density_floor = 1e-10
+diagnose = false
+
+[e]
+type = quasineutral, evolve_pressure, zero_current
+AA = 1/1836
+charge = -1
+bndry_flux = false
+poloidal_flows = false
+thermal_conduction = false
+p_div_v = true
+density_floor = 1e-10
+diagnose = false
+
+[Vi]
+bndry_xin = neumann
+bndry_xout = neumann
+
+[Vj]
+bndry_xin = neumann
+bndry_xout = neumann
+
+[evolve_vorticity_ion_energy]
+average_atomic_mass = 2
+poloidal_flows = false
+radial_boundary = fixed
+density_floor = 1e-10
+# phi_atol is a denominator scale: effective absolute update tolerance is
+# phi_atol*phi_rtol. Avoid requesting sub-roundoff updates where phi crosses 0.
+phi_atol = 1
+phi_rtol = 1e-13
+vort_atol = 1e-12
+phi_max_iterations = 400
+diagnose = false
+
+[evolve_vorticity_ion_energy:laplacian]
+type = cyclic
+
+[sound_speed]
+# Electrons have zero-current closure, with no independent electron momentum.
+# Use the collective acoustic speed for numerical Lax fluxes.
+electron_dynamics = false
+alfven_wave = false
+
+[mms]
+variant = curvature
+c9 = cos(2*pi*x)*cos(t/5 - y)/20 + 3*cos(t/5 + z)/100
+c17 = -sin(t/5 - z)*cos(2*pi*x)*cos(t/5 + y)/80 + 1/4
+c22 = -sin(t/5 - y)*cos(2*pi*x)*cos(t/5 - z)/50 + 1/10
+c23 = cos(2*pi*x)*cos(t/5 - y)/10 + 3*cos(t/5 + z)/50
+c26 = 3*sin(t/5 - z)*cos(2*pi*x)*cos(t/5 + y)/80
+c28 = -3*sin(t/5 - z)*cos(2*pi*x)*cos(t/5 + y)/200 + 7/100
+c35 = (cos(t/5 + y)/1000 + 1/50)*(-1100*cos(2*pi*x)/287 + cos(4*pi*x) + 813/287)*sin(t/5 - z)
+c37 = 3*sin(t/5 - z)*cos(2*pi*x)*cos(t/5 + y)/160
+c40 = (-2*mms:c35 + 2*cos(t/5 - y)/25 + 12/5)/(mms:c23 - mms:c37 + 19/8)
+c44 = -mms:c17*mms:c40 - mms:c40*(mms:c9 + 1) - sin(t/5 - z)*cos(2*pi*x)/50 + 4
+c50 = (sin(t/5 + y)/50 + 1/5)*sin(pi*x)*cos(t/5 - z)
+c52 = -2*pi^2*(cos(t/5 + y)/1000 + 1/50)*(-1100*cos(2*pi*x)/287 + cos(4*pi*x) + 813/287)*sin(t/5 - z)/25
+c54 = 44*pi^2*cos(2*pi*x)/287 - 4*pi^2*cos(4*pi*x)/25
+c56 = 2*mms:c54*(cos(t/5 + y)/1000 + 1/50)*sin(t/5 - z)
+c64 = pi*(sin(t/5 + y)/50 + 1/5)*sin(pi*x)*sin(t/5 - z)
+c67 = (cos(t/5 + y)/1000 + 1/50)*(-1100*cos(2*pi*x)/287 + cos(4*pi*x) + 813/287)*cos(t/5 - z)
+c75 = 220*pi*sin(2*pi*x)/287 - 2*pi*sin(4*pi*x)/5
+c77 = -mms:c75*(cos(t/5 + y)/1000 + 1/50)*sin(t/5 - z) + pi*(sin(t/5 + y)/50 + 1/5)*cos(pi*x)*cos(t/5 - z)/10
+c85 = (sin(t/5 + y)/50 + 1/5)*cos(pi*x)*cos(t/5 - z)
+c89 = (sin(t/5 + y)/50 + 1/5)*sin(pi*x)*sin(t/5 - z)
+c93 = -pi^2*mms:c50/25 + pi^2*(cos(t/5 + y)/1000 + 1/50)*(-1100*cos(2*pi*x)/287 + cos(4*pi*x) + 813/287)*sin(t/5 - z)/25
+c95 = pi^2*(sin(t/5 + y)/50 + 1/5)*sin(t/5 - z)*cos(pi*x)
+c98 = mms:c64*(pi^2*mms:c75*(cos(t/5 + y)/1000 + 1/50)*sin(t/5 - z)/25 - pi^3*mms:c85/250)/5
+c99 = pi*(cos(t/5 + y)/1000 + 1/50)*cos(t/5 - z)/5
+c106 = -pi^2*mms:c50/100 - mms:c54*(cos(t/5 + y)/1000 + 1/50)*sin(t/5 - z)
+c115 = (sin(t/5 + y)/50 + 1/5)*(cos(t/5 + y)/1000 + 1/50)
+c117 = pi^2*mms:c115*((-42*pi^2*cos(pi*x)/25 + 567*pi^2*cos(3*pi*x)/25 - 21*pi^2*cos(5*pi*x))*sin(t/5 - z)^2/41 - 128*pi^2*cos(pi*x)/7175 + 1782*pi^2*cos(3*pi*x)/7175 - 10*pi^2*cos(5*pi*x)/41)/50
+c121 = 2*pi*(sin(t/5 + y)/50 + 1/5)^2*sin(pi*x)*sin(t/5 - z)*cos(pi*x)*cos(t/5 - z)
+c126 = -4400*cos(2*pi*x)/287 + 4*cos(4*pi*x) + 3252/287
+c128 = 13200*cos(2*pi*x)/287 - 36*cos(4*pi*x) - 3252/287
+c129 = mms:c106*mms:c95/50 - mms:c117 - pi^2*mms:c50*(mms:c75*mms:c99 + mms:c95/50)/20 - pi^3*mms:c77*mms:c89/500 - pi^3*mms:c85*(mms:c64/5 + pi*mms:c67/5)/250 + pi*mms:c85*(mms:c54*mms:c99 - pi^3*mms:c89/500)/10 + mms:c93*mms:c95/50 + mms:c98 + pi^3*(mms:c115*(pi*mms:c126*cos(pi*x)*cos(t/5 - z)^2/10 + pi*mms:c128*sin(t/5 - z)^2*cos(pi*x)/10 + (-2640*pi*sin(2*pi*x)/287 + 72*pi*sin(4*pi*x)/5)*sin(pi*x)*sin(t/5 - z)^2 + (880*pi*sin(2*pi*x)/287 - 8*pi*sin(4*pi*x)/5)*sin(pi*x)*cos(t/5 - z)^2 + (440*pi*cos(2*pi*x)/287 - 8*pi*cos(4*pi*x)/5)*cos(pi*x) - pi*(2200*sin(2*pi*x)/287 - 4*sin(4*pi*x))*sin(pi*x)/10) + mms:c121)/500 - pi*cos(2*pi*x)*cos(t/5 - z)/5000
+c134 = (3300*sin(2*pi*x)/287 - 6*sin(4*pi*x))*sin(pi*x) + (8800*cos(2*pi*x)/287 - 14*cos(4*pi*x) - 4878/287)*cos(pi*x)
+c136 = 168*cos(pi*x) - 252*cos(3*pi*x) + 84*cos(5*pi*x)
+c137 = pi^4*mms:c115*mms:c136*cos(t/5 - z)^2/25625 - pi^4*mms:c136*(sin(t/5 + y)/50 + 1/5)*(cos(t/5 + y)/1000 + 1/50)*sin(t/5 - z)^2/25625
+c138 = -mms:c106*mms:c95/50 - mms:c137 + pi^2*mms:c50*(mms:c75*mms:c99 + mms:c95/50)/20 + pi^3*mms:c77*mms:c89/500 + pi^3*mms:c85*(mms:c64/5 + pi*mms:c67/5)/250 - pi*mms:c85*(mms:c54*mms:c99 - pi^3*mms:c89/500)/10 - mms:c93*mms:c95/50 - mms:c98 + pi^3*(-pi*mms:c115*mms:c134*sin(t/5 - z)^2/5 - mms:c121 + pi*mms:c134*(sin(t/5 + y)/50 + 1/5)*(cos(t/5 + y)/1000 + 1/50)*cos(t/5 - z)^2/5)/500 - pi*cos(2*pi*x)*cos(t/5 - z)/5000
+c140 = (sin(t/5 + y)/50 + 1/5)*(cos(t/5 + y)/1000 + 1/50)*sin(t/5 - z)*cos(t/5 - z)
+c141 = -pi*mms:c106*mms:c85/10 + pi^3*mms:c136*mms:c140/5125 + pi^2*mms:c50*mms:c77/100 - mms:c64*(mms:c75*mms:c99 + mms:c95/50)/5 - mms:c95*(mms:c64/5 + pi*mms:c67/5)/50 + pi^3*(-mms:c134*mms:c140 - 5*(sin(t/5 + y)/50 + 1/5)^2*sin(pi*x)*cos(pi*x)*cos(t/5 - z)^2)/500 + sin(t/5 - z)*cos(2*pi*x)/1000
+c146 = 3*pi*cos(2*pi*x)*cos(t/5 + y)*cos(t/5 - z)/400
+c147 = (-mms:c146 + 3*pi*sin(t/5 + z)/250)/(mms:c23 - mms:c26 + 11/4)^2
+c151 = -pi^2*mms:c115*((-84*pi*sin(pi*x)/5 + 378*pi*sin(3*pi*x)/5 - 42*pi*sin(5*pi*x))*sin(t/5 - z)^2/41 - 256*pi*sin(pi*x)/1435 + 1188*pi*sin(3*pi*x)/1435 - 20*pi*sin(5*pi*x)/41)/50 - pi^2*mms:c50*(mms:c64/5 + pi*mms:c67/5)/25 + mms:c64*mms:c93/5 + mms:c77*mms:c95/50 + pi*mms:c85*(mms:c75*mms:c99 + mms:c95/50)/10 + pi^3*(mms:c115*(mms:c126*sin(pi*x)*cos(t/5 - z)^2 + mms:c128*sin(pi*x)*sin(t/5 - z)^2 + (2200*sin(2*pi*x)/287 - 4*sin(4*pi*x))*cos(pi*x)) + 10*(sin(t/5 + y)/50 + 1/5)^2*sin(pi*x)^2*sin(t/5 - z)*cos(t/5 - z))/500 - sin(2*pi*x)*cos(t/5 - z)/1000
+c154 = 3*pi*sin(2*pi*x)*sin(t/5 - z)*cos(t/5 + y)/400
+c155 = (-mms:c154 + pi*sin(2*pi*x)*cos(t/5 - y)/50)/(mms:c23 - mms:c26 + 11/4)^2
+c164 = cos(2*pi*x)*cos(t/5 - y)*cos(t/5 - z)/250
+c166 = pi*mms:c164*(mms:c9 + 1) + pi*mms:c22*sin(t/5 - y)*cos(2*pi*x)/100
+c167 = -3*sin(t/5 - z)*cos(2*pi*x)*cos(t/5 + y)/40 + cos(2*pi*x)*cos(t/5 - y)/5 + 3*cos(t/5 + z)/25 + 11/2
+c176 = mms:c141*(3*pi*sin(t/5 + z)/125 - 3*pi*cos(2*pi*x)*cos(t/5 + y)*cos(t/5 - z)/200)
+c177 = mms:c151*(-3*pi*sin(2*pi*x)*sin(t/5 - z)*cos(t/5 + y)/200 + pi*sin(2*pi*x)*cos(t/5 - y)/25)
+c179 = sin(t/5 + y)*sin(t/5 - z)*cos(2*pi*x)/400
+c181 = 3*sin(t/5 + y)*sin(t/5 - z)*cos(2*pi*x)/1000
+c188 = mms:c179 - cos(2*pi*x)*cos(t/5 + y)*cos(t/5 - z)/400
+c189 = sin(t/5 - y)*cos(2*pi*x)/50 + 3*sin(t/5 + z)/250
+c191 = sin(t/5 - y)*sin(t/5 - z)*cos(2*pi*x)/250
+c197 = pi*sin(pi*x)*cos(t/5 + y)*cos(t/5 - z)/250
+c199 = cos(2*pi*x)*cos(t/5 - y)*cos(t/5 - z)/125
+c201 = sin(t/5 - y)*sin(t/5 - z)*cos(2*pi*x)/125
+c202 = pi*sin(2*pi*x)*sin(t/5 - y)*cos(t/5 - z)
+c204 = (-1100*cos(2*pi*x)/287 + cos(4*pi*x) + 813/287)*sin(t/5 + y)
+c205 = (pi*mms:c204*sin(t/5 - z)/2500 + 2*pi*sin(t/5 - y)/125)/(mms:c23 - mms:c37 + 19/8)
+c207 = 3*sin(t/5 + y)*sin(t/5 - z)*cos(2*pi*x)/800
+c210 = (-2*mms:c35 + 2*cos(t/5 - y)/25 + 12/5)/(mms:c23 - mms:c37 + 19/8)^2
+c211 = mms:c210*(-pi*mms:c207 - pi*sin(t/5 - y)*cos(2*pi*x)/50)
+c213 = mms:c205*(mms:c9 + 1) + mms:c211*(mms:c9 + 1) + pi*mms:c40*sin(t/5 - y)*cos(2*pi*x)/100
+c214 = 3*sin(t/5 + y)*sin(t/5 - z)*cos(2*pi*x)/400
+c218 = pi*cos(2*pi*x)*cos(t/5 + y)*cos(t/5 - z)
+c220 = sin(t/5 - z)*cos(2*pi*x)*cos(t/5 + y)/40
+c222 = pi*sin(2*pi*x)*sin(t/5 - z)*cos(t/5 + y)
+c223 = 3*sin(t/5 + y)*sin(t/5 - z)*cos(2*pi*x)/500
+c232 = -sin(t/5 - y)*cos(2*pi*x)/100 - 3*sin(t/5 + z)/500
+c235 = 2*(cos(t/5 + y)/1000 + 1/50)*cos(t/5 - z)/5
+c236 = mms:c235*(-1100*cos(2*pi*x)/287 + cos(4*pi*x) + 813/287)
+c237 = (-mms:c236 + (-1100*cos(2*pi*x)/287 + cos(4*pi*x) + 813/287)*sin(t/5 + y)*sin(t/5 - z)/2500 - 2*sin(t/5 - y)/125)/(mms:c23 - mms:c37 + 19/8)
+c240 = 3*cos(2*pi*x)*cos(t/5 + y)*cos(t/5 - z)/800
+c244 = pi*sin(t/5 + y)*sin(t/5 - z)*cos(2*pi*x)
+c246 = -mms:c244/200 - pi*sin(t/5 - y)*cos(2*pi*x)/100
+c259 = 3*pi*cos(2*pi*x)*cos(t/5 + y)*cos(t/5 - z)/800
+c264 = mms:c17*mms:c210*(-mms:c259 + 3*pi*sin(t/5 + z)/250) + pi*mms:c17*mms:c236/(mms:c23 - mms:c37 + 19/8) + mms:c210*(-mms:c259 + 3*pi*sin(t/5 + z)/250)*(mms:c9 + 1) + mms:c218*mms:c40/400 + pi*mms:c236*(mms:c9 + 1)/(mms:c23 - mms:c37 + 19/8) - 3*pi*mms:c40*sin(t/5 + z)/500
+c265 = mms:c75*(cos(t/5 + y)/1000 + 1/50)*sin(t/5 - z)/(mms:c23 - mms:c37 + 19/8)
+c268 = 3*pi*sin(2*pi*x)*sin(t/5 - z)*cos(t/5 + y)/800
+c271 = mms:c17*mms:c210*(-mms:c268 + pi*sin(2*pi*x)*cos(t/5 - y)/50)
+c272 = mms:c210*(-mms:c268 + pi*sin(2*pi*x)*cos(t/5 - y)/50)*(mms:c9 + 1)
+c293 = mms:c50 + 3*(5*mms:c17*mms:c40/2 + mms:c28^2*(3/8 - mms:c37))/(2*(mms:c23 - mms:c26 + 11/4)) + 2*(mms:c22^2*(mms:c9 + 1) + 5*mms:c40*(mms:c9 + 1)/2)/(mms:c23 - mms:c26 + 11/4)
+total_pressure = mms:c17*mms:c40 + mms:c40*(mms:c9 + 1)
+pressure_i = mms:c40*(mms:c9 + 1)
+pressure_j = mms:c17*mms:c40
+ion_temperature = mms:c40
+potential = mms:c50
+pressure_potential = -mms:c35 + cos(t/5 - y)/25 + 6/5
+current_potential = pi^2*mms:c115*(mms:c136*sin(t/5 - z)^2/41 + 512*cos(pi*x)/287 - 792*cos(3*pi*x)/287 + 40*cos(5*pi*x)/41)/100 - cos(2*pi*x)*cos(t/5 - z)/(400*pi)
+
+[Ni]
+solution = mms:c9 + 1
+source = 2*mms:c129*(mms:c9 + 1)/(mms:c23 - mms:c26 + 11/4) + 2*mms:c138*(mms:c9 + 1)/(mms:c23 - mms:c26 + 11/4) + mms:c141*mms:c147*(2*mms:c9 + 2) - 3*pi*mms:c141*sin(t/5 + z)/(250*(mms:c23 - mms:c26 + 11/4)) + mms:c151*mms:c155*(2*mms:c9 + 2) - pi*mms:c151*sin(2*pi*x)*cos(t/5 - y)/(50*(mms:c23 - mms:c26 + 11/4)) + mms:c166 - pi^2*mms:c89*sin(2*pi*x)*cos(t/5 - y)/500 + 3*pi^2*(sin(t/5 + y)/50 + 1/5)*sin(t/5 + z)*cos(pi*x)*cos(t/5 - z)/5000 - sin(t/5 - y)*cos(2*pi*x)/100 - 3*sin(t/5 + z)/500
+bndry_xin = neumann
+bndry_xout = neumann
+
+[Nj]
+solution = mms:c17
+source = 3*mms:c129*mms:c17/mms:c167 + 3*mms:c138*mms:c17/mms:c167 + mms:c141*mms:c146/mms:c167 + mms:c151*mms:c154/mms:c167 + pi*mms:c17*mms:c181 + pi*mms:c179*mms:c28 + mms:c188 + pi^2*(sin(t/5 + y)/50 + 1/5)*sin(pi*x)*sin(2*pi*x)*sin(t/5 - z)^2*cos(t/5 + y)/2000 - pi^2*(sin(t/5 + y)/50 + 1/5)*cos(pi*x)*cos(2*pi*x)*cos(t/5 + y)*cos(t/5 - z)^2/4000 + 3*mms:c17*mms:c176/mms:c167^2 + 3*mms:c17*mms:c177/mms:c167^2
+bndry_xin = neumann
+bndry_xout = neumann
+
+[NVi]
+solution = mms:c22*(mms:c23 + 2)
+source = 2*mms:c129*mms:c22*(mms:c23 + 2)/(mms:c23 - mms:c26 + 11/4) + 2*mms:c138*mms:c22*(mms:c23 + 2)/(mms:c23 - mms:c26 + 11/4) + 2*mms:c141*mms:c147*mms:c22*(mms:c23 + 2) - pi*mms:c141*mms:c201*(mms:c23 + 2)/(mms:c23 - mms:c26 + 11/4) - 3*pi*mms:c141*mms:c22*sin(t/5 + z)/(125*(mms:c23 - mms:c26 + 11/4)) + 2*mms:c151*mms:c155*mms:c22*(mms:c23 + 2) + mms:c151*mms:c202*(mms:c23 + 2)/(125*(mms:c23 - mms:c26 + 11/4)) - pi*mms:c151*mms:c22*sin(2*pi*x)*cos(t/5 - y)/(25*(mms:c23 - mms:c26 + 11/4)) - mms:c189*mms:c22 + mms:c197*(mms:c9 + 1) + pi*mms:c199*mms:c22*(mms:c23 + 2) + mms:c213 + pi*mms:c22^2*sin(t/5 - y)*cos(2*pi*x)/50 + mms:c64*(-pi*mms:c22*sin(2*pi*x)*cos(t/5 - y)/50 + pi*(mms:c23 + 2)*sin(2*pi*x)*sin(t/5 - y)*cos(t/5 - z)/250)/5 - pi*mms:c85*(-pi*mms:c191*(mms:c23 + 2) - 3*pi*mms:c22*sin(t/5 + z)/250)/10 + (-mms:c164 + mms:c191)*(mms:c23 + 2)
+bndry_xin = neumann
+bndry_xout = neumann
+
+[NVj]
+solution = mms:c28*(3/4 - mms:c26)
+source = 3*mms:c129*mms:c28*(3/4 - mms:c26)/mms:c167 + 3*mms:c138*mms:c28*(3/4 - mms:c26)/mms:c167 + 9*mms:c141*mms:c218*mms:c28/(400*mms:c167) + mms:c141*mms:c218*(27/4000 - 9*mms:c26/1000)/mms:c167 + 9*mms:c151*mms:c222*mms:c28/(400*mms:c167) + mms:c151*mms:c222*(27/4000 - 9*mms:c26/1000)/mms:c167 + mms:c17*mms:c205 + mms:c17*mms:c211 + pi*mms:c179*mms:c40 - mms:c197*(mms:c220 - 1/2) + pi*mms:c214*mms:c28^2 + pi*mms:c223*mms:c28*(3/4 - mms:c26) + mms:c28*(mms:c214 - 3*cos(2*pi*x)*cos(t/5 + y)*cos(t/5 - z)/400) + mms:c64*(mms:c154*mms:c28 + mms:c222*(9/4000 - 3*mms:c26/1000))/5 - pi*mms:c85*(mms:c146*mms:c28 + mms:c218*(9/4000 - 3*mms:c26/1000))/10 + (3/4 - mms:c26)*(mms:c181 - 3*cos(2*pi*x)*cos(t/5 + y)*cos(t/5 - z)/1000) + 3*mms:c176*mms:c28*(3/4 - mms:c26)/mms:c167^2 + 3*mms:c177*mms:c28*(3/4 - mms:c26)/mms:c167^2
+bndry_xin = neumann
+bndry_xout = neumann
+
+[Pe]
+solution = mms:c44
+source = -mms:c17*mms:c210*(mms:c189 - mms:c207 + mms:c240) - mms:c17*mms:c237 - mms:c188*mms:c40 - mms:c210*(mms:c9 + 1)*(mms:c189 - mms:c207 + mms:c240) - mms:c232*mms:c40 - mms:c237*(mms:c9 + 1) + mms:c246*mms:c44*(mms:c22*(mms:c9 + 1) + mms:c28*(1/2 - mms:c220))/(-mms:c220 + mms:c9 + 3/2)^2 + mms:c44*(mms:c166 + pi*mms:c181*(1/2 - mms:c220) + mms:c244*mms:c28/200)/(-mms:c220 + mms:c9 + 3/2) - mms:c64*(mms:c17*mms:c40/15 + mms:c40*(mms:c9 + 1)/15 + sin(t/5 - z)*cos(2*pi*x)/750 - 4/15)/5 - pi*mms:c85*(-mms:c264 + pi*cos(2*pi*x)*cos(t/5 - z)/250)/10 + (mms:c22*(mms:c9 + 1) + mms:c28*(1/2 - mms:c220))*(-mms:c17*mms:c205 - mms:c17*mms:c211 - pi*mms:c179*mms:c40 - mms:c213)/(-mms:c220 + mms:c9 + 3/2) - (mms:c246*(mms:c22*(mms:c9 + 1) + mms:c28*(1/2 - mms:c220))/(-mms:c220 + mms:c9 + 3/2)^2 + (mms:c166 + pi*mms:c181*(1/2 - mms:c220) + mms:c244*mms:c28/200)/(-mms:c220 + mms:c9 + 3/2))*(2*mms:c17*mms:c40/3 + 2*mms:c40*(mms:c9 + 1)/3 + sin(t/5 - z)*cos(2*pi*x)/75 - 8/3) + pi*(sin(t/5 + y)/50 + 1/5)*(2*mms:c17*mms:c265 - mms:c222*mms:c40/400 + mms:c265*(2*mms:c9 + 2) - mms:c271 - mms:c272 + pi*mms:c40*sin(2*pi*x)*cos(t/5 - y)/100 + pi*sin(2*pi*x)*sin(t/5 - z)/250)*sin(pi*x)*sin(t/5 - z)/5 - cos(2*pi*x)*cos(t/5 - z)/250
+bndry_xin = neumann
+bndry_xout = neumann
+
+[Vort]
+solution = -pi^2*mms:c50/10 - mms:c52 - mms:c56
+source = where(x*(1-x),-mms:c117 - mms:c137 - pi^2*mms:c204*sin(t/5 - z)/62500 - mms:c235*mms:c54 + mms:c54*sin(t/5 + y)*sin(t/5 - z)/2500 + pi^2*(sin(t/5 + y)/50 + 1/5)*sin(pi*x)*sin(t/5 - z)/50 + 2*pi^2*(cos(t/5 + y)/1000 + 1/50)*(-1100*cos(2*pi*x)/287 + cos(4*pi*x) + 813/287)*cos(t/5 - z)/125 - pi^2*sin(pi*x)*cos(t/5 + y)*cos(t/5 - z)/2500 - pi*cos(2*pi*x)*cos(t/5 - z)/2500,0)
+
+[Eion]
+solution = 3*mms:c17*mms:c40/2 + mms:c22^2*(mms:c9 + 1) + mms:c28^2*(3/8 - mms:c37) + 3*mms:c40*(mms:c9 + 1)/2 + mms:c77^2 + (mms:c64/5 + pi*mms:c67/5)^2
+source = mms:c129*mms:c293 + mms:c138*mms:c293 + mms:c141*(mms:c147*(15*mms:c17*mms:c40/4 + 3*mms:c28^2*(3/8 - mms:c37)/2) + mms:c147*(2*mms:c22^2*(mms:c9 + 1) + 5*mms:c40*(mms:c9 + 1)) + mms:c64/5 + 3*(5*mms:c17*mms:c210*(-mms:c259 + 3*pi*sin(t/5 + z)/250)/2 + pi*mms:c17*mms:c67/(mms:c23 - mms:c37 + 19/8) + 3*mms:c218*mms:c28*(3/8 - mms:c37)/500 + mms:c218*mms:c40/160 + mms:c259*mms:c28^2)/(2*(mms:c23 - mms:c26 + 11/4)) + 2*(-pi*mms:c201*mms:c22*(mms:c9 + 1) - 3*pi*mms:c22^2*sin(t/5 + z)/500 - 3*pi*mms:c40*sin(t/5 + z)/200 + 5*(-mms:c259 + 3*pi*sin(t/5 + z)/250)*(mms:c9 + 1)*(-2*mms:c35 + 2*cos(t/5 - y)/25 + 12/5)/(2*(mms:c23 - mms:c37 + 19/8)^2) + pi*(mms:c9 + 1)*(cos(t/5 + y)/1000 + 1/50)*(-1100*cos(2*pi*x)/287 + cos(4*pi*x) + 813/287)*cos(t/5 - z)/(mms:c23 - mms:c37 + 19/8))/(mms:c23 - mms:c26 + 11/4)) + mms:c151*(mms:c155*(15*mms:c17*mms:c40/4 + 3*mms:c28^2*(3/8 - mms:c37)/2) + mms:c155*(2*mms:c22^2*(mms:c9 + 1) + 5*mms:c40*(mms:c9 + 1)) + pi*mms:c85/10 + 3*(-5*mms:c17*mms:c265 + 3*mms:c222*mms:c28*(3/8 - mms:c37)/500 + mms:c222*mms:c40/160 + mms:c268*mms:c28^2 + 5*mms:c271/2)/(2*(mms:c23 - mms:c26 + 11/4)) + 2*(-pi*mms:c22^2*sin(2*pi*x)*cos(t/5 - y)/100 + pi*mms:c22*(mms:c9 + 1)*sin(2*pi*x)*sin(t/5 - y)*cos(t/5 - z)/125 - 5*mms:c265*(mms:c9 + 1) - pi*mms:c40*sin(2*pi*x)*cos(t/5 - y)/40 + 5*(-mms:c268 + pi*sin(2*pi*x)*cos(t/5 - y)/50)*(mms:c9 + 1)*(-2*mms:c35 + 2*cos(t/5 - y)/25 + 12/5)/(2*(mms:c23 - mms:c37 + 19/8)^2))/(mms:c23 - mms:c26 + 11/4)) + pi*mms:c164*(mms:c22^2*(mms:c9 + 1) + 5*mms:c40*(mms:c9 + 1)/2) + 3*mms:c17*mms:c210*(mms:c189 - mms:c207 + mms:c240)/2 + 3*mms:c17*mms:c237/2 + pi*mms:c181*(5*mms:c17*mms:c40/2 + mms:c28^2*(3/8 - mms:c37)) + 3*mms:c188*mms:c40/2 + mms:c197*(mms:c22*(mms:c9 + 1) + mms:c28*(1/2 - mms:c220)) + 3*mms:c210*(mms:c9 + 1)*(mms:c189 - mms:c207 + mms:c240)/2 + mms:c22^2*mms:c232 + mms:c22*(-mms:c199 + mms:c201)*(mms:c9 + 1) + mms:c22*(pi*mms:c199*mms:c22*(mms:c9 + 1) + 5*mms:c205*(mms:c9 + 1)/2 + 5*mms:c211*(mms:c9 + 1)/2 + pi*mms:c22^2*sin(t/5 - y)*cos(2*pi*x)/100 + pi*mms:c40*sin(t/5 - y)*cos(2*pi*x)/40) + 3*mms:c232*mms:c40/2 + 3*mms:c237*(mms:c9 + 1)/2 + mms:c264*mms:c50/10 + mms:c28^2*(mms:c207 - mms:c240) + mms:c28*(3/8 - mms:c37)*(mms:c223 - 3*cos(2*pi*x)*cos(t/5 + y)*cos(t/5 - z)/500) + mms:c28*(5*mms:c17*mms:c205/2 + 5*mms:c17*mms:c211/2 + pi*mms:c207*mms:c28^2 + pi*mms:c223*mms:c28*(3/8 - mms:c37) + mms:c244*mms:c40/160) + mms:c50*(mms:c166 + pi*mms:c181*(1/2 - mms:c220) + mms:c244*mms:c28/200) + mms:c50*(-mms:c166 - mms:c17*mms:c210*(-mms:c259 + 3*pi*sin(t/5 + z)/250)/10 - pi*mms:c17*mms:c67/(25*(mms:c23 - mms:c37 + 19/8)) - pi*mms:c181*(1/2 - mms:c220) - mms:c210*(-mms:c259 + 3*pi*sin(t/5 + z)/250)*(mms:c9 + 1)/10 - mms:c218*mms:c40/4000 - mms:c244*mms:c28/200 - pi*mms:c67*(mms:c9 + 1)/(25*(mms:c23 - mms:c37 + 19/8)) + pi*cos(2*pi*x)*cos(t/5 - z)/2500 + 3*pi*(-2*mms:c35 + 2*cos(t/5 - y)/25 + 12/5)*sin(t/5 + z)/(5000*(mms:c23 - mms:c37 + 19/8))) + mms:c64*(mms:c17*mms:c40 + mms:c40*(mms:c9 + 1))/50 + mms:c64*(mms:c77*(-pi^2*mms:c50/50 - mms:c56) + (mms:c64/5 + pi*mms:c67/5)*(pi*mms:c235*mms:c75 + mms:c95/25))/5 + mms:c64*(-3*mms:c17*mms:c265 + mms:c202*mms:c22*(mms:c9 + 1)/125 - pi*mms:c22^2*sin(2*pi*x)*cos(t/5 - y)/100 + 3*mms:c222*mms:c28*(3/8 - mms:c37)/500 - 3*mms:c265*(mms:c9 + 1) + mms:c268*mms:c28^2 + mms:c268*mms:c40 + 3*mms:c271/2 + 3*mms:c272/2 - 3*pi*mms:c40*sin(2*pi*x)*cos(t/5 - y)/200)/5 + mms:c77*(-mms:c235*mms:c75 + mms:c75*sin(t/5 + y)*sin(t/5 - z)/2500 - pi*(sin(t/5 + y)/50 + 1/5)*sin(t/5 - z)*cos(pi*x)/25 + pi*cos(pi*x)*cos(t/5 + y)*cos(t/5 - z)/1250) - pi*mms:c85*(mms:c77*(pi*mms:c235*mms:c75 + mms:c95/25) + (mms:c64/5 + pi*mms:c67/5)*(-2*pi^2*mms:c50/25 - mms:c52))/10 - pi*mms:c85*(3*mms:c17*mms:c210*(-mms:c259 + 3*pi*sin(t/5 + z)/250)/2 + 3*pi*mms:c17*mms:c67/(5*(mms:c23 - mms:c37 + 19/8)) - pi*mms:c201*mms:c22*(mms:c9 + 1) + 3*mms:c210*(-mms:c259 + 3*pi*sin(t/5 + z)/250)*(mms:c9 + 1)/2 + 3*mms:c218*mms:c28*(3/8 - mms:c37)/500 - 3*pi*mms:c22^2*sin(t/5 + z)/500 + mms:c259*mms:c28^2 + mms:c259*mms:c40 - 9*pi*mms:c40*sin(t/5 + z)/1000 + 3*pi*mms:c67*(mms:c9 + 1)/(5*(mms:c23 - mms:c37 + 19/8)))/10 + (mms:c64/5 + pi*mms:c67/5)*(-pi*mms:c204*cos(t/5 - z)/12500 - 2*pi*mms:c35/25 + 2*pi*(sin(t/5 + y)/50 + 1/5)*sin(pi*x)*cos(t/5 - z)/25 + pi*sin(pi*x)*sin(t/5 - z)*cos(t/5 + y)/625)
+bndry_xin = dirichlet_o2(Eion:solution)
+bndry_xout = dirichlet_o2(Eion:solution)

@@ -43,9 +43,9 @@ g_13 = -1/4
 g_23 = 0
 bxcvx = 0
 bxcvy = 0
-# Restoring the full 3831b4d fields precludes the prescribed-curvature chi
-# inversion: Pe + Pi now contains composition-dependent rational expressions.
-# Keep its exact expression-only Reynolds/viscosity solution (see README).
+# Baseline, skew and viscosity retain their original zero curvature.
+# The curvature variant uses a finite total-pressure mode and an analytic chi
+# inverse (see README).
 bxcvz = 0
 
 [mesh:ddz]

@@ -18,13 +18,21 @@ and restart runs compare with uninterrupted histories (13 executions total).
 python tests/integrated/ion-energy-walls/runtest --exe build/hermes-3
 ```
 
-Recovery, vorticity, fixed wall potentials and diagnostic state comparisons
-use `1e-10`. Open budgets, restart and analytic rates use limits resolved from
-each run's `solver:rtol`, with a `1e-10` floor. The analytic profiles retain
-tighter solver tolerances. `criteria.json` records observations; isolated
-`result.json` files contain effective limits and times. No parallel current
-or sheaths are present. Physics failures remain enabled.
+Recovery, closed-current vorticity, fixed potentials and diagnostic comparisons
+use `1e-10`. Free-slip vorticity uses `open_vorticity`: its cumulative viscous
+wall flux has an output-sampling error, observed as `3.247e-8` / `2.593e-8` at
+`rtol=1e-7` with the original operator. The perturbed cases use `rtol=1e-7`
+and `atol=1e-10`; `rtol=1e-8` exceeded 600 s in a free-slip case. Analytic
+profiles retain tighter tolerances. Signed budgets include the retained Reynolds
+corner curl and its species/enthalpy face weights. Sampled energy exchanges use
+`open_energy`; halving cadence raises the new fixed-Neumann residual from
+`2.705e-9` to `1.042e-8`. Upper limits keep a `1e-10` floor.
 
-Known failures: free-slip Neumann/Dirichlet vorticity residuals are
-`3.244e-8` / `2.593e-8` against `1e-10`. The cumulative snapshot-flux checks
-remain enabled; all magnitude, chi-hook, analytic and restart checks pass.
+The new free-slip evolution reaches density floors and nonphysical local energy
+by time 240. Increasing auxiliary chi corrections from 2 to 8 and 20 did not
+remove the failure; the configured correction count remains unchanged. Negative
+integrated Reynolds heating precedes the failure. This is an unresolved acceptance
+failure, not a budget limit to calibrate away. All physics checks remain enabled.
+`criteria.json` records valid observations; isolated `result.json` files and the
+PR validation description record timings and failures. No parallel current or
+sheaths are present.

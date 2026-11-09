@@ -14,21 +14,24 @@ import xarray as xr
 
 from .dataset import AuditError
 from .inventory import _kinetic, energy_densities, soft_floor
-from .operators import spectral_ddz
+from .operators import calculate_kperp, spectral_ddz
 from .transfers import (
     electron_curvature_work,
     polarisation_energy_coefficient,
 )
 from .transport import (
     arakawa,
+    central_advection_faces,
     central_parallel,
+    face_work,
     flux_dataset,
     fv_xz,
     neighbor,
     numerical_parallel_heating,
     parallel_flux,
     parallel_kinetic_flux,
-    spectral_d2z,
+    reynolds_face_fluxes,
+    solenoidal_reynolds_faces,
     xppm,
 )
 
@@ -601,14 +604,9 @@ def reconstruct_fluxes(run, *, sources=None):
     bracket = fill_transport_guards(
         arakawa(phi, psi, ds.dx, ds.dz), run, periodic_x, periodic_y
     )
-    lap = ds.g11 * (
-        neighbor(phi, "x") - 2 * phi + neighbor(phi, "x", -1)
-    ) / ds.dx**2 + ds.g33 * spectral_d2z(phi, ds.dz)
-    delp = fill_transport_guards(0.5 * c * lap, run, periodic_x, periodic_y)
     if not periodic_x:
         pi = fill_wall_guards(pi, run, "pressure")
         bracket = fill_wall_guards(bracket, run, "zero")
-        delp = fill_wall_guards(delp, run, "free_o2")
     families = {}
 
     def combine(*terms):
@@ -621,11 +619,18 @@ def reconstruct_fluxes(run, *, sources=None):
         }
         return flux_dataset(fluxes, ds)
 
-    reynolds = combine(
-        (-1, xppm(0.5 * ds.Vort, phi, ds)),
-        (-1, fv_xz(0.5 * c, bracket, ds, boundary_flux=False, periodic_x=periodic_x)),
-        (-1, xppm(delp, Phi, ds)),
+    reynolds_faces = reynolds_face_fluxes(
+        c,
+        ds.Vort,
+        phi,
+        psi,
+        ds,
+        mxg=run.mxg,
+        walls=not periodic_x,
+        periodic_x=periodic_x,
+        fill_guards=lambda f: fill_transport_guards(f, run, periodic_x, periodic_y),
     )
+    reynolds = flux_dataset({d: -f for d, f in reynolds_faces.items()}, ds)
     curl = (
         2 * run.length_scale**2 * ds.options["mesh"].evaluate_scalar("bxcvz") / ds.Bxy
     )
@@ -672,23 +677,24 @@ def reconstruct_fluxes(run, *, sources=None):
                     periodic_x=periodic_x,
                 ),
             ),
-            (1, xppm(0.5 * ds.Vort, -phi, ds, weight=weight)),
             (
                 -1,
-                fv_xz(
-                    0.5 * weight * c,
-                    bracket,
+                flux_dataset(
+                    {
+                        d: f * (weight + neighbor(weight, d)) / 2
+                        for d, f in reynolds_faces.items()
+                    },
                     ds,
-                    boundary_flux=False,
-                    periodic_x=periodic_x,
                 ),
             ),
-            (1, xppm(delp, -Phi, ds, weight=weight)),
         )
 
     families["DivEExB"] = xppm(1.5 * pi + densities.ion_parallel, phi, ds)
-    families["DivEReynolds"] = fv_xz(
-        0.5 * c * bracket, Phi, ds, boundary_flux=False, periodic_x=periodic_x
+    families["DivEReynolds"] = flux_dataset(
+        central_advection_faces(
+            calculate_kperp(c, Phi, ds, mxg=run.mxg), phi, ds, mxg=run.mxg
+        ),
+        ds,
     )
     advected = polarisation_energy_coefficient(run)
     families["DivEpol"] = pol(advected.total)
@@ -703,6 +709,9 @@ def reconstruct_fluxes(run, *, sources=None):
         "kinematic_viscous_heating": viscous_heat,
         "electron_viscous_heating": electron_heat,
         "electron_exb_work": work,
+        "reynolds_work": face_work(reynolds_faces, Phi, ds),
+        "reynolds_heating": face_work(reynolds_faces, Phi, ds)
+        - families["DivEReynolds"].divergence,
         "arakawa": bracket,
     }
     jion = xr.zeros_like(phi)
@@ -1009,6 +1018,9 @@ def compare_flux_diagnostics(run, fluxes):
     for name in (
         "DivEExB",
         "DivEReynolds",
+        "DivJReynolds",
+        "reynolds_work",
+        "reynolds_heating",
         "DivEelectric",
         "DivEparallel",
         "DivEpol",
@@ -1025,11 +1037,11 @@ def compare_flux_diagnostics(run, fluxes):
 def closed_slab_outward_power(run, *, densities=None):
     """Global SI face powers without solving for an interior auxiliary flow.
 
-    In this explicitly closed singleton-Y contract, polarisation and electron
-    thermal radial faces are suppressed and Z is periodic. Their net outward
-    power is exactly zero by the implemented face rules. Reynolds and viscous
-    energy faces are reconstructed. This function does not provide regional
-    divergences or claim that the locally nonzero closed transports vanish.
+    In this singleton-Y contract, chi and species ExB radial faces are closed
+    and Z is periodic. The retained Reynolds corner curl contributes to weighted
+    polarisation wall power. Kinetic advection and viscous energy faces are
+    reconstructed separately. No interior auxiliary solve or regional divergence
+    is supplied.
     """
     if run.formulation != "total_energy":
         raise AuditError("Closed slab boundary audit requires total ion energy")
@@ -1051,14 +1063,11 @@ def closed_slab_outward_power(run, *, densities=None):
     densities = energy_densities(run) if densities is None else densities
     Phi = ds.phi + densities.pressure_potential
     c = run.scalar_option("average_atomic_mass") / ds.Bxy**2
-    bracket = fill_transport_guards(
-        arakawa(ds.phi, densities.pressure_potential, ds.dx, ds.dz),
-        run,
-        periodic_x,
-        periodic_y,
-    )
-    reynolds = fv_xz(
-        0.5 * c * bracket, Phi, ds, boundary_flux=False, periodic_x=periodic_x
+    reynolds = flux_dataset(
+        central_advection_faces(
+            calculate_kperp(c, Phi, ds, mxg=run.mxg), ds.phi, ds, mxg=run.mxg
+        ),
+        ds,
     )
     nu = run.scalar_option("viscosity", 0) / (run.length_scale**2 * run.frequency)
     viscosity = xr.ones_like(ds.phi) * nu
@@ -1077,9 +1086,18 @@ def closed_slab_outward_power(run, *, densities=None):
     viscous = flux_dataset(
         {d: (Phi + neighbor(Phi, d)) / 2 * current["flux_" + d] for d in ("x", "z")}, ds
     )
+    weight = polarisation_energy_coefficient(run).total
+    curl = solenoidal_reynolds_faces(c, ds.phi, Phi, ds)
+    pol = flux_dataset(
+        {d: -f * (weight + neighbor(weight, d)) / 2 for d, f in curl.items()}, ds
+    )
     powers = {}
     scale = run.energy_scale * run.length_scale**3 * run.frequency
-    for name, family in (("Reynolds", reynolds), ("viscous", viscous)):
+    for name, family in (
+        ("Reynolds", reynolds),
+        ("viscous", viscous),
+        ("polarisation_curl", pol),
+    ):
         faces = xr.Dataset(
             {
                 "family": family.divergence,
@@ -1096,7 +1114,7 @@ def closed_slab_outward_power(run, *, densities=None):
             "provenance": "reconstructed global closed-slab faces",
         }
     result.attrs = {
-        "coverage": "global outward power; closed species ExB/polarisation faces, no parallel flow, periodic Z",
+        "coverage": "global outward power; closed species ExB/chi faces, retained Reynolds wall curl, no parallel flow, periodic Z",
         "local_transport_coverage": False,
     }
     return result

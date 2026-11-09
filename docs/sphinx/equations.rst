@@ -1687,7 +1687,7 @@ The time evolution is
 
    \begin{aligned}
    \frac{\partial\Omega}{\partial t}
-      &= -\nabla\cdot\mathbf{G}
+      &= -\nabla\cdot\boldsymbol{\Gamma}
          + \nabla\cdot(\mathbf{J}_{\mathrm{dia},i}
                        +\mathbf{J}_{\mathrm{dia},e}+\mathbf{J}_\nu), \\
    \frac{\partial E_i}{\partial t}
@@ -1697,9 +1697,58 @@ The time evolution is
          -\phi\nabla\cdot\mathbf{J}_e - H_{\nu,e} + S_i.
    \end{aligned}
 
-Here :math:`-\mathbf{G}` is the Reynolds stress current, using the full
-Boussinesq expression described in :ref:`sec-vorticity` with
-:math:`\hat{p}=\psi` and :math:`\overline{n}=1`.
+Here :math:`-\boldsymbol{\Gamma}` is the skew-symmetric Reynolds current,
+with :math:`\Phi=\phi+\psi` and :math:`c=\overline{A}/B^2`:
+
+.. math::
+
+   \boldsymbol{\Gamma}
+      = c(\mathbf{v}_E\cdot\nabla)\nabla_\perp\Phi
+        +\frac{1}{2}\nabla_\perp\Phi\nabla\cdot(c\mathbf{v}_E).
+
+Metric compatibility gives its kinetic-energy identity:
+
+.. math::
+
+   \boldsymbol{\Gamma}\cdot\nabla\Phi
+      &= \frac{c}{2}\mathbf{v}_E\cdot\nabla|\nabla_\perp\Phi|^2
+         +\frac{1}{2}|\nabla_\perp\Phi|^2\nabla\cdot(c\mathbf{v}_E), \\
+      &= \nabla\cdot(K_\perp\mathbf{v}_E).
+
+For flute fields in Clebsch coordinates, :math:`\mathbf{B}=\nabla z\times\nabla x`,
+this current has the following form without Christoffel symbols:
+
+.. math::
+
+   \boldsymbol{\Gamma}
+      &= \frac{1}{2}\Omega\mathbf{v}_E
+         +\frac{c}{2}\nabla_\perp Q+\Lambda\mathbf{U}+\mathbf{S}, \\
+   Q &= \mathbf{v}_E\cdot\nabla\psi,\qquad
+   (v_E^x,v_E^z)=(\partial_z\phi,-\partial_x\phi),\qquad
+   (U^x,U^z)=(\partial_z\Phi,-\partial_x\Phi), \\
+   D &= g^{11}g^{33}-(g^{13})^2,\qquad
+   \Lambda=\frac{cDJ}{2}\nabla\cdot\left(\frac{\nabla_\perp\phi}{JD}\right), \\
+   (JS^x,JS^z)&=(\partial_z\Psi,-\partial_x\Psi), \\
+   \Psi &= -\frac{cJ}{2}\left[
+      g^{11}\partial_x\phi\partial_x\Phi
+      +g^{13}(\partial_x\phi\partial_z\Phi+\partial_z\phi\partial_x\Phi)
+      +g^{33}\partial_z\phi\partial_z\Phi\right].
+
+The Clebsch identity requires the metric determinant :math:`D`, which equals
+:math:`B^2` for a consistent metric. The implementation therefore computes
+:math:`D` from the metric in :math:`\Lambda`; the independently normalised
+``Bxy`` supplies :math:`c`. The corner curl :math:`\mathbf{S}` changes the
+face fluxes while its discrete divergence vanishes to roundoff. Face values
+of :math:`\Omega/2` and :math:`\Lambda` use the XPPM MC limiter and are
+reconstructed once. Polarisation weights multiply those same face fluxes
+using arithmetic face averages. The energy flux uses central face averages
+of the discrete :math:`K_\perp` and the same corner velocities.
+
+This construction covers X--Z flow. With ``poloidal_flows = true``, the
+existing X--Y contributions of the two XPPM terms are added unchanged to
+the current divergence and weighted polarisation transport. The work and
+heating diagnostics below describe the X--Z construction.
+
 The energy fluxes are
 
 .. math::
@@ -1708,7 +1757,7 @@ The energy fluxes are
    \mathbf{Q}_{E\times B}
       &= \left(\frac{3}{2}P_i+K_\parallel\right)\mathbf{v}_{E\times B}, \\
    \mathbf{Q}_{\mathrm{R}}
-      &= \frac{c}{2}(\mathbf{v}_{E\times B}\cdot\nabla\psi)\nabla_\perp\Phi, \\
+      &= K_\perp\mathbf{v}_{E\times B}, \\
    \mathbf{Q}_{\mathrm{electric}}
       &= \phi(\mathbf{J}_{\mathrm{dia},i}+\mathbf{J}_{\parallel,i}), \\
    \mathbf{Q}_\parallel
@@ -1746,7 +1795,7 @@ work is accounted for by the electron momentum equation.
 Polarisation transport uses an auxiliary potential :math:`\chi` obtained
 from an approximate solution of :math:`\mathcal{L}(\chi)=\partial_t\Omega`
 to calculate
-:math:`\mathbf{J}_{\mathrm{pol}}=-c\nabla_\perp\chi-\mathbf{G}`.
+:math:`\mathbf{J}_{\mathrm{pol}}=-c\nabla_\perp\chi-\boldsymbol{\Gamma}`.
 Each ion species receives polarisation particle and momentum fluxes
 
 .. math::
@@ -1902,15 +1951,16 @@ derivative at either wall:
    \qquad
    \frac{d\phi_b}{dt}=\widehat{\kappa}M_b D_n.
 
-With the guard centre mirrored across the wall, this is second order and exact
-for quadratics. It uses the first interior cell spacing even on a nonuniform
+For a solved finite-volume potential, this wall-face gradient converges at
+second order to the true wall flux by discrete conservation. It uses the first
+interior cell spacing even on a nonuniform
 mesh. Treating the stored midpoint as a true face value in a one-sided stencil
 would introduce a first-order wall-rate error. Multiplication by
 :math:`M_b` converts the coordinate derivative to a normal derivative.
 For 3D metrics, the geometry is averaged over Z before taking this square root.
-The :ref:`quadratic wall-relaxation regression
-<subsec-ion-energy-tests>` checks the integrated midpoint drift at 16 radial cells. C++ unit tests check
-the exact quadratic derivative and boundary rate.
+The :ref:`wall-relaxation regressions <subsec-ion-energy-tests>` check
+rigid-rotation decay and uniform-vorticity drift. C++ unit tests check
+the finite-volume wall flux and boundary rate.
 The boundary state is integrated by the time solver and saved in restarts.
 All wall modes require at least two radial guard cells, complete periodic Z
 lines on each rank, and evolving ``Vort`` boundaries. The component automatically
@@ -1945,17 +1995,27 @@ Physical vorticity has radial Neumann guards in ``fixed`` and ``no_slip``;
 fluxes share the same faces: closed in ``fixed`` and ``no_slip``, open in
 ``free_slip``. The viscosity coefficient retains its interior value at each
 radial face so that the free-slip condition permits diffusion. Reynolds
-current and energy fluxes and E×B energy fluxes are closed in every mode.
-The Reynolds intermediate :math:`Q=\mathbf{v}_E\cdot\nabla\psi` has zero
-wall midpoint; :math:`c\nabla_\perp^2\phi/2` uses linear radial extrapolation.
+energy flux and E×B energy flux are closed in every mode. At physical X walls,
+the split Reynolds flux is set to zero and the corner curl is retained:
+:math:`F_x=\Delta_z\Psi`. Its sum over each periodic Z wall line is zero,
+so it carries no net charge. The wall midpoint conditions give
+:math:`v_E^x=U^x=Q=0`; the kinetic-energy wall flux is therefore zero.
+:math:`Q` has zero wall midpoint and :math:`\Lambda` uses linear radial
+extrapolation for reconstruction. Species and energy weights still multiply
+the retained curl, so their signed wall budgets include it.
+The pressure part of :math:`E_{\mathrm{adv}}` is
+:math:`5\overline{A}\psi/(2\rho)`, which varies with mass density even where
+:math:`\psi` is uniform. This permits polarisation energy exchange through
+the retained curl with Neumann chi as well as with Dirichlet chi.
 
 The auxiliary solve uses the physical vorticity RHS and the full FV
 operator, including wall currents. Its transport faces are selected separately.
 ``polarisation_ac_boundary`` selects the auxiliary AC wall condition:
 ``neumann`` (default) sets :math:`\partial_x\widetilde{\chi}=0` and closes
-normal polarisation transport of particles, momentum and energy by setting
-the complete normal face flux to zero, including cross-metric terms. The
-boundary cells acquire a charge mismatch from that dropped wall flux, in
+the chi contribution to normal polarisation transport of particles, momentum
+and energy by setting its complete face flux to zero, including cross-metric
+terms. The Reynolds corner curl is retained. The boundary cells acquire a
+charge mismatch from the dropped chi wall flux, in
 addition to any error from the finite-correction auxiliary inverse.
 This choice generally permits larger timesteps. A Neumann derivative alone
 is not insulating when :math:`g^{13}\ne0`: the normal current also contains
@@ -1966,7 +2026,7 @@ shifted-metric grids; explicit face closure removes it on other grids.
 the chi part of polarisation transport, allowing particle, momentum and energy
 exchange consistently with the current solve. The flux is signed and may
 enter or leave the plasma; no one-way loss constraint is imposed. Reynolds
-transport remains closed. Chi reflects each radial guard layer from the
+transport retains its corner curl. Chi reflects each radial guard layer from the
 corresponding interior layer, evenly for Neumann AC and oddly for Dirichlet AC.
 The DC midpoint of chi is zero for ``fixed`` and ``free_slip``, and
 :math:`d\phi_b/dt` for ``no_slip``. This approximates
@@ -2060,8 +2120,16 @@ divergences ``DivEExB``, ``DivEReynolds``, ``DivEelectric``, ``DivEparallel``
 and ``DivEpol``, and the exchange/source terms ``phi_Div_Je``,
 ``electron_exb_work`` and ``Eion_src``. ``DivJpol`` is the divergence of the
 selected polarisation transport current: the chi wall flux is closed for
-Neumann AC and open for Dirichlet AC, while the Reynolds wall flux is always
-closed. ``DivJReynolds`` records the Reynolds current divergence.
+Neumann AC and open for Dirichlet AC. The Reynolds corner curl is retained
+at walls in both cases. ``DivJReynolds`` records the Reynolds current divergence.
+``reynolds_work`` is the cell sum of current face flux times the potential jump,
+divided by twice the cell volume. Its volume integral equals
+:math:`-\int\Phi\nabla\cdot\boldsymbol{\Gamma}\,dV` with the wall conditions
+above. ``reynolds_heating = reynolds_work - DivEReynolds`` records the signed
+transfer from perpendicular kinetic energy into ion heat through the
+total-energy partition. Limiting and discretisation contribute to this transfer;
+negative values indicate a kinetic-energy gain. Both diagnostics have units
+W m\ :sup:`-3`.
 ``ion_chi`` and ``ddt(Phi)`` record the same auxiliary potential in V/s, with
 conversion factor :math:`T_{\mathrm{norm}}\Omega_{ci}`. It approximates the
 polarisation current rather than the exact time derivative of

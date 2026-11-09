@@ -2,6 +2,7 @@
 
 #include "fake_mesh_fixture.hxx"
 #include "fake_solver.hxx"
+#include "reynolds_reference.hxx"
 #include "test_extras.hxx"
 
 #include "../../include/component_scheduler.hxx"
@@ -14,24 +15,47 @@
 #include <bout/constants.hxx>
 #include <bout/derivs.hxx>
 #include <bout/difops.hxx>
+#include <bout/field_factory.hxx>
 
 using bout::globals::mesh;
 using bout::ion_energy::PolarisationACBoundary;
 
-TEST(IonEnergyWallDerivative, QuadraticsAreExactWithMirroredGuardSpacing) {
-  for (BoutReal dx0 : {0.1, 0.7, 2.0}) {
-    for (BoutReal curvature : {-0.2, 0.0, 0.3}) {
-      for (BoutReal slope : {-0.4, 0.0, 0.7}) {
-        const auto phi = [&](BoutReal inward) {
-          return 0.3 + slope * inward + curvature * inward * inward;
-        };
-        const BoutReal phi0 = phi(dx0 / 2.0);
-        const BoutReal midpoint = 0.5 * (phi(-dx0 / 2.0) + phi0);
-        EXPECT_NEAR(bout::ion_energy::wallInwardDerivative(midpoint, phi0, dx0), slope,
-                    3e-14);
-      }
+TEST(IonEnergyWallDerivative, MatchesFiniteVolumeWallFlux) {
+  // Solve phi'' = 6*x - 12*x^2 - 0.6 on [0,1], with zero wall
+  // midpoints, using a tridiagonal finite-volume solve. The continuum
+  // phi=x^3*(1-x)+0.3*x*(1-x) has inward wall derivatives 0.3 and 1.3.
+  std::vector<BoutReal> errors;
+  for (size_t n : {8u, 16u, 32u}) {
+    const BoutReal h = 1.0 / static_cast<BoutReal>(n);
+    std::vector<BoutReal> diagonal(n, -2.0), rhs(n), phi(n), source(n);
+    diagonal.front() = diagonal.back() = -3.0; // Odd reflection at each wall.
+    for (size_t i = 0; i < n; ++i) {
+      const BoutReal x = (static_cast<BoutReal>(i) + 0.5) * h;
+      source[i] = 6 * x - 12 * x * x - 0.6;
+      rhs[i] = h * h * source[i];
     }
+    for (size_t i = 1; i < n; ++i) {
+      diagonal[i] -= 1.0 / diagonal[i - 1];
+      rhs[i] -= rhs[i - 1] / diagonal[i - 1];
+    }
+    phi.back() = rhs.back() / diagonal.back();
+    for (size_t i = n - 1; i-- > 0;) {
+      phi[i] = (rhs[i] - phi[i + 1]) / diagonal[i];
+    }
+    const BoutReal inner = bout::ion_energy::wallInwardDerivative(0, phi.front(), h);
+    const BoutReal outer = bout::ion_energy::wallInwardDerivative(0, phi.back(), h);
+    BoutReal integrated_source = 0;
+    for (size_t i = 0; i < n; ++i) {
+      const BoutReal left = i ? phi[i - 1] : -phi[0];
+      const BoutReal right = i + 1 < n ? phi[i + 1] : -phi.back();
+      EXPECT_NEAR((left - 2 * phi[i] + right) / (h * h), source[i], 1e-11);
+      integrated_source += h * source[i];
+    }
+    EXPECT_NEAR(inner + outer, -integrated_source, 1e-13);
+    errors.push_back(std::max(std::abs(inner - 0.3), std::abs(outer - 1.3)));
   }
+  EXPECT_GT(std::log2(errors[0] / errors[1]), 1.8);
+  EXPECT_GT(std::log2(errors[1] / errors[2]), 1.8);
 }
 
 class EvolveVorticityIonEnergyTest : public FakeMeshFixture_tmpl<10, 5, 8, false, 2> {
@@ -1801,7 +1825,7 @@ TEST_F(EvolveVorticityIonEnergyTest, WallModelsPairParticleChargeAndEnergyBudget
         EXPECT_NEAR(integral(state["species"][species]["density_source"].as<Field3D>()),
                     -integral(loss), 1e-12);
         if (std::string{ac} == "neumann") {
-          EXPECT_EQ(max(abs(loss), true), 0.0);
+          EXPECT_GT(max(abs(loss), true), 0.0); // weighted wall curl is retained
         }
       }
       EXPECT_NEAR(integral(solver.getTimeDerivs()["Vort"].as<Field3D>()),
@@ -1814,4 +1838,142 @@ TEST_F(EvolveVorticityIonEnergyTest, WallModelsPairParticleChargeAndEnergyBudget
       }
     }
   }
+}
+
+TEST_F(EvolveVorticityIonEnergyTest, XPPMFacesMatchSharedDivergenceAndWeights) {
+  using namespace bout::ion_energy;
+  auto* coord = mesh->getCoordinates();
+  coord->setJ(makeField<Coordinates::FieldMetric>(
+      [](const auto& i) { return 1.3 + 0.1 * sin(0.7 * i.x()); }));
+  coord->setContravariantMetricTensor(
+      ContravariantMetricTensor{1.2, 1.0, 1.4, 0.0, 0.3, 0.0});
+  const Field3D n = makeField<Field3D>(
+      [](const Ind3D& i) { return 0.8 + sin(1.7 * i.x() + 0.9 * i.z()) + 0.1 * i.y(); });
+  const Field3D f = makeField<Field3D>([](const Ind3D& i) {
+    return cos(0.4 * i.x() - 2 * PI * i.z() / nz) + 0.1 * sin(1.3 * i.x());
+  });
+  const Field3D weight =
+      makeField<Field3D>([](const Ind3D& i) { return 0.3 + 0.1 * sin(i.x() + i.z()); });
+  const auto faces = xppmFaceFluxes(n, f);
+  for (const auto* w : {static_cast<const Field3D*>(nullptr), &weight}) {
+    const Field3D expected = Div_n_bxGrad_f_B_XPPM(n, f, false, false, false, w);
+    const Field3D actual = divergence(faces, w);
+    const BoutReal scale = std::max(1.0, max(abs(expected)));
+    EXPECT_LT(max(abs(actual - expected)) / scale, 1e-13);
+  }
+}
+
+TEST_F(EvolveVorticityIonEnergyTest, ReynoldsCurlIsSolenoidalAndWallsRetainIt) {
+  using namespace bout::ion_energy;
+  auto* coord = mesh->getCoordinates();
+  coord->setJ(makeField<Coordinates::FieldMetric>(
+      [](const auto& i) { return 1.2 + 0.05 * i.x(); }));
+  coord->setContravariantMetricTensor(
+      ContravariantMetricTensor{1.2, 1.0, 1.4, 0.0, 0.3, 0.0});
+  Field3D phi = makeField<Field3D>(
+      [](const Ind3D& i) { return sin(0.7 * i.x()) * cos(2 * PI * i.z() / nz); });
+  Field3D psi = makeField<Field3D>([](const Ind3D& i) {
+    return 1.0 + 0.1 * cos(0.8 * i.x()) * sin(2 * PI * i.z() / nz);
+  });
+  applyVorticityWallBoundary(phi, true);
+  applyWallPressureBoundary(psi);
+  const Field3D c = makeField<Field3D>(
+      [](const Ind3D& i) { return 1.0 + 0.1 * cos(i.x() + 2 * PI * i.z() / nz); });
+  const auto curl = solenoidalReynoldsFaceFluxes(c, phi, phi + psi);
+  EXPECT_LT(max(abs(divergence(curl))), 1e-13);
+  RadialBoundaryModel model;
+  model.walls = true;
+  const auto flux =
+      reynoldsFaceFluxes(c, Div_a_Grad_perp_XZ(c, phi + psi), phi, psi, model);
+  BoutReal signal = 0.0;
+  for (int x : {mesh->xstart - 1, mesh->xend}) {
+    for (int y = mesh->ystart; y <= mesh->yend; ++y) {
+      BoutReal sum = 0.0;
+      for (int z = 0; z < nz; ++z) {
+        EXPECT_DOUBLE_EQ(flux.x(x, y, z), curl.x(x, y, z));
+        sum += flux.x(x, y, z);
+        signal += abs(flux.x(x, y, z));
+      }
+      EXPECT_NEAR(sum, 0.0, 1e-13);
+    }
+  }
+  EXPECT_GT(signal, 1e-3);
+  // The wall midpoint of Phi is uniform in Z, so the open curl does no net work.
+  const BoutReal work = integral(faceWork(flux, phi + psi));
+  const BoutReal adjoint_work = -integral((phi + psi) * divergence(flux));
+  ASSERT_GT(std::abs(work), 1e-6);
+  EXPECT_LT(std::abs(work - adjoint_work) / std::abs(work), 1e-13);
+  const auto weighted = divergence(flux, &c);
+  const Field3D complement = 1.0 - c;
+  EXPECT_LT(max(abs(weighted + divergence(flux, &complement) - divergence(flux))), 1e-13);
+  output_info.write(
+      "Reynolds fixture max |D/Bxy^2 - 1| = {}\n",
+      max(abs((coord->g11() * coord->g33() - SQ(coord->g13())) / SQ(coord->Bxy())
+              - 1.0)));
+}
+
+// The analytic reference is generated from covariant derivatives with
+// Christoffel symbols, independently of the implemented split/curl current.
+template <int NX, int NZ>
+class ReynoldsConvergenceMesh : public FakeMeshFixture_tmpl<NX, 1, NZ, false, 2> {
+public:
+  void TestBody() override {}
+
+  std::pair<BoutReal, BoutReal> error() {
+    using namespace bout::ion_energy;
+    const BoutReal h = 1.0 / NZ;
+    Options::root()["h"] = h;
+    Options::root()["r"] = std::string{"1+h*(x-1.5)"};
+    // Parsed option references retain constants; each refinement needs its h.
+    FieldFactory::get()->cleanCache();
+    auto* coord = mesh->getCoordinates();
+    coord->setNon_uniform(false);
+    coord->setDx(h);
+    coord->setDz(2 * PI / NZ);
+    const auto metric = [&](const char* expression) {
+      return Coordinates::FieldMetric{
+          FieldFactory::get()->create2D(expression, nullptr, mesh)};
+    };
+    coord->setJ(metric(reynolds_reference::J));
+    coord->setBxy(metric("1/r"));
+    coord->setContravariantMetricTensor(ContravariantMetricTensor{
+        metric(reynolds_reference::g11), Coordinates::FieldMetric{1.0},
+        metric(reynolds_reference::g33), Coordinates::FieldMetric{0.0},
+        metric(reynolds_reference::g13), Coordinates::FieldMetric{0.0}});
+    const auto field = [&](const char* expression) {
+      return FieldFactory::get()->create3D(expression, nullptr, mesh);
+    };
+    const Field3D phi = field(reynolds_reference::phi);
+    const Field3D psi = field(reynolds_reference::psi);
+    const Field3D expected = field(reynolds_reference::expected);
+    RadialBoundaryModel model;
+    model.walls = true;
+    const Field3D actual = divergence(reynoldsFaceFluxes(
+        field(reynolds_reference::c), field(reynolds_reference::omega), phi, psi, model));
+    BoutReal sum = 0;
+    int count = 0;
+    for (const auto& i : expected.getRegion("RGN_NOBNDRY")) {
+      if (i.x() >= mesh->xstart + 3 && i.x() <= mesh->xend - 3) {
+        sum += SQ(actual[i] - expected[i]);
+        ++count;
+      }
+    }
+    const BoutReal mismatch = max(
+        abs((coord->g11() * coord->g33() - SQ(coord->g13())) / SQ(coord->Bxy()) - 1.0));
+    return {std::sqrt(sum / count), mismatch};
+  }
+};
+
+TEST(IonEnergyReynoldsConvergence, LimitedCurrentConvergesInShearedAnnulus) {
+  const auto [coarse, coarse_metric] = [] {
+    return ReynoldsConvergenceMesh<36, 32>{}.error();
+  }();
+  const auto [fine, fine_metric] = [] {
+    return ReynoldsConvergenceMesh<68, 64>{}.error();
+  }();
+  const BoutReal order = std::log2(coarse / fine);
+  output_info.write("Limited Reynolds annulus errors: {}, {}; order {}\n", coarse, fine,
+                    order);
+  output_info.write("Annulus max |D/Bxy^2 - 1|: {}, {}\n", coarse_metric, fine_metric);
+  EXPECT_GE(order, 1.5);
 }

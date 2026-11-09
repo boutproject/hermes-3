@@ -84,6 +84,9 @@ def generate(destination, variant="baseline"):
             "g_13": "-1/4",
         }.items():
             options["mesh"][key] = value
+    if variant == "curvature":
+        # Curlb_B.z = 2*rho_s0^2*bxcvz/Bxy in the normalised slab.
+        options["mesh"]["bxcvz"] = "(1/10)*1.602176634e-19/(2*1.672621898e-27)"
     if variant == "viscosity":
         # Units used by Hermes: nu_SI = nu_normalised * rho_s0^2 * Omega_ci.
         # With Tnorm=Bnorm=1, rho_s0^2*Omega_ci = Tnorm/Bnorm.

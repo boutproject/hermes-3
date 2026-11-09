@@ -225,6 +225,10 @@ def flux_report(run, *, sources=None):
         "ion_balance": histories(ion),
         "diagnostics": compare_flux_diagnostics(run, fluxes),
         "outward_ion_power_W": boundary.values.tolist(),
+        "reynolds_power_W": {
+            name: integrated_power(run, fluxes[name]).values.tolist()
+            for name in ("reynolds_work", "reynolds_heating")
+        },
         "gauss_error_W": {
             n: float(
                 abs(integrated_power(run, fluxes[n]) - flux_power(run, fluxes, n))

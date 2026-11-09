@@ -53,6 +53,27 @@ def audit(study, run, label, *, nonlinear=False):
     report = summary(run)
     study.result["cases"][Path(run.source).name]["summary"] = report
     study.check("recovery/" + label, report["recovery_error"], "recovery")
+    if "DivJReynolds" in run.data:
+        for name in (
+            "DivJReynolds",
+            "DivEReynolds",
+            "reynolds_work",
+            "reynolds_heating",
+            "DivJpol",
+            "DivEpol",
+        ):
+            diagnostic = report["diagnostics"].get(name, {})
+            study.check(
+                "diagnostic_coverage/" + label + "/" + name,
+                int(not diagnostic.get("available", False)),
+                "coverage",
+            )
+            if diagnostic.get("available", False):
+                study.check(
+                    "diagnostic_error/" + label + "/" + name,
+                    diagnostic["max_absolute_error_normalised"],
+                    "diagnostics",
+                )
     budget = wall_budget(run)
     study.check(
         "coverage/" + label,
@@ -65,7 +86,9 @@ def audit(study, run, label, *, nonlinear=False):
         study.check(
             "energy/" + label,
             float(abs(balance.relative_residual).max()),
-            "open_energy" if open_faces else "energy",
+            "open_energy"
+            if open_faces or float(abs(budget.polarisation_absolute).max()) > 0
+            else "energy",
             run=run,
         )
         for name in balance:
@@ -82,7 +105,8 @@ def audit(study, run, label, *, nonlinear=False):
     study.check(
         "vorticity/" + label,
         float(np.max(abs(np.asarray(vort - vort.isel(t=0)) - supplied))) / volume,
-        "vorticity",
+        "open_vorticity" if label.startswith("free_slip") else "vorticity",
+        run=run,
     )
     if "no_slip" not in label:
         study.check(
@@ -169,7 +193,9 @@ def audit(study, run, label, *, nonlinear=False):
 
 
 def main():
-    args = parser(__doc__).parse_args()
+    cli = parser(__doc__)
+    cli.set_defaults(timeout=600)
+    args = cli.parse_args()
     with Study(HERE, args) as study:
         runs, rotations = {}, []
         for mode in ("fixed", "free_slip", "no_slip"):
@@ -185,6 +211,8 @@ def main():
             or name
             in (
                 "phi_wall_rate",
+                "reynolds_work",
+                "reynolds_heating",
                 "kinematic_viscosity",
                 "kinematic_viscous_heating",
                 "electron_viscous_heating",

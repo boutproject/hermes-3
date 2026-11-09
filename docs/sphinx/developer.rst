@@ -1657,14 +1657,14 @@ Four integrated tests exercise ``evolve_vorticity_ion_energy``:
   nonlinear perturbed budgets in every mode, absolute wall-flux and kinetic-energy
   minimum checks, rigid-rotation decay, uniform-vorticity drift and perturbed restarts.
 - ``ion-energy-mms`` checks continuum expression sources on two resolutions for
-  orthogonal, skew-metric and viscous slabs. The baseline includes nonzero
+  orthogonal, skew-metric, viscous and curvature slabs. The baseline includes nonzero
   potential, E×B transport and Reynolds stress; all variants have varying
   composition and finite parallel flows. The focused skew and viscosity
   variants retain wall-compatible zero potential. Periodic Y uses twice the
   X/Z resolution. Known convergence failures remain enabled and are listed in
-  the MMS README. Restoring these fields conflicts with the prescribed analytic
-  curvature inversion; the MMS retains the original curvature-free physics. The ``long`` profile adds size 32
-  and uses two MPI ranks.
+  the MMS README. The added curvature variant uses a finite cosine total-pressure
+  mode and its analytic chi inverse while retaining nonzero potential. The
+  ``long`` profile adds size 32 and uses two MPI ranks.
 
 All cases use zero parallel current and omit sheaths. Parallel-current and
 sheath coverage will be restored after those terms enter the ion-energy
@@ -1677,6 +1677,14 @@ open polarisation wall fluxes report incomplete coverage when chi is absent.
 All upper limits have a floor of ``1e-10``. Solver-sensitive limits resolve
 as ``max(floor, rtol_factor * solver:rtol)`` from each run's options; linear
 invariants, recovery and diagnostic comparisons use fixed roundoff floors.
+Free-slip vorticity budgets use ``open_vorticity`` because time integration of
+sampled viscous wall fluxes introduces a cadence error. The perturbed walls
+use ``rtol = 1e-7`` and ``atol = 1e-10``; analytic cases retain tighter tolerances.
+The Reynolds corner curl has zero net wall charge, but its enthalpy-weighted
+wall sum need not vanish even with Neumann chi. These sampled energy exchanges
+use ``open_energy``. The new free-slip runs reach density floors and nonphysical
+local energy before completing the budget; increasing chi corrections to 8 and
+20 did not resolve this acceptance failure. The walls README records it.
 MMS truncation errors, convergence orders and magnitude minima retain their
 separate criteria. Every effective limit is saved with its check.
 
@@ -1700,7 +1708,18 @@ coverage flags and generator identities. The uniform equilibrium and analytic
 AC wall assertions have C++ unit coverage in
 ``EvolveVorticityIonEnergyTest.UniformStateHasZeroRHS``,
 ``PolarisationPotentialHasFixedCorrectionResponse``, ``FixedAuxiliaryInverse*``
-and ``MixedPolarisationGuards*``.
+and ``MixedPolarisationGuards*``. ``XPPMFacesMatchSharedDivergenceAndWeights``
+checks the shared XPPM reconstruction and ``ReynoldsCurlIsSolenoidalAndWallsRetainIt``
+checks the curl, wall and work identities. ``test_reynolds_transport.py`` compares
+central and limited transport with an independent covariant SymPy reference on
+wavy metrics and a sheared annulus, including varying c, J and D. It also checks
+both current face components against that reference, fixing the curl's sign
+independently of its divergence, and checks the legacy slab limit.
+``tests/unit/generate_reynolds_reference.py`` generates
+that continuum reference without using the implemented split/curl identity.
+``IonEnergyReynoldsConvergence.LimitedCurrentConvergesInShearedAnnulus`` uses
+the generated expressions on two FakeMesh resolutions with varying c, J and D
+and nonzero g13, checking limited-current convergence at order 1.5 or above.
 
 The legacy ``2D-energy`` regression retains its existing registration. The
 publication refinement scan is an example in

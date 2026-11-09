@@ -14,7 +14,7 @@ COORDINATES = (X, Y, Z, t)
 LENGTH = s.Integer(10)
 EVOLVED = ("Ni", "Nj", "NVi", "NVj", "Pe", "Vort", "Eion")
 RECOVERED = ("Pi", "pi", "pj", "Tion", "phi", "psi", "chi")
-VARIANTS = ("baseline", "skew", "viscosity")
+VARIANTS = ("baseline", "skew", "viscosity", "curvature")
 
 
 def grad(f):
@@ -62,7 +62,7 @@ def chi_shape(a, theta):
     ) ** 2 / 41
 
 
-@lru_cache(maxsize=3)
+@lru_cache(maxsize=4)
 def model(variant="baseline"):
     """Return exact fields, physical RHS, forcing and separate term coverage."""
     r = s.Rational
@@ -87,7 +87,7 @@ def model(variant="baseline"):
     phi = amp_phi * s.sin(a) * s.cos(theta)
     shape = r(813, 287) - r(1100, 287) * s.cos(2 * a) + s.cos(4 * a)
     psi = r(12, 10) + r(4, 100) * s.cos(b - tau) + amp_psi * shape * s.sin(theta)
-    if variant != "baseline":
+    if variant in ("skew", "viscosity"):
         # These focused recovery/viscosity cases vanish to sixth order at X
         # faces: all mixed normal fluxes and Omega_X are compatible there.
         phi = s.Integer(0)
@@ -103,6 +103,12 @@ def model(variant="baseline"):
     ve, je = ji / ne, -ji
     assert s.cancel(ji - ne * ve) == 0, "Zero total parallel current"
     pe = ne * te
+    curvature = r(1, 10) if variant == "curvature" else s.Integer(0)
+    if curvature:
+        # Cancel the composition-dependent pressure only in this added variant.
+        # Total pressure is then a finite Neumann cosine mode with an analytic
+        # inverse for the diamagnetic current; electron pressure stays positive.
+        pe = 4 + r(1, 50) * s.cos(2 * a) * s.sin(theta) - pi - pj
     mi, mj = 2 * ni * vi, 3 * nj * vj
     ki, kj = ni * vi**2, r(3, 2) * nj * vj**2
     rho, pressure, Phi, c = 2 * ni + 3 * nj, pi + pj, phi + psi, s.Integer(2)
@@ -144,25 +150,33 @@ def model(variant="baseline"):
         )
     )
     test_point = {X: 1.37, Y: 2.91, Z: 4.23, t: 0.73}
-    if variant == "baseline":
+    if variant in ("baseline", "curvature"):
         assert (
             max(abs(float(q.subs(test_point))) for q in reynolds - raw_reynolds) < 1e-14
         )
     chi = (s.pi / LENGTH) ** 2 * amp_phi * amp_psi * chi_shape(a, theta)
-    if variant != "baseline":
+    if variant in ("skew", "viscosity"):
         reynolds = s.zeros(2, 1)
         chi = nu * omega / c
+    if curvature:
+        chi += -curvature * r(1, 50) / (4 * c * k) * s.cos(2 * a) * s.cos(theta)
+    # Negative skew current differs from the legacy split by a solenoidal curl.
+    # Its divergence agrees, but weights in transport require this full current.
+    stream = -c * grad(phi).dot(H * grad(Phi)) / 2
+    reynolds -= drift(stream)
     jnu = nu * H * grad(omega)
     jpol = -c * H * grad(chi) + reynolds
     terms = {"Vort.reynolds": div(reynolds)}
     # The verified finite cosine inversion makes these expressions identical.
     # Keeping the harmonic form avoids large cancelling terms in the source.
     rhs = {"Vort": c * lap(chi, H)}
+    if curvature:
+        terms["Vort.curvature"] = curvature * s.diff(pe + pressure, Z)
     if nu:
         terms["Vort.viscosity"] = div(jnu)
 
     def polarisation(weight):
-        return -grad(weight).dot(jpol) if not nu else -div(weight * jpol)
+        return -grad(weight).dot(jpol) if not (nu or curvature) else -div(weight * jpol)
 
     for name, n, v, m, p, mass, charge in (
         ("i", ni, vi, mi, pi, 2, 1),
@@ -191,7 +205,7 @@ def model(variant="baseline"):
             "Pe.parallel": -s.diff(pe * ve, Y),
             "Pe.compression": -r(2, 3) * pe * s.diff(ve, Y),
             "Eion.exb": -advection(r(3, 2) * pressure + ki + kj, phi),
-            "Eion.reynolds": -div(c * alpha * grad(Phi) / 2),
+            "Eion.reynolds": -advection(kperp, phi),
             "Eion.parallel_electric": -s.diff(phi * ji, Y),
             "Eion.parallel": -s.diff(
                 (r(5, 2) * pi + ki) * vi + (r(5, 2) * pj + kj) * vj, Y
@@ -202,9 +216,12 @@ def model(variant="baseline"):
                 + 2 / rho * (r(5, 2) * pi + ki)
                 + r(3, 2) / rho * (r(5, 2) * pj + kj)
             ),
-            "Eion.electron_work": -phi * s.diff(je, Y),
+            "Eion.electron_work": -phi * (s.diff(je, Y) + curvature * s.diff(pe, Z)),
         }
     )
+    if curvature:
+        terms["Pe.curvature_work"] = -r(2, 3) * curvature * pe * s.diff(phi, Z)
+        terms["Eion.curvature_electric"] = -curvature * s.diff(phi * pressure, Z)
     if nu:
         heating = -nu * grad(omega).dot(H * grad(Phi))
         electron_heating = (ne / 1836) / (rho + ne / 1836) * heating
@@ -255,7 +272,30 @@ def preflight(variant="baseline"):
             assert s.simplify(q.subs(a, face)) == 0
     fields, rhs, _, terms = model(variant)
     H = metric(variant)
-    if variant != "baseline":
+    Phi = fields["phi"] + fields["psi"]
+    v = drift(fields["phi"])
+    u = H * grad(Phi)
+    skew = 2 * s.Matrix([grad(u[i]).dot(v) for i in range(2)])
+    residual = div(-skew) - terms["Vort.reynolds"]
+    assert s.simplify(s.expand(s.expand_trig(residual).rewrite(s.exp))) == 0, (
+        "Reynolds skew identity"
+    )
+    assert (
+        s.simplify(
+            terms["Eion.reynolds"]
+            + advection(grad(Phi).dot(H * grad(Phi)), fields["phi"])
+        )
+        == 0
+    )
+    if variant == "curvature":
+        residual = 2 * lap(fields["chi"], H) - sum(
+            terms[key] for key in ("Vort.reynolds", "Vort.curvature")
+        )
+        assert s.simplify(s.expand(s.expand_trig(residual).rewrite(s.exp))) == 0, (
+            "Curvature chi inversion"
+        )
+
+    if variant in ("skew", "viscosity"):
         for face in (0, LENGTH):
             for name in ("psi", "Vort", "chi"):
                 assert s.simplify(s.diff(fields[name], X).subs(X, face)) == 0
@@ -274,13 +314,21 @@ def preflight(variant="baseline"):
         - s.Rational(2, 100) * s.Rational(2200, 287) * s.Rational(105, 100)
         > 0
     )
+    if variant == "curvature":
+        psi_upper = (
+            s.Rational(12, 10)
+            + s.Rational(4, 100)
+            + s.Rational(2, 100) * s.Rational(2200, 287) * s.Rational(105, 100)
+        )
+        # Pi <= 4*psi/3 for positive ni,nj, so the replaced Pe is positive too.
+        assert 4 - s.Rational(1, 50) - s.Rational(4, 3) * psi_upper > 0
     sample = (1.37, 2.91, 4.23, 0.73)
     magnitudes = {
         k: abs(float(s.lambdify(COORDINATES, v, "numpy", cse=True)(*sample)))
         for k, v in terms.items()
     }
     assert all(np.isfinite(v) for v in magnitudes.values()), magnitudes
-    if variant == "baseline":
+    if variant in ("baseline", "curvature"):
         assert all(v > 1e-12 for v in magnitudes.values()), magnitudes
     else:
         for key in ("Ni.parallel", "NVj.pressure", "Pe.compression", "Eion.parallel"):
@@ -296,6 +344,7 @@ def preflight(variant="baseline"):
     return {
         "variant": variant,
         "elliptic_and_X_boundaries": "verified symbolically",
+        "reynolds_skew_identity": "verified symbolically",
         "positive_primitives": True,
         "sample_term_magnitudes": magnitudes,
     }

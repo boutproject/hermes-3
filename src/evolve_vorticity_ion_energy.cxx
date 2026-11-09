@@ -246,7 +246,7 @@ void applyVorticityWallBoundary(Field3D& w, bool midpoint_zero) {
 
 BoutReal wallInwardDerivative(BoutReal phi_midpoint, BoutReal phi0, BoutReal dx0) {
   // The stored midpoint is the arithmetic mean of a mirrored guard/interior
-  // pair, so their centred face derivative is exact for quadratic profiles.
+  // pair. The finite-volume solve determines its wall-face gradient.
   return 2.0 * (phi0 - phi_midpoint) / dx0;
 }
 
@@ -330,6 +330,190 @@ Field3D kineticEnergyPerp(const Field3D& a, const Field3D& f) {
                 / (4. * coord->J()[i] * coord->dx()[i] * coord->dz()[i]);
   }
   return result;
+}
+namespace {
+// Corner (i+1/2,k+1/2) stream function; two-point differences match XPPM.
+BoutReal streamCorner(const Field3D& f, const Ind3D& i) {
+  return 0.25 * (f[i] + f[i.xp()] + f[i.zp()] + f[i.xp().zp()]);
+}
+
+XZFaceFluxes advectionFaces(const Field3D& n, const Field3D& f, bool limited) {
+  auto* m = f.getMesh();
+  const auto* coord = f.getCoordinates();
+  XZFaceFluxes flux{zeroFrom(f), zeroFrom(f)};
+  const auto edge = [&](const Ind3D& i, bool x, bool right) {
+    const BoutReal a = 2.0 * (n[x ? i.xp() : i.zp()] - n[i]);
+    const BoutReal b = 0.5 * (n[x ? i.xp() : i.zp()] - n[x ? i.xm() : i.zm()]);
+    const BoutReal c = 2.0 * (n[i] - n[x ? i.xm() : i.zm()]);
+    const BoutReal slope =
+        (a * b <= 0.0 || a * c <= 0.0)
+            ? 0.0
+            : std::copysign(std::min({std::abs(a), std::abs(b), std::abs(c)}), a);
+    return n[i] + (right ? 0.5 : -0.5) * slope;
+  };
+  for (int x = m->xstart - 1; x <= m->xend; ++x) {
+    for (int y = m->ystart; y <= m->yend; ++y) {
+      for (int z = 0; z < m->LocalNz; ++z) {
+        const Ind3D i =
+            Ind3D((x * m->LocalNy + y) * m->LocalNz + z, m->LocalNy, m->LocalNz);
+        const auto r = i.xp();
+        if (!((x == m->xstart - 1 && m->firstX()) || (x == m->xend && m->lastX()))) {
+          const BoutReal velocity = 0.5 * (coord->J()[i] + coord->J()[r])
+                                    * (streamCorner(f, i) - streamCorner(f, i.zm()))
+                                    / coord->dz()[i];
+          const BoutReal nf =
+              limited ? (velocity > 0 ? edge(i, true, true) : edge(r, true, false))
+                      : 0.5 * (n[i] + n[r]);
+          flux.x[i] = velocity * nf * coord->dy()[i] * coord->dz()[i];
+        }
+        if (x >= m->xstart) {
+          const BoutReal velocity = coord->J()[i]
+                                    * (streamCorner(f, i.xm()) - streamCorner(f, i))
+                                    / coord->dx()[i];
+          const BoutReal nf =
+              limited ? (velocity > 0 ? edge(i, false, true) : edge(i.zp(), false, false))
+                      : 0.5 * (n[i] + n[i.zp()]);
+          flux.z[i] = velocity * nf * coord->dx()[i] * coord->dy()[i];
+        }
+      }
+    }
+  }
+  return flux;
+}
+
+Field3D reynoldsLambda(const Field3D& c, const Field3D& phi) {
+  const auto* coord = phi.getCoordinates();
+  const Field3D D{
+      Coordinates::FieldMetric{coord->g11() * coord->g33() - SQ(coord->g13())}};
+  Field3D lambda = 0.5 * c * D * coord->J()
+                   * Div_a_Grad_perp_XZ(Field3D{1.0 / (coord->J() * D)}, phi, true);
+  lambda.applyBoundary("neumann_o2");
+  fillRadialGuards(lambda, [&](int x, int step, int layer, int y, int z) {
+    return lambda(x, y, z) + layer * (lambda(x, y, z) - lambda(x - step, y, z));
+  });
+  phi.getMesh()->communicate(lambda);
+  return lambda;
+}
+} // namespace
+
+XZFaceFluxes xppmFaceFluxes(const Field3D& n, const Field3D& stream) {
+  return advectionFaces(n, stream, true);
+}
+
+XZFaceFluxes centralAdvectionFaceFluxes(const Field3D& n, const Field3D& stream) {
+  return advectionFaces(n, stream, false);
+}
+
+Field3D divergence(const XZFaceFluxes& flux, const Field3D* weight) {
+  Field3D result = zeroFrom(flux.x);
+  const auto* coord = result.getCoordinates();
+  BOUT_FOR(i, result.getRegion("RGN_NOBNDRY")) {
+    const auto w = [&](const Ind3D& j) {
+      return weight ? 0.5 * ((*weight)[i] + (*weight)[j]) : 1.0;
+    };
+    result[i] = (w(i.xp()) * flux.x[i] - w(i.xm()) * flux.x[i.xm()]
+                 + w(i.zp()) * flux.z[i] - w(i.zm()) * flux.z[i.zm()])
+                / (coord->J()[i] * coord->dx()[i] * coord->dy()[i] * coord->dz()[i]);
+  }
+  return result;
+}
+
+Field3D faceWork(const XZFaceFluxes& flux, const Field3D& f) {
+  Field3D result = zeroFrom(f);
+  const auto* coord = f.getCoordinates();
+  BOUT_FOR(i, result.getRegion("RGN_NOBNDRY")) {
+    result[i] = 0.5
+                * ((f[i.xp()] - f[i]) * flux.x[i] + (f[i] - f[i.xm()]) * flux.x[i.xm()]
+                   + (f[i.zp()] - f[i]) * flux.z[i] + (f[i] - f[i.zm()]) * flux.z[i.zm()])
+                / (coord->J()[i] * coord->dx()[i] * coord->dy()[i] * coord->dz()[i]);
+  }
+  return result;
+}
+
+XZFaceFluxes reynoldsFaceFluxes(const Field3D& c, const Field3D& vort, const Field3D& phi,
+                                const Field3D& psi, const RadialBoundaryModel& model) {
+  auto* m = phi.getMesh();
+  const auto* coord = phi.getCoordinates();
+  const Field3D Phi = phi + psi;
+  Field3D Q = bracket(phi, psi, BRACKET_ARAKAWA);
+  Q.applyBoundary("neumann_o2");
+  applyVorticityWallBoundary(Q, true);
+  m->communicate(Q);
+  const auto omega = xppmFaceFluxes(0.5 * vort, phi);
+  const auto lambda = xppmFaceFluxes(reynoldsLambda(c, phi), Phi);
+  XZFaceFluxes flux{omega.x + lambda.x, omega.z + lambda.z};
+  const Field3D half_c = 0.5 * c;
+  BOUT_FOR(i, phi.getRegion("RGN_NOBNDRY")) {
+    const auto q = perpendicularFaceFluxes(half_c, Q, i, false);
+    flux.x[i] += q.xp * coord->dy()[i];
+    if (i.x() == m->xstart) {
+      flux.x[i.xm()] += q.xm * coord->dy()[i];
+    }
+    flux.z[i] += q.zp * coord->dy()[i];
+  }
+  const auto curl = solenoidalReynoldsFaceFluxes(c, phi, Phi);
+  BOUT_FOR(i, phi.getRegion("RGN_NOBNDRY")) {
+    flux.x[i] += curl.x[i];
+    flux.z[i] += curl.z[i];
+    if (i.x() == m->xstart) {
+      flux.x[i.xm()] += curl.x[i.xm()];
+    }
+    if (model.walls && !m->periodicX) {
+      if (m->firstX() && i.x() == m->xstart) {
+        flux.x[i.xm()] = curl.x[i.xm()];
+      }
+      if (m->lastX() && i.x() == m->xend) {
+        flux.x[i] = curl.x[i];
+      }
+    }
+  }
+  return flux;
+}
+
+XZFaceFluxes solenoidalReynoldsFaceFluxes(const Field3D& c, const Field3D& phi,
+                                          const Field3D& Phi) {
+  auto* m = phi.getMesh();
+  const auto* coord = phi.getCoordinates();
+  XZFaceFluxes flux{zeroFrom(phi), zeroFrom(phi)};
+  Field3D stream = zeroFrom(phi);
+  const auto average = [](const auto& f, const Ind3D& i) {
+    return 0.25 * (f[i] + f[i.xp()] + f[i.zp()] + f[i.xp().zp()]);
+  };
+  const Field3D cJ = c * coord->J();
+  for (int x = m->xstart - 1; x <= m->xend; ++x) {
+    for (int y = m->ystart; y <= m->yend; ++y) {
+      for (int z = 0; z < m->LocalNz; ++z) {
+        const Ind3D i =
+            Ind3D((x * m->LocalNy + y) * m->LocalNz + z, m->LocalNy, m->LocalNz);
+        const auto gradient = [&](const Field3D& f) {
+          return std::pair<BoutReal, BoutReal>{
+              (f[i.xp()] - f[i] + f[i.xp().zp()] - f[i.zp()])
+                  / (2 * average(coord->dx(), i)),
+              (f[i.zp()] - f[i] + f[i.xp().zp()] - f[i.xp()])
+                  / (2 * average(coord->dz(), i))};
+        };
+        const auto p = gradient(phi), h = gradient(Phi);
+        stream[i] =
+            -0.5 * average(cJ, i)
+            * (average(coord->g11(), i) * p.first * h.first
+               + average(coord->g13(), i) * (p.first * h.second + p.second * h.first)
+               + average(coord->g33(), i) * p.second * h.second);
+      }
+    }
+  }
+  for (int x = m->xstart - 1; x <= m->xend; ++x) {
+    for (int y = m->ystart; y <= m->yend; ++y) {
+      for (int z = 0; z < m->LocalNz; ++z) {
+        const Ind3D i =
+            Ind3D((x * m->LocalNy + y) * m->LocalNz + z, m->LocalNy, m->LocalNz);
+        flux.x[i] = (stream[i] - stream[i.zm()]) * coord->dy()[i];
+        if (x >= m->xstart) {
+          flux.z[i] -= (stream[i] - stream[i.xm()]) * coord->dy()[i];
+        }
+      }
+    }
+  }
+  return flux;
 }
 } // namespace bout::ion_energy
 
@@ -741,35 +925,27 @@ void EvolveVorticityIonEnergy::transform_impl(GuardedOptions& state) {
   //////////////////////////////////////////////////////////
   // Reynolds stress
 
-  // V_ExB dot Grad(psi)
-  Field3D vEdotGradPsi = bracket(phi, psi, BRACKET_ARAKAWA);
-  vEdotGradPsi.applyBoundary("neumann_o2"); // Retain the Y treatment
-  bout::ion_energy::applyVorticityWallBoundary(vEdotGradPsi, true); // Q_wall = 0
-
-  // delp2(phi) term
-  Field3D DelpPhi_2B2 = 0.5 * boussinesq_coeff * Delp2(phi);
-  DelpPhi_2B2.applyBoundary("neumann_o2"); // Retain the Y treatment
-  if (radial_model.walls) {
-    // free_o2 linear extrapolation, independent of mesh boundary labels.
-    fillRadialGuards(DelpPhi_2B2, [&](int x, int step, int layer, int y, int z) {
-      return DelpPhi_2B2(x, y, z)
-             + layer * (DelpPhi_2B2(x, y, z) - DelpPhi_2B2(x - step, y, z));
-    });
+  const Field3D Phi = phi + psi;
+  const auto reynolds = bout::ion_energy::reynoldsFaceFluxes(
+      Field3D{boussinesq_coeff}, vorticity, phi, psi, radial_model);
+  DivJReynolds = -bout::ion_energy::divergence(reynolds);
+  // Preserve the shared poloidal X-Y terms; the skew construction is X-Z only.
+  Field3D lambda;
+  if (poloidal_flows) {
+    lambda = bout::ion_energy::reynoldsLambda(Field3D{boussinesq_coeff}, phi);
+    DivJReynolds -= Div_n_bxGrad_f_B_XPPM(0.5 * vorticity, phi, false, true)
+                    - Div_n_bxGrad_f_B_XPPM(0.5 * vorticity, phi, false, false)
+                    + Div_n_bxGrad_f_B_XPPM(lambda, Phi, false, true)
+                    - Div_n_bxGrad_f_B_XPPM(lambda, Phi, false, false);
   }
-
-  mesh->communicate(vEdotGradPsi, DelpPhi_2B2);
-
-  // Divergence of Reynolds stress term DivJReynolds = -Div(G)
-  // Use the same X-Z face operator as potential recovery and polarisation.
-  DivJReynolds =
-      -Div_n_bxGrad_f_B_XPPM(0.5 * vorticity, phi, false, poloidal_flows)
-      - Div_a_Grad_perp_XZ(Field3D{0.5 * boussinesq_coeff}, vEdotGradPsi, false)
-      - Div_n_bxGrad_f_B_XPPM(DelpPhi_2B2, phi + psi, false, poloidal_flows);
-
-  // Divergence of Reynolds stress energy flux
-  {
-    const Field3D Phi = phi + psi;
-    DivEReynolds = Div_a_Grad_perp_XZ(0.5 * boussinesq_coeff * vEdotGradPsi, Phi, false);
+  Field3D kinetic_perp =
+      bout::ion_energy::kineticEnergyPerp(Field3D{boussinesq_coeff}, Phi);
+  mesh->communicate(kinetic_perp); // Supply central averages at inter-rank X faces.
+  DivEReynolds = bout::ion_energy::divergence(
+      bout::ion_energy::centralAdvectionFaceFluxes(kinetic_perp, phi));
+  if (diagnose) {
+    reynolds_work = bout::ion_energy::faceWork(reynolds, Phi);
+    reynolds_heating = reynolds_work - DivEReynolds;
   }
 
   //////////////////////////////////////////////////////////
@@ -856,16 +1032,17 @@ void EvolveVorticityIonEnergy::transform_impl(GuardedOptions& state) {
 
   // Explicit wall closure for transport, distinct from the full current solve.
   const auto divPol = [&](const Field3D& weight) -> Field3D {
-    return
-        // Potential flow part of polarisation drift
+    Field3D result =
         -Div_a_Grad_perp_XZ(weight * boussinesq_coeff, chi, radial_model.chi_wall_flux)
-        // Reynolds stress part of the polarisation drift
-        // Note: The stream functions are negated so that upwinding works correctly
-        + Div_n_bxGrad_f_B_XPPM(0.5 * vorticity, -phi, false, poloidal_flows, false,
-                                &weight)
-        - Div_a_Grad_perp_XZ(weight * 0.5 * boussinesq_coeff, vEdotGradPsi, false)
-        + Div_n_bxGrad_f_B_XPPM(DelpPhi_2B2, -(phi + psi), false, poloidal_flows, false,
-                                &weight);
+        - bout::ion_energy::divergence(reynolds, &weight);
+    if (poloidal_flows) {
+      result +=
+          Div_n_bxGrad_f_B_XPPM(0.5 * vorticity, -phi, false, true, false, &weight)
+          - Div_n_bxGrad_f_B_XPPM(0.5 * vorticity, -phi, false, false, false, &weight)
+          + Div_n_bxGrad_f_B_XPPM(lambda, -Phi, false, true, false, &weight)
+          - Div_n_bxGrad_f_B_XPPM(lambda, -Phi, false, false, false, &weight);
+    }
+    return result;
   };
   DivJpol = divPol(Field3D{1.0});
 
@@ -887,9 +1064,24 @@ void EvolveVorticityIonEnergy::transform_impl(GuardedOptions& state) {
       const Field3D particle_coefficient = coefficient * N * boussinesq_coeff;
       // Outward particle loss per cell volume, supported only next to X walls.
       // Its volume integral is the signed particle flux through those walls.
-      polarisation_sources[species.name()]["wall_loss"] =
+      Field3D loss =
           Div_a_Grad_perp_XZ(particle_coefficient, chi, false)
           - Div_a_Grad_perp_XZ(particle_coefficient, chi, radial_model.chi_wall_flux);
+      const Field3D weight = coefficient * N;
+      const auto* coord = loss.getCoordinates();
+      if (radial_model.walls) {
+        BOUT_FOR(i, loss.getRegion("RGN_NOBNDRY")) {
+          const BoutReal volume =
+              coord->J()[i] * coord->dx()[i] * coord->dy()[i] * coord->dz()[i];
+          if (mesh->firstX() && i.x() == mesh->xstart) {
+            loss[i] += 0.5 * (weight[i] + weight[i.xm()]) * reynolds.x[i.xm()] / volume;
+          }
+          if (mesh->lastX() && i.x() == mesh->xend) {
+            loss[i] -= 0.5 * (weight[i] + weight[i.xp()]) * reynolds.x[i] / volume;
+          }
+        }
+      }
+      polarisation_sources[species.name()]["wall_loss"] = loss;
     }
     E_adv += coefficient * (5. / 2) * P;
     if (species.isSet("velocity")) {
@@ -1130,6 +1322,13 @@ void EvolveVorticityIonEnergy::outputVars(Options& state) {
     set_with_attrs(
         state["DivEReynolds"], DivEReynolds,
         {{"time_dimension", "t"}, {"units", "W m^-3"}, {"conversion", Pnorm * Omega_ci}});
+    for (const auto& diagnostic : {std::pair{"reynolds_work", &reynolds_work},
+                                   std::pair{"reynolds_heating", &reynolds_heating}}) {
+      set_with_attrs(state[diagnostic.first], *diagnostic.second,
+                     {{"time_dimension", "t"},
+                      {"units", "W m^-3"},
+                      {"conversion", Pnorm * Omega_ci}});
+    }
     set_with_attrs(
         state["DivEelectric"], DivEelectric,
         {{"time_dimension", "t"}, {"units", "W m^-3"}, {"conversion", Pnorm * Omega_ci}});

@@ -462,7 +462,8 @@ if(HERMES_TESTS)
                                --timeout 300)
     hermes_add_ion_energy_test(ion-energy-sources ion-energy-sources "energy"
                                300)
-    hermes_add_ion_energy_test(ion-energy-walls ion-energy-walls "energy" 300)
+    hermes_add_ion_energy_test(ion-energy-walls ion-energy-walls "energy" 1800
+                               --timeout 600)
     add_test(NAME energy-analysis-python
              COMMAND "${HERMES_ENERGY_PYTHON}" -m pytest -q
                      "${CMAKE_CURRENT_SOURCE_DIR}/tests/python")

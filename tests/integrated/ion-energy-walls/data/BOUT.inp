@@ -52,7 +52,7 @@ func_iter = true
 nout = 10
 output_step = 1
 atol = 1e-10
-rtol = 1e-6
+rtol = 1e-7
 max_timestep = 1
 mxstep = 1e6
 

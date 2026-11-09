@@ -56,7 +56,9 @@ def flux_dataset(fluxes, geometry):
     )
 
 
-def xppm(field, stream, geometry, *, mxg=2, boundary_flux=False, weight=1):
+def xppm_faces(
+    field, stream, geometry, *, mxg=2, boundary_flux=False, weight=1, limiter="mc"
+):
     """Hermes X-Z MC ExB transport, with weights applied after limiting.
 
     Matches the current firstX/lastX boundary switch even for periodic X.
@@ -71,10 +73,17 @@ def xppm(field, stream, geometry, *, mxg=2, boundary_flux=False, weight=1):
     corner = (stream + xp(stream) + zp(stream) + xp(zp(stream))) / 4
     vx = (geometry.J + xp(geometry.J)) / 2 * (corner - zm(corner)) / geometry.dz
     vz = geometry.J * (neighbor(corner, "x", -1) - corner) / geometry.dx
-    left_x, right_x = mc_edges(field, "x")
-    left_z, right_z = mc_edges(field, "z")
-    fx = vx * xr.where(vx > 0, right_x, xp(left_x))
-    fz = vz * xr.where(vz > 0, right_z, zp(left_z))
+    if limiter == "mc":
+        left_x, right_x = mc_edges(field, "x")
+        left_z, right_z = mc_edges(field, "z")
+    elif limiter is None:
+        # Kinetic advection uses central faces; tests also apply them to the current.
+        left_x = right_x = (field + xp(field)) / 2
+        left_z = right_z = (field + zp(field)) / 2
+    else:
+        raise ValueError(f"Unknown XPPM limiter: {limiter}")
+    fx = vx * (right_x if limiter is None else xr.where(vx > 0, right_x, xp(left_x)))
+    fz = vz * (right_z if limiter is None else xr.where(vz > 0, right_z, zp(left_z)))
     ix = xr.DataArray(np.arange(field.sizes["x"]), dims="x", coords={"x": field.x})
     low, high = mxg - 1, field.sizes["x"] - mxg - 1
     if boundary_flux:
@@ -86,7 +95,116 @@ def xppm(field, stream, geometry, *, mxg=2, boundary_flux=False, weight=1):
     w = xr.ones_like(field) * weight
     fx *= (w + xp(w)) / 2 * geometry.dy * geometry.dz
     fz *= (w + zp(w)) / 2 * geometry.dx * geometry.dy
-    return flux_dataset({"x": fx, "z": fz}, geometry)
+    return {"x": fx, "z": fz}
+
+
+def xppm(field, stream, geometry, *, mxg=2, boundary_flux=False, weight=1):
+    """Divergence and faces of MC XPPM; weights follow reconstruction."""
+    return flux_dataset(
+        xppm_faces(
+            field, stream, geometry, mxg=mxg, boundary_flux=boundary_flux, weight=weight
+        ),
+        geometry,
+    )
+
+
+def central_advection_faces(field, stream, geometry, *, mxg=2):
+    """Central face averages times the XPPM corner-stream velocities."""
+    return xppm_faces(field, stream, geometry, mxg=mxg, limiter=None)
+
+
+def face_work(fluxes, potential, geometry):
+    """Half the sum of oriented face fluxes times potential jumps per volume."""
+    work = 0
+    for dim, flux in fluxes.items():
+        jump = neighbor(potential, dim) - potential
+        work += flux * jump + neighbor(flux * jump, dim, -1)
+    return work / (2 * geometry.J * geometry.dx * geometry.dy * geometry.dz)
+
+
+def solenoidal_reynolds_faces(c, phi, Phi, geometry):
+    """Corner curl of -c J grad(phi).grad(Phi)/2, including cross metric."""
+    xp, zp = lambda f: neighbor(f, "x"), lambda f: neighbor(f, "z")
+    avg = lambda f: (f + xp(f) + zp(f) + xp(zp(f))) / 4
+    gradient = lambda f: (
+        (xp(f) - f + xp(zp(f)) - zp(f)) / (2 * avg(geometry.dx)),
+        (zp(f) - f + xp(zp(f)) - xp(f)) / (2 * avg(geometry.dz)),
+    )
+    px, pz = gradient(phi)
+    hx, hz = gradient(Phi)
+    stream = (
+        -avg(c * geometry.J)
+        / 2
+        * (
+            avg(geometry.g11) * px * hx
+            + avg(geometry.g13) * (px * hz + pz * hx)
+            + avg(geometry.g33) * pz * hz
+        )
+    )
+    return {
+        "x": (stream - neighbor(stream, "z", -1)) * geometry.dy,
+        "z": -(stream - neighbor(stream, "x", -1)) * geometry.dy,
+    }
+
+
+def reynolds_face_fluxes(
+    c,
+    vorticity,
+    phi,
+    psi,
+    geometry,
+    *,
+    mxg=2,
+    walls=True,
+    periodic_x=False,
+    limiter="mc",
+    fill_guards=None,
+):
+    """Skew X-Z Reynolds faces; closed split wall flux retains the corner curl.
+
+    The orchestration layer supplies communication/Y guard filling; standalone
+    tests can supply analytic periodic halos. Physical X scalar guards follow
+    the component's midpoint-zero Q and linear-extrapolated Lambda rules.
+    """
+    Phi = phi + psi
+    D = geometry.g11 * geometry.g33 - geometry.g13**2
+    lam = (
+        c
+        * D
+        * geometry.J
+        / 2
+        * perpendicular_operator(
+            1 / (geometry.J * D),
+            phi,
+            geometry,
+            mxg=mxg,
+            boundary_flux=True,
+            periodic_x=periodic_x,
+        ).divergence
+    )
+    Q = arakawa(phi, psi, geometry.dx, geometry.dz)
+    if fill_guards is not None:
+        Q, lam = fill_guards(Q), fill_guards(lam)
+    if not periodic_x:
+        # Copy before writes: broadcast arrays and dask-backed values are allowed.
+        Q, lam = Q.copy(), lam.copy()
+        for cell, step in ((mxg, -1), (phi.sizes["x"] - mxg - 1, 1)):
+            for layer in range(1, mxg + 1):
+                Q[{"x": cell + step * layer}] = -Q.isel(x=cell)
+                lam[{"x": cell + step * layer}] = lam.isel(x=cell) + layer * (
+                    lam.isel(x=cell) - lam.isel(x=cell - step)
+                )
+    omega = xppm_faces(vorticity / 2, phi, geometry, mxg=mxg, limiter=limiter)
+    rotation = xppm_faces(lam, Phi, geometry, mxg=mxg, limiter=limiter)
+    q = fv_xz(c / 2, Q, geometry, mxg=mxg, boundary_flux=False, periodic_x=periodic_x)
+    curl = solenoidal_reynolds_faces(c, phi, Phi, geometry)
+    split = {d: omega[d] + rotation[d] + q["flux_" + d] for d in ("x", "z")}
+    if walls and not periodic_x:
+        ix = xr.DataArray(np.arange(phi.sizes["x"]), dims="x", coords={"x": phi.x})
+        split["x"] = split["x"].where(
+            (ix != mxg - 1) & (ix != phi.sizes["x"] - mxg - 1), 0
+        )
+    return {d: split[d] + curl[d] for d in ("x", "z")}
 
 
 def fv_xz(

@@ -51,11 +51,40 @@ PerpendicularFaceFluxes perpendicularFaceFluxes(const Field3D& a, const Field3D&
 Field3D Div_a_Grad_perp_XZ(const Field3D& a, const Field3D& f, bool bndry_flux = true);
 /// Face-based energy density consistent with Div_a_Grad_perp_XZ.
 Field3D kineticEnergyPerp(const Field3D& a, const Field3D& f);
+/// Area-integrated X-Z fluxes, oriented towards increasing coordinate.
+/// x(i,j,k) is face (i+1/2,j,k); z(i,j,k) is face (i,j,k+1/2).
+/// Physical cells and their adjacent faces are defined; outer guards are unused.
+struct XZFaceFluxes {
+  Field3D x;
+  Field3D z;
+};
+/// MC-limited XPPM faces with closed firstX/lastX faces, as in div_ops.cxx.
+XZFaceFluxes xppmFaceFluxes(const Field3D& n, const Field3D& stream);
+/// Central face averages transported by the same corner stream velocities.
+/// Radial firstX/lastX faces are closed.
+XZFaceFluxes centralAdvectionFaceFluxes(const Field3D& n, const Field3D& stream);
+/// Skew Reynolds current: split terms plus a corner curl. At physical walls
+/// only the corner curl remains. Inputs must carry their physical wall guards.
+XZFaceFluxes reynoldsFaceFluxes(const Field3D& c, const Field3D& vorticity,
+                                const Field3D& phi, const Field3D& psi,
+                                const RadialBoundaryModel& model);
+/// Corner curl contribution to the Reynolds current, with the same face indices.
+/// Its divergence vanishes to roundoff; Y-plane widths must be uniform in X-Z.
+XZFaceFluxes solenoidalReynoldsFaceFluxes(const Field3D& c, const Field3D& phi,
+                                          const Field3D& Phi);
+/// Conservative divergence on physical cells. Optional weights are averaged
+/// across each face after reconstruction; the supplied fluxes are preserved.
+Field3D divergence(const XZFaceFluxes& flux, const Field3D* weight = nullptr);
+/// Half the sum of flux times the increasing-coordinate potential jump on
+/// each cell face, divided by cell volume. Uses the same face index convention.
+Field3D faceWork(const XZFaceFluxes& flux, const Field3D& potential);
 /// Estimate the inward wall derivative from an encoded arithmetic midpoint.
 ///
 /// Reflection sets phi_guard = 2 * phi_midpoint - phi0, so this is the centred
 /// face derivative (phi0 - phi_guard) / dx0. With the guard centre mirrored
-/// across the face, it is second order and exact for quadratic profiles.
+/// across the face, this is the finite-volume wall-face gradient. For a solved
+/// finite-volume potential it converges at second order to the true wall flux
+/// by discrete conservation. A sampled quadratic does not encode that solve.
 ///
 /// @param phi_midpoint Arithmetic mean of guard and interior potential, normally
 ///                     averaged over Z; this is the value stored in Vort guards.
@@ -215,8 +244,10 @@ private:
   VectorMetric Curlb_B; // Curvature vector Curl(b/B)
 
   // Divergence of currents
-  Field3D DivJdia;      ///< Divergence of diamagnetic current
-  Field3D DivJReynolds; ///< Divergence of Reynolds stress current
+  Field3D DivJdia;          ///< Divergence of diamagnetic current
+  Field3D reynolds_work;    ///< Face work of the X-Z Reynolds current
+  Field3D reynolds_heating; ///< Reynolds work minus kinetic energy advection
+  Field3D DivJReynolds;     ///< Divergence of Reynolds stress current
   Field3D DivJpol; ///< Polarisation transport divergence with the selected wall closure
   Field3D DivJviscous{0.0}; ///< Divergence of nu grad_perp(Vort)
 
