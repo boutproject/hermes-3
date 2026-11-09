@@ -626,13 +626,10 @@ TEST_F(RelaxPotentialChannelsTest, ChannelsCloseVorticity) {
       const Options& species = state["species"][sp];
       const Field3D jpar = (get<BoutReal>(species["charge"]) / get<BoutReal>(species["AA"]))
                            * get<Field3D>(species["momentum"]);
-      // (calculateParallelCurrentSource skips the species at the moment, isSet on a section)
-      if (outputs.isSet("E" + sp + "_phi_Div_jpar")) {
-        const Field3D div_jpar = Div_par(jpar);
-        sum_div_jpar += div_jpar;
-        expect_weighted("E" + sp + "_phi_Div_jpar", -phi * div_jpar);
-        sum_phi_jpar += get<Field3D>(outputs["E" + sp + "_phi_Div_jpar"]);
-      }
+      const Field3D div_jpar = Div_par(jpar);
+      sum_div_jpar += div_jpar;
+      expect_weighted("E" + sp + "_phi_Div_jpar", -phi * div_jpar);
+      sum_phi_jpar += get<Field3D>(outputs["E" + sp + "_phi_Div_jpar"]);
       sum_phi_jdia += get<Field3D>(outputs["E" + sp + "_phi_Div_Jdia"]);
 
       const Field3D jdia_grad_phi = get<Field3D>(outputs["E" + sp + "_Jdia_Grad_phi"]);
