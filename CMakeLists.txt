@@ -310,7 +310,7 @@ if(HERMES_TESTS)
   # Integrated tests
   function(hermes_add_integrated_test TESTNAME)
     set(oneValueArgs DOWNLOAD DOWNLOAD_NAME)
-    set(multiValueArgs REQUIRES CONFLICTS)
+    set(multiValueArgs REQUIRES CONFLICTS ARGUMENTS)
     cmake_parse_arguments(HERMES_TEST_OPTIONS "${options}" "${oneValueArgs}"
                           "${multiValueArgs}" ${ARGN})
 
@@ -352,7 +352,7 @@ if(HERMES_TESTS)
     add_test(
       NAME ${TESTNAME}
       WORKING_DIRECTORY ${INT_TEST_DEST}
-      COMMAND runtest)
+      COMMAND runtest ${HERMES_TEST_OPTIONS_ARGUMENTS})
     set_tests_properties(${TESTNAME} PROPERTIES LABELS integration)
 
     if(HERMES_TEST_OPTIONS_DOWNLOAD)
@@ -397,6 +397,21 @@ if(HERMES_TESTS)
   hermes_add_integrated_test(2D-recycling CONFLICTS BOUT_USE_METRIC_3D)
   hermes_add_integrated_test(examples CONFLICTS BOUT_USE_METRIC_3D)
   hermes_add_integrated_test(component-order CONFLICTS BOUT_USE_METRIC_3D)
+
+  add_executable(diamagnetic_drift_smoke
+                 tests/integrated/diamagnetic-drift/main.cxx)
+  target_link_libraries(diamagnetic_drift_smoke
+                        PRIVATE hermes_warnings bout++::bout++ hermes-3-lib)
+  hermes_add_integrated_test(
+    diamagnetic-drift
+    ARGUMENTS
+    --executable
+    $<TARGET_FILE:diamagnetic_drift_smoke>
+    --grid
+    ${CMAKE_CURRENT_SOURCE_DIR}/examples/tokamak-2D/compass-36x48.grd.nc
+    --run-root
+    ${CMAKE_CURRENT_BINARY_DIR}/tests/integrated/diamagnetic-drift/runs)
+  set_tests_properties(diamagnetic-drift PROPERTIES PROCESSORS 12 TIMEOUT 210)
 
   hermes_add_integrated_test(1D-density-fci REQUIRES BOUT_USE_METRIC_3D)
   hermes_add_integrated_test(1D-momentum-fci REQUIRES BOUT_USE_METRIC_3D)
