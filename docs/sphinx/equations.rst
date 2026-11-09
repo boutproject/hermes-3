@@ -1349,6 +1349,12 @@ The radial treatment is:
      - Apply ``closed``, then average the core-ring sources.
      - Apply ``closed``, then average the core-ring sources.
 
+Core-ring averaging in the ``closed_average`` radial boundary removes
+the average flux through the core (inner X, periodic Y) boundary, by
+averaging the density, energy and momentum sources over both Y
+and Z. This removes the poloidal variation caused by turning off
+fluxes through the core boundary.
+
 In the divergence form, the target guard temperature is copied from the adjacent
 interior cell in field-aligned coordinates. Together with the sign-reversed guard
 curvature, this makes the face velocity zero even when the supplied guard
