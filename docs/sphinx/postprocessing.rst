@@ -139,3 +139,99 @@ implemented for every term.
 
 
 
+.. _sec-energy-channels:
+
+Energy channel diagnostics
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Several components can save each term of the energy equations separately, so a simulation
+can be power balanced term by term (following Dudson et al. 2026, Nucl. Fusion 66 036015,
+section 5 and appendix B). They are named ``E<species>_<term>``, e.g. ``Ed+_conduction``, and
+are power densities in :math:`W m^{-3}`. Each one is saved from exactly the field that goes
+into the equation, so the channels of an equation add up to its time derivative to rounding.
+
+**Sign.** Positive is a source for whatever the channel belongs to: the species for
+``E<species>_*``, and the perpendicular flow energy for ``E<species>_phi_Div_*`` and
+``Evort_*``.
+
+**Thermal channels** are :math:`3/2` times the term in the pressure equation, so they are
+energy, not pressure. With :math:`\frac{3}{2}` ``SP<species>`` they add up to
+:math:`\frac{3}{2}` ``ddt(P<species>)`` (plus ``E<species>_nvh`` when
+``numerical_viscous_heating`` is on). In the default form ``E<species>_Div_Vpar_32P`` holds all
+of :math:`-\frac{5}{2}\nabla_{||}(P V)` and ``E<species>_VgradP`` holds
+:math:`V \partial_{||} P`. With ``p_div_v = true`` they are
+:math:`-\frac{3}{2}\nabla_{||}(P V)` and ``E<species>_PdivV``.
+
+**Kinetic channels** are :math:`V` times each term of the parallel momentum equation, so with
+:math:`V` ``SNV<species>`` they add up to :math:`V` ``ddt(NV<species>)``. That isn't quite the
+rate of change of :math:`\frac{1}{2} m n V^2`, since it leaves out
+:math:`-\frac{1}{2} m V^2 \partial n / \partial t`, which matters for electrons (their density
+comes from quasineutrality). ``E<species>_Div_VExB_KE_flux`` and ``E<species>_Div_Vpar_KE_flux``
+are the conservative flux forms of the two advection terms. They are saved for comparison and
+are not part of the sum.
+
+**Volume integrals.** ``E<species>_Div_VExB_32P``, ``E<species>_Div_Vpar_32P``,
+``E<species>_Div_Vdia_52P`` (with the default ``diamag_form = 1``) and the two ``_flux``
+channels are divergences of a flow. Their volume integral is that flow through the domain
+boundary (the targets and the radial boundaries), not a loss inside the domain. The same goes
+for each species' pair ``E<species>_Jdia_Grad_phi + E<species>_phi_Div_Jdia``, which is
+:math:`-\nabla\cdot(\phi \mathbf{J}_{dia})`. The other kinetic channels and ``Evort_ExB`` are a
+velocity or a potential times a divergence, so they only become boundary terms together with
+other channels (appendix B).
+
+.. list-table::
+   :header-rows: 1
+   :widths: 22 26 52
+
+   * - Component
+     - Switched on by
+     - Channels
+   * - ``sheath_boundary_simple``
+     - ``diagnose`` in ``[sheath_boundary_simple]``
+     - ``E<sp>_sheath_extra`` (see :ref:`sec-sheath_boundary_simple`)
+   * - ``evolve_pressure``
+     - ``diagnose`` in ``[<sp>]``
+     - ``E<sp>_Div_VExB_32P``, ``E<sp>_Div_Vpar_32P``, ``E<sp>_numerical_P`` (all the low
+       density, low temperature and low pressure diffusion, hyper diffusion and damping terms)
+   * - ``braginskii_conduction``
+     - ``diagnose`` in ``[<sp>]``
+     - ``E<sp>_conduction``
+   * - ``anomalous_diffusion``
+     - ``diagnose`` in ``[<sp>]``
+     - ``E<sp>_anomalous_D`` (particle diffusion), ``E<sp>_anomalous_chi`` (thermal diffusion)
+   * - ``diamagnetic_drift``
+     - ``diagnose`` in ``[diamagnetic_drift]``
+     - ``E<sp>_Div_Vdia_52P``
+   * - ``evolve_momentum``
+     - ``diagnose`` in ``[<sp>]``
+     - ``E<sp>_Div_VExB_KE``, ``E<sp>_Div_Vpar_KE``, ``E<sp>_V_Gradpar_P``,
+       ``E<sp>_j_Gradpar_phi``, ``E<sp>_numerical_V``, and the flux forms
+       ``E<sp>_Div_VExB_KE_flux`` and ``E<sp>_Div_Vpar_KE_flux``
+   * - ``relax_potential``
+     - ``diagnose`` in ``[relax_potential]``
+     - ``E<sp>_Jdia_Grad_phi``, ``E<sp>_phi_Div_Jdia``, ``E<sp>_phi_Div_jpar``,
+       ``Evort_DivJcol``, ``Evort_ExB``, ``Evort_numerical``, ``Evort_Pi_DivJ``,
+       ``Evort_relax`` and ``Vort_mismatch``
+
+**relax_potential.** As in appendix B, the terms of the vorticity equation are weighted by
+:math:`-(\phi + \hat{P}_i)`, where :math:`\hat{P}_i` (``Pi_hat`` in the code) is the ion
+pressure part of the generalised vorticity. The per species channels take the :math:`-\phi`
+part of each current. ``E<sp>_Jdia_Grad_phi`` is the :math:`-\mathbf{J}_{dia}\cdot\nabla\phi`
+that goes into the species ``energy_source``. ``Evort_Pi_DivJ`` is the :math:`-\hat{P}_i` part
+of the current terms, which nothing in the species equations balances on this path.
+``Evort_relax`` is :math:`-(\phi + \hat{P}_i)` times the whole right hand side. With
+``evolve_vorticity = false`` it shows how far :math:`\phi` lags behind zero current divergence
+(the relaxation residual), and with ``evolve_vorticity = true`` it is the rate of change of the
+perpendicular flow energy (up to a divergence). ``Vort_mismatch`` is ``Vort_from_phi - Vort``,
+a vorticity rather than a power, and zero when the vorticity isn't evolved. Only the vector
+path has channels. On the bracket path (``diamagnetic_bracketform``, the default on FCI meshes)
+the component also adds :math:`P \nabla\cdot\mathbf{J}_{dia}` to each species'
+``energy_source`` when ``diamagnetic_polarisation`` is set, and that has no channel yet (it
+would be ``E<sp>_P_DivJdia``).
+
+**Not covered yet.** A few terms that reach ``energy_source`` or ``ddt`` have no channel, so a
+term by term balance leaves them over: the kinetic terms :math:`\frac{1}{2} m R (\Delta v)^2`
+of ionisation, recombination and charge exchange, the magnetic flutter terms in
+``evolve_pressure`` and ``evolve_momentum``, the electromagnetic :math:`Z A_{||}\partial n/\partial t`
+term in ``evolve_momentum``, and ``DivJextra`` in ``relax_potential`` (it only shows up in
+``Evort_relax``). ``neutral_mixed`` has no channels.
