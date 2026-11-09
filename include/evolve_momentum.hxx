@@ -3,10 +3,22 @@
 #define EVOLVE_MOMENTUM_H
 
 #include "component.hxx"
+#include "guarded_options.hxx"
+
+#include <bout/bout_types.hxx>
+#include <bout/field3d.hxx>
+
+#include <string>
 
 /// Evolve parallel momentum
 struct EvolveMomentum : public NamedComponent<EvolveMomentum> {
   EvolveMomentum(std::string name, Options& options, Solver* solver);
+
+  /// Options
+  ///
+  /// - <name>
+  ///   - scale_momentum_ddt: float, default -1.0
+  ///     Multiply `ddt(NV)` by this factor when positive
 
   /// Calculate ddt(NV).
   ///
@@ -33,7 +45,7 @@ private:
   Field3D NV;        ///< Species parallel momentum (normalised, evolving)
   Field3D NV_err;    ///< Difference from momentum as input from solver
   Field3D NV_solver; ///< Momentum as calculated in the solver
-  Field3D V;         ///< Species parallel velocity
+  Field3DParallel V; ///< Species parallel velocity
 
   Field3D momentum_source; ///< From other components. Stored for diagnostic output
 
@@ -51,6 +63,8 @@ private:
   bool diagnose;                   ///< Output additional diagnostics?
   bool fix_momentum_boundary_flux; ///< Fix momentum flux to boundary condition?
   Field3D flow_xlow, flow_ylow;    ///< Momentum flow diagnostics
+
+  BoutReal scale_momentum_ddt; ///< Scale time derivatives
 
   /// This takes as inputs
   /// - species
