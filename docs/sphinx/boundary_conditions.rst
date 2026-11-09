@@ -177,6 +177,18 @@ based on the difference between the required and "underlying" coefficient:
    q_{e}^{additional} &= \gamma_e T_e n_e v_e - (2.5 T_{e} + \frac{1}{2} m_e v_{e}^{2}) n_{e} v_{e}
    \end{aligned}
 
+With ``diagnose = true`` in ``[sheath_boundary_simple]``, two energy diagnostics are saved per
+species, in :math:`W m^{-3}` in the last cell before the target. ``E<species>_sheath`` is the
+total sheath heat flux :math:`\gamma T n v`, always negative, and is the one to use for the
+target heat load. ``E<species>_sheath_extra`` is only :math:`q^{additional}` above, the part
+that actually goes into ``energy_source``. The rest, :math:`(\frac{5}{2} T + \frac{1}{2} m v^2) n v`,
+leaves through the pressure and momentum equations and shows up at the target face in
+``ef<species>_adv_ylow`` (thermal) and ``ef<species>_visc_heat_ylow`` (kinetic), both saved
+with the species ``diagnose``. ``E<species>_sheath_extra`` can be positive, e.g. for ions with
+``gamma_i = 2.5``, where advection already carries out more than :math:`\gamma T n v`. Use it
+(not ``E<species>_sheath``) when closing the pressure equation term by term, see
+:ref:`sec-energy-channels`.
+
 The sheath ion particle flux is facilitated through the underlying density equation advecting density out of the domain:
 
 .. math::
