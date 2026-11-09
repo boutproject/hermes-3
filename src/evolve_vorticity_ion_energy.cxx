@@ -1079,11 +1079,11 @@ void EvolveVorticityIonEnergy::transform_impl(GuardedOptions& state) {
         -Div_a_Grad_perp_XZ(weight * boussinesq_coeff, chi, radial_model.chi_wall_flux)
         - bout::ion_energy::divergence(reynolds, &weight);
     if (poloidal_flows) {
-      result +=
-          Div_n_bxGrad_f_B_XPPM(0.5 * vorticity, -phi, false, true, false, &weight)
-          - Div_n_bxGrad_f_B_XPPM(0.5 * vorticity, -phi, false, false, false, &weight)
-          + Div_n_bxGrad_f_B_XPPM(lambda, -Phi, false, true, false, &weight)
-          - Div_n_bxGrad_f_B_XPPM(lambda, -Phi, false, false, false, &weight);
+      result -=
+          Div_n_bxGrad_f_B_XPPM(0.5 * vorticity, phi, false, true, false, &weight)
+          - Div_n_bxGrad_f_B_XPPM(0.5 * vorticity, phi, false, false, false, &weight)
+          + Div_n_bxGrad_f_B_XPPM(lambda, Phi, false, true, false, &weight)
+          - Div_n_bxGrad_f_B_XPPM(lambda, Phi, false, false, false, &weight);
     }
     return result;
   };

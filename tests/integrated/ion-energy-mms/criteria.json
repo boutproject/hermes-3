@@ -1,4 +1,5 @@
 {
+  "stall_seconds": 120,
   "default_order": 1.7,
   "long_order": 1.8,
   "recovery": 1e-10,

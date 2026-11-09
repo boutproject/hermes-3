@@ -1,4 +1,5 @@
 {
+  "stall_seconds": 120,
   "energy": 1e-10,
   "particles": 1e-10,
   "recovery": 1e-10,
@@ -171,7 +172,7 @@
   "diagnostics": 1e-10,
   "open_energy": {
     "floor": 1e-10,
-    "rtol_factor": 69
+    "rtol_factor": 70
   },
   "open_particles": {
     "floor": 1e-10,

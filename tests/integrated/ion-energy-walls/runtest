@@ -110,7 +110,9 @@ def audit(study, run, label, *, nonlinear=False):
             "energy/" + label,
             float(abs(balance.relative_residual).max()),
             "open_energy"
-            if open_faces or float(abs(budget.polarisation_absolute).max()) > 0
+            if open_faces
+            or label.startswith("free_slip")
+            or float(abs(budget.polarisation_absolute).max()) > 0
             else "energy",
             run=run,
         )

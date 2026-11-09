@@ -3,8 +3,11 @@
 import argparse
 import hashlib
 import json
+import os
+import re
 import shlex
 import shutil
+import signal
 import subprocess
 import tempfile
 import time
@@ -14,6 +17,48 @@ import numpy as np
 
 from .dataset import AuditError, open_run
 from .report import revision
+
+# BOUT++'s output monitor prints these rows only after saving an output.
+OUTPUT_TIME = re.compile(r"^\s*([+-]?\d+\.\d+[eE][+-]?\d+)\s+\d+\s+", re.MULTILINE)
+FLOOR_MESSAGE = re.compile(r"\bfloor(?:ed|ing)?\b", re.IGNORECASE)
+
+
+def run_progress(contents):
+    """Read saved output times and runtime floor messages from a Hermes log.
+
+    Configuration messages such as 'Option ... density_floor' are not floor
+    events. Hermes currently clips density and recovered pressure silently;
+    this also recognises explicit 'Ion energy below floor' diagnostics.
+    """
+    lines = contents.replace("\r", "\n")
+    times = [float(match[1]) for match in OUTPUT_TIME.finditer(lines)]
+    floor = next(
+        (
+            line.strip()
+            for line in lines.splitlines()
+            if not line.lstrip().startswith("Option ") and FLOOR_MESSAGE.search(line)
+        ),
+        None,
+    )
+    return max(times) if times else None, floor
+
+
+def stop_run(process):
+    """Reap the launcher and its MPI ranks when a monitored run fails."""
+    if process.poll() is not None:
+        return
+    try:
+        os.killpg(process.pid, signal.SIGTERM)
+    except ProcessLookupError:
+        pass
+    try:
+        process.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        process.wait()
 
 
 def parser(description):
@@ -89,7 +134,11 @@ class Study:
 
     def __exit__(self, kind, error, traceback):
         self.result.update(
-            passed=kind is None and all(c["passed"] for c in self.result["checks"]),
+            passed=kind is None
+            and all(c["passed"] for c in self.result["checks"])
+            and all(
+                c.get("outcome") == "completed" for c in self.result["cases"].values()
+            ),
             elapsed_seconds=time.monotonic() - self.start,
         )
         if error:
@@ -153,6 +202,9 @@ class Study:
 
     def launch(self, folder, overrides=()):
         args = self.args
+        stall_seconds = float(self.criteria.get("stall_seconds", 120))
+        if not np.isfinite(stall_seconds) or stall_seconds <= 0:
+            raise AuditError(f"Invalid stall_seconds: {stall_seconds}")
         # BOUT++ rejects duplicate command-line keys. Later overrides replace
         # defaults, particularly restart=false in a restart round trip.
         overrides = list(
@@ -180,31 +232,80 @@ class Study:
                 (folder / "BOUT.inp").read_bytes()
             ).hexdigest(),
             "executable_sha256": hashlib.sha256(args.exe.read_bytes()).hexdigest(),
+            "stall_seconds": stall_seconds,
+            "last_output_time": None,
+            "outcome": "failed",
         }
         start = time.monotonic()
+        last_advance = start
         self.result["cases"][folder.name] = status
-        with (folder / "run.log").open("w") as log:
+        log_path = folder / "run.log"
+        with log_path.open("w") as log:
             try:
-                process = subprocess.run(
+                process = subprocess.Popen(
                     command,
                     stdout=log,
                     stderr=subprocess.STDOUT,
-                    timeout=args.timeout,
-                    check=False,
+                    start_new_session=True,
                 )
+                try:
+                    while True:
+                        latest, floor_message = run_progress(
+                            log_path.read_text(errors="replace")
+                        )
+                        now = time.monotonic()
+                        if latest is not None and (
+                            status["last_output_time"] is None
+                            or latest > status["last_output_time"]
+                        ):
+                            status["last_output_time"] = latest
+                            last_advance = now
+                        if floor_message:
+                            status.update(
+                                outcome="floored", floor_message=floor_message
+                            )
+                            stop_run(process)
+                            break
+                        if process.poll() is not None:
+                            # Read once more after exit, including the final flushed rows.
+                            latest, floor_message = run_progress(
+                                log_path.read_text(errors="replace")
+                            )
+                            status["last_output_time"] = latest
+                            if floor_message:
+                                status.update(
+                                    outcome="floored", floor_message=floor_message
+                                )
+                            elif (
+                                process.returncode == 0
+                                and len(list(folder.glob("BOUT.dmp.*.nc")))
+                                == args.nproc
+                            ):
+                                status["outcome"] = "completed"
+                            break
+                        if now - last_advance >= stall_seconds:
+                            status["outcome"] = "stalled"
+                            stop_run(process)
+                            break
+                        if now - start >= args.timeout:
+                            status["timed_out"] = True
+                            stop_run(process)
+                            break
+                        time.sleep(min(1.0, stall_seconds / 10, args.timeout / 10))
+                finally:
+                    if process.poll() is None:
+                        stop_run(process)
                 status["returncode"] = process.returncode
-            except subprocess.TimeoutExpired:
-                status["timed_out"] = True
-                raise AuditError(f"Run timed out: {folder / 'run.log'}") from None
             finally:
                 status["elapsed_seconds"] = time.monotonic() - start
                 write_json(folder / "execution.json", status)
-        if process.returncode:
+                write_json(self.output / "result.json", self.result)
+        if status["outcome"] != "completed":
+            self.check("execution/" + folder.name, 1, limit=0, truncation=True)
+            reason = "timed out" if status.get("timed_out") else status["outcome"]
             raise AuditError(
-                f"Hermes exited {process.returncode}: {folder / 'run.log'}"
+                f"Run {reason} (last output {status['last_output_time']}): {log_path}"
             )
-        if len(list(folder.glob("BOUT.dmp.*.nc"))) != args.nproc:
-            raise AuditError(f"Missing rank dumps: {folder}")
 
 
 def state_difference(first, second, *, first_index=-1, second_index=-1):

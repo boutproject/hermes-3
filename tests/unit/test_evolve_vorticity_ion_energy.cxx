@@ -1483,6 +1483,71 @@ TEST_F(EvolveVorticityIonEnergyTest, VaryingSpeciesFractionsPreservePolarisation
   EXPECT_TRUE(IsFieldEqual(charge_source, Field3D{-divJpol}, "RGN_NOBNDRY", 1e-12));
 }
 
+TEST_F(EvolveVorticityIonEnergyTest, PoloidalPolarisationUsesUpwindCurrentStreams) {
+  using namespace bout::ion_energy;
+  auto* coord = mesh->getCoordinates();
+  coord->setContravariantMetricTensor(
+      ContravariantMetricTensor{1.0, 1.0, 1.0, 0.0, 0.0, 0.3});
+  FakeSolver solver;
+  auto options = makeOptions();
+  options["test"]["poloidal_flows"] = true;
+  EvolveVorticityIonEnergy component("test", options, &solver);
+  declareSpecies(component);
+  Field3D vort = makeField<Field3D>([](const Ind3D& i) {
+    return 0.02 * sin(0.8 * i.x() + 1.7 * i.y() + 2 * PI * i.z() / nz);
+  });
+  solver.setState({{"Vort", vort}, {"Eion", Field3D{4.0}}});
+  auto state = makeState();
+  component.transform(state);
+  component.finally(state);
+  const auto output = diagnostics(component);
+  const Field3D phi = output["phi"].as<Field3D>();
+  const Field3D psi = output["ion_pressure_potential"].as<Field3D>();
+  const Field3D chi = output["ion_chi"].as<Field3D>();
+  vort = get<Field3D>(state["fields"]["vorticity"]);
+  const Field3D c{1.5 / SQ(coord->Bxy())};
+  // D=J=1 in this slab, so Lambda is half the perpendicular Laplacian.
+  const Field3D D{
+      Coordinates::FieldMetric{coord->g11() * coord->g33() - SQ(coord->g13())}};
+  Field3D lambda = 0.5 * c * D * coord->J()
+                   * Div_a_Grad_perp_XZ(Field3D{1.0 / (coord->J() * D)}, phi, true);
+  lambda.applyBoundary("neumann_o2");
+  for (const auto [x, step] : {std::pair{mesh->xstart, -1}, std::pair{mesh->xend, 1}}) {
+    for (int layer = 1; layer <= 2; ++layer) {
+      for (int y = mesh->ystart; y <= mesh->yend; ++y) {
+        for (int z = 0; z < nz; ++z) {
+          lambda(x + step * layer, y, z) =
+              lambda(x, y, z) + layer * (lambda(x, y, z) - lambda(x - step, y, z));
+        }
+      }
+    }
+  }
+  mesh->communicate(lambda);
+  const auto poloidal = [&](const Field3D& n, const Field3D& stream) {
+    return Div_n_bxGrad_f_B_XPPM(n, stream, false, true, false)
+           - Div_n_bxGrad_f_B_XPPM(n, stream, false, false, false);
+  };
+  const Field3D upwind = -poloidal(0.5 * vort, phi) - poloidal(lambda, phi + psi);
+  const Field3D downwind = poloidal(0.5 * vort, -phi) + poloidal(lambda, -phi - psi);
+  ASSERT_GT(max(abs(upwind), false), 1e-7);
+  ASSERT_GT(max(abs(upwind - downwind), false), 1e-7);
+  RadialBoundaryModel model;
+  model.walls = true;
+  const auto reynolds = reynoldsFaceFluxes(c, vort, phi, psi, model);
+  const Field3D current = output["DivJReynolds"].as<Field3D>();
+  const Field3D poloidal_current = current + divergence(reynolds);
+  // FakeMesh communication does not populate Y halos of the reconstructed
+  // Lambda. Compare the explicit poloidal stencil with physical Y neighbours.
+  for (const auto& i : phi.getRegion("RGN_NOBNDRY")) {
+    if (i.y() > mesh->ystart && i.y() < mesh->yend) {
+      EXPECT_NEAR(poloidal_current[i], upwind[i], 1e-12);
+    }
+  }
+  const Field3D expected = current - Div_a_Grad_perp_XZ(c, chi, false);
+  EXPECT_TRUE(
+      IsFieldEqual(output["DivJpol"].as<Field3D>(), expected, "RGN_NOBNDRY", 1e-12));
+}
+
 TEST_F(EvolveVorticityIonEnergyTest, MixedAuxiliaryBoundaryIsIndependentOfRHSHistories) {
   static_cast<FakeMesh*>(mesh)->setGridDataSource(
       new FakeGridDataSource{{{"bxcvx", 0.3}, {"bxcvy", 0.0}, {"bxcvz", 0.5}}});
