@@ -93,19 +93,19 @@ struct RelaxPotential : public NamedComponent<RelaxPotential> {
   Field3D calculatePihat(GuardedOptions allspecies);
 
   /// Apply the configured radial boundary condition to phi
-  void applyPhiBoundary(Field3D& phi, GuardedOptions state);
+  void applyPhiBoundary(Field3DParallel& phi, GuardedOptions state);
 
   /// Calculates Div(Jdia) and sets energy_source for all
   /// charged species with pressure.
   /// The parallel boundary of phi is set using extrapolation
-  Field3D calculateDivJdia(Field3D& phi, GuardedOptions allspecies);
+  Field3D calculateDivJdia(Field3DParallel& phi, GuardedOptions allspecies);
 
   /// Calculates the collisional friction current divergence.
-  Field3D calculateDivJcol(const Field3D& phi, const Field3D& pi_hat,
+  Field3D calculateDivJcol(const Field3DParallel& phi, const Field3D& pi_hat,
                            GuardedOptions allspecies);
 
   /// Calculate the ExB advection contribution to ddt(Vort).
-  Field3D calculateExBAdvectionSource(const Field3D& vort, const Field3D& phi,
+  Field3D calculateExBAdvectionSource(const Field3D& vort, const Field3DParallel& phi,
                                       const Field3D& pi_hat);
 
   /// Calculate the current-divergence source terms added in finally().
@@ -113,14 +113,14 @@ struct RelaxPotential : public NamedComponent<RelaxPotential> {
 
   /// Calculate viscosity and dissipation contributions added in finally().
   Field3D calculateDissipationSource(const Options& state, const Field3D& vort,
-                                     const Field3D& phi);
+                                     const Field3DParallel& phi);
 
   /// Calculate ddt(phi1) from the chosen evolution mode.
   Field3D calculatePhi1Source(const Field3D& vort, const Field3D& vort_rhs,
                               const Field3D& vort_from_phi) const;
 
   /// Calculate vorticity from potential and species
-  Field3D vorticity(const Field3D& phi, GuardedOptions& allspecies);
+  Field3D vorticity(const Field3DParallel& phi, GuardedOptions& allspecies);
 
   static constexpr auto type = "relax_potential";
 
@@ -129,8 +129,8 @@ private:
   Field3D Vort;          // Evolving vorticity
   Field3D Vort_from_phi; ///< Vort calculated from phi
 
-  Field3D phi1; // Scaled electrostatic potential, evolving in time ϕ_1 = λ_2 ϕ
-  Field3D phi;  // Electrostatic potential
+  Field3D phi1;        // Scaled electrostatic potential, evolving in time ϕ_1 = λ_2 ϕ
+  Field3DParallel phi; // Electrostatic potential
 
   Field3D Pi_hat; ///< Contribution from ion pressure, weighted by atomic mass / charge
 
@@ -161,13 +161,13 @@ private:
   BoutReal phi_boundary_last_update; ///< Time when last updated
   bool phi_core_averagey;            ///< Average phi core boundary in Y?
 
-  Coordinates::FieldMetric Bsq; ///< SQ(coord->Bxy())
-  VectorMetric Curlb_B;         ///< Curvature vector Curl(b/B)
-  Field3D logB;
-  BoutReal hyper_z;                       ///< Hyper-viscosity in Z
-  Coordinates::FieldMetric viscosity;     ///< Perpendicular Kinematic viscosity
-  Coordinates::FieldMetric viscosity_par; ///< Parallel Kinematic viscosity
-
+  bout::FieldMetricParallel Bsq; ///< SQ(coord->Bxy())
+  VectorMetric Curlb_B;          ///< Curvature vector Curl(b/B)
+  bout::FieldMetricParallel logB;
+  BoutReal hyper_z;      ///< Hyper-viscosity in Z
+  Field3D viscosity;     ///< Perpendicular Kinematic viscosity
+  Field3D viscosity_par; ///< Parallel Kinematic viscosity
+  bool include_viscosity, include_viscosity_par;
   // Relax-potential related variables
   BoutReal lambda_1; ///< Relaxation parameters.  NOTE: lambda_1 has dimensions!
   BoutReal lambda_2; ///< Relaxation parameters

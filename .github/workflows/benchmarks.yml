@@ -72,7 +72,7 @@ jobs:
           submodules: true
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: "3.x"
 
@@ -112,7 +112,7 @@ jobs:
         if: always()
         run: cp benchmarks.log .asv/results/
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: asv-benchmark-results-${{ runner.os }}

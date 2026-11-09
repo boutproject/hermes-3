@@ -32,7 +32,7 @@ type = evolve_density, evolve_momentum, evolve_pressure
 AA = 1
 charge = 1
 thermal_conduction = true
-
+dissipative = false
 [Nh+]
 function = 1.0
 bndry_all = neumann
@@ -59,7 +59,7 @@ type = quasineutral, zero_current, evolve_pressure
 AA = 1.0 / 1836.0
 charge = -1
 thermal_conduction = true
-
+dissipative = false
 
 [Pe]
 function = 1.0

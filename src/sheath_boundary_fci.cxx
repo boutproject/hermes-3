@@ -10,6 +10,10 @@ using bout::globals::mesh;
 
 namespace {
 
+BoutReal smoothmax(const BoutReal a, const BoutReal b, const BoutReal eps) {
+  return 0.5 * (a + b + sqrt(SQ(a - b) + eps));
+}
+
 /// Limited free gradient of log of a quantity
 /// This ensures that the guard cell values remain positive
 /// while also ensuring that the quantity never increases
@@ -21,7 +25,6 @@ namespace {
 /// Mode 0: default (exponential extrapolation if decreases, Neumann if increases)
 /// Mode 1: always exponential extrapolation
 /// Mode 2: always linear extrapolation
-
 BoutReal limitFree(BoutReal fm, BoutReal fc, BoutReal mode) {
   if ((fm < fc) && (mode == 0)) {
     return fc; // Neumann rather than increasing into boundary
@@ -188,7 +191,9 @@ void SheathBoundaryFci::transform_impl(GuardedOptions& state) {
   Field3DParallel phi;
   if (IS_SET_NOBOUNDARY(state["fields"]["phi"])) {
     phi = getNoBoundary<Field3D>(state["fields"]["phi"]);
+    do_phi_extrapolation = true;
   } else {
+    do_phi_extrapolation = false;
     // Calculate potential phi assuming zero current
 
     // Need to sum  n_i Z_i C_i over all ion species
@@ -232,11 +237,8 @@ void SheathBoundaryFci::transform_impl(GuardedOptions& state) {
         BoutReal C_i_sq = (sheath_ion_polytropic * tisheath + Zi * tesheath) / Mi;
 
         BoutReal visheath;
-        if (pnt.dir() > 0) {
-          visheath = std::max(pnt.current(Vi), pnt.dir() * sqrt(C_i_sq));
-        } else {
-          visheath = std::min(pnt.current(Vi), pnt.dir() * sqrt(C_i_sq));
-        }
+        const BoutReal C_i = sqrt(C_i_sq);
+        visheath = pnt.dir() * smoothmax(std::abs(pnt.current(Vi)), C_i, 1e-1 * C_i_sq);
 
         pnt.current(ion_sum) += pnt.dir() * Zi * nisheath * visheath;
       }); // End of yboundary.iter
@@ -290,7 +292,8 @@ void SheathBoundaryFci::transform_impl(GuardedOptions& state) {
     pnt.next(Te) = limitFree(pnt.prev(Te), pnt.current(Te), temperature_boundary_mode);
     pnt.next(Pe) = limitFree(pnt.prev(Pe), pnt.current(Pe), pressure_boundary_mode);
 
-    pnt.next(phi) = 2.0 * pnt.current(phi) - pnt.prev(phi);
+    pnt.next(phi) = do_phi_extrapolation ? (2.0 * pnt.current(phi) - pnt.prev(phi))
+                                         : pnt.current(phi);
 
     const BoutReal nesheath = 0.5 * (pnt.next(Ne) + pnt.current(Ne));
     const BoutReal tesheath = 0.5 * (pnt.next(Te) + pnt.current(Te));
@@ -403,18 +406,15 @@ void SheathBoundaryFci::transform_impl(GuardedOptions& state) {
 
       // Calculate sheath values at half-way points (cell edge)
       const BoutReal nisheath = 0.5 * (pnt.current(Ni) + pnt.next(Ni));
-      const BoutReal tesheath = floor(pnt.current(Te) + pnt.next(Te), 1e-5);
-      const BoutReal tisheath = floor(pnt.current(Ti) + pnt.next(Ti), 1e-5);
+      const BoutReal tesheath = floor(0.5 * (pnt.current(Te) + pnt.next(Te)), 1e-5);
+      const BoutReal tisheath = floor(0.5 * (pnt.current(Ti) + pnt.next(Ti)), 1e-5);
 
       // Ion speed into sheath
       BoutReal C_i_sq = (sheath_ion_polytropic * tisheath + Zi * tesheath) / Mi;
 
       BoutReal visheath;
-      if (pnt.dir() > 0) {
-        visheath = std::max(pnt.current(Vi), pnt.dir() * sqrt(C_i_sq));
-      } else {
-        visheath = std::min(pnt.current(Vi), pnt.dir() * sqrt(C_i_sq));
-      }
+      const BoutReal C_i = sqrt(C_i_sq);
+      visheath = pnt.dir() * smoothmax(std::abs(pnt.current(Vi)), C_i, 1e-1 * C_i_sq);
 
       pnt.next(Vi) = 2.0 * visheath - pnt.current(Vi);
       pnt.next(NVi) = 2.0 * Mi * nisheath * visheath - pnt.current(NVi);
