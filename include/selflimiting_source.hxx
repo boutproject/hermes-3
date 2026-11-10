@@ -8,13 +8,9 @@
 ///
 struct SelflimitingSource : public NamedComponent<SelflimitingSource> {
   /// # Inputs
-  ///
-  /// - <name>
-  ///   - anomalous_D    This overrides D_<name> mesh input
-  ///   - anomalous_chi  This overrides chi_<name>
-  ///   - anomalous_nu   Overrides nu_<name>
-  ///   - anomalous_sheath_flux  Allow anomalous flux into sheath?
-  //                             Default false.
+  /// See documentation
+  /// https://hermes3.readthedocs.io/en/latest/feedback_control.html
+
   SelflimitingSource(std::string name, Options& alloptions, Solver*);
 
   void outputVars(Options& state) override;
