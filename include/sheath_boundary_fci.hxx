@@ -48,7 +48,7 @@ private:
   bool always_set_phi; ///< Set phi field?
   bool do_phi_extrapolation;
   Field3D wall_potential;  ///< Voltage of the wall. Normalised units.
-  BoutReal bohm_smoothing; //< Width of the smooth Bohm condition as fraction of C_i
+  BoutReal bohm_smoothing; ///< Width of the smooth Bohm condition as fraction of C_i
 
   Field3D hflux_e;         // Electron heat flux through sheath
   Field3DParallel phi;     // Phi at sheath
