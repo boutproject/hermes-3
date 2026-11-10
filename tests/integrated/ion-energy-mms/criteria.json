@@ -1,5 +1,8 @@
 {
-  "stall_seconds": 120,
+  "stall_seconds": 300,
+  "stall_seconds_by_size": {
+    "32": 3300
+  },
   "default_order": 1.7,
   "long_order": 1.8,
   "recovery": 1e-10,

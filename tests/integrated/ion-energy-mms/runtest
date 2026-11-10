@@ -55,11 +55,14 @@ def main():
                         f"mesh:nx={size + 4}",
                         f"mesh:ny={2 * size}",
                         f"mesh:nz={size}",
-                        "solver:nout=1",
-                        "solver:output_step=0.1",
+                        "solver:nout=20",
+                        "solver:output_step=0.005",
                         f"evolve_vorticity_ion_energy:diagnose={str(size == 8).lower()}",
                     ],
                     template=HERE / f"data-{variant}" / "BOUT.inp",
+                    stall_seconds=study.criteria.get("stall_seconds_by_size", {}).get(
+                        str(size)
+                    ),
                 )
                 report = summary(run)
                 study.result["cases"][Path(run.source).name]["summary"] = report
@@ -100,8 +103,8 @@ def main():
                     "mesh:nx=12",
                     "mesh:ny=16",
                     "mesh:nz=8",
-                    "solver:nout=1",
-                    "solver:output_step=0.1",
+                    "solver:nout=20",
+                    "solver:output_step=0.005",
                     "evolve_vorticity_ion_energy:diagnose=false",
                 ],
                 template=HERE / "data-baseline/BOUT.inp",

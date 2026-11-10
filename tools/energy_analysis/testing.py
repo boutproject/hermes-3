@@ -185,7 +185,9 @@ class Study:
             flush=True,
         )
 
-    def run(self, name, overrides=(), *, template=None, restart=None):
+    def run(
+        self, name, overrides=(), *, template=None, restart=None, stall_seconds=None
+    ):
         folder = self.output / name
         folder.mkdir()
         template = Path(template or self.here / "data/BOUT.inp")
@@ -193,16 +195,20 @@ class Study:
         if restart:
             for file in Path(restart).glob("BOUT.restart.*.nc"):
                 shutil.copyfile(file, folder / file.name)
-        self.launch(folder, overrides)
+        self.launch(folder, overrides, stall_seconds=stall_seconds)
         self.current_run = open_run(folder)
         self.result["cases"][name]["solver_rtol"] = float(
             self.current_run.data.options["solver"].evaluate_scalar("rtol")
         )
         return self.current_run
 
-    def launch(self, folder, overrides=()):
+    def launch(self, folder, overrides=(), *, stall_seconds=None):
         args = self.args
-        stall_seconds = float(self.criteria.get("stall_seconds", 120))
+        stall_seconds = float(
+            self.criteria.get("stall_seconds", 120)
+            if stall_seconds is None
+            else stall_seconds
+        )
         if not np.isfinite(stall_seconds) or stall_seconds <= 0:
             raise AuditError(f"Invalid stall_seconds: {stall_seconds}")
         # BOUT++ rejects duplicate command-line keys. Later overrides replace
@@ -234,10 +240,29 @@ class Study:
             "executable_sha256": hashlib.sha256(args.exe.read_bytes()).hexdigest(),
             "stall_seconds": stall_seconds,
             "last_output_time": None,
+            "maximum_output_interval_seconds": 0.0,
+            "output_progress": [],
             "outcome": "failed",
         }
         start = time.monotonic()
         last_advance = start
+
+        def record_progress(latest, now):
+            nonlocal last_advance
+            if latest is not None and (
+                status["last_output_time"] is None
+                or latest > status["last_output_time"]
+            ):
+                if status["last_output_time"] is not None:
+                    status["maximum_output_interval_seconds"] = max(
+                        status["maximum_output_interval_seconds"], now - last_advance
+                    )
+                status["last_output_time"] = latest
+                status["output_progress"].append(
+                    {"time": latest, "elapsed_seconds": now - start}
+                )
+                last_advance = now
+
         self.result["cases"][folder.name] = status
         log_path = folder / "run.log"
         with log_path.open("w") as log:
@@ -254,12 +279,7 @@ class Study:
                             log_path.read_text(errors="replace")
                         )
                         now = time.monotonic()
-                        if latest is not None and (
-                            status["last_output_time"] is None
-                            or latest > status["last_output_time"]
-                        ):
-                            status["last_output_time"] = latest
-                            last_advance = now
+                        record_progress(latest, now)
                         if floor_message:
                             status.update(
                                 outcome="floored", floor_message=floor_message
@@ -271,7 +291,7 @@ class Study:
                             latest, floor_message = run_progress(
                                 log_path.read_text(errors="replace")
                             )
-                            status["last_output_time"] = latest
+                            record_progress(latest, time.monotonic())
                             if floor_message:
                                 status.update(
                                     outcome="floored", floor_message=floor_message

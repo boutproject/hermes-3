@@ -8,6 +8,25 @@ varying composition; skew/viscosity have zero potential and high psi harmonics.
 `PROFILES` and `--variants` select coverage. Physics, grids, end time, error
 caps and order gates (1.7 / 1.8) are unchanged; recovery/diagnostics use `1e-10`.
 
+Every case saves 20 intervals of 0.005, retaining the end time 0.1. Errors
+and orders use only the final saved output for evolved and recovered fields.
+The default 300 s stall window measures lack of saved-time progress; it can therefore
+detect a stopped run without waiting for its complete MMS integration. Case
+provenance includes the observed output wall timestamps and their maximum
+interval, sampled by the monitor at up to 1 s resolution.
+
+A standalone 32-cell baseline completed with a maximum interval of 618.45 s,
+so 300 s cannot cover this grid. `stall_seconds_by_size` selects 3300 s for
+32 cells only. The allowance is twice the projected curvature interval,
+using the measured 16-cell curvature/baseline ratio `142.63 / 55.24`, rounded
+up to 300 s. The 8/16-cell window remains 300 s; each case records its selected
+window. Earlier 300 s failures are retained in the external rerun report.
+
+At 8 cells, baseline final-time L2 errors with 20 outputs match the original
+single-interval cadence for every evolved and recovered reference field.
+The largest relative difference is `6.02e-13`, below the `1e-6` invariance
+limit. The extra outputs provide progress without changing the solution.
+
 ```sh
 python tests/integrated/ion-energy-mms/runtest --exe build/hermes-3 --timeout 3600
 python tests/integrated/ion-energy-mms/runtest --exe build/hermes-3 --profile long --nproc 2 --timeout 10800
@@ -134,6 +153,10 @@ Orders below are 32→64 on the analytic Y=2.91, t=0.1 plane. Baseline and curva
 | transport_E_adv | 1.93 / 2.02 | 1.57 / 1.64 | (4.92, 2.27), interior |
 | S_grad_E_adv | -0.43 / 2.03 | -0.43 / 2.03 | (9.92, 2.42), wall band |
 
-Default CTest timeout is 4500 s, about twice the measured default run; long remains 18000 s. Per-case limits remain 3600 / 10800 s.
+With the finer output cadence, the default validation took 2544.14 s: all
+five runs completed, recovery and error caps passed, and the same eight order
+gates failed. The longest output interval in that validation was 162.1 s.
+Default CTest timeout is 6000 s, exceeding twice that profile time; long is
+36000 s. Per-case limits remain 3600 / 10800 s.
 
 The four C++ Reynolds diagnostics agree with the mirror within `4.2e-17` on the baseline-8 output. Timing includes concurrent validation load.

@@ -108,6 +108,20 @@ def test_progress_ignores_options_and_reads_saved_output_rows():
         ([], 200, 0, 120, 30, "failed", 0.0),
         ([(110, "2.000e+00 10 0.1\n")], 250, 0, 120, 300, "stalled", 2.0),
         ([(110, "0.000e+00 10 0.1\n")], 200, 0, 120, 180, "stalled", 0.0),
+        (
+            [
+                (110, "5.000e-03 10 0.1\n"),
+                (220, "1.000e-02 10 0.1\n"),
+                (330, "1.500e-02 10 0.1\n"),
+                (440, "2.000e-02 10 0.1\n"),
+            ],
+            500,
+            0,
+            300,
+            1000,
+            "completed",
+            0.02,
+        ),
     ],
 )
 def test_launch_records_monitored_outcomes(
@@ -121,7 +135,7 @@ def test_launch_records_monitored_outcomes(
     outcome,
     last_time,
 ):
-    # A controlled clock and output schedule test the actual 120-second stall
+    # A controlled clock and output schedule test the configured stall
     # rule without depending on process startup or scheduler latency.
     clock = [0.0]
     monkeypatch.setattr(
@@ -185,6 +199,12 @@ def test_launch_records_monitored_outcomes(
     status = result["cases"]["case"]
     assert status["outcome"] == outcome
     assert status["last_output_time"] == last_time
+    assert status["output_progress"][-1]["time"] == last_time
+    if len(status["output_progress"]) > 1:
+        intervals = np.diff(
+            [row["elapsed_seconds"] for row in status["output_progress"]]
+        )
+        assert status["maximum_output_interval_seconds"] == max(intervals)
     if outcome == "stalled":
         expected = 110 + stall if last_time == 2 else stall
         assert expected <= status["elapsed_seconds"] <= expected + 1
@@ -195,3 +215,60 @@ def test_launch_records_monitored_outcomes(
         assert not result["checks"][-1]["passed"]
     if timeout < stall:
         assert status["timed_out"]
+
+
+def test_launch_stall_override_applies_only_to_one_case(tmp_path, monkeypatch):
+    clock = [0.0]
+    monkeypatch.setattr(
+        testing, "revision", lambda root: {"revision": "test", "dirty": False}
+    )
+    monkeypatch.setattr(testing.time, "monotonic", lambda: clock[0])
+    monkeypatch.setattr(
+        testing.time, "sleep", lambda seconds: clock.__setitem__(0, clock[0] + seconds)
+    )
+
+    class Process:
+        pid = 12345
+        returncode = None
+
+        def __init__(self, command, *, stdout, stderr, start_new_session):
+            self.started = clock[0]
+            self.log = stdout
+            self.log.write("0.000e+00 1 0.01\n")
+            self.log.flush()
+            (Path(command[2]) / "BOUT.dmp.0.nc").touch()
+
+        def poll(self):
+            if clock[0] - self.started >= 400:
+                self.log.write("5.000e-03 10 0.1\n")
+                self.log.flush()
+                self.returncode = 0
+            return self.returncode
+
+        def wait(self, timeout=None):
+            self.returncode = -15
+
+    monkeypatch.setattr(testing.subprocess, "Popen", Process)
+    monkeypatch.setattr(testing.os, "killpg", lambda *args: None)
+    (tmp_path / "criteria.json").write_text(json.dumps({"stall_seconds": 300}))
+    executable = tmp_path / "hermes"
+    executable.write_text("fake executable for provenance")
+    study = Study(
+        tmp_path,
+        SimpleNamespace(output_root=tmp_path, exe=executable, nproc=1, timeout=1000),
+    )
+    for name, window in [("large", 600), ("small", None)]:
+        folder = study.output / name
+        folder.mkdir()
+        (folder / "BOUT.inp").write_text("[solver]\nrtol=1e-7\n")
+        if window:
+            study.launch(folder, stall_seconds=window)
+        else:
+            with pytest.raises(AuditError, match="stalled"):
+                study.launch(folder)
+    assert study.result["cases"]["large"]["outcome"] == "completed"
+    assert study.result["cases"]["large"]["stall_seconds"] == 600
+    assert study.result["cases"]["large"]["maximum_output_interval_seconds"] == 400
+    assert study.result["cases"]["small"]["outcome"] == "stalled"
+    assert study.result["cases"]["small"]["stall_seconds"] == 300
+    assert study.criteria["stall_seconds"] == 300

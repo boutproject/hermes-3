@@ -444,14 +444,14 @@ if(HERMES_TESTS)
         DESTINATION "${CMAKE_CURRENT_BINARY_DIR}/tools"
         PATTERN "__pycache__" EXCLUDE)
     endif()
-    # About twice the measured baseline/curvature default-profile runtime.
-    hermes_add_ion_energy_test(ion-energy-mms ion-energy-mms "energy;mms" 4500
+    # More than twice the measured baseline/curvature default-profile runtime.
+    hermes_add_ion_energy_test(ion-energy-mms ion-energy-mms "energy;mms" 6000
                                --timeout 3600)
     hermes_add_ion_energy_test(
       ion-energy-mms-long
       ion-energy-mms
       "energy;mms;long"
-      18000
+      36000
       --timeout
       10800
       --profile
