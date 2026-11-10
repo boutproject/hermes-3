@@ -400,11 +400,11 @@ and additionally via
 `grid variables <https://bout-dev.readthedocs.io/en/latest/user_docs/input_grids.html#generating-input-grids>`__.
 ``density_form`` is normalized by
 .. ::math
-   N_\mathrm{norm}\cdot \Omega
+   N_{norm}\cdot \Omega
 
 and the ``pressure_form`` is normalized by 
 .. ::math
-   q_\mathrm{e} \cdot N_\mathrm{norm} \cdot T_\mathrm{norm} \cdot \Omega
+   q_{e} \cdot N_{norm} \cdot T_{norm} \cdot \Omega
 
 The function used for the damping is
 
