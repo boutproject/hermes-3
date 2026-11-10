@@ -35,6 +35,13 @@ public:
 
   LowNSources(const std::string& name, Options& options);
   LowNSources(const std::string& name, Options& options, Solver* solver);
+  ~LowNSources() override;
+
+  // Don't allow copying or moving of LowNSources instances
+  LowNSources(const LowNSources&) = delete;
+  LowNSources& operator=(const LowNSources&) = delete;
+  LowNSources(LowNSources&&) = delete;
+  LowNSources& operator=(LowNSources&&) = delete;
 
   std::vector<ReactionDef> get_reaction_defs() const;
 

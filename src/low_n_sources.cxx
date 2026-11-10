@@ -123,6 +123,8 @@ void set_unique_species_or_throw(std::string& existing_species,
 namespace hermes {
 
 // ======================= LowNSources member functions =======================
+LowNSources::~LowNSources() = default;
+
 LowNSources::LowNSources(const std::string& name, Options& options,
                          [[maybe_unused]] Solver* solver)
     : LowNSources(name, options) {}
