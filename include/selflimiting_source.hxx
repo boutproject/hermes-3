@@ -35,6 +35,9 @@ private:
   BoutReal
       selflimiting_temperature_overshoot; ///< Temperature interval in which the source is dampened
 
+  Field3D density_source;
+  Field3D energy_source;
+
   // Selflimiting source function
   // This function uses logistic growth to dampen this over the interval overshoot from 1 to 0
   // k = 5.0/overshoot is chosen so the function goes from 1 to ~0.1 in the inverval of the overshoot

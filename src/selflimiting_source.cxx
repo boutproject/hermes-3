@@ -84,19 +84,17 @@ void SelflimitingSource::transform_impl(GuardedOptions& state) {
 
   if (species.isSet("density") && (selflimiting_density > 0.0)) {
     const Field3D N = GET_NOBOUNDARY(Field3D, species["density"]);
-    const Field3D density_source =
-        selflimiting_densityform
-        * selflimiting_sourceterm(N, selflimiting_density,
-                                  selflimiting_density_overshoot);
+    density_source = selflimiting_densityform
+                     * selflimiting_sourceterm(N, selflimiting_density,
+                                               selflimiting_density_overshoot);
     add(species["density_source"], density_source);
   }
 
   if (species.isSet("temperature") && (selflimiting_temperature > 0.0)) {
     const Field3D T = GET_NOBOUNDARY(Field3D, species["temperature"]);
-    const Field3D energy_source =
-        (3.0 / 2.0) * selflimiting_pressureform
-        * selflimiting_sourceterm(T, selflimiting_temperature,
-                                  selflimiting_temperature_overshoot);
+    energy_source = (3.0 / 2.0) * selflimiting_pressureform
+                    * selflimiting_sourceterm(T, selflimiting_temperature,
+                                              selflimiting_temperature_overshoot);
     add(species["energy_source"], energy_source);
   }
 }
@@ -107,10 +105,32 @@ void SelflimitingSource::outputVars(Options& state) {
   auto Nnorm = get<BoutReal>(state["Nnorm"]);
   auto Tnorm = get<BoutReal>(state["Tnorm"]);
   auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
-  auto rho_s0 = get<BoutReal>(state["rho_s0"]);
+  BoutReal Pnorm = SI::qe * Tnorm * Nnorm; // Pressure normalisation
 
   const std::string& name = objectName();
 
   if (diagnose) {
+    if (density_source.isAllocated()) {
+      set_with_attrs(state[name + std::string("_selflimiting_densitysource")],
+                     density_source,
+                     {{"time_dimension", "t"},
+                      {"units", "m^-3 s^-1"},
+                      {"conversion", Nnorm * Omega_ci},
+                      {"standard_name", "selflimiting density source"},
+                      {"species", name},
+                      {"source", "selflimiting_source"}});
+    }
+
+    if (energy_source.isAllocated()) {
+
+      set_with_attrs(state[name + std::string("_selflimiting_energysource")],
+                     energy_source,
+                     {{"time_dimension", "t"},
+                      {"units", "m^-3 s^-1"},
+                      {"conversion", Pnorm * Omega_ci},
+                      {"standard_name", "selflimiting energy source"},
+                      {"species", name},
+                      {"source", "selflimiting_source"}});
+    }
   }
 }
