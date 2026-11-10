@@ -60,9 +60,8 @@ private:
   bool lower_y; // Boundary on lower y?
   bool upper_y; // Boundary on upper y?
 
-  bool always_set_phi; ///< Set phi field?
-  /// Width of the smooth Bohm condition, as a fraction of C_i (0 = sharp max(C_i, |V|))
-  BoutReal bohm_smoothing;
+  bool always_set_phi;     ///< Set phi field?
+  BoutReal bohm_smoothing; //< Width of the smooth Bohm condition as fraction of C_i
 
   Field3D wall_potential; ///< Voltage at the wall. Normalised units.
 

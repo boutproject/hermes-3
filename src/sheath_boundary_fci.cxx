@@ -10,8 +10,9 @@ using bout::globals::mesh;
 
 namespace {
 
-BoutReal smoothmax(const BoutReal a, const BoutReal b, const BoutReal eps) {
-  return 0.5 * (a + b + sqrt(SQ(a - b) + eps));
+BoutReal bohmSpeed(BoutReal C_i, BoutReal u, BoutReal smoothing) {
+  const BoutReal w = smoothing * C_i;
+  return 0.5 * (C_i + u + std::sqrt(SQ(C_i - u) + SQ(w)));
 }
 
 /// Limited free gradient of log of a quantity
@@ -113,6 +114,10 @@ SheathBoundaryFci::SheathBoundaryFci(std::string name, Options& alloptions, Solv
       options["always_set_phi"]
           .doc("Always set phi field? Default is to only modify if already set")
           .withDefault<bool>(false);
+  bohm_smoothing = options["bohm_smoothing"]
+                       .doc("Smooth the Bohm condition |V_i| >= C_i over a width "
+                            "bohm_smoothing * C_i (0 = sharp)")
+                       .withDefault(std::sqrt(0.1));
 
   const Options& units = alloptions["units"];
   const BoutReal Tnorm = units["eV"];
@@ -242,7 +247,7 @@ void SheathBoundaryFci::transform_impl(GuardedOptions& state) {
 
         BoutReal visheath;
         const BoutReal C_i = sqrt(C_i_sq);
-        visheath = pnt.dir() * smoothmax(std::abs(pnt.current(Vi)), C_i, 1e-1 * C_i_sq);
+        visheath = pnt.dir() * bohmSpeed(std::abs(pnt.current(Vi)), C_i, bohm_smoothing);
 
         pnt.current(ion_sum) += pnt.dir() * Zi * nisheath * visheath;
       }); // End of yboundary.iter
@@ -416,7 +421,7 @@ void SheathBoundaryFci::transform_impl(GuardedOptions& state) {
 
       BoutReal visheath;
       const BoutReal C_i = sqrt(C_i_sq);
-      visheath = pnt.dir() * smoothmax(std::abs(pnt.current(Vi)), C_i, 1e-1 * C_i_sq);
+      visheath = pnt.dir() * bohmSpeed(std::abs(pnt.current(Vi)), C_i, bohm_smoothing);
 
       pnt.next(Vi) = 2.0 * visheath - pnt.current(Vi);
       pnt.next(NVi) = 2.0 * Mi * nisheath * visheath - pnt.current(NVi);
