@@ -481,15 +481,22 @@ TEST_F(LowNSourcesTest, MomentumEnergySources) {
 }
 
 /**
- * @brief Check that momentum and energy sources for external ion sources are added, unless
- * explicitly disabled with `external_src_mom_energy_enabled=false`.
- *
+ * @brief Check that momentum and energy for external ion sources have the correct magnitudes
+ * and that they are disabled if `external_src_mom_energy_enabled=false`.
  */
 TEST_F(LowNSourcesTest, ExternalSourceMomentumAndEnergyFollowConfig) {
-  const BoutReal nfloor = 1e-7;
+  const BoutReal nfloor = 1.0;
+  const BoutReal floor_factor = 4.0;
+  const BoutReal timescale = 2.0;
+  const BoutReal ion_density = 0.0;
+  const BoutReal ion_mass = 2.0;
+  const BoutReal ion_velocity = 3.0;
+  const BoutReal ion_temperature = 6.0;
   // Include ions only
   Options options =
       make_test_options(nfloor, nfloor, nfloor, "standard", "low_n_sources, d+");
+  options["low_n_sources"]["floor_factor"].force(floor_factor);
+  options["low_n_sources"]["timescale"].force(timescale);
   for (const bool mom_energy_srcs_enabled : {true, false}) {
     SCOPED_TRACE(mom_energy_srcs_enabled);
     options["low_n_sources"]["external_src_mom_energy_enabled"].force(
@@ -498,21 +505,32 @@ TEST_F(LowNSourcesTest, ExternalSourceMomentumAndEnergyFollowConfig) {
 
     // Set up a depleted ion state with non-zero velocity and temperature.
     Options state;
-    set_state(state, 0.0, 0.0, 0.0);
+    set_state(state, 0.0, ion_density, 0.0);
     auto& ion = state["species"][ion_species];
+    ion["AA"].force(ion_mass);
+    ion["velocity"].force(Field3D(ion_velocity, mesh));
+    ion["temperature"].force(Field3D(ion_temperature, mesh));
     ion["momentum_source"] = Field3D(0.0, mesh);
     ion["energy_source"] = Field3D(0.0, mesh);
 
     // Run transform
     component.transform(state);
 
-    // Mom/energy sources must be zero when disabled, non-zero otherwise
-    EXPECT_EQ(
-        IsFieldEqual(getNonFinal<Field3D>(ion["momentum_source"]), 0.0, "RGN_NOBNDRY"),
-        !mom_energy_srcs_enabled);
-    EXPECT_EQ(
-        IsFieldEqual(getNonFinal<Field3D>(ion["energy_source"]), 0.0, "RGN_NOBNDRY"),
-        !mom_energy_srcs_enabled);
+    // Expected source magnitudes
+    const BoutReal expected_density_source =
+        (nfloor * floor_factor - ion_density) / timescale;
+    const BoutReal expected_momentum_source =
+        expected_density_source * ion_mass * ion_velocity;
+    const BoutReal expected_energy_source =
+        expected_density_source * 1.5 * ion_temperature;
+
+    // Mom/energy sources must have the expected values when enabled, zero otherwise
+    EXPECT_TRUE(IsFieldEqual(getNonFinal<Field3D>(ion["momentum_source"]),
+                             mom_energy_srcs_enabled ? expected_momentum_source : 0.0,
+                             "RGN_NOBNDRY"));
+    EXPECT_TRUE(IsFieldEqual(getNonFinal<Field3D>(ion["energy_source"]),
+                             mom_energy_srcs_enabled ? expected_energy_source : 0.0,
+                             "RGN_NOBNDRY"));
   }
 }
 
