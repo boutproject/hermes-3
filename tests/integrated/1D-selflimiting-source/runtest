@@ -24,7 +24,7 @@ t_overshoot = 2.0
 success = True
 
 for d_target, t_target in zip(density_targets, temperature_targets):
-    args = f"nout={nout} timestep={timestep} d+:adaptive_density={d_target} d+:adaptive_temperature={t_target}"
+    args = f"nout={nout} timestep={timestep} d+:selflimiting_density={d_target} d+:selflimiting_temperature={t_target}"
 
     # Delete old data
     shell("rm data/BOUT.dmp.*.nc")
