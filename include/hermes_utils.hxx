@@ -8,6 +8,7 @@
 #include <string>
 #include <vector>
 
+#include "bout/assert.hxx"
 #include "bout/field3d.hxx"
 #include "bout/traits.hxx"
 
@@ -80,6 +81,33 @@ inline T clamp(const T& var, BoutReal lo, BoutReal hi,
   }
 
   return result;
+}
+
+/**
+ * @brief Map `x` to a smooth sigmoid between `lo` and `hi`.
+ * The transition is centred on (`lo` +`hi`) / 2.
+ *
+ * @param x The value to map
+ * @param lo Lower bound, approached smoothly as x -> -inf
+ * @param hi Upper bound, approached smoothly as x -> +inf
+ * @param width Positive transition scale; smaller is closer to a hard step
+ */
+inline BoutReal sigmoid_map(BoutReal x, BoutReal lo, BoutReal hi, BoutReal width) {
+  ASSERT2(width > 0.0);
+  return lo + (hi - lo) / (1.0 + exp(-(x - 0.5 * (lo + hi)) / width));
+}
+
+/**
+ * @brief Smoothly transition from 0 (ratio <= 1) to 1 (ratio >= 1 + width),
+ * with continuous first and second derivatives.
+ *
+ * @param ratio A value expected to vary around 1 (e.g. density / density_threshold)
+ * @param width Positive transition scale (above ratio = 1)
+ */
+inline BoutReal smooth_gate(BoutReal ratio, BoutReal width) {
+  ASSERT2(width > 0.0);
+  const BoutReal x = std::clamp((ratio - 1.0) / width, 0.0, 1.0);
+  return x * x * x * (10.0 + x * (-15.0 + 6.0 * x));
 }
 
 /**

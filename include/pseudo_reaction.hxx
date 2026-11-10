@@ -4,12 +4,12 @@
 #define PSEUDO_REACTION_H
 
 #include <algorithm>
-#include <cmath>
 #include <stdexcept>
 #include <string>
 
 #include <bout/bout_enum_class.hxx>
 
+#include "hermes_utils.hxx"
 #include "low_n_sources.hxx"
 #include "reaction.hxx"
 
@@ -80,38 +80,9 @@ private:
   /// Strategy to use when generating sources
   LowNSrcsStrategy strategy;
 
-  static BoutReal smooth_clamp(BoutReal x, BoutReal lo, BoutReal hi, BoutReal width);
-  static BoutReal smooth_gate(BoutReal ratio, BoutReal width);
-
   ///
   RateData get_rate_standard(GuardedOptions& state);
 };
-
-/**
- * @brief Map `x` to a smooth sigmoid between `lo` and `hi`.
- * The transition is centred on (`lo` +`hi`) / 2.
- *
- * @param x The value to map
- * @param lo Lower bound, approached smoothly as x -> -inf
- * @param hi Upper bound, approached smoothly as x -> +inf
- * @param width Transition scale; smaller is closer to a hard step
- */
-inline BoutReal PseudoReaction::smooth_clamp(BoutReal x, BoutReal lo, BoutReal hi,
-                                             BoutReal width) {
-  return lo + (hi - lo) / (1.0 + exp(-(x - 0.5 * (lo + hi)) / width));
-}
-
-/**
- * @brief Smoothly transition from 0 (ratio <= 1) to 1 (ratio >= 1 + width),
- * with continuous first and second derivatives.
- *
- * @param ratio A value expected to vary around 1 (e.g. density / density_threshold)
- * @param width Positive transition width (above ratio = 1)
- */
-inline BoutReal PseudoReaction::smooth_gate(BoutReal ratio, BoutReal width) {
-  const BoutReal x = std::clamp((ratio - 1.0) / width, 0.0, 1.0);
-  return x * x * x * (10.0 + x * (-15.0 + 6.0 * x));
-}
 
 /**
  * @brief Construct a new Pseudo Reaction object
@@ -190,7 +161,7 @@ inline RateData PseudoReaction::get_rate_standard(GuardedOptions& state) {
         // The more deficient the boost species is, the further the rate is boosted
         // (Use a sigmoid between 0.01 and 1.0 for the inverse boost factor,
         // bounding the boost between 1 and 100 and avoiding division by zero)
-        const BoutReal inv_boost_fac = smooth_clamp(thresh_ratio, 0.01, 1.0, 0.01);
+        const BoutReal inv_boost_fac = sigmoid_map(thresh_ratio, 0.01, 1.0, 0.01);
         result.rate[i] /= inv_boost_fac;
       }
       if (this->boost_requires_deficit) {
