@@ -82,7 +82,7 @@ SelflimitingSource::SelflimitingSource(std::string name, Options& alloptions, So
       / Tnorm;
 
   if (selflimiting_density_overshoot <= 0.0) {
-    throw BoutException("Temperature overshoot is zero or negative!");
+    throw BoutException("Density overshoot is zero or negative!");
   }
 
   if (selflimiting_temperature_overshoot <= 0.0) {
