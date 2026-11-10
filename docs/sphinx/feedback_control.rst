@@ -366,7 +366,7 @@ Selflimiting source
 
 This component is applicable to 1D, 2D and 3D simulations. The controller adjusts
 the density source to target a user-set density in the same cell, or adjusts the
-pressure source to target a temperature.. It uses logistic growth to
+pressure source to target a temperature. It uses logistic growth to
 smoothly transition the set source term from its full strength to zero. This
 makes it differentiable but potentially stiff. Each cell is individually
 controlled and does not rely on any averaging, which makes it suitable for 3D
