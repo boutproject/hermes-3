@@ -378,13 +378,14 @@ The density and temperature control is managed in each species section:
    [d+]
    type = (evolve_density, ..., selflimiting_source)
 
-   selflimiting_density = 1e19                  # in m^-3
-   selflimiting_density_overshoot = 1e18        # in m^-3
-   selflimiting_densityform = gauss(y, 0.25) * 1e24
+   [d+:selflimiting_source]
+   density_setpoint = 1e19                  # in m^-3
+   density_overshoot = 1e18                 # in m^-3
+   densityform = gauss(y, 0.25) * 1e24
 
-   selflimiting_temperature = 100               # in eV
-   selflimiting_temperature_overshoot = 2.0     # in eV
-   selflimiting_pressureform = 2.5e7 * gauss(y, 0.25)
+   temperature_setpoint = 100               # in eV
+   temperature_overshoot = 2.0              # in eV
+   pressureform = 2.5e7 * gauss(y, 0.25)
 
 The overshoot sets the width of the transition region. At the target value
 the source is at about 90% of its full strength, it drops to 50% half an
