@@ -45,7 +45,7 @@ upper_y = true
 
 [d+]  # Deuterium ions
 type = (evolve_density, evolve_pressure, evolve_momentum,
-        noflow_boundary)
+        noflow_boundary, adaptive_source)
 
 noflow_lower_y = true
 noflow_upper_y = false  # Sheath boundary at upper y
@@ -55,25 +55,24 @@ AA = 2
 
 thermal_conduction = true  # in evolve_pressure
 
+adaptive_density = 1e19
+adaptive_density_overshoot = 1e18
+adaptive_densityform = gauss(y, 0.25) * 1e24
+
+adaptive_temperature = 100
+adaptive_temperature_overshoot = 2.0
+adaptive_pressureform = 2.5e7 * gauss(y, 0.25)
+
 [Nd+]
 
 function = 1
 
-source = gauss(y, 0.25) * 1e24 # Feedback controller source shape
-
-adaptive_source = 1e19
-adaptive_overshoot = 1e18
+source = 0.0
 
 
 [Pd+]
 function = 1
-
-powerflux = 2.5e7  # Input power flux in W/m^2
-
-source = powerflux * gauss(y, 0.25)  # Input power as function of y
-
-adaptive_source = 100
-adaptive_overshoot = 2.0
+source = 0.0
 
 [NVd+]
 

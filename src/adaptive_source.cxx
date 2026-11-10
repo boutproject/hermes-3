@@ -31,12 +31,13 @@ AdaptiveSource::AdaptiveSource(std::string name, Options& alloptions, Solver*)
                              .withDefault<Field3D>(Field3D{0.0})
                          / densitysource_normalisation;
 
-  BoutReal source_normalisation =
+  BoutReal pressuresource_normalisation =
       SI::qe * Nnorm * Tnorm * Omega_ci; // [Pa/s] or [W/m^3] if converted to energy
 
   adaptive_pressureform = options["adaptive_pressureform"]
                               .doc("Form of the adaptive pressure source.")
-                              .withDefault<Field3D>(Field3D{0.0});
+                              .withDefault<Field3D>(Field3D{0.0})
+                          / pressuresource_normalisation;
 
   adaptive_density = options["adaptive_density"]
                          .doc("Density [m^-3] above which the source term will be "
