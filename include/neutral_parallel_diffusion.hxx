@@ -60,6 +60,10 @@ struct NeutralParallelDiffusion : public NamedComponent<NeutralParallelDiffusion
             .doc("Enable parallel projection of perpendicular conduction?")
             .withDefault<bool>(true);
 
+    toroidal_slip = options["toroidal_slip"]
+                        .doc("Allow non-zero toroidal flow at the target?")
+                        .withDefault<bool>(false);
+
     perpendicular_viscosity =
         options["perpendicular_viscosity"]
             .doc("Enable parallel projection of perpendicular viscosity?")
@@ -72,6 +76,11 @@ struct NeutralParallelDiffusion : public NamedComponent<NeutralParallelDiffusion
     // FIXME: momentum_source is only set if velocity was set.
     substitutePermissions("outputs",
                           {"density_source", "energy_source", "momentum_source"});
+
+    if (toroidal_slip) {
+      setPermissions(writeBoundaryReadInteriorIfSet("species:{neutrals}:velocity"));
+      setPermissions(writeBoundaryReadInteriorIfSet("species:{neutrals}:momentum"));
+    }
   }
 
   /// Save variables to the output
@@ -91,6 +100,7 @@ private:
   bool equation_fix;             ///< Fix incorrect 3/2 factor in pressure advection?
   bool perpendicular_conduction; ///< Enable conduction?
   bool perpendicular_viscosity;  ///< Enable viscosity?
+  bool toroidal_slip;            ///< Allow non-zero toroidal flow at the target?
 
   /// Per-species diagnostics
   struct Diagnostics {

@@ -1,9 +1,15 @@
 
+#include <bout/assert.hxx>
+#include <bout/bout_types.hxx>
+#include <bout/boutexception.hxx>
 #include <bout/difops.hxx>
 #include <bout/field3d.hxx>
+#include <bout/globals.hxx>
 #include <bout/mesh.hxx>
 
+#include "../include/component.hxx"
 #include "../include/electron_force_balance.hxx"
+#include "../include/guarded_options.hxx"
 
 using bout::globals::mesh;
 
@@ -17,8 +23,8 @@ void ElectronForceBalance::transform_impl(GuardedOptions& state) {
 
   // Get the electron pressure, with boundary condition applied
   GuardedOptions electrons = state["species"]["e"];
-  Field3D Pe = GET_VALUE(Field3D, electrons["pressure"]);
-  Field3D Ne = GET_NOBOUNDARY(Field3D, electrons["density"]);
+  const Field3D Pe = GET_VALUE(Field3D, electrons["pressure"]);
+  const Field3D Ne = GET_NOBOUNDARY(Field3D, electrons["density"]);
 
   ASSERT1(get<BoutReal>(electrons["charge"]) == -1.0);
 
@@ -42,7 +48,7 @@ void ElectronForceBalance::transform_impl(GuardedOptions& state) {
     }
     GuardedOptions species = allspecies[kv.first]; // Note: Need non-const
 
-    if (!(species.isSet("density") and species.isSet("charge"))) {
+    if (!(IS_SET_NOBOUNDARY(species["density"]) and IS_SET(species["charge"]))) {
       continue; // Needs both density and charge to experience a force
     }
 
