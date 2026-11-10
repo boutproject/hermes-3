@@ -13,11 +13,11 @@ Upstream density controller
 This is intended for 1D simulations, where the density at :math:`y=0` is set
 by adjusting an input source. This component uses a PI controller method
 to scale the density source up and down, to maintain the specified upstream
-density. 
-The source, e.g. ``Sd+_feedback``, is calculated as a product of the control signal ``density_source_multiplier``, 
+density.
+The source, e.g. ``Sd+_feedback``, is calculated as a product of the control signal ``density_source_multiplier``,
 and the array ``density_source_shape`` which defines the source region.
 The signal is non-dimensional and the controller depends on the value of ``density_source_shape`` to have a good initial guess of the source.
-It should be set to a reasonable value in the units of ``[m-3s-1]``. 
+It should be set to a reasonable value in the units of ``[m-3s-1]``.
 A good reasonable value is the expected steady state domain particle loss (for example due to unrecycled ions at the target).
 
 
@@ -40,7 +40,7 @@ There are two additional settings which can make the controller more robust with
 ``density_source_positive`` ensures the controller never takes particles away, which can prevent oscillatory
 behaviour. Note that this requires some other domain particle sink to ensure control, or else the particle count can never reduce.
 
-``density_integral_positive`` This makes sure the integral component only adds particles. 
+``density_integral_positive`` This makes sure the integral component only adds particles.
 The integral component takes a long time to change value, which can result in large overshoots if the initial guess was too small.
 This setting mitigates this by disabling the integral term if the density is above the desired value.
 
