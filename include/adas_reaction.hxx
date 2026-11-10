@@ -55,9 +55,9 @@ struct OpenADAS : public hermes::ReactionBase {
   ///               and negative for ionisation
   ///
   /// Notes
-  ///  - The rate and radiation file names have "json_database/" prepended
+  ///  - The rate and radiation file names have `json_db_dir` prepended
   ///
-  OpenADAS(std::string name, const Options& units, const std::string& rate_file,
+  OpenADAS(std::string name, const Options& options, const std::string& rate_file,
            const std::string& radiation_file, std::string from_ion, std::string to_ion,
            std::size_t level, BoutReal electron_heating)
       : hermes::ReactionBase(
@@ -69,6 +69,7 @@ struct OpenADAS : public hermes::ReactionBase {
         radiation_coef(std::string("json_database/") + radiation_file, level),
         electron_heating(electron_heating) {
     // Get the units
+    auto& units = options["units"];
     Tnorm = get<BoutReal>(units["eV"]);
     Nnorm = get<BoutReal>(units["inv_meters_cubed"]);
     FreqNorm = 1. / get<BoutReal>(units["seconds"]);
@@ -101,7 +102,7 @@ private:
 };
 
 struct OpenADASChargeExchange : public hermes::ReactionBase {
-  OpenADASChargeExchange(std::string name, const Options& units,
+  OpenADASChargeExchange(std::string name, const Options& options,
                          const std::string& rate_file, std::string from_A,
                          std::string from_B, std::string to_A, std::string to_B,
                          std::size_t level)
@@ -112,6 +113,7 @@ struct OpenADASChargeExchange : public hermes::ReactionBase {
                                                readWrite("species:{sp}:{w_val}")}),
         rate_coef(std::string("json_database/") + rate_file, level) {
     // Get the units
+    auto& units = options["units"];
     Tnorm = get<BoutReal>(units["eV"]);
     Nnorm = get<BoutReal>(units["inv_meters_cubed"]);
     FreqNorm = 1. / get<BoutReal>(units["seconds"]);

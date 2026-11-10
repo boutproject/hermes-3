@@ -45,7 +45,7 @@ struct neon_species {
 template <std::size_t level>
 struct ADASNeonIonisation : public OpenADAS {
   ADASNeonIonisation(std::string name, Options& alloptions, Solver*)
-      : OpenADAS(std::move(name), alloptions["units"], "scd96_ne.json", "plt96_ne.json",
+      : OpenADAS(std::move(name), alloptions, "scd96_ne.json", "plt96_ne.json",
                  neon_species_name<level>, neon_species_name<level + 1>, level,
                  -neon_ionisation_energy[level]) {}
   static constexpr auto type = izn_component_name_v<neon_species, level>;
@@ -69,9 +69,9 @@ private:
 /// @tparam level  The ionisation level of the ion on the right of the reaction
 template <std::size_t level>
 struct ADASNeonRecombination : public OpenADAS {
-  /// @param alloptions  The top-level options. Only uses the ["units"] subsection.
+  /// @param alloptions  The top-level options.
   ADASNeonRecombination(std::string name, Options& alloptions, Solver*)
-      : OpenADAS(std::move(name), alloptions["units"], "acd96_ne.json", "prb96_ne.json",
+      : OpenADAS(std::move(name), alloptions, "acd96_ne.json", "prb96_ne.json",
                  neon_species_name<level + 1>, neon_species_name<level>, level,
                  neon_ionisation_energy[level]) {}
   static constexpr auto type = rec_component_name_v<neon_species, level>;
@@ -92,9 +92,9 @@ private:
 /// @tparam Hisotope  The hydrogen isotope ('h', 'd' or 't')
 template <std::size_t level, char Hisotope>
 struct ADASNeonCX : public OpenADASChargeExchange {
-  /// @param alloptions  The top-level options. Only uses the ["units"] subsection.
+  /// @param alloptions  The top-level options.
   ADASNeonCX(std::string name, Options& alloptions, Solver*)
-      : OpenADASChargeExchange(std::move(name), alloptions["units"], "ccd89_ne.json",
+      : OpenADASChargeExchange(std::move(name), alloptions, "ccd89_ne.json",
                                neon_species_name<level + 1>, {Hisotope},
                                neon_species_name<level>, {Hisotope, '+'}, level) {}
   static constexpr auto type = cx_component_name_v<neon_species, level, Hisotope>;
