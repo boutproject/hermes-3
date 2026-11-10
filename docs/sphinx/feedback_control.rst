@@ -359,3 +359,42 @@ Input Parameters
 -  **``debug``**: Controls the level of debugging information printed to
    the screen. A value of ``0`` disables debugging output, ``1`` enables
    basic output, and ``2`` provides extensive debugging information.
+
+
+Adaptive source
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+This component is applicable to 1D, 2D and 3D simulations. The controller is responsive to plasma density and temperature. It uses logistic growth to smoothly transition the set source term from its full strength to zero. This makes it differentable but potentially stiff. Each cell is individually controlled and does not rely on any averaging which makes it suitable for 3D geometries like stellarators.
+
+The density and temperature control is managed in each species section:
+
+.. code-block:: ini
+
+   [d+]
+   type = (evolve_density, ..., adaptive_source)
+
+   ...
+   ...
+
+   adaptive_density = 1e19                            # in m^-3
+   adaptive_density_overshoot = 1e18                  # in m^-3
+   adaptive_densityform = gauss(y, 0.25) * 1e24
+
+   adaptive_temperature = 100                         # in eV
+   adaptive_temperature_overshoot = 2.0               # in eV
+   adaptive_pressureform = 2.5e7 * gauss(y, 0.25)
+
+The overshoot is an approximate interval after which the source is completely dampened. This is not meant to be exact. The precise value it reaches depends on e.g. the source terms. It is advised to not use too unrealistic source strengths (e.g. running with GW of power), otherwise the density or temperature values might exceed multiples of the overshoot.
+
+The function used for the dampening is
+
+.. code-block: c++
+
+   Field3D adaptive_sourceterm(const Field3D& thisfield, const BoutReal maximum,
+                               const BoutReal overshoot) {
+     BoutReal k = 5.0 / overshoot;
+     BoutReal x0 = maximum + overshoot / 2.0;
+     return (1.0 - (1.0 / (1.0 + exp(-k * (thisfield - x0)))));
+   }
+
+This function is multiplied with ``adaptive_densityform`` and ``adaptive_pressureform`` and then added to the ``density_source`` and ``energy_source`` of the species.
