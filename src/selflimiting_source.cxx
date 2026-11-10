@@ -28,7 +28,7 @@ SelflimitingSource::SelflimitingSource(std::string name, Options& alloptions, So
 
   auto& soptions = options["selflimiting_source"];
 
-  selflimiting_densityform = soptions["densityform"]
+  selflimiting_densityform = soptions["density_form"]
                                  .doc("Form of the selflimiting density source.")
                                  .withDefault<Field3D>(Field3D{0.0})
                              / densitysource_normalisation;
@@ -36,7 +36,7 @@ SelflimitingSource::SelflimitingSource(std::string name, Options& alloptions, So
   BoutReal pressuresource_normalisation =
       SI::qe * Nnorm * Tnorm * Omega_ci; // [Pa/s] or [W/m^3] if converted to energy
 
-  selflimiting_pressureform = soptions["pressureform"]
+  selflimiting_pressureform = soptions["pressure_form"]
                                   .doc("Form of the selflimiting pressure source.")
                                   .withDefault<Field3D>(Field3D{0.0})
                               / pressuresource_normalisation;

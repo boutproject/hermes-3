@@ -58,11 +58,11 @@ thermal_conduction = true  # in evolve_pressure
 [d+:selflimiting_source]
 density_setpoint = 1e19
 density_overshoot = 1e18
-densityform = gauss(y, 0.25) * 1e24
+density_form = gauss(y, 0.25) * 1e24
 
 temperature_setpoint = 100
 temperature_overshoot = 2.0
-pressureform = 2.5e7 * gauss(y, 0.25)
+pressure_form = 2.5e7 * gauss(y, 0.25)
 
 [Nd+]
 
