@@ -81,6 +81,14 @@ SelflimitingSource::SelflimitingSource(std::string name, Options& alloptions, So
           .withDefault<BoutReal>(10.0)
       / Tnorm;
 
+  if (selflimiting_density_overshoot <= 0.0) {
+    throw BoutException("Temperature overshoot is zero or negative!");
+  }
+
+  if (selflimiting_temperature_overshoot <= 0.0) {
+    throw BoutException("Temperature overshoot is zero or negative!");
+  }
+
   substitutePermissions("name", {name});
   std::vector<std::string> output_vars;
   if (selflimiting_density > 0.0) {
