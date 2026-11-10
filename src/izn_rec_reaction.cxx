@@ -8,8 +8,9 @@ namespace hermes {
 // ============================== IznRecReaction ==============================
 ///
 IznRecReaction::IznRecReaction(std::string short_reaction_type, std::string name,
-                               Options& options)
-    : Reaction(name, options), short_reaction_type(short_reaction_type) {
+                               Options& options, bool use_standalone_config)
+    : Reaction(name, options, use_standalone_config),
+      short_reaction_type(short_reaction_type) {
 
   // Store heavy species names for convenience. Parser calls throw if there isn't exactly
   // one heavy reactant and one heavy product.
@@ -207,8 +208,8 @@ void IznRecReaction::transform_additional(GuardedOptions& state,
 
 // ================================ IznReaction ===============================
 ///
-IznReaction::IznReaction(std::string name, Options& options)
-    : IznRecReaction("iz", name, options) {
+IznReaction::IznReaction(std::string name, Options& options, bool use_standalone_config)
+    : IznRecReaction("iz", name, options, use_standalone_config) {
   // Multiplier options are set on the heavy reactant species for ionisation
   this->rate_multiplier = options[this->heavy_reactant]["K_iz_multiplier"]
                               .doc("Scale the ionisation rate by this factor")
@@ -222,8 +223,8 @@ IznReaction::IznReaction(std::string name, Options& options)
 
 // ================================ RecReaction ===============================
 ///
-RecReaction::RecReaction(std::string name, Options& options)
-    : IznRecReaction("rec", name, options) {
+RecReaction::RecReaction(std::string name, Options& options, bool use_standalone_config)
+    : IznRecReaction("rec", name, options, use_standalone_config) {
   // Multiplier options are set on the heavy product species for recombination
   this->rate_multiplier = options[this->heavy_product]["K_rec_multiplier"]
                               .doc("Scale the recombination rate by this factor")

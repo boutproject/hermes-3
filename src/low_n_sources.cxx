@@ -278,9 +278,6 @@ void LowNSources::instantiate_reactions() {
         toString(ReactionDataTypes::None);
     reaction_options[PseudoReaction::component_name]["type"] = spec.reaction_str;
     reaction_options[PseudoReaction::component_name]["diagnose"] = this->diagnose;
-    /// This ensures that PseudoReaction instances don't interfere with the parsing of reaction strings from the config
-    //  (See Reaction, ReactionBase constructors for details)
-    reaction_options[PseudoReaction::component_name]["is_internal"] = "true";
 
     // Configure all other settings in a PseudoReactionSpec struct
     spec.density_threshold = this->density_thresholds.at(spec.target_species);

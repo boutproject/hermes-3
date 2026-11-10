@@ -7,12 +7,14 @@
 namespace hermes {
 
 struct ConcreteIznReaction : public IznReaction {
-  using IznReaction::IznReaction;
+  ConcreteIznReaction(std::string name, Options& options, Solver* = nullptr)
+      : IznReaction(name, options, true) {}
   static constexpr auto type = "test_izn_reaction";
 };
 
 struct ConcreteRecReaction : public RecReaction {
-  using RecReaction::RecReaction;
+  ConcreteRecReaction(std::string name, Options& options, Solver* = nullptr)
+      : RecReaction(name, options, true) {}
   static constexpr auto type = "test_rec_reaction";
 };
 
@@ -64,7 +66,6 @@ protected:
     Options state{{comp_name,
                    {
                        {"type", this->parser.get_reaction_str()},
-                       {"is_internal", "true"},
                        {"diagnose", true},
                    }},
                   {"units", {{"eV", 1.0}, {"inv_meters_cubed", 1.0}, {"seconds", 1.0}}},

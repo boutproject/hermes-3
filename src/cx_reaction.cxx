@@ -10,8 +10,8 @@ CXReaction::CXReaction(std::string name, Options& alloptions, Solver*)
     : CXReaction(name, alloptions) {}
 
 ///
-CXReaction::CXReaction(std::string name, Options& alloptions)
-    : Reaction(name, alloptions) {
+CXReaction::CXReaction(std::string name, Options& alloptions, bool use_standalone_config)
+    : Reaction(name, alloptions, use_standalone_config) {
 
   this->do_parallel_averaging = false;
 

@@ -202,8 +202,6 @@ protected:
     // Generate input state
     Options state = generate_state();
     const std::string component_name("test" + this->lbl);
-    // This is required to bypass the instance number check in Reaction/ReactionBase, which is only appropriate for reaction strings read from config files.
-    state[component_name]["is_internal"] = "true";
 
     // Run reaction
     RTYPE component = RTYPE(component_name, state, nullptr);

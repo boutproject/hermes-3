@@ -25,15 +25,16 @@ using OPTYPE = GuardedOptions && (GuardedOptions&&, Field3D);
  * Reaction.
  */
 struct ReactionBase : public Component {
-  ReactionBase(std::string name, Permissions&& permissions, bool is_internal = false)
-      : Component(name, std::move(permissions)), is_internal(is_internal),
-        inst_num(is_internal ? 1 : incremented_instance_num() + 1) {}
+  ReactionBase(std::string name, Permissions&& permissions,
+               bool use_standalone_config = false)
+      : Component(name, std::move(permissions)),
+        inst_num(use_standalone_config ? 1 : incremented_instance_num() + 1) {}
 
   static std::size_t incremented_instance_num() { return instance_num_ref()++; }
 
   // Reset the instance counter
   // This is left in for now, as it's used by ConcreteComponentTests and is less ugly
-  // than setting is_internal=true for every tested reaction component.
+  // than setting use_standalone_config=true for every tested reaction component.
   static void reset_instance_counter() { instance_num_ref() = 0; }
 
 private:
@@ -43,9 +44,8 @@ private:
   }
 
 protected:
-  /// 'internal' reactions (e.g. the PseudoReactions instantiated by LowNSources) do not increment inst_num
-  const bool is_internal;
   /// Any scheduled reactions (those read from the config) that inherit from this class have a unique instance number
+  /// Standalone reactions use instance number 1 without advancing the shared counter.
   std::size_t inst_num;
 };
 
@@ -67,9 +67,10 @@ struct Reaction : public ReactionBase {
    *
    * @param name
    * @param options Options object
-   * @param is_internal Whether or not this instance is an 'internal' reaction (e.g. a PseudoReaction created by LowNSources)
+   * @param use_standalone_config Use the first reaction config entry without advancing
+   * the shared instance counter (e.g. for a PseudoReaction created by LowNSources).
    */
-  Reaction(std::string name, Options& options);
+  Reaction(std::string name, Options& options, bool use_standalone_config = false);
 
   /**
    * @brief Copy all diagnostics into the output, setting the appropriate metadata at the

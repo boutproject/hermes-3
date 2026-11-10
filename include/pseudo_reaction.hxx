@@ -91,7 +91,7 @@ private:
  * @param spec Typed pseudo-reaction configuration
  */
 inline PseudoReaction::PseudoReaction(Options& options, const PseudoReactionSpec& spec)
-    : Reaction(component_name, options), type(spec.type),
+    : Reaction(component_name, options, true), type(spec.type),
       external_src_mom_energy_enabled(spec.external_src_mom_energy_enabled),
       density_threshold(spec.density_threshold), timescale(spec.timescale),
       target_species(spec.target_species), gate_species(spec.gate_species),

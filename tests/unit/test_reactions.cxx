@@ -13,8 +13,7 @@ TEST(ReactionTest, InputOptions) {
 
   // Base input with two reaction strings
   Options base_input{
-      {comp_name,
-       {{"type", "(h + h+ -> h+ + h, d + d+ -> d+ + d)"}, {"is_internal", "true"}}},
+      {comp_name, {{"type", "(h + h+ -> h+ + h, d + d+ -> d+ + d)"}}},
       {"units", {{"eV", 1.0}, {"inv_meters_cubed", 1.0}, {"seconds", 1.0}}}};
 
   // Setting one or two data_srcs should work
@@ -48,8 +47,7 @@ TEST(ReactionTest, InputOptions) {
 TEST(ReactionTest, ThrowsWithoutReactionData) {
   const std::string comp_name = "test";
   Options base_input{
-      {comp_name,
-       {{"type", "(h + h+ -> h+ + h, d + d+ -> d+ + d)"}, {"is_internal", "true"}}},
+      {comp_name, {{"type", "(h + h+ -> h+ + h, d + d+ -> d+ + d)"}}},
       {"units", {{"eV", 1.0}, {"inv_meters_cubed", 1.0}, {"seconds", 1.0}}}};
 
   // Don't read any reaction data
@@ -66,7 +64,7 @@ TEST(ReactionTest, ThrowsWithoutReactionData) {
 /// reactions
 TEST(CXReactionTest, InvalidReactionStrings) {
   Options base_options{
-      {"test", {{"data_ids", "H.2_3.1.8"}, {"is_internal", "true"}}},
+      {"test", {{"data_ids", "H.2_3.1.8"}}},
       {"units", {{"eV", 1.0}, {"inv_meters_cubed", 1.0}, {"seconds", 1.0}}}};
 
   // Invalid CX reaction strings
@@ -90,7 +88,7 @@ TEST(CXReactionTest, InvalidReactionStrings) {
 /// @brief CXReaction should accept strings with reactants and products in either order
 TEST(CXReactionTest, OrderIndependentReactionStrs) {
   Options base_options{
-      {"test", {{"data_ids", "H.2_3.1.8"}, {"is_internal", "true"}}},
+      {"test", {{"data_ids", "H.2_3.1.8"}}},
       {"units", {{"eV", 1.0}, {"inv_meters_cubed", 1.0}, {"seconds", 1.0}}}};
 
   std::string DT_cx_order1 = "d + t+ -> t + d+";
