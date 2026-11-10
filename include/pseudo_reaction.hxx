@@ -15,7 +15,7 @@
 
 // An enum representing different potential strategies for low-n sources; only standard is implemented.
 // (BOUT_ENUM_CLASS specialises Options::as(), so must be in the global scope)
-BOUT_ENUM_CLASS(LowNSrcsStrategy, uedge, standard)
+BOUT_ENUM_CLASS(LowNSrcsStrategy, standard)
 
 namespace hermes {
 
