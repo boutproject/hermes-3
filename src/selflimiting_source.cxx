@@ -26,7 +26,9 @@ SelflimitingSource::SelflimitingSource(std::string name, Options& alloptions, So
 
   BoutReal densitysource_normalisation = Nnorm * Omega_ci;
 
-  selflimiting_densityform = options["selflimiting_densityform"]
+  auto& soptions = options["selflimiting_source"];
+
+  selflimiting_densityform = soptions["densityform"]
                                  .doc("Form of the selflimiting density source.")
                                  .withDefault<Field3D>(Field3D{0.0})
                              / densitysource_normalisation;
@@ -34,33 +36,33 @@ SelflimitingSource::SelflimitingSource(std::string name, Options& alloptions, So
   BoutReal pressuresource_normalisation =
       SI::qe * Nnorm * Tnorm * Omega_ci; // [Pa/s] or [W/m^3] if converted to energy
 
-  selflimiting_pressureform = options["selflimiting_pressureform"]
+  selflimiting_pressureform = soptions["pressureform"]
                                   .doc("Form of the selflimiting pressure source.")
                                   .withDefault<Field3D>(Field3D{0.0})
                               / pressuresource_normalisation;
 
-  selflimiting_density = options["selflimiting_density"]
+  selflimiting_density = soptions["density_setpoint"]
                              .doc("Density [m^-3] above which the source term will be "
                                   "dampened. Only active when > 0.")
                              .withDefault<BoutReal>(-1.0)
                          / Nnorm;
 
   selflimiting_temperature =
-      options["selflimiting_temperature"]
+      soptions["temperature_setpoint"]
           .doc("Temperature [eV] above which the source term will be "
                "dampened. Only active when > 0.")
           .withDefault<BoutReal>(-1.0)
       / Tnorm;
 
   selflimiting_density_overshoot =
-      options["selflimiting_density_overshoot"]
+      soptions["density_overshoot"]
           .doc("Density [m^-3] interval in which the source term is "
                "dampened when selflimiting_density > 0.")
           .withDefault<BoutReal>(2e18)
       / Nnorm;
 
   selflimiting_temperature_overshoot =
-      options["selflimiting_temperature_overshoot"]
+      soptions["temperature_overshoot"]
           .doc("Temperature [eV] interval in which the source term is "
                "dampened when selflimiting_temperature > 0.")
           .withDefault<BoutReal>(10.0)
