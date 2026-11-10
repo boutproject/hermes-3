@@ -614,7 +614,7 @@ void SheathBoundarySimple::transform_impl(GuardedOptions& state) {
           BoutReal heatflow = q * da;     // [W]
           BoutReal power = heatflow / dv; // [Wm^-3]
           ASSERT2(std::isfinite(power));
-          energy_source[i] += power; // Note: Sign negative because power > 0
+          energy_source[i] += power;
           particle_source[i] +=
               nisheath * visheath * da / dv; // [m^-3s^-1] Diagnostics only
 
