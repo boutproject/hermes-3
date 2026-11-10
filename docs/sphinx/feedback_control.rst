@@ -361,40 +361,48 @@ Input Parameters
    basic output, and ``2`` provides extensive debugging information.
 
 
-Adaptive source
-~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Selflimiting source
+~~~~~~~~~~~~~~~~~~~
 
-This component is applicable to 1D, 2D and 3D simulations. The controller is responsive to plasma density and temperature. It uses logistic growth to smoothly transition the set source term from its full strength to zero. This makes it differentable but potentially stiff. Each cell is individually controlled and does not rely on any averaging which makes it suitable for 3D geometries like stellarators.
+This component is applicable to 1D, 2D and 3D simulations. The controller is
+responsive to plasma density and temperature. It uses logistic growth to
+smoothly transition the set source term from its full strength to zero. This
+makes it differentiable but potentially stiff. Each cell is individually
+controlled and does not rely on any averaging, which makes it suitable for 3D
+geometries like stellarators.
 
 The density and temperature control is managed in each species section:
 
 .. code-block:: ini
 
    [d+]
-   type = (evolve_density, ..., adaptive_source)
+   type = (evolve_density, ..., selflimiting_source)
 
-   ...
-   ...
+   selflimiting_density = 1e19                  # in m^-3
+   selflimiting_density_overshoot = 1e18        # in m^-3
+   selflimiting_densityform = gauss(y, 0.25) * 1e24
 
-   adaptive_density = 1e19                            # in m^-3
-   adaptive_density_overshoot = 1e18                  # in m^-3
-   adaptive_densityform = gauss(y, 0.25) * 1e24
+   selflimiting_temperature = 100               # in eV
+   selflimiting_temperature_overshoot = 2.0     # in eV
+   selflimiting_pressureform = 2.5e7 * gauss(y, 0.25)
 
-   adaptive_temperature = 100                         # in eV
-   adaptive_temperature_overshoot = 2.0               # in eV
-   adaptive_pressureform = 2.5e7 * gauss(y, 0.25)
+The overshoot sets the width of the transition region. At the target value
+the source is at about 90% of its full strength, it drops to 50% half an
+overshoot above the target, and to about 10% at one overshoot above it. The
+source never reaches exactly zero, and the precise value the density or
+temperature settles at depends on e.g. the source terms.
+The function used for the damping is
 
-The overshoot is an approximate interval after which the source is completely dampened. This is not meant to be exact. The precise value it reaches depends on e.g. the source terms. It is advised to not use too unrealistic source strengths (e.g. running with GW of power), otherwise the density or temperature values might exceed multiples of the overshoot.
+.. code-block:: c++
 
-The function used for the dampening is
-
-.. code-block: c++
-
-   Field3D adaptive_sourceterm(const Field3D& thisfield, const BoutReal maximum,
-                               const BoutReal overshoot) {
+   Field3D selflimiting_sourceterm(const Field3D& thisfield,
+                                   const BoutReal maximum,
+                                   const BoutReal overshoot) {
      BoutReal k = 5.0 / overshoot;
      BoutReal x0 = maximum + overshoot / 2.0;
-     return (1.0 - (1.0 / (1.0 + exp(-k * (thisfield - x0)))));
+     return 1.0 - (1.0 / (1.0 + exp(-k * (thisfield - x0))));
    }
 
-This function is multiplied with ``adaptive_densityform`` and ``adaptive_pressureform`` and then added to the ``density_source`` and ``energy_source`` of the species.
+This function is multiplied with ``selflimiting_densityform`` and
+``selflimiting_pressureform`` and the result is added to the
+``density_source`` and ``energy_source`` of the species.
