@@ -103,6 +103,7 @@ set(HERMES_SOURCES
     src/sound_speed.cxx
     src/zero_current.cxx
     src/anomalous_diffusion.cxx
+    src/adaptive_source.cxx
     src/binormal_stpm.cxx
     src/recycling.cxx
     src/adas_reaction.cxx
@@ -128,6 +129,7 @@ set(HERMES_SOURCES
     include/adas_neon.hxx
     include/amjuel_data.hxx
     include/anomalous_diffusion.hxx
+    include/adaptive_source.hxx
     include/classical_diffusion.hxx
     include/cx_reaction.hxx
     include/binormal_stpm.hxx
@@ -397,7 +399,7 @@ if(HERMES_TESTS)
   hermes_add_integrated_test(2D-recycling CONFLICTS BOUT_USE_METRIC_3D)
   hermes_add_integrated_test(examples CONFLICTS BOUT_USE_METRIC_3D)
   hermes_add_integrated_test(component-order CONFLICTS BOUT_USE_METRIC_3D)
-
+  hermes_add_integrated_test(1D-adaptive-source CONFLICTS BOUT_USE_METRIC_3D)
   hermes_add_integrated_test(1D-density-fci REQUIRES BOUT_USE_METRIC_3D)
   hermes_add_integrated_test(1D-momentum-fci REQUIRES BOUT_USE_METRIC_3D)
   hermes_add_integrated_test(1D-pressure-fci REQUIRES BOUT_USE_METRIC_3D)
