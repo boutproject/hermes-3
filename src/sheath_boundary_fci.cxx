@@ -25,7 +25,7 @@ BoutReal smoothmax(const BoutReal a, const BoutReal b, const BoutReal eps) {
 /// Mode 0: default (exponential extrapolation if decreases, Neumann if increases)
 /// Mode 1: always exponential extrapolation
 /// Mode 2: always linear extrapolation
-BoutReal limitFree(BoutReal fm, BoutReal fc, BoutReal mode) {
+BoutReal limitFree(BoutReal fm, BoutReal fc, int mode) {
   if ((fm < fc) && (mode == 0)) {
     return fc; // Neumann rather than increasing into boundary
   }
@@ -51,6 +51,13 @@ BoutReal limitFree(BoutReal fm, BoutReal fc, BoutReal mode) {
 #endif
 
   return fp;
+}
+template <class T>
+BoutReal limitFree(T point, const Field3D& f, int mode) {
+  if (point.valid() < 1) {
+    return limitFree(point.current(f), point.current(f), mode);
+  }
+  return limitFree(point.prev(f), point.current(f), mode);
 }
 
 } // namespace
@@ -125,17 +132,17 @@ SheathBoundaryFci::SheathBoundaryFci(std::string name, Options& alloptions, Solv
   density_boundary_mode =
       options["density_boundary_mode"]
           .doc("BC mode: 0=LimitFree, 1=ExponentialFree, 2=LinearFree")
-          .withDefault<BoutReal>(1);
+          .withDefault<int>(1);
 
   pressure_boundary_mode =
       options["pressure_boundary_mode"]
           .doc("BC mode: 0=LimitFree, 1=ExponentialFree, 2=LinearFree")
-          .withDefault<BoutReal>(1);
+          .withDefault<int>(1);
 
   temperature_boundary_mode =
       options["temperature_boundary_mode"]
           .doc("BC mode: 0=LimitFree, 1=ExponentialFree, 2=LinearFree")
-          .withDefault<BoutReal>(1);
+          .withDefault<int>(1);
 
   diagnose = options["diagnose"]
                  .doc("Save additional output diagnostics")
@@ -170,11 +177,11 @@ void SheathBoundaryFci::transform_impl(GuardedOptions& state) {
   // This is for applying boundary conditions
   Field3DParallel Ve = IS_SET_NOBOUNDARY(electrons["velocity"])
                            ? getNoBoundary<Field3D>(electrons["velocity"])
-                           : zeroFrom(Ne);
+                           : zeroFrom<Field3DParallel>(Ne);
 
   Field3DParallel NVe = IS_SET_NOBOUNDARY(electrons["momentum"])
                             ? getNoBoundary<Field3D>(electrons["momentum"])
-                            : zeroFrom(Ne);
+                            : zeroFrom<Field3DParallel>(Ne);
 
   ASSERT2(Ne.hasParallelSlices());
   ASSERT2(Te.hasParallelSlices());
@@ -220,12 +227,9 @@ void SheathBoundaryFci::transform_impl(GuardedOptions& state) {
                                : zeroFrom(Ni);
 
       mesh->getCoordinates()->getYBoundary().iter([&](auto& pnt) {
-        const BoutReal Ni_im =
-            limitFree(pnt.prev(Ni), pnt.current(Ni), density_boundary_mode);
-        const BoutReal Ti_im =
-            limitFree(pnt.prev(Ti), pnt.current(Ti), temperature_boundary_mode);
-        const BoutReal Te_im =
-            limitFree(pnt.prev(Te), pnt.current(Te), temperature_boundary_mode);
+        const BoutReal Ni_im = limitFree(pnt, Ni, density_boundary_mode);
+        const BoutReal Ti_im = limitFree(pnt, Ti, temperature_boundary_mode);
+        const BoutReal Te_im = limitFree(pnt, Te, temperature_boundary_mode);
 
         const BoutReal nisheath = 0.5 * (Ni_im + pnt.current(Ni));
         const BoutReal tesheath =
@@ -253,10 +257,8 @@ void SheathBoundaryFci::transform_impl(GuardedOptions& state) {
     mesh->getCoordinates()->getYBoundary().iter([&](auto& pnt) {
       const auto& i = pnt.ind();
 
-      const BoutReal Ne_im =
-          limitFree(pnt.prev(Ne), pnt.current(Ne), density_boundary_mode);
-      const BoutReal Te_im =
-          limitFree(pnt.prev(Te), pnt.current(Te), temperature_boundary_mode);
+      const BoutReal Ne_im = limitFree(pnt, Ne, density_boundary_mode);
+      const BoutReal Te_im = limitFree(pnt, Te, temperature_boundary_mode);
 
       const BoutReal nesheath = 0.5 * (Ne_im + pnt.current(Ne));
       const BoutReal tesheath = floor(0.5 * (Te_im + pnt.current(Te)), 1e-5);
@@ -288,9 +290,9 @@ void SheathBoundaryFci::transform_impl(GuardedOptions& state) {
   mesh->getCoordinates()->getYBoundary().iter([&](auto& pnt) {
     const auto& i = pnt.ind();
 
-    pnt.next(Ne) = limitFree(pnt.prev(Ne), pnt.current(Ne), density_boundary_mode);
-    pnt.next(Te) = limitFree(pnt.prev(Te), pnt.current(Te), temperature_boundary_mode);
-    pnt.next(Pe) = limitFree(pnt.prev(Pe), pnt.current(Pe), pressure_boundary_mode);
+    pnt.next(Ne) = limitFree(pnt, Ne, density_boundary_mode);
+    pnt.next(Te) = limitFree(pnt, Te, temperature_boundary_mode);
+    pnt.next(Pe) = limitFree(pnt, Pe, pressure_boundary_mode);
 
     pnt.next(phi) = do_phi_extrapolation ? (2.0 * pnt.current(phi) - pnt.prev(phi))
                                          : pnt.current(phi);
@@ -307,8 +309,8 @@ void SheathBoundaryFci::transform_impl(GuardedOptions& state) {
     pnt.next(Ve) = 2.0 * vesheath - pnt.current(Ve);
     pnt.next(NVe) = 2.0 * Me * nesheath * vesheath - pnt.current(NVe);
 
-    if (abs(pnt.offset())
-        == 1) { // Only subtract flux when the cell is actually in direct contact with the sheath
+    // Only subtract flux when the cell is actually in direct contact with the sheath
+    if (abs(pnt.offset()) == 1) {
 
       BoutReal q = gamma_e * tesheath * nesheath * vesheath;
 
@@ -383,7 +385,7 @@ void SheathBoundaryFci::transform_impl(GuardedOptions& state) {
                              : zeroFrom(Ni);
     Field3DParallel NVi = species.isSet("momentum")
                               ? getNoBoundary<Field3D>(species["momentum"])
-                              : Mi * Ni * Vi;
+                              : Field3DParallel{Mi * Ni * Vi};
 
     // Energy source will be modified in the domain
     Field3D energy_source = species.isSet("energy_source")
@@ -400,9 +402,9 @@ void SheathBoundaryFci::transform_impl(GuardedOptions& state) {
       // This ensures that the guard cell values remain positive
       // exp( 2*log(N[i]) - log(N[ip]) )
 
-      pnt.next(Ni) = limitFree(pnt.prev(Ni), pnt.current(Ni), density_boundary_mode);
-      pnt.next(Ti) = limitFree(pnt.prev(Ti), pnt.current(Ti), temperature_boundary_mode);
-      pnt.next(Pi) = limitFree(pnt.prev(Pi), pnt.current(Pi), pressure_boundary_mode);
+      pnt.next(Ni) = limitFree(pnt, Ni, density_boundary_mode);
+      pnt.next(Ti) = limitFree(pnt, Ti, temperature_boundary_mode);
+      pnt.next(Pi) = limitFree(pnt, Pi, pressure_boundary_mode);
 
       // Calculate sheath values at half-way points (cell edge)
       const BoutReal nisheath = 0.5 * (pnt.current(Ni) + pnt.next(Ni));

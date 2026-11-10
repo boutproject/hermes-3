@@ -40,6 +40,8 @@ if(HERMES_REVISION STREQUAL "GITDIR-NOTFOUND")
 endif()
 message(STATUS "Git revision: ${HERMES_REVISION}")
 
+option(BUILD_SHARED_LIBS "Build shared libs" ON)
+
 # BOUT++ is a dependency
 option(HERMES_BUILD_BOUT "Build BOUT++ in external/BOUT-dev" ON)
 if(HERMES_BUILD_BOUT)
@@ -293,7 +295,7 @@ endif()
 if(HERMES_TESTS)
   enable_testing()
 
-  if(BOUT_ENABLE_METRIC_3D)
+  if(BOUT_USE_METRIC_3D)
     find_program(PYTHON_EXECUTABLE NAMES python3.12 python3 REQUIRED)
 
     add_custom_command(
@@ -375,51 +377,52 @@ if(HERMES_TESTS)
     endif()
   endfunction()
 
-  hermes_add_integrated_test(1D-density CONFLICTS BOUT_ENABLE_METRIC_3D)
-  hermes_add_integrated_test(1D-fluid CONFLICTS BOUT_ENABLE_METRIC_3D)
-  hermes_add_integrated_test(1D-recycling CONFLICTS BOUT_ENABLE_METRIC_3D)
-  hermes_add_integrated_test(1D-recycling-dthe CONFLICTS BOUT_ENABLE_METRIC_3D)
-  hermes_add_integrated_test(diffusion CONFLICTS BOUT_ENABLE_METRIC_3D)
-  hermes_add_integrated_test(evolve_density CONFLICTS BOUT_ENABLE_METRIC_3D)
-  hermes_add_integrated_test(neutral_mixed CONFLICTS BOUT_ENABLE_METRIC_3D)
-  hermes_add_integrated_test(vorticity CONFLICTS BOUT_ENABLE_METRIC_3D)
-  hermes_add_integrated_test(sod-shock CONFLICTS BOUT_ENABLE_METRIC_3D)
-  hermes_add_integrated_test(sod-shock-energy CONFLICTS BOUT_ENABLE_METRIC_3D)
-  hermes_add_integrated_test(drift-wave CONFLICTS BOUT_ENABLE_METRIC_3D)
-  hermes_add_integrated_test(alfven-wave CONFLICTS BOUT_ENABLE_METRIC_3D)
+  hermes_add_integrated_test(1D-density CONFLICTS BOUT_USE_METRIC_3D)
+  hermes_add_integrated_test(1D-fluid CONFLICTS BOUT_USE_METRIC_3D)
+  hermes_add_integrated_test(1D-recycling CONFLICTS BOUT_USE_METRIC_3D)
+  hermes_add_integrated_test(1D-recycling-dthe CONFLICTS BOUT_USE_METRIC_3D)
+  hermes_add_integrated_test(diffusion CONFLICTS BOUT_USE_METRIC_3D)
+  hermes_add_integrated_test(evolve_density CONFLICTS BOUT_USE_METRIC_3D)
+  hermes_add_integrated_test(neutral_mixed CONFLICTS BOUT_USE_METRIC_3D)
+  hermes_add_integrated_test(vorticity CONFLICTS BOUT_USE_METRIC_3D)
+  hermes_add_integrated_test(sod-shock CONFLICTS BOUT_USE_METRIC_3D)
+  hermes_add_integrated_test(sod-shock-energy CONFLICTS BOUT_USE_METRIC_3D)
+  hermes_add_integrated_test(drift-wave CONFLICTS BOUT_USE_METRIC_3D)
+  hermes_add_integrated_test(alfven-wave CONFLICTS BOUT_USE_METRIC_3D)
   hermes_add_integrated_test(collfreq-braginskii-afn CONFLICTS
-                             BOUT_ENABLE_METRIC_3D)
-  hermes_add_integrated_test(collfreq-multispecies CONFLICTS
-                             BOUT_ENABLE_METRIC_3D)
-  hermes_add_integrated_test(2D-production CONFLICTS BOUT_ENABLE_METRIC_3D)
-  hermes_add_integrated_test(2D-energy CONFLICTS BOUT_ENABLE_METRIC_3D)
-  hermes_add_integrated_test(2D-recycling CONFLICTS BOUT_ENABLE_METRIC_3D)
-  hermes_add_integrated_test(examples CONFLICTS BOUT_ENABLE_METRIC_3D)
-  hermes_add_integrated_test(component-order CONFLICTS BOUT_ENABLE_METRIC_3D)
+                             BOUT_USE_METRIC_3D)
+  hermes_add_integrated_test(collfreq-multispecies CONFLICTS BOUT_USE_METRIC_3D)
+  hermes_add_integrated_test(2D-production CONFLICTS BOUT_USE_METRIC_3D)
+  hermes_add_integrated_test(2D-energy CONFLICTS BOUT_USE_METRIC_3D)
+  hermes_add_integrated_test(2D-recycling CONFLICTS BOUT_USE_METRIC_3D)
+  hermes_add_integrated_test(examples CONFLICTS BOUT_USE_METRIC_3D)
+  hermes_add_integrated_test(component-order CONFLICTS BOUT_USE_METRIC_3D)
 
-  hermes_add_integrated_test(1D-density-fci REQUIRES BOUT_ENABLE_METRIC_3D)
-  hermes_add_integrated_test(1D-momentum-fci REQUIRES BOUT_ENABLE_METRIC_3D)
-  hermes_add_integrated_test(1D-pressure-fci REQUIRES BOUT_ENABLE_METRIC_3D)
-  hermes_add_integrated_test(1D-ionviscosity-fci REQUIRES BOUT_ENABLE_METRIC_3D)
+  hermes_add_integrated_test(1D-density-fci REQUIRES BOUT_USE_METRIC_3D)
+  hermes_add_integrated_test(1D-momentum-fci REQUIRES BOUT_USE_METRIC_3D)
+  hermes_add_integrated_test(1D-pressure-fci REQUIRES BOUT_USE_METRIC_3D)
+  hermes_add_integrated_test(1D-ionviscosity-fci REQUIRES BOUT_USE_METRIC_3D)
   hermes_add_integrated_test(1D-electronviscosity-fci REQUIRES
-                             BOUT_ENABLE_METRIC_3D)
+                             BOUT_USE_METRIC_3D)
   hermes_add_integrated_test(2D-density-anomalous-fci REQUIRES
-                             BOUT_ENABLE_METRIC_3D)
-  hermes_add_integrated_test(2D-fluid-anomalous-fci REQUIRES
-                             BOUT_ENABLE_METRIC_3D)
-  hermes_add_integrated_test(1D-conduction-fci REQUIRES BOUT_ENABLE_METRIC_3D)
-  hermes_add_integrated_test(1D-golden-answer-fci REQUIRES
-                             BOUT_ENABLE_METRIC_3D)
+                             BOUT_USE_METRIC_3D)
+  hermes_add_integrated_test(2D-fluid-anomalous-fci REQUIRES BOUT_USE_METRIC_3D)
+  hermes_add_integrated_test(1D-conduction-fci REQUIRES BOUT_USE_METRIC_3D)
+  hermes_add_integrated_test(1D-golden-answer-fci REQUIRES BOUT_USE_METRIC_3D)
 
-  # Unit tests
   option(HERMES_UNIT_TESTS "Build the unit tests" ON)
-  if(HERMES_UNIT_TESTS)
-    if(NOT PACKAGE_TESTS)
+  option(HERMES_DIVOPS_MMS_TESTS "Build the differential operator MMS tests" ON)
+
+  if(HERMES_UNIT_TESTS OR HERMES_DIVOPS_MMS_TESTS)
+    if(NOT BOUT_TESTS)
       # Not running BOUT++ tests Since BOUT++ includes googletest, adding it
       # again causes errors
       add_subdirectory(external/googletest)
     endif()
+  endif()
 
+  # Unit tests
+  if(HERMES_UNIT_TESTS)
     file(GLOB_RECURSE TEST_SOURCES tests/unit/test_*.cxx)
 
     add_executable(hermes_unit_tests tests/unit/main.cxx ${TEST_SOURCES})
@@ -428,18 +431,20 @@ if(HERMES_TESTS)
 
     add_test(NAME hermes_unit_tests COMMAND hermes_unit_tests)
     set_tests_properties(hermes_unit_tests PROPERTIES LABELS unit)
-    target_link_libraries(hermes_unit_tests PRIVATE gtest bout++::bout++
-                                                    hermes-3-lib)
+    target_link_libraries(
+      hermes_unit_tests
+      PRIVATE gtest bout++::bout++
+              # Make sure ALL components are linked into the binary.
+              "$<LINK_LIBRARY:WHOLE_ARCHIVE,hermes-3-lib>")
     # Have hermes_unit_tests look for dynamic libs in ./ before searching
     # elsewhere
     set_target_properties(hermes_unit_tests PROPERTIES BUILD_RPATH "$ORIGIN")
   endif()
 
   # Method of manufactured solutions (MMS) tests of operators
-  option(HERMES_DIVOPS_MMS_TESTS "Build the differential operator MMS tests" ON)
   if(HERMES_DIVOPS_MMS_TESTS)
-    if(BOUT_ENABLE_METRIC_3D)
-      message(STATUS "CONFLICT mms-operator-tests and BOUT_ENABLE_METRIC_3D")
+    if(BOUT_USE_METRIC_3D)
+      message(STATUS "CONFLICT mms-operator-tests and BOUT_USE_METRIC_3D")
     else()
       # TEST_SOURCES=
       add_executable(hermes_mms_operator_tests tests/mms_operator/main.cxx)

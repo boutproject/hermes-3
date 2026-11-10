@@ -1,6 +1,11 @@
 ### Purpose
 <!-- What problem does this PR solve, or what capability does it add? Provide a link to any relevant issues or pull requests. -->
 
+### Breaking changes and changes to results
+<!-- Does this PR require changes to existing input files, scripts, or workflows?
+     Does it change physics results for existing inputs?
+     Describe the changes, their rationale and any migration steps needed. -->
+
 ### Change Summary
 <!-- Briefly describe what was changed. -->
 
