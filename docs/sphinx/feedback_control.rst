@@ -364,8 +364,9 @@ Input Parameters
 Selflimiting source
 ~~~~~~~~~~~~~~~~~~~
 
-This component is applicable to 1D, 2D and 3D simulations. The controller is
-responsive to plasma density and temperature. It uses logistic growth to
+This component is applicable to 1D, 2D and 3D simulations. The controller adjusts
+the density source to target a user-set density in the same cell, or adjusts the
+pressure source to target a temperature.. It uses logistic growth to
 smoothly transition the set source term from its full strength to zero. This
 makes it differentiable but potentially stiff. Each cell is individually
 controlled and does not rely on any averaging, which makes it suitable for 3D
@@ -381,17 +382,30 @@ The density and temperature control is managed in each species section:
    [d+:selflimiting_source]
    density_setpoint = 1e19                  # in m^-3
    density_overshoot = 1e18                 # in m^-3
-   densityform = gauss(y, 0.25) * 1e24
+   density_form = gauss(y, 0.25) * 1e24
 
    temperature_setpoint = 100               # in eV
    temperature_overshoot = 2.0              # in eV
-   pressureform = 2.5e7 * gauss(y, 0.25)
+   pressure_form = 2.5e7 * gauss(y, 0.25)
 
-The overshoot sets the width of the transition region. At the target value
+The overshoot sets the width of the transition region. At the setpoint value
 the source is at about 90% of its full strength, it drops to 50% half an
-overshoot above the target, and to about 10% at one overshoot above it. The
+overshoot above the setpoint, and to about 10% at one overshoot above it. The
 source never reaches exactly zero, and the precise value the density or
 temperature settles at depends on e.g. the source terms.
+
+``density_form`` and ``pressure_form`` can be set via the typical
+`expressions <https://bout-dev.readthedocs.io/en/latest/user_docs/variable_init.html#expressions>`__ 
+and additionally via
+`grid variables <https://bout-dev.readthedocs.io/en/latest/user_docs/input_grids.html#generating-input-grids>`__.
+``density_form`` is normalized by
+.. ::math
+   N_\mathrm{norm}\cdot \Omega
+
+and the ``pressure_form`` is normalized by 
+.. ::math
+   q_\mathrm{e} \cdot N_\mathrm{norm} \cdot T_\mathrm{norm} \cdot \Omega
+
 The function used for the damping is
 
 .. code-block:: c++
