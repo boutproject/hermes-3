@@ -4,3 +4,6 @@ This is an extremely simple 1D example designed to test the low_n_sources compon
 The only top-level components are the species "t", "t+", "d", "d+" and "e"; and low_n_sources.
 Density, pressure and momentum are evolved for all species with no-flow boundaries.
 All species densities are started at values that trigger the low-n sources, restoring each to its respective threshold (10x the species-specific density floor, by default.)
+
+The test checks that each source is strictly positive wherever its activation conditions hold,
+and exactly zero everywhere else. Checking of source magnitudes is left up to the unit tests.

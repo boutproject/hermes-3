@@ -388,7 +388,8 @@ strings in parentheses for a simulation including :math:`H`, :math:`H^+`, :math:
   * Restores depleted ion species, consuming some neutrals.
   * ``Available when`` at least one pair of neutral and ion species are present in the simulation.
   * ``Triggered when`` the ion population falls below its threshold.
-  * Smoothly ``suppressed when`` the neutral reactant is below its density threshold.
+  * ``Disabled when`` the neutral reactant's density is below its threshold. The rate ramps up
+    smoothly to full strength between 1 and 1.1 times that threshold.
 
 * **Association** (:math:`2H \to H_2`):
 
@@ -401,6 +402,7 @@ strings in parentheses for a simulation including :math:`H`, :math:`H^+`, :math:
   * Adds ions to the system (introduces a net source of nuclei and mass).
   * ``Available when`` at least one ion species is present in the simulation.
   * ``Triggered only as a last resort when`` the ion and corresponding neutral populations are simultaneously below their thresholds.
+  * Smoothly reduces to zero as the neutral density rises from 0.9 to 1 times its threshold.
   * If the corresponding neutral species is not present, the external source is triggered solely by ion deficit.
   * Adds momentum and thermal energy at the local ion velocity and temperature. These terms can be disabled with :code:`external_src_mom_energy_enabled = false`.
   * ``Boosted when`` a corresponding neutral species is included in the simulation and is also depleted.

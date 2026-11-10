@@ -69,7 +69,7 @@ private:
   std::string target_species;
   /// Species whose depletion smoothly suppresses this reaction (empty string means no gating)
   std::string gate_species;
-  /// Density at which the gate weight is one half; no hard cutoff is imposed
+  /// Density at and below which the gate weight is zero
   BoutReal gate_species_threshold;
   /// Species whose depletion boosts this reaction's rate (empty string means no boost)
   std::string boost_species;
@@ -102,14 +102,15 @@ inline BoutReal PseudoReaction::smooth_clamp(BoutReal x, BoutReal lo, BoutReal h
 }
 
 /**
- * @brief Smoothly transition from 0 (ratio << 1) to 1 (ratio >> 1), replacing a hard
- * `ratio < 1 ? 0 : 1` step (helps Newton-based solvers) with a differentiable one.
+ * @brief Smoothly transition from 0 (ratio <= 1) to 1 (ratio >= 1 + width),
+ * with continuous first and second derivatives.
  *
  * @param ratio A value expected to vary around 1 (e.g. density / density_threshold)
- * @param width Transition width; smaller is closer to a hard step
+ * @param width Positive transition width (above ratio = 1)
  */
 inline BoutReal PseudoReaction::smooth_gate(BoutReal ratio, BoutReal width) {
-  return 1.0 / (1.0 + exp(-(ratio - 1.0) / width));
+  const BoutReal x = std::clamp((ratio - 1.0) / width, 0.0, 1.0);
+  return x * x * x * (10.0 + x * (-15.0 + 6.0 * x));
 }
 
 /**
@@ -167,8 +168,7 @@ inline RateData PseudoReaction::get_rate_standard(GuardedOptions& state) {
     result.rate[i] = n_deficit / this->timescale;
   }
 
-  // If this reaction has a gate species, smoothly reduce the rate towards zero as it
-  // becomes depleted (a hard on/off step here made the Newton solver's job harder).
+  // If this reaction has a gate species, smoothly reduce the rate to zero at its threshold
   if (!this->gate_species.empty()) {
     // Local variable to workaround gcc dangling ref false positive
     const GuardedOptions n_gate_opt = state["species"][this->gate_species]["density"];
@@ -192,10 +192,11 @@ inline RateData PseudoReaction::get_rate_standard(GuardedOptions& state) {
         // bounding the boost between 1 and 100 and avoiding division by zero)
         const BoutReal inv_boost_fac = smooth_clamp(thresh_ratio, 0.01, 1.0, 0.01);
         result.rate[i] /= inv_boost_fac;
-      } else if (this->boost_requires_deficit) {
+      }
+      if (this->boost_requires_deficit) {
         // Some reactions (e.g. an external ion source) should only run at all while
         // the boost species is deficient, rather than merely running un-boosted.
-        result.rate[i] = 0.0;
+        result.rate[i] *= smooth_gate(2.0 - thresh_ratio, 0.1);
       }
     }
   }

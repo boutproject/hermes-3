@@ -588,8 +588,8 @@ TEST_F(LowNSourcesTest, EffectOfExternalIonSource) {
   // => Expect +ve atom source
   EXPECT_GT(first_interior_value(large_natom_deficit_atom_src), 0.0);
 
-  // Both atom deficits saturate the sigmoid boost near 100x. Check net sources,
-  // including the small ionisation rate admitted by the smooth gate.
+  // Both atom deficits saturate the sigmoid boost near 100x. Check net sources;
+  // ionisation is disabled below the atom density threshold.
   const BoutReal timescale = options["low_n_sources"]["timescale"].as<BoutReal>();
   for (const auto& [atom_density, ion_source, atom_source] :
        {std::make_tuple(small_deficit_natom, small_natom_deficit_ion_src,
@@ -600,11 +600,8 @@ TEST_F(LowNSourcesTest, EffectOfExternalIonSource) {
     const BoutReal inv_boost = 0.01 + 0.99 / (1.0 + std::exp(-(ratio - 0.505) / 0.01));
     const BoutReal external_rate = (nth - nion) / timescale / inv_boost;
     const BoutReal recombination_rate = (nth - atom_density) / timescale;
-    const BoutReal ionisation_rate =
-        (nth - nion) / timescale / (1.0 + std::exp(-(ratio - 1.0) / 0.1));
-    EXPECT_NEAR(first_interior_value(ion_source),
-                external_rate - recombination_rate + ionisation_rate, 1e-15);
-    EXPECT_NEAR(first_interior_value(atom_source), recombination_rate - ionisation_rate,
+    EXPECT_NEAR(first_interior_value(ion_source), external_rate - recombination_rate,
                 1e-15);
+    EXPECT_NEAR(first_interior_value(atom_source), recombination_rate, 1e-15);
   }
 }
