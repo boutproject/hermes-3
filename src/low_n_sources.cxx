@@ -264,24 +264,9 @@ void LowNSources::instantiate_reactions() {
   this->reaction_options_store.clear();
   this->reactions.clear();
 
-  std::size_t num_reactions = 0;
-  for (const auto& element : this->base_species_order) {
-    const auto& groups = this->species_by_base.at(element);
-    if (!groups.ion.empty() and !groups.neutral.empty()) {
-      // recombination, ionization, external_src of ions
-      num_reactions += 3;
-    } else if (!groups.ion.empty()) {
-      // no atoms; create external_src of ions only
-      num_reactions += 1;
-    }
-    // association
-    if (!groups.neutral.empty() and !groups.molecule.empty()) {
-      num_reactions += 1;
-    }
-  }
-
-  this->reaction_options_store.reserve(num_reactions);
-  this->reactions.reserve(num_reactions);
+  populate_reaction_defs();
+  this->reaction_options_store.reserve(this->reaction_defs.size());
+  this->reactions.reserve(this->reaction_defs.size());
 
   for (const auto& element : this->base_species_order) {
     const auto& groups = this->species_by_base.at(element);
