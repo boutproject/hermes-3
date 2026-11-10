@@ -395,14 +395,14 @@ source never reaches exactly zero, and the precise value the density or
 temperature settles at depends on e.g. the source terms.
 
 ``density_form`` and ``pressure_form`` can be set via the typical
-`expressions <https://bout-dev.readthedocs.io/en/latest/user_docs/variable_init.html#expressions>`__ 
+`expressions <https://bout-dev.readthedocs.io/en/latest/user_docs/variable_init.html#expressions>`__
 and additionally via
 `grid variables <https://bout-dev.readthedocs.io/en/latest/user_docs/input_grids.html#generating-input-grids>`__.
 ``density_form`` is normalized by
 .. ::math
    N_{norm}\cdot \Omega
 
-and the ``pressure_form`` is normalized by 
+and the ``pressure_form`` is normalized by
 .. ::math
    q_{e} \cdot N_{norm} \cdot T_{norm} \cdot \Omega
 
