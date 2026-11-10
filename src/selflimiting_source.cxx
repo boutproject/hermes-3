@@ -141,7 +141,7 @@ void SelflimitingSource::outputVars(Options& state) {
       set_with_attrs(state[name + std::string("_selflimiting_energysource")],
                      energy_source,
                      {{"time_dimension", "t"},
-                      {"units", "m^-3 s^-1"},
+                      {"units", "Pa s^-1"},
                       {"conversion", Pnorm * Omega_ci},
                       {"standard_name", "selflimiting energy source"},
                       {"species", name},
