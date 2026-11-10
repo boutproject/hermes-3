@@ -4,6 +4,7 @@
 #define LOW_N_SOURCES_H
 
 #include <map>
+#include <memory>
 #include <string>
 #include <tuple>
 #include <utility>
@@ -13,10 +14,8 @@
 #include <bout/field3d.hxx>
 
 #include "component.hxx"
-#include "reaction.hxx"
 #include "species_parser.hxx"
 
-BOUT_ENUM_CLASS(LowNSrcsStrategy, uedge, standard)
 BOUT_ENUM_CLASS(PseudoReactionType, association, recombination, ionization, external_src)
 namespace hermes {
 
@@ -95,69 +94,6 @@ private:
   void instantiate_reactions();
   void populate_reaction_defs() const;
   void transform_impl(GuardedOptions& state) final;
-};
-
-const std::string PSEUDO_REACTION_COMPONENT_NAME = "pseudo_reaction";
-
-struct PseudoReactionSpec {
-  std::string reaction_str;
-  PseudoReactionType type;
-  std::string target_species;
-  BoutReal density_threshold{0.0};
-  BoutReal timescale{0.0};
-  std::string gate_species;
-  BoutReal gate_species_threshold{0.0};
-  std::string boost_species;
-  BoutReal boost_species_threshold{0.0};
-  bool boost_requires_deficit{false};
-  bool external_src_mom_energy_enabled{true};
-  std::string strategy;
-};
-
-class PseudoReaction : public Reaction {
-public:
-  /**
-   * @brief Construct a new Pseudo Reaction object
-   *
-   * @param options Options object used by Reaction base class
-   * @param spec Typed pseudo-reaction configuration
-   */
-  PseudoReaction(Options& options, const PseudoReactionSpec& spec);
-
-protected:
-  /// Override Reaction::get_rate to bypass RateHelper and use custom rates
-  RateData get_rate(GuardedOptions& state) override;
-
-  /// Inject external particles at the target species' local velocity and temperature.
-  void transform_additional(GuardedOptions& state,
-                            const RateData& rate_calc_results) override;
-
-private:
-  /// Type of the pseudo-reaction
-  PseudoReactionType type;
-  /// Whether external ion sources add momentum and energy sources as well as density
-  bool external_src_mom_energy_enabled;
-  /// Threshold density below which the source term is activated
-  BoutReal density_threshold;
-  /// Timescale over which the source term would restore density to the threshold value
-  BoutReal timescale;
-  /// Species whose density may be boosted by the reaction
-  std::string target_species;
-  /// Species whose depletion will disable this reaction entirely (empty string means no gating)
-  std::string gate_species;
-  /// Threshold density below which gate_species disables the reaction
-  BoutReal gate_species_threshold;
-  /// Species whose depletion boosts this reaction's rate (empty string means no boost)
-  std::string boost_species;
-  /// Threshold density below which boost_species enhances the reaction rate
-  BoutReal boost_species_threshold;
-  /// If true, the reaction is disabled entirely if boost_species is not deficient
-  bool boost_requires_deficit;
-  /// Strategy to use when generating sources
-  LowNSrcsStrategy strategy;
-
-  /// Calculate rate using 'standard' strategy (default)
-  RateData get_rate_standard(GuardedOptions& state);
 };
 
 } // namespace hermes

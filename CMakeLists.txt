@@ -159,6 +159,7 @@ set(HERMES_SOURCES
     include/ionisation.hxx
     include/izn_rec_reaction.hxx
     include/low_n_sources.hxx
+    include/pseudo_reaction.hxx
     include/neutral_boundary.hxx
     include/neutral_mixed.hxx
     include/neutral_parallel_diffusion.hxx
