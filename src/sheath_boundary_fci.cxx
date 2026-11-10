@@ -247,7 +247,7 @@ void SheathBoundaryFci::transform_impl(GuardedOptions& state) {
 
         BoutReal visheath;
         const BoutReal C_i = sqrt(C_i_sq);
-        visheath = pnt.dir() * bohmSpeed(std::abs(pnt.current(Vi)), C_i, bohm_smoothing);
+        visheath = pnt.dir() * bohmSpeed(C_i, std::abs(pnt.current(Vi)), bohm_smoothing);
 
         pnt.current(ion_sum) += pnt.dir() * Zi * nisheath * visheath;
       }); // End of yboundary.iter
@@ -421,7 +421,7 @@ void SheathBoundaryFci::transform_impl(GuardedOptions& state) {
 
       BoutReal visheath;
       const BoutReal C_i = sqrt(C_i_sq);
-      visheath = pnt.dir() * bohmSpeed(std::abs(pnt.current(Vi)), C_i, bohm_smoothing);
+      visheath = pnt.dir() * bohmSpeed(C_i, std::abs(pnt.current(Vi)), bohm_smoothing);
 
       pnt.next(Vi) = 2.0 * visheath - pnt.current(Vi);
       pnt.next(NVi) = 2.0 * Mi * nisheath * visheath - pnt.current(NVi);
