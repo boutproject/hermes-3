@@ -56,6 +56,8 @@ if not debug:
     # Allow oversubscription for OpenMPI via env var (silently ignored by MPICH,
     # which does not enforce slot limits and does not support --oversubscribe)
     os.environ["OMPI_MCA_rmaps_base_oversubscribe"] = "yes"
+    # OpenMPI 5
+    os.environ["PRTE_MCA_rmaps_default_mapping_policy"] = ":oversubscribe"
 
     s, out = launch_safe("../../../hermes-3 -d data restart", nproc=10, pipe=True)
 

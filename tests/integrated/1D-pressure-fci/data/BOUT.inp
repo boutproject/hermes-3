@@ -29,7 +29,7 @@ type = fixed_density, fixed_velocity, evolve_pressure
 charge = 1.0
 AA = 1.0
 
-
+dissipative = false
 velocity = 2188.56455992991*sin(y)/(0.1*sin(2.0*y) + 1)
 density = 1.0e+17*sin(2.0*y) + 1.0e+18
 

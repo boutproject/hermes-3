@@ -46,7 +46,7 @@ private:
   bool upper_y; // Boundary on upper y?
 
   bool always_set_phi; ///< Set phi field?
-
+  bool do_phi_extrapolation;
   Field3D wall_potential; ///< Voltage of the wall. Normalised units.
 
   Field3D hflux_e;         // Electron heat flux through sheath
@@ -57,7 +57,7 @@ private:
 
   bool no_flow; ///< No flow speed, only remove energy
 
-  BoutReal density_boundary_mode, pressure_boundary_mode,
+  int density_boundary_mode, pressure_boundary_mode,
       temperature_boundary_mode; ///< BC mode: 0=LimitFree, 1=ExponentialFree, 2=LinearFree
 
   ///

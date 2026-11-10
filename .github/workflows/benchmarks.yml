@@ -42,6 +42,7 @@ jobs:
       OPENBLAS_NUM_THREADS: 1
       PYTHONPATH: ${{ github.workspace }}/tools/pylib
       OMPI_MCA_rmaps_base_oversubscribe: yes
+      PRTE_MCA_rmaps_default_mapping_policy: ":oversubscribe"
       MPIRUN: mpiexec -np
       LD_LIBRARY_PATH: /home/runner/local/lib:$LD_LIBRARY_PATH
       ASV_FACTOR: 1.1
@@ -50,6 +51,7 @@ jobs:
 
       - name: Install dependencies
         run: sudo apt update &&
+             sudo apt install -y ca-certificates &&
              sudo apt install -y
                  libfftw3-dev
                  libnetcdf-dev
@@ -72,7 +74,7 @@ jobs:
           submodules: true
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: "3.x"
 
@@ -80,6 +82,7 @@ jobs:
         uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
+          version: "0.13.4"
 
       - name: Install dev tools
         run: uv sync --only-dev
@@ -112,7 +115,7 @@ jobs:
         if: always()
         run: cp benchmarks.log .asv/results/
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: asv-benchmark-results-${{ runner.os }}
