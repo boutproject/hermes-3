@@ -15,9 +15,6 @@
 // ======================= Helper struct and functions ========================
 namespace {
 
-/// The information needed to define a pseudo-reaction
-using PseudoReactionSpec = hermes::PseudoReactionSpec;
-
 /**
  * @brief Append a (pseudo-)reaction definition if both species are present
  *
@@ -37,45 +34,53 @@ void append_reaction_def_if_present(
 }
 
 /**
- * @brief Assemble the information needed to define a pseudo-reaction: its reaction
- * string and target species (i.e. the species whose density the reaction restores).
+ * @brief Assemble the information needed to define a pseudo-reaction.
  *
  * @param type The type of pseudo-reaction
- * @param species1 The first species involved in the reaction
- * @param species2 A possible second species involved in the reaction
+ * @param species_group Group containing related ion, neutral, and molecule species. Some or all of
+ * the species may be involved in the reaction.
  * @return PseudoReactionSpec The reaction specification
  */
-PseudoReactionSpec make_reaction_spec(PseudoReactionType type,
-                                      const std::string& species1,
-                                      const std::string& species2) {
-  PseudoReactionSpec spec;
+hermes::PseudoReactionSpec
+make_reaction_spec(PseudoReactionType type,
+                   const hermes::PseudoReactionSpeciesGroup& species_group) {
+  hermes::PseudoReactionSpec spec;
   spec.type = type;
 
   switch (type) {
   case PseudoReactionType::association: {
     // Allow for molecules made up of any number of atoms (of the same element)
-    const SpeciesParser molecule(species2);
+    const SpeciesParser molecule(species_group.molecule);
     const int atoms_per_molecule =
         stringToInt(molecule.get_base_species().substr(molecule.get_element().size()));
-    // N.B. SpeciesParser constructor reject molecule strings with <1 atoms, so we can assume
-    // atoms_per_molecule is +ve
-    spec.reaction_str = fmt::format("{}{} -> {}", atoms_per_molecule, species1, species2);
-    spec.target_species = species2;
+    // N.B. SpeciesParser constructor rejects molecule strings with <1 atoms, so we can assume
+    // atoms_per_molecule is always +ve
+    spec.reaction_str = fmt::format("{}{} -> {}", atoms_per_molecule,
+                                    species_group.neutral, species_group.molecule);
+    spec.target_species = species_group.molecule;
     return spec;
   }
   case PseudoReactionType::recombination:
-    spec.reaction_str = fmt::format("{} + e -> {}", species1, species2);
-    spec.target_species = species2;
+    spec.reaction_str =
+        fmt::format("{} + e -> {}", species_group.ion, species_group.neutral);
+    spec.target_species = species_group.neutral;
+    spec.boost_species = species_group.molecule;
     return spec;
   case PseudoReactionType::ionization:
-    spec.reaction_str = fmt::format("{} -> {} + e", species1, species2);
-    spec.target_species = species2;
+    spec.reaction_str =
+        fmt::format("{} -> {} + e", species_group.neutral, species_group.ion);
+    spec.target_species = species_group.ion;
+    spec.gate_species = species_group.neutral;
     return spec;
   case PseudoReactionType::external_src:
-    // N.B. Since no species in this reaction has a -ve pop. change, Reaction::transform doesn't add momentum and energy sources.
-    // These are added in PseudoReaction::transform_impl instead, unless turned off with external_src_mom_energy_enabled=false.
-    spec.reaction_str = fmt::format("{} -> 2{}", species1, species1);
-    spec.target_species = species1;
+    // N.B. Since no species in this reaction has a -ve pop. change, Reaction::transform_impl doesn't add momentum and energy sources.
+    // These are added in PseudoReaction::transform_additional instead, unless turned off with external_src_mom_energy_enabled=false.
+    spec.reaction_str = fmt::format("{} -> 2{}", species_group.ion, species_group.ion);
+    spec.target_species = species_group.ion;
+    if (!species_group.neutral.empty()) {
+      spec.boost_species = species_group.neutral;
+      spec.boost_requires_deficit = true;
+    }
     return spec;
   }
   throw BoutException("Unhandled PseudoReactionType in make_reaction_spec()");
@@ -102,10 +107,14 @@ namespace hermes {
 // ======================= LowNSources member functions =======================
 LowNSources::~LowNSources() = default;
 
+/// Constructor used by the Component-factory; solver arg is discarded.
 LowNSources::LowNSources(const std::string& name, Options& options,
                          [[maybe_unused]] Solver* solver)
     : LowNSources(name, options) {}
 
+/**
+ * @brief Main constructor: Read options and set up pseudo-reactions.
+ */
 LowNSources::LowNSources(const std::string& name, Options& options)
     : NamedComponent(name, {readOnly("species:{all_species}:{read_vals}"),
                             readWrite("species:{all_species}:{write_vals}")}),
@@ -176,6 +185,9 @@ LowNSources::LowNSources(const std::string& name, Options& options)
   instantiate_reactions();
 }
 
+/**
+ * @brief Add species to their respective groups, rejecting duplicate entries in each category.
+ */
 void LowNSources::append_species_by_type(const SpeciesParser& species, SpeciesType type) {
   if (type != SpeciesType::electron
       and (species.get_charge() < 0 or species.get_charge() > 1)) {
@@ -192,9 +204,9 @@ void LowNSources::append_species_by_type(const SpeciesParser& species, SpeciesTy
 
   // First, register the species as an ion/neutral/molecule of a particular element
   auto [element_group_it, element_group_inserted] =
-      this->species_by_base.try_emplace(element_str);
+      this->species_groups.try_emplace(element_str);
   if (element_group_inserted) {
-    this->base_species_order.push_back(element_str);
+    this->species_groups_order.push_back(element_str);
   }
   auto& element_group = element_group_it->second;
 
@@ -213,11 +225,11 @@ void LowNSources::append_species_by_type(const SpeciesParser& species, SpeciesTy
   if (species.is_molecule()) {
     // Get the neutral molecule base (which is the same as species_str for neutral molecules, but not for molecular ions)
     const std::string& mol_str = species.get_base_species();
-    auto [mol_group_it, mol_group_inserted] = this->species_by_base.try_emplace(mol_str);
+    auto [mol_group_it, mol_group_inserted] = this->species_groups.try_emplace(mol_str);
     if (mol_group_inserted) {
-      this->base_species_order.push_back(mol_str);
+      this->species_groups_order.push_back(mol_str);
     }
-    auto& mol_group = this->species_by_base.at(mol_str);
+    auto& mol_group = this->species_groups.at(mol_str);
     if (type == SpeciesType::molecular_ion) {
       // Treat it as an 'ion' of the molecule base
       set_unique_species_or_throw(mol_group.ion, species_str, mol_str, "ion");
@@ -232,7 +244,7 @@ void LowNSources::append_species_by_type(const SpeciesParser& species, SpeciesTy
 /**
  * @brief Getter for the reaction definitions; used for testing.
  *
- * @return std::vector<LowNSources::ReactionDef>
+ * @return A copy of the cached reaction definitions
  */
 std::vector<LowNSources::ReactionDef> LowNSources::get_reaction_defs() const {
   populate_reaction_defs();
@@ -247,87 +259,57 @@ void LowNSources::instantiate_reactions() {
   this->reaction_options_store.reserve(this->reaction_defs.size());
   this->reactions.reserve(this->reaction_defs.size());
 
-  for (const auto& element : this->base_species_order) {
-    const auto& groups = this->species_by_base.at(element);
+  /*
+    Loop over the reaction definitions, instantiating a PseudoReaction instance for each one.
+    Note that the existence of a definition at this point guarantees that all required heavy species
+    are present in the simulation.
+    */
+  for (const auto& [species1, species2, type] : this->reaction_defs) {
+    const auto& species =
+        this->species_groups.at(SpeciesParser(species1).get_base_species());
+    PseudoReactionSpec spec = make_reaction_spec(type, species);
 
-    // Add a pseudo-reaction if both `species1` and `species2` are present.
-    // `gate_species`, if given, disables the reaction entirely while it is in deficit;
-    // `boost_species`, if given, increases the rate more the further it is in deficit.
-    //  If `boost_requires_deficit` is also set, the reaction is disabled entirely (rather than just left un-boosted) if `boost_species` is not
-    // deficient.
-    auto add_reaction_if_present =
-        [&](const std::string& species1, const std::string& species2,
-            PseudoReactionType type, const std::string& gate_species = "",
-            const std::string& boost_species = "", bool boost_requires_deficit = false) {
-          // Both species must be specified
-          if (species1.empty() or species2.empty()) {
-            return;
-          }
+    // Settings required by the Reaction base class need to be in an Options object
+    this->reaction_options_store.emplace_back(this->options.copy());
+    Options& reaction_options = this->reaction_options_store.back();
+    reaction_options[PseudoReaction::component_name]["data_srcs"] =
+        toString(ReactionDataTypes::None);
+    reaction_options[PseudoReaction::component_name]["data_ids"] =
+        toString(ReactionDataTypes::None);
+    reaction_options[PseudoReaction::component_name]["type"] = spec.reaction_str;
+    reaction_options[PseudoReaction::component_name]["diagnose"] = this->diagnose;
+    /// This ensures that PseudoReaction instances don't interfere with the parsing of reaction strings from the config
+    //  (See Reaction, ReactionBase constructors for details)
+    reaction_options[PseudoReaction::component_name]["is_internal"] = "true";
 
-          PseudoReactionSpec spec = make_reaction_spec(type, species1, species2);
+    // Configure all other settings in a PseudoReactionSpec struct
+    spec.density_threshold = this->density_thresholds.at(spec.target_species);
+    spec.timescale = this->timescale;
+    spec.gate_species_threshold =
+        spec.gate_species.empty() ? 0.0 : this->density_thresholds.at(spec.gate_species);
+    spec.boost_species_threshold = spec.boost_species.empty()
+                                       ? 0.0
+                                       : this->density_thresholds.at(spec.boost_species);
+    spec.external_src_mom_energy_enabled = this->external_src_mom_energy_enabled;
+    spec.strategy = this->strategy;
 
-          // Settings required by the Reaction base class need to be in an Options object
-          this->reaction_options_store.emplace_back(this->options.copy());
-          Options& reaction_options = this->reaction_options_store.back();
-          reaction_options[PseudoReaction::component_name]["data_srcs"] =
-              toString(ReactionDataTypes::None);
-          reaction_options[PseudoReaction::component_name]["data_ids"] =
-              toString(ReactionDataTypes::None);
-          reaction_options[PseudoReaction::component_name]["type"] = spec.reaction_str;
-          reaction_options[PseudoReaction::component_name]["diagnose"] = this->diagnose;
-          /// This ensures that PseudoReaction instances don't interfere with the parsing of reaction strings from the config
-          //  (See Reaction, ReactionBase constructors for details)
-          reaction_options[PseudoReaction::component_name]["is_internal"] = "true";
+    // Instantiate and add to the (pseudo-)reaction list
+    this->reactions.emplace_back(
+        std::make_unique<PseudoReaction>(reaction_options, spec));
 
-          // Configure all other settings in a PseudoReactionSpec struct
-          const BoutReal gate_species_threshold =
-              gate_species.empty() ? 0.0 : this->density_thresholds.at(gate_species);
-          const BoutReal boost_species_threshold =
-              boost_species.empty() ? 0.0 : this->density_thresholds.at(boost_species);
-          spec.density_threshold = this->density_thresholds.at(spec.target_species);
-          spec.timescale = this->timescale;
-          spec.gate_species = gate_species;
-          spec.gate_species_threshold = gate_species_threshold;
-          spec.boost_species = boost_species;
-          spec.boost_species_threshold = boost_species_threshold;
-          spec.boost_requires_deficit = boost_requires_deficit;
-          spec.external_src_mom_energy_enabled = this->external_src_mom_energy_enabled;
-          spec.strategy = this->strategy;
-
-          // Instantiate and add to the (pseudo-)reaction list
-          this->reactions.emplace_back(
-              std::make_unique<PseudoReaction>(reaction_options, spec));
-
-          // transform_guarded() reuses LowNSources' own permission-checked state, so any
-          // permissions a PseudoReaction sets on itself (e.g. when adding diagnostics) must be copied across
-          for (const auto& [varname, region] :
-               this->reactions.back()->getPermissions().getVariablesWithMinimumPermission(
-                   PermissionTypes::Write)) {
-            setPermissions(readWrite(varname, region));
-          }
-        };
-
-    // Recombination restores the atom population and is boosted further when molecules are also depleted.
-    add_reaction_if_present(groups.ion, groups.neutral, PseudoReactionType::recombination,
-                            "", groups.molecule);
-    // Ionization restores the ion population, but only when there are enough atoms to do so.
-    add_reaction_if_present(groups.neutral, groups.ion, PseudoReactionType::ionization,
-                            groups.neutral);
-    // Association restores the molecule population.
-    add_reaction_if_present(groups.neutral, groups.molecule,
-                            PseudoReactionType::association);
-    if (!groups.neutral.empty()) {
-      // When atoms and ions are both present, the external ion source is enabled only when BOTH are depleted.
-      // It is boosted by the level of atom depletion.
-      add_reaction_if_present(groups.ion, groups.neutral,
-                              PseudoReactionType::external_src, "", groups.neutral, true);
-    } else {
-      // With no atom species, the external ion source only responds to the ion deficit.
-      add_reaction_if_present(groups.ion, groups.ion, PseudoReactionType::external_src);
+    // transform_guarded() reuses LowNSources' own permission-checked state, so any
+    // permissions a PseudoReaction sets on itself (e.g. when adding diagnostics) must be copied across
+    for (const auto& [varname, region] :
+         this->reactions.back()->getPermissions().getVariablesWithMinimumPermission(
+             PermissionTypes::Write)) {
+      setPermissions(readWrite(varname, region));
     }
   }
 }
 
+/**
+ * @brief Rebuild the cached reaction definitions if a new species grouping has invalidated them.
+ */
 void LowNSources::populate_reaction_defs() const {
   if (this->reaction_defs_populated) {
     return;
@@ -335,23 +317,30 @@ void LowNSources::populate_reaction_defs() const {
 
   this->reaction_defs.clear();
 
-  for (const auto& base_species : this->base_species_order) {
-    const auto& groups = this->species_by_base.at(base_species);
+  for (const auto& base_species : this->species_groups_order) {
+    const auto& groups = this->species_groups.at(base_species);
 
     // Add reaction definitions.  If a required species isn't present, no definition is generated
+
+    // Recombination restores neutrals; for an atomic product, the rate is boosted further when molecules are also depleted.
     append_reaction_def_if_present(groups.ion, groups.neutral,
                                    PseudoReactionType::recombination,
                                    this->reaction_defs);
+    // Ionization restores the ion population, with smooth suppression when neutrals are depleted.
     append_reaction_def_if_present(groups.neutral, groups.ion,
                                    PseudoReactionType::ionization, this->reaction_defs);
+    // Association restores the molecule population.
     append_reaction_def_if_present(groups.neutral, groups.molecule,
                                    PseudoReactionType::association, this->reaction_defs);
     if (!groups.neutral.empty()) {
+      // If both neutrals and ions are present, the external ion source is enabled only when BOTH are depleted.
+      // It is boosted by the level of neutral depletion.
       append_reaction_def_if_present(groups.ion, groups.neutral,
                                      PseudoReactionType::external_src,
                                      this->reaction_defs);
     } else {
       append_reaction_def_if_present(
+          // With no neutral partner, the external ion source only responds to the ion deficit.
           groups.ion, groups.ion, PseudoReactionType::external_src, this->reaction_defs);
     }
   }

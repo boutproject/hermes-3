@@ -13,10 +13,13 @@
 #include "low_n_sources.hxx"
 #include "reaction.hxx"
 
+// An enum representing different potential strategies for low-n sources; only standard is implemented.
+// (BOUT_ENUM_CLASS specialises Options::as(), so must be in the global scope)
 BOUT_ENUM_CLASS(LowNSrcsStrategy, uedge, standard)
 
 namespace hermes {
 
+/// A struct to aggregate the information needed to define a pseudo-reaction
 struct PseudoReactionSpec {
   std::string reaction_str;
   PseudoReactionType type;
@@ -32,23 +35,24 @@ struct PseudoReactionSpec {
   std::string strategy;
 };
 
+/**
+ * @brief Class representing a pseudo-reaction used in `LowNSources`.
+ *
+ * @details Uses the `Reaction` class to create sources that restore target species towards a threshold density.
+ * Rates depend on the deficit of the target species and can be modified by 'gate' and 'boost' species.
+ *
+ */
 class PseudoReaction : public Reaction {
 public:
   static constexpr auto component_name = "pseudo_reaction";
 
-  /**
-   * @brief Construct a new Pseudo Reaction object
-   *
-   * @param options Options object used by Reaction base class
-   * @param spec Typed pseudo-reaction configuration
-   */
   PseudoReaction(Options& options, const PseudoReactionSpec& spec);
 
 protected:
-  /// Override Reaction::get_rate to bypass RateHelper and use custom rates
+  ///
   RateData get_rate(GuardedOptions& state) override;
 
-  /// Inject external particles at the target species' local velocity and temperature.
+  ///
   void transform_additional(GuardedOptions& state,
                             const RateData& rate_calc_results) override;
 
@@ -59,13 +63,13 @@ private:
   bool external_src_mom_energy_enabled;
   /// Threshold density below which the source term is activated
   BoutReal density_threshold;
-  /// Timescale over which the source term would restore density to the threshold value
+  /// Deficit-reduction timescale in normalised units, before gates and boosts
   BoutReal timescale;
-  /// Species whose density may be boosted by the reaction
+  /// Species whose density is restored by the reaction
   std::string target_species;
-  /// Species whose depletion will disable this reaction entirely (empty string means no gating)
+  /// Species whose depletion smoothly suppresses this reaction (empty string means no gating)
   std::string gate_species;
-  /// Threshold density below which gate_species disables the reaction
+  /// Density at which the gate weight is one half; no hard cutoff is imposed
   BoutReal gate_species_threshold;
   /// Species whose depletion boosts this reaction's rate (empty string means no boost)
   std::string boost_species;
@@ -79,18 +83,18 @@ private:
   static BoutReal smooth_clamp(BoutReal x, BoutReal lo, BoutReal hi, BoutReal width);
   static BoutReal smooth_gate(BoutReal ratio, BoutReal width);
 
-  /// Calculate rate using 'standard' strategy (default)
+  ///
   RateData get_rate_standard(GuardedOptions& state);
 };
 
 /**
- * @brief Smoothly saturate `x` between `lo` and `hi`, avoiding the discontinuous
- * derivative of std::clamp() at the two bounds (helps Newton-based solvers).
+ * @brief Map `x` to a smooth sigmoid between `lo` and `hi`.
+ * The transition is centred on (`lo` +`hi`) / 2.
  *
- * @param x The value to clamp
+ * @param x The value to map
  * @param lo Lower bound, approached smoothly as x -> -inf
  * @param hi Upper bound, approached smoothly as x -> +inf
- * @param width Transition width between lo and hi; smaller is closer to a hard clamp
+ * @param width Transition scale; smaller is closer to a hard step
  */
 inline BoutReal PseudoReaction::smooth_clamp(BoutReal x, BoutReal lo, BoutReal hi,
                                              BoutReal width) {
@@ -108,6 +112,12 @@ inline BoutReal PseudoReaction::smooth_gate(BoutReal ratio, BoutReal width) {
   return 1.0 / (1.0 + exp(-(ratio - 1.0) / width));
 }
 
+/**
+ * @brief Construct a new Pseudo Reaction object
+ *
+ * @param options Options object
+ * @param spec Typed pseudo-reaction configuration
+ */
 inline PseudoReaction::PseudoReaction(Options& options, const PseudoReactionSpec& spec)
     : Reaction(component_name, options), type(spec.type),
       external_src_mom_energy_enabled(spec.external_src_mom_energy_enabled),
@@ -133,6 +143,9 @@ inline PseudoReaction::PseudoReaction(Options& options, const PseudoReactionSpec
 
 // ===================== PseudoReaction member functions ======================
 
+/**
+ * @brief Calculate a rate using the 'standard' strategy.
+ */
 inline RateData PseudoReaction::get_rate_standard(GuardedOptions& state) {
 
   // Get target species density
@@ -146,8 +159,8 @@ inline RateData PseudoReaction::get_rate_standard(GuardedOptions& state) {
   RateData result({});
   result.rate = zeroFrom(n_target);
 
-  // Set rate such that the source term will restore the target species to its threshold density over delta_t = [timescale]
-  //   (deficit = source = 0  when n_target > n_thresh)
+  // Relax the target deficit with e-folding time [timescale], before gates and boosts.
+  //   (deficit = source = 0 when n_target >= n_thresh)
   BOUT_FOR(i, region) {
     const BoutReal n_deficit =
         std::max<BoutReal>(0.0, this->density_threshold - n_target[i]);
@@ -175,8 +188,8 @@ inline RateData PseudoReaction::get_rate_standard(GuardedOptions& state) {
       const BoutReal thresh_ratio = n_boost[i] / this->boost_species_threshold;
       if (thresh_ratio < 1.0) {
         // The more deficient the boost species is, the further the rate is boosted
-        // (Smoothly floor the inverse boost factor at 0.01 to avoid a divide-by-zero
-        // and the derivative discontinuity a hard std::clamp would introduce)
+        // (Use a sigmoid between 0.01 and 1.0 for the inverse boost factor,
+        // bounding the boost between 1 and 100 and avoiding division by zero)
         const BoutReal inv_boost_fac = smooth_clamp(thresh_ratio, 0.01, 1.0, 0.01);
         result.rate[i] /= inv_boost_fac;
       } else if (this->boost_requires_deficit) {
@@ -193,6 +206,12 @@ inline RateData PseudoReaction::get_rate_standard(GuardedOptions& state) {
   return result;
 }
 
+/**
+ * @brief Get the rate for this pseudo-reaction based on the current simulation state.
+ *
+ * @param state GuardedOptions object containing the current state
+ * @return RateData Calculated rate data for the pseudo-reaction
+ */
 inline RateData PseudoReaction::get_rate(GuardedOptions& state) {
   switch (this->strategy) {
   case LowNSrcsStrategy::standard:
@@ -207,7 +226,7 @@ inline RateData PseudoReaction::get_rate(GuardedOptions& state) {
  * @brief Add momentum and energy for external ion sources.
  *
  * @details The external ion source abuses the reaction framework using a string like "ion -> 2ion".
- * Since the only reactant has a +ve population change, Reaction::transform won't generate momentum
+ * Since the only reactant has a +ve population change, Reaction::transform_impl won't generate momentum
  * or energy sources. Add them here instead, unless they've been explicitly disabled.
  *
  */

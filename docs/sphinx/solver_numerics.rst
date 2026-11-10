@@ -351,22 +351,35 @@ The activation threshold for each source is the :code:`density_floor` of its tar
 species multiplied by a :code:`floor_factor` (default :code:`10`). Below this density,
 the pseudo-reaction adds density sources and sinks to the participating species,
 together with the associated momentum and energy transfers. They do not impose a
-hard lower bound on density. Setting :code:`diagnose = true` adds the density
-sources associated with each pseudo-reaction to the simulation output.
+hard lower bound on density. The unmodified reaction rate is zero at or above the
+target threshold and, below it, is
+
+.. math::
+
+   R_0 = \frac{\max(n_{\mathrm{thresh}} - n_{\mathrm{target}}, 0)}{\tau} \\
+   \mathrm{with} \qquad n_{\mathrm{thresh}} = F~n_{\mathrm{floor}}.
+
+:math:`\tau` and :math:`F` are set by the :code:`timescale` and :code:`floor_factor` configuration
+options, respectively. Each species density floor, :math:`n_{\mathrm{floor}}`, defaults to
+:code:`1e-7` if it is not specified.
+
+Setting :code:`diagnose = true` adds the target density
+source for each pseudo-reaction to the simulation output, with names such as
+:code:`Sd_low-n_recombination` and :code:`Sd+_low-n_external_src`.
 
 Pseudo-reactions
 ^^^^^^^^^^^^^^^^
 
-The types of pseudo-reactions available in each simulation are determined
-automatically based on which species are present. Reactants and products are
-typically, but not necessarily, the same as the equivalent physical reactions.
-The pseudo-reaction types are listed below, with example reaction strings in
-parentheses for a simulation including :math:`H`, :math:`H^+`, :math:`H_2` and :math:`H_2^+`.
+The types of pseudo-reactions available in each simulation are determined automatically based on
+which species are present. Reactants and products are typically, but not necessarily, the same as
+the equivalent physical reactions. The pseudo-reaction types are listed below, with example reaction
+strings in parentheses for a simulation including :math:`H`, :math:`H^+`, :math:`H_2` and
+:math:`H_2^+`.
 
 * **Recombination** (:math:`H^+ + e \to H` and :math:`H_2^+ + e \to H_2`):
 
-  * Restores depleted neutral species, consuming some ions.
-  * ``Available when`` at least one neutral and singly charged ion pair is present.
+  * Restores depleted neutral species, consuming ions and electrons.
+  * ``Available when`` a neutral and its (singly charged, positive) ion are present; an electron species is also required in the simulation state.
   * ``Triggered when`` the neutral (atom or molecule) population falls below its threshold.
   * ``Boosted when`` the product species is an atom and the corresponding molecular species (if present) is also depleted.
 
@@ -375,11 +388,11 @@ parentheses for a simulation including :math:`H`, :math:`H^+`, :math:`H_2` and :
   * Restores depleted ion species, consuming some neutrals.
   * ``Available when`` at least one pair of neutral and ion species are present in the simulation.
   * ``Triggered when`` the ion population falls below its threshold.
-  * Smoothly ``suppressed when`` the reactant species is below its density threshold.
+  * Smoothly ``suppressed when`` the neutral reactant is below its density threshold.
 
 * **Association** (:math:`2H \to H_2`):
 
-  * Restores depleted molecules, consuming some atoms.
+  * Restores depleted molecules, consuming atoms.
   * ``Available when`` at least one pair of atom and molecule species are present in the simulation.
   * ``Triggered when`` the molecular population falls below its threshold.
 
@@ -392,15 +405,15 @@ parentheses for a simulation including :math:`H`, :math:`H^+`, :math:`H_2` and :
   * Adds momentum and thermal energy at the local ion velocity and temperature. These terms can be disabled with :code:`external_src_mom_energy_enabled = false`.
   * ``Boosted when`` a corresponding neutral species is included in the simulation and is also depleted.
 
-Note that, for now, only singly charged ions can be included in pseudo-reactions, other charge states are ignored.
+Note that, for now, only singly charged positive ions can be included in pseudo-reactions, other charge states are ignored with a warning.
 
 Choosing the restoration timescale
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-The :code:`timescale` option controls how rapidly pseudo-reactions restore
-species densities towards their threshold(s). User-supplied values must be
-in normalised code units; the default corresponds to :math:`10^{-5}` s.
-When setting this option, aim for a timescale short enough that
-pseudo-reactions are able to compete with physical reactions in the low-density
-regime where they are triggered, but not so short that they behave like a hard
-density floor, which may increase stiffness and worsen solver convergence.
+The :code:`timescale` option controls how rapidly pseudo-reactions restore species densities towards
+their threshold(s). User-supplied values must be in normalised code units; the default corresponds
+to :math:`10^{-5}` s. Neglecting gates, boosts, or competing terms, :code:`timescale` is the
+e-folding time for the target deficit reduction. When setting this option, aim for a timescale short
+enough that pseudo-reactions are able to compete with physical reactions in the low-density regime
+where they are triggered, but not so short that they behave like a hard density floor, which may
+increase stiffness and worsen solver convergence.
