@@ -145,7 +145,7 @@ inline RateData PseudoReaction::get_rate_standard(GuardedOptions& state) {
     const GuardedOptions n_gate_opt = state["species"][this->gate_species]["density"];
     const Field3D& n_gate = n_gate_opt.GetRef<Field3D>();
     BOUT_FOR(i, region) {
-      result.rate[i] *= smooth_gate(n_gate[i] / this->gate_species_threshold, 0.1);
+      result.rate[i] *= smooth_gate(n_gate[i] / this->gate_species_threshold, 0.2);
     }
   }
 
@@ -167,7 +167,7 @@ inline RateData PseudoReaction::get_rate_standard(GuardedOptions& state) {
       if (this->boost_requires_deficit) {
         // Some reactions (e.g. an external ion source) should only run at all while
         // the boost species is deficient, rather than merely running un-boosted.
-        result.rate[i] *= smooth_gate(2.0 - thresh_ratio, 0.1);
+        result.rate[i] *= smooth_gate(2.0 - thresh_ratio, 0.2);
       }
     }
   }
