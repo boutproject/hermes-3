@@ -81,7 +81,7 @@ BraginskiiIonViscosity::BraginskiiIonViscosity(const std::string& name,
 
   precondition = options["precondition"]
                      .doc("Apply parallel viscosity preconditioner")
-                     .withDefault<bool>(true);
+                     .withDefault<bool>(false);
 
   bounce_frequency_epsilon =
       options["bounce_frequency_epsilon"]
