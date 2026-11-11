@@ -35,7 +35,7 @@ BraginskiiElectronViscosity::BraginskiiElectronViscosity(const std::string& name
 
   precondition = options["precondition"]
                      .doc("Apply parallel viscosity preconditioner")
-                     .withDefault<bool>(false);
+                     .withDefault<bool>(true);
 }
 
 void BraginskiiElectronViscosity::transform_impl(GuardedOptions& state) {
