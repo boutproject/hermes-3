@@ -92,7 +92,7 @@ SelflimitingSource::SelflimitingSource(std::string name, Options& alloptions, So
 
     if (selflimiting_temperature_overshoot <= 0.0) {
       throw BoutException("Temperature overshoot must be positive but is {}",
-                          temperature_overshoot);
+                          selflimiting_temperature_overshoot);
     }
   }
 
