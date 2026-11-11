@@ -108,16 +108,43 @@ Physical vorticity guards are Neumann for ``fixed`` and ``no_slip`` and have
 zero midpoint for ``free_slip``. These three helpers copy the first guard
 outward. In contrast, the chi helper reflects every guard layer from its
 corresponding interior layer, with even AC reflection for ``neumann`` and
-odd AC reflection for ``dirichlet``.
+odd AC reflection for ``dirichlet``. Chi guards are filled at all local Y
+rows, including Y guards; the other three wall helpers use physical Y only.
 
 Closed finite-volume wall faces must remove the entire normal flux,
-including ``g13`` contributions. Reynolds current and energy faces are
-closed in every mode. Viscous current and energy faces open only for
+including ``g13`` contributions. The advective and Q-gradient parts of the
+X--Z Reynolds current are closed at physical walls, while the unpinned corner
+curl remains open in every mode. Its discrete divergence and its Z-summed
+charge flux at each wall and Y row vanish to roundoff when ``dy`` is uniform
+in each X--Z plane. Species, momentum and energy weights can vary in Z, so
+their weighted wall exchanges need not vanish. Viscous current and energy
+faces open only for
 ``free_slip`` and use the same face current, with the viscosity coefficient
 continued from the interior. The chi contribution to polarisation particle,
 momentum and energy transport opens only for ``dirichlet`` AC. The auxiliary
 residual always uses the full FV operator with its physical wall currents;
 transport masking is applied separately.
+
+``reynoldsFaceFluxes()`` reconstructs :math:`\Omega/2` with the MC limiter
+and :math:`\Lambda` with central face averages. Q has odd radial guards;
+Lambda uses linear radial extrapolation. ``perpendicularFaces()`` supplies
+the same diagonal and cross-metric faces to the forward operator, kinetic
+energy, viscosity and chi current. These face fields include the transverse
+``dy`` factor and use the index convention in ``XZFaceFluxes``. Mesh-owned
+regions cache the X-face and physical-wall indices.
+
+Polarisation transport combines minus the Reynolds and selected chi faces
+once, then ``divergence()`` applies arithmetic face averages of each species
+or energy weight to that common current. It fills physical radial guards of
+a weight copy with Neumann values, preserving the supplied weight and ignoring
+its recovery or species boundary conditions there. ``DivEExB`` advects total
+``Eion`` with the shared XPPM operator and closes normal radial energy flux;
+the perpendicular kinetic-energy work flux is included in this advection.
+``reynolds_work`` is an X--Z diagnostic, rather than a separate energy RHS term.
+With ``poloidal_flows = true``, the differences between poloidal and
+nonpoloidal XPPM calls add the existing X--Y current and weighted transport
+contributions. They are not included in the saved X--Z polarisation faces or
+Reynolds work diagnostic.
 
 After the final pressure/potential recovery and boundary application,
 ``computeWallRates()`` resets all rates to zero, then computes the centred
@@ -1655,9 +1682,9 @@ Four integrated tests exercise ``evolve_vorticity_ion_energy``:
   density sources, with collisional heat exchange and output-cadence refinement.
 - ``ion-energy-walls`` checks the three radial wall modes, both AC conditions,
   nonlinear perturbed budgets in every mode, absolute wall-flux and kinetic-energy
-  minimum checks, density and local thermal-energy minima above ``1e-3`` of
-  their initial means at every output, rigid-rotation decay, uniform-vorticity
-  drift and perturbed restarts.
+  minimum checks, nonzero solenoidal wall exchange, density and local thermal-energy
+  minima above ``1e-3`` of their initial means at every output, rigid-rotation
+  decay, uniform-vorticity drift and perturbed restarts.
 - ``ion-energy-mms`` checks continuum expression sources on two resolutions for
   baseline and curvature slabs. ``ion-energy-mms-long`` runs baseline,
   skew-metric, viscous and curvature variants at 8, 16 and 32; ``--variants``
@@ -1684,11 +1711,14 @@ invariants, recovery and diagnostic comparisons use fixed roundoff floors.
 Free-slip vorticity budgets use ``open_vorticity`` because time integration of
 sampled viscous wall fluxes introduces a cadence error. The perturbed walls
 use ``rtol = 1e-7`` and ``atol = 1e-10``; analytic cases retain tighter tolerances.
-Pinned Reynolds corners close the normal flux for every face weight; Neumann
-particle budgets therefore use the closed-wall floor. Free-slip viscous wall
-power still introduces output-sampling error in energy balances. Central
-Reynolds reconstruction is available for comparing free-slip stability without
-changing the default MC limiter. The walls README records the measured results.
+The unpinned Reynolds curl carries weighted wall fluxes with both AC conditions,
+so particle and energy budgets use the open-wall limits even for Neumann AC.
+The runner integrates signed wall exchanges in those balances and separately
+checks a minimum cumulative absolute solenoidal energy exchange in each
+nonlinear case. Free-slip viscous wall power still introduces output-sampling
+error in energy balances. The production Reynolds reconstruction is fixed:
+MC for vorticity and central for Lambda. The walls README records the measured
+results.
 MMS truncation errors, convergence orders and magnitude minima retain their
 separate criteria. Every effective limit is saved with its check.
 
@@ -1711,7 +1741,8 @@ not require an environment in the source tree.
 ``operator_convergence.py`` samples analytic MMS fields on X-Z planes at
 16/32/64, applies the component wall guards, and reports all-cell and interior
 L2 orders and error maxima for each Reynolds term and each species/energy
-weight. It compares both reconstructions and needs SymPy, but no Hermes run.
+weight, including the weighted solenoidal contribution. It uses the production
+MC-vorticity/central-Lambda reconstruction and needs SymPy, but no Hermes run.
 ``--y`` and ``--time`` select the analytic plane; ``--run`` checks the mirror
 against saved C++ diagnostics with a ``1e-10`` limit. The diagnostic is not a
 CTest convergence gate and does not change the manufactured physics.
@@ -1722,9 +1753,12 @@ AC wall assertions have C++ unit coverage in
 ``EvolveVorticityIonEnergyTest.UniformStateHasZeroRHS``,
 ``PolarisationPotentialHasFixedCorrectionResponse``, ``FixedAuxiliaryInverse*``
 and ``MixedPolarisationGuards*``. ``XPPMFacesMatchSharedDivergenceAndWeights``
-checks the shared XPPM reconstruction and ``ReynoldsCurlIsSolenoidalAndWallsImpermeable``
-checks the curl, wall and work identities. ``test_reynolds_transport.py`` compares
-central and limited transport with an independent covariant SymPy reference on
+checks the shared XPPM reconstruction and ``UnpinnedCurlAndNeumannWallWeights``
+checks zero curl divergence and wall charge, weighted wall exchange, independence
+from weight guards, and integration by parts with boundary work.
+``TotalEnergyAndPolarisationOutputsUseSharedFaces`` checks total-energy advection
+and the common saved polarisation faces. ``test_reynolds_transport.py`` compares
+the production transport with an independent covariant SymPy reference on
 wavy metrics and a sheared annulus, including varying c, J and D. It also checks
 both current face components against that reference, fixing the curl's sign
 independently of its divergence, and checks the legacy slab limit.

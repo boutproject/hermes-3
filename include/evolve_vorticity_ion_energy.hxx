@@ -18,21 +18,34 @@
 
 BOUT_ENUM_CLASS_NS(bout::ion_energy, RadialBoundary, fixed, free_slip, no_slip);
 BOUT_ENUM_CLASS_NS(bout::ion_energy, PolarisationACBoundary, neumann, dirichlet);
-BOUT_ENUM_CLASS_NS(bout::ion_energy, ReynoldsReconstruction, xppm, central);
 
 namespace bout::ion_energy {
 /// All radial settings are derived once from the two boundary enums.
 struct RadialBoundaryModel {
+  /// True for nonperiodic X, enabling physical radial walls and wall-state storage.
   bool walls{false};
+  /// Selected potential/vorticity wall model; fixed retains the initial midpoint.
   RadialBoundary mode{RadialBoundary::fixed};
+  /// Radial condition on the Z-dependent part of the auxiliary potential chi.
   PolarisationACBoundary chi_ac{PolarisationACBoundary::neumann};
+  /// Evolve the stored mean wall potential for no_slip; otherwise its rate is zero.
   bool evolve_wall_potential{false};
+  /// Impose zero vorticity midpoint for free_slip; otherwise use Neumann guards.
   bool vorticity_wall_zero{false};
+  /// Retain viscous current through free_slip walls; otherwise close its X faces.
   bool viscous_wall_flux{false};
+  /// Retain chi current through Dirichlet AC walls; otherwise close its X faces.
   bool chi_wall_flux{false};
+  /// Average inner-wall potential midpoints and rates over a closed core Y surface.
+  /// True only on first-X ranks with physical walls and periodic Y at xstart.
   bool core_flux_surface_average{false};
-  BoutReal phi_boundary_velocity{0.0}; ///< Normalised velocity, only for no_slip
+  /// Positive no_slip relaxation velocity, normalised by Lnorm * Omega_ci.
+  /// Multiplies the inward normal potential derivative to give the wall rate.
+  BoutReal phi_boundary_velocity{0.0};
+  /// Potential inverse flags: INVERT_SET uses the supplied wall guard values.
   int phi_flags{INVERT_SET};
+  /// Auxiliary inverse flags: homogeneous DC Dirichlet with AC Neumann
+  /// (INVERT_AC_GRAD) or AC Dirichlet (0), as selected by chi_ac.
   int chi_flags{INVERT_AC_GRAD};
 };
 
@@ -42,16 +55,6 @@ void applyWallPressureBoundary(Field3D& f);
 /// Neumann vorticity, or zero midpoint for a stress-free wall; all X guards.
 void applyVorticityWallBoundary(Field3D& w, bool midpoint_zero);
 
-struct PerpendicularFaceFluxes {
-  BoutReal xp, xm, zp, zm;
-};
-/// Integrated fluxes on the four faces of a physical cell, including g13.
-PerpendicularFaceFluxes perpendicularFaceFluxes(const Field3D& a, const Field3D& f,
-                                                const Ind3D& i, bool bndry_flux = true);
-/// Conservative X-Z operator, including the cross metric g13.
-Field3D Div_a_Grad_perp_XZ(const Field3D& a, const Field3D& f, bool bndry_flux = true);
-/// Face-based energy density consistent with Div_a_Grad_perp_XZ.
-Field3D kineticEnergyPerp(const Field3D& a, const Field3D& f);
 /// Area-integrated X-Z fluxes, oriented towards increasing coordinate.
 /// x(i,j,k) is face (i+1/2,j,k); z(i,j,k) is face (i,j,k+1/2).
 /// Physical cells and their adjacent faces are defined; outer guards are unused.
@@ -59,24 +62,22 @@ struct XZFaceFluxes {
   Field3D x;
   Field3D z;
 };
-/// MC-limited XPPM faces with closed firstX/lastX faces, as in div_ops.cxx.
-XZFaceFluxes xppmFaceFluxes(const Field3D& n, const Field3D& stream);
-/// Central face averages transported by the same corner stream velocities.
-/// Radial firstX/lastX faces are closed.
-XZFaceFluxes centralAdvectionFaceFluxes(const Field3D& n, const Field3D& stream);
-/// Skew Reynolds current: split terms plus a corner curl. At physical walls
-/// the wall corners are pinned, closing transport for every face weight.
-/// Inputs must carry their physical wall guards.
-XZFaceFluxes
-reynoldsFaceFluxes(const Field3D& c, const Field3D& vorticity, const Field3D& phi,
-                   const Field3D& psi, const RadialBoundaryModel& model,
-                   ReynoldsReconstruction reconstruction = ReynoldsReconstruction::xppm);
-/// Corner curl contribution to the Reynolds current, with the same face indices.
-/// Its divergence vanishes to roundoff; Y-plane widths must be uniform in X-Z.
-XZFaceFluxes solenoidalReynoldsFaceFluxes(const Field3D& c, const Field3D& phi,
-                                          const Field3D& Phi, bool walls = false);
+/// Geometric diagonal/cross faces, including the transverse dy factor.
+XZFaceFluxes perpendicularFaces(const Field3D& a, const Field3D& f);
+/// Close only physical X wall rows; periodic/inter-rank faces are preserved.
+void closeRadialFaces(XZFaceFluxes& flux);
+/// Conservative X-Z operator, including the cross metric g13.
+Field3D Div_a_Grad_perp_XZ(const Field3D& a, const Field3D& f, bool bndry_flux = true);
+/// Face-based energy density consistent with Div_a_Grad_perp_XZ.
+Field3D kineticEnergyPerp(const Field3D& a, const Field3D& f);
+/// MC-upwinded omega, central Lambda, closed Q and unpinned corner curl.
+/// Physical wall faces carry only the curl, with zero net charge on each wall.
+/// Y-plane widths dy must be uniform in X-Z for the curl identity.
+XZFaceFluxes reynoldsFaceFluxes(const Field3D& c, const Field3D& vorticity,
+                                const Field3D& phi, const Field3D& psi);
 /// Conservative divergence on physical cells. Optional weights are averaged
-/// across each face after reconstruction; the supplied fluxes are preserved.
+/// across each face after reconstruction, with Neumann physical wall guards;
+/// the supplied fluxes and weights are preserved.
 Field3D divergence(const XZFaceFluxes& flux, const Field3D* weight = nullptr);
 /// Half the sum of flux times the increasing-coordinate potential jump on
 /// each cell face, divided by cell volume. Uses the same face index convention.
@@ -232,7 +233,6 @@ private:
   int polarisation_corrections{2}; ///< FV defect corrections after the spectral solve
 
   bout::ion_energy::RadialBoundaryModel radial_model;
-  bout::ion_energy::ReynoldsReconstruction reynolds_reconstruction;
   std::vector<BoutReal> wall_rate_inner; ///< Current inner wall dphi/dt, by local y
   std::vector<BoutReal> wall_rate_outer; ///< Current outer wall dphi/dt, by local y
 
@@ -248,16 +248,15 @@ private:
   VectorMetric Curlb_B; // Curvature vector Curl(b/B)
 
   // Divergence of currents
-  Field3D DivJdia;          ///< Divergence of diamagnetic current
-  Field3D reynolds_work;    ///< Face work of the X-Z Reynolds current
-  Field3D reynolds_heating; ///< Reynolds work minus kinetic energy advection
-  Field3D DivJReynolds;     ///< Divergence of Reynolds stress current
+  Field3D DivJdia;       ///< Divergence of diamagnetic current
+  Field3D reynolds_work; ///< Face work of the X-Z Reynolds current
+  Field3D DivJReynolds;  ///< Divergence of Reynolds stress current
+  bout::ion_energy::XZFaceFluxes polarisation_flux; ///< Common Reynolds + chi current
   Field3D DivJpol; ///< Polarisation transport divergence with the selected wall closure
   Field3D DivJviscous{0.0}; ///< Divergence of nu grad_perp(Vort)
 
   // Divergence of energy fluxes
-  Field3D DivEExB;      ///< Divergence of ExB energy flux
-  Field3D DivEReynolds; ///< Divergence of Reynolds stress energy flux
+  Field3D DivEExB;      ///< E×B advection of total ion energy, including Kperp
   Field3D DivEelectric; ///< Divergence of ion electrical work Div(phi (Jpar + Jdia))
   Field3D DivEparallel; ///< Divergence of parallel ion enthalpy and kinetic energy flux
   Field3D DivEpol;      ///< Divergence of polarisation drift energy flux

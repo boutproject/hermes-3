@@ -19,6 +19,7 @@ from energy_analysis.transport import (
     fv_xz,
     reynolds_face_fluxes,
     solenoidal_reynolds_faces,
+    weighted_faces,
     xppm_faces,
 )
 
@@ -58,8 +59,8 @@ def periodic_halos(field):
 
 
 @pytest.mark.parametrize("case", ("periodic", "annulus"))
-@pytest.mark.parametrize("limiter, minimum", ((None, 1.8), ("mc", 1.5)))
-def test_covariant_skew_convergence(case, limiter, minimum):
+def test_covariant_skew_convergence(case):
+    minimum = 1.5
     errors = []
     for n in (32, 64, 128):
         v, g = sample(case, n)
@@ -69,9 +70,7 @@ def test_covariant_skew_convergence(case, limiter, minimum):
             v["phi"],
             v["psi"],
             g,
-            walls=case == "annulus",
             periodic_x=case != "annulus",
-            limiter=limiter,
             fill_guards=periodic_halos if case != "annulus" else None,
         )
         error = face_divergence(faces, g) - v["expected"]
@@ -80,7 +79,7 @@ def test_covariant_skew_convergence(case, limiter, minimum):
         boundary = error.isel(x=[2, 3, -4, -3])
         print(
             case,
-            limiter,
+            "mixed",
             n,
             "interior",
             errors[-1],
@@ -90,12 +89,12 @@ def test_covariant_skew_convergence(case, limiter, minimum):
             float(abs((g.g11 * g.g33 - g.g13**2) / g.Bxy**2 - 1).max()),
         )
     orders = np.log2(np.asarray(errors[:-1]) / errors[1:])
-    assert np.all(orders >= minimum), (case, limiter, errors, orders)
+    assert np.all(orders >= minimum), (case, errors, orders)
 
 
 @pytest.mark.parametrize("case", ("periodic", "annulus"))
-@pytest.mark.parametrize("limiter, minimum", ((None, 1.8), ("mc", 1.5)))
-def test_covariant_current_face_convergence(case, limiter, minimum):
+def test_covariant_current_face_convergence(case):
+    minimum = 1.5
     # Divergence alone cannot distinguish the signs of a solenoidal curl.
     # Compare J*Gamma at the actual faces with the independent covariant form.
     errors = {dim: [] for dim in ("x", "z")}
@@ -107,9 +106,7 @@ def test_covariant_current_face_convergence(case, limiter, minimum):
             v["phi"],
             v["psi"],
             g,
-            walls=case == "annulus",
             periodic_x=case != "annulus",
-            limiter=limiter,
             fill_guards=periodic_halos if case != "annulus" else None,
         )
         dx, dz = float(g.dx), float(g.dz)
@@ -128,20 +125,17 @@ def test_covariant_current_face_convergence(case, limiter, minimum):
             errors[dim].append(float(np.sqrt(np.mean(error**2))))
     for dim, values in errors.items():
         orders = np.log2(np.asarray(values[:-1]) / values[1:])
-        print(case, limiter, dim, "face errors", values, "orders", orders)
-        assert np.all(orders >= minimum), (case, limiter, dim, values, orders)
+        print(case, "mixed", dim, "face errors", values, "orders", orders)
+        assert np.all(orders >= minimum), (case, dim, values, orders)
 
 
 def test_curl_work_and_wall_identities():
     v, g = sample("annulus", 32)
-    phi, psi = v["phi"].copy(), v["psi"].copy()
-    for cell, step in ((2, -1), (phi.sizes["x"] - 3, 1)):
-        for layer in (1, 2):
-            phi[{"x": cell + step * layer}] = -phi.isel(x=cell)
-            psi[{"x": cell + step * layer}] = -psi.isel(x=cell)
+    wall = SimpleNamespace(mxg=2)
+    phi = fill_wall_guards(v["phi"], wall, "zero")
+    psi = fill_wall_guards(v["psi"], wall, "pressure")
     Phi = phi + psi
-    unpinned = solenoidal_reynolds_faces(v["c"], phi, Phi, g)
-    curl = solenoidal_reynolds_faces(v["c"], phi, Phi, g, walls=True)
+    curl = solenoidal_reynolds_faces(v["c"], phi, Phi, g)
     volume = g.J * g.dx * g.dy * g.dz
     scale = max(
         1.0,
@@ -154,27 +148,43 @@ def test_curl_work_and_wall_identities():
     faces = reynolds_face_fluxes(v["c"], v["omega"], phi, psi, g)
     rng = np.random.default_rng(1729)
     weight = xr.DataArray(rng.uniform(0.1, 2, phi.shape), dims=phi.dims)
-    for face in (1, phi.sizes["x"] - 3):
-        assert_allclose(faces["x"].isel(x=face), 0, atol=0)
-        for w in (xr.ones_like(phi), weight):
-            from energy_analysis.transport import neighbor
-
-            weighted = faces["x"] * (w + neighbor(w, "x")) / 2
-            assert_allclose(weighted.isel(x=face), 0, atol=1e-14)
-    before = {d: faces[d] - curl[d] + unpinned[d] for d in faces}
+    changed = weight.copy()
+    changed[{"x": [0, 1, -2, -1]}] = 1e6
+    first = weighted_faces(faces, weight)
+    second = weighted_faces(faces, changed)
     assert_allclose(
-        face_divergence(faces, g).isel(x=slice(2, -2)),
-        face_divergence(before, g).isel(x=slice(2, -2)),
-        atol=1e-13 * scale,
-        rtol=1e-13,
+        face_divergence(first, g).isel(x=slice(2, -2)),
+        face_divergence(second, g).isel(x=slice(2, -2)),
+        atol=0,
+        rtol=0,
     )
-    volume = g.J * g.dx * g.dy * g.dz
+    boundary_work = 0
+    for face, cell, sign in ((1, 2, -1), (phi.sizes["x"] - 3, phi.sizes["x"] - 3, 1)):
+        assert_allclose(faces["x"].isel(x=face), curl["x"].isel(x=face), atol=0)
+        assert_allclose(curl["x"].isel(x=face).sum("z"), 0, atol=1e-13)
+        assert float(abs(curl["x"].isel(x=face)).max()) > 1e-6
+        assert_allclose(
+            first["x"].isel(x=face), weight.isel(x=cell) * curl["x"].isel(x=face)
+        )
+        boundary_work += sign * float(
+            (
+                faces["x"].isel(x=face) * (Phi.isel(x=face) + Phi.isel(x=face + 1)) / 2
+            ).sum()
+        )
     integral = lambda f: float((f * volume).isel(x=slice(2, -2)).sum())
     assert_allclose(
         integral(face_work(faces, Phi, g)),
-        -integral(Phi * face_divergence(faces, g)),
+        boundary_work - integral(Phi * face_divergence(faces, g)),
         rtol=1e-13,
         atol=1e-13,
+    )
+    complement = weighted_faces(faces, 1 - weight)
+    assert_allclose(
+        face_divergence({d: first[d] + complement[d] for d in faces}, g).isel(
+            x=slice(2, -2)
+        ),
+        face_divergence(faces, g).isel(x=slice(2, -2)),
+        atol=1e-13 * scale,
     )
 
 
@@ -208,7 +218,7 @@ def test_flat_slab_agrees_with_legacy_split_interior():
             / 2
         )
         old_a = xppm_faces(omega / 2, phi, g)
-        old_b = xppm_faces(lam, phi + psi, g)
+        old_b = xppm_faces(lam, phi + psi, g, limiter=None)
         old_q = fv_xz(c / 2, Q, g, periodic_x=True)
         old = {d: old_a[d] + old_b[d] + old_q["flux_" + d] for d in ("x", "z")}
         new = reynolds_face_fluxes(
@@ -217,7 +227,6 @@ def test_flat_slab_agrees_with_legacy_split_interior():
             phi,
             psi,
             g,
-            walls=False,
             periodic_x=True,
             fill_guards=periodic_halos,
         )
@@ -226,56 +235,38 @@ def test_flat_slab_agrees_with_legacy_split_interior():
     assert np.all(np.log2(np.asarray(errors[:-1]) / errors[1:]) > 1.8), errors
 
 
-def test_pinned_wall_heating_converges_in_sheared_annulus():
-    integrals = []
+def test_unpinned_weighted_boundary_divergence_converges():
+    errors = []
     for n in (16, 32, 64):
         v, g = sample("annulus", n)
         wall = SimpleNamespace(mxg=2)
         phi = fill_wall_guards(v["phi"], wall, "zero")
         psi = fill_wall_guards(v["psi"], wall, "pressure")
         omega = fill_wall_guards(v["omega"], wall, "neumann")
-        Phi = phi + psi
-        faces = reynolds_face_fluxes(
-            v["c"],
-            omega,
-            phi,
-            psi,
-            g,
-            reconstruction="central",
-        )
-        from energy_analysis.transport import central_advection_faces
-
-        kinetic = perpendicular_operator(v["c"], Phi, g).kperp
-        heating = face_work(faces, Phi, g) - face_divergence(
-            central_advection_faces(kinetic, phi, g), g
-        )
-        volume = g.J * g.dx * g.dy * g.dz
-        integrals.append(abs(float((heating * volume).isel(x=[2, -3]).sum())))
-    orders = np.log2(np.asarray(integrals[:-1]) / integrals[1:])
-    assert np.all(orders >= 0.8), (integrals, orders)
+        faces = reynolds_face_fluxes(v["c"], omega, phi, psi, g)
+        transport = face_divergence(weighted_faces(faces, 1 + 0.1 * np.sin(phi)), g)
+        errors.append(float(abs(transport).isel(x=[2, -3]).mean()))
+    # A pinned curl produces a 1/dx boundary-cell layer. The unpinned operator
+    # remains bounded as dx decreases, without weakening convergence gates.
+    assert max(errors) < 2 * errors[0], errors
 
 
 @pytest.mark.parametrize("n", (32, 64))
-def test_central_periodic_current_has_zero_integrated_work(n):
+def test_upwind_omega_dissipates_periodic_kinetic_energy(n):
     v, g = sample("periodic", n)
     for name, value in {"J": 1.0, "g11": 1.0, "g33": 1.0, "g13": 0.0}.items():
         g[name] = value
-    # Include nonzero normal flow at the periodic seam. Closing it previously
-    # gave work -0.01726 / -0.009094 on 32/64 (approximately first order).
-    phi, psi = periodic_halos(v["phi"]), periodic_halos(v["psi"])
-    c, Phi = xr.ones_like(phi), phi + psi
-    omega = periodic_halos(perpendicular_operator(c, Phi, g).divergence)
+    phi = periodic_halos(v["phi"])
+    c = xr.ones_like(phi)
+    omega = periodic_halos(perpendicular_operator(c, phi, g).divergence)
     faces = reynolds_face_fluxes(
         c,
         omega,
         phi,
-        psi,
+        xr.zeros_like(phi),
         g,
-        walls=False,
         periodic_x=True,
-        reconstruction="central",
         fill_guards=periodic_halos,
     )
-    volume = g.J * g.dx * g.dy * g.dz
-    work = (face_work(faces, Phi, g) * volume).isel(x=slice(2, -2))
-    assert abs(float(work.sum())) <= 1e-13 * max(1.0, float(abs(work).sum()))
+    work = (face_work(faces, phi, g) * g.J * g.dx * g.dy * g.dz).isel(x=slice(2, -2))
+    assert float(work.sum()) > 0

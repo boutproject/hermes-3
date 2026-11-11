@@ -14,7 +14,12 @@ from .fluxes import (
     reconstruct_sources,
 )
 from .inventory import compare_diagnostics, energy_densities, energy_inventory
-from .operators import calculate_kperp, perpendicular_operator, spectral_ddz
+from .operators import (
+    calculate_kperp,
+    perpendicular_faces,
+    perpendicular_operator,
+    spectral_ddz,
+)
 from .report import summary
 from .sources import external_power
 from .transfers import (
@@ -45,6 +50,7 @@ __all__ = [
     "integrated_power",
     "net_face_flux",
     "open_run",
+    "perpendicular_faces",
     "perpendicular_operator",
     "polarisation_energy_coefficient",
     "reconstruct_fluxes",

@@ -195,7 +195,6 @@ def flux_report(run, *, sources=None):
         return report
     families = (
         "DivEExB",
-        "DivEReynolds",
         "DivEelectric",
         "DivEparallel",
         "DivEpol",

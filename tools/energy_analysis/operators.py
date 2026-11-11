@@ -48,14 +48,61 @@ def spectral_ddz(field, dz):
     ).transpose(*field.dims)
 
 
-def perpendicular_operator(
+def neighbor(field, dim, direction=1):
+    if dim not in field.dims or (dim == "y" and field.sizes[dim] == 1):
+        return field
+    if dim == "z":
+        return field.roll(z=-direction, roll_coords=False)
+    return field.shift({dim: -direction})
+
+
+def face_divergence(fluxes, geometry):
+    """Discrete Gauss divergence of area-integrated coordinate face fluxes."""
+    volume = geometry.J * geometry.dx * geometry.get("dy", 1) * geometry.dz
+    result = sum(f - neighbor(f, dim, -1) for dim, f in fluxes.items()) / volume
+    result.attrs = {"units_type": "hermes", "provenance": "reconstructed"}
+    return result
+
+
+def face_work(fluxes, potential, geometry):
+    """Half the sum of oriented face fluxes times potential jumps per volume."""
+    work = 0
+    for dim, flux in fluxes.items():
+        jump = neighbor(potential, dim) - potential
+        work += flux * jump + neighbor(flux * jump, dim, -1)
+    return work / (2 * geometry.J * geometry.dx * geometry.get("dy", 1) * geometry.dz)
+
+
+def close_radial_faces(faces, field, mxg):
+    """Close the two physical wall rows after evaluating the geometric faces."""
+    ix = xr.DataArray(np.arange(field.sizes["x"]), dims="x", coords={"x": field.x})
+    return {
+        **faces,
+        "x": faces["x"].where((ix != mxg - 1) & (ix != field.sizes["x"] - mxg - 1), 0),
+    }
+
+
+def neumann_weights(weight, *, mxg=2, periodic_x=False):
+    """Local copy with interior values on every physical radial guard column."""
+    if periodic_x:
+        return weight
+    w = weight.copy()
+    for cell, step in ((mxg, -1), (w.sizes["x"] - mxg - 1, 1)):
+        for layer in range(1, mxg + 1):
+            w[{"x": cell + step * layer}] = w.isel(x=cell)
+    return w
+
+
+def weighted_faces(faces, weight, *, mxg=2, periodic_x=False):
+    """Face-average a Neumann wall weight on the common polarisation current."""
+    w = neumann_weights(weight, mxg=mxg, periodic_x=periodic_x)
+    return {d: f * (w + neighbor(w, d)) / 2 for d, f in faces.items()}
+
+
+def perpendicular_faces(
     coefficient, potential, geometry, *, mxg=2, boundary_flux=True, periodic_x=False
 ):
-    """Return divergence, kinetic energy and shared diagonal/cross face fluxes.
-
-    Mixed terms use one symmetric bilinear form at each X-Z corner, including
-    spatially varying coefficients and metrics. Calculations remain lazy.
-    """
+    """Area-integrated diagonal/cross fluxes, computed once per face and corner."""
     if not {"x", "z"}.issubset(potential.dims):
         raise ValueError("X-Z operator requires named x and z dimensions")
     if mxg < 1 or potential.sizes["x"] <= 2 * mxg:
@@ -81,24 +128,37 @@ def perpendicular_operator(
     fz = (a + zp(a)) / 2 * (J * g33 * dx + zp(J * g33 * dx)) * (zp(f) - f) / (
         dz + zp(dz)
     ) + (cross_z + xm(cross_z)) / 2
-    cell_area = J * dx * dz
-    # Kperp always uses the unmodified geometric flux, as in the C++ operator.
-    ke = (
-        (xp(f) - f) * fx
-        + (f - xm(f)) * xm(fx)
-        + (zp(f) - f) * fz
-        + (f - zm(f)) * zm(fz)
-    ) / (4 * cell_area)
     if not boundary_flux and not periodic_x:
         index = xr.DataArray(range(f.sizes["x"]), dims="x", coords={"x": f.x})
         fx = fx.where((index != mxg - 1) & (index != f.sizes["x"] - mxg - 1), 0)
-    div = (fx - xm(fx) + fz - zm(fz)) / cell_area
+    return {"x": fx * geometry.get("dy", 1), "z": fz * geometry.get("dy", 1)}
+
+
+def perpendicular_operator(
+    coefficient, potential, geometry, *, mxg=2, boundary_flux=True, periodic_x=False
+):
+    """Divergence, geometric Kperp and shared area-integrated X-Z faces."""
+    faces = perpendicular_faces(coefficient, potential, geometry, mxg=mxg)
+    ke = face_work(faces, potential, geometry) / 2
+    if not boundary_flux and not periodic_x:
+        faces = close_radial_faces(faces, potential, mxg)
     return xr.Dataset(
-        {"divergence": div, "kperp": ke, "flux_x": fx, "flux_z": fz},
+        {
+            "divergence": face_divergence(faces, geometry),
+            "kperp": ke,
+            **{"flux_" + d: f / geometry.get("dy", 1) for d, f in faces.items()},
+        },
         attrs={"units_type": "hermes", "flux_orientation": "increasing coordinate"},
     )
 
 
 def calculate_kperp(coefficient, potential, geometry, *, mxg=2):
     """Scheme-matched perpendicular energy density (normalised)."""
-    return perpendicular_operator(coefficient, potential, geometry, mxg=mxg)["kperp"]
+    return (
+        face_work(
+            perpendicular_faces(coefficient, potential, geometry, mxg=mxg),
+            potential,
+            geometry,
+        )
+        / 2
+    )

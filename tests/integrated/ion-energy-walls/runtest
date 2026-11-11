@@ -3,7 +3,6 @@
 
 import sys
 from dataclasses import replace
-from functools import partial
 from pathlib import Path
 
 import numpy as np
@@ -21,15 +20,12 @@ OUTPUTS = 200
 OUTPUT_STEP = 2
 
 
-def overrides(
-    mode, ac, *, nx=8, profile="perturbed", outputs=None, reconstruction="xppm"
-):
+def overrides(mode, ac, *, nx=8, profile="perturbed", outputs=None):
     args = [
         "restart=false",
         f"mesh:nx={nx + 4}",
         f"evolve_vorticity_ion_energy:radial_boundary={mode}",
         f"evolve_vorticity_ion_energy:polarisation_ac_boundary={ac}",
-        f"evolve_vorticity_ion_energy:reynolds_reconstruction={reconstruction}",
         f"evolve_vorticity_ion_energy:viscosity={0.02 if mode == 'free_slip' else 0}",
         f"evolve_vorticity_ion_energy:diagnose={str(ac == 'dirichlet').lower()}",
     ]
@@ -79,9 +75,10 @@ def audit(study, run, label, *, nonlinear=False):
     if "DivJReynolds" in run.data:
         for name in (
             "DivJReynolds",
-            "DivEReynolds",
+            "DivEExB",
+            "polarisation_flux_x",
+            "polarisation_flux_z",
             "reynolds_work",
-            "reynolds_heating",
             "DivJpol",
             "DivEpol",
         ):
@@ -103,17 +100,12 @@ def audit(study, run, label, *, nonlinear=False):
         int(budget.attrs["coverage"] != "complete"),
         "coverage",
     )
-    open_faces = "dirichlet" in label
     if budget.attrs["coverage"] == "complete":
         balance = source_balance(run)
         study.check(
             "energy/" + label,
             float(abs(balance.relative_residual).max()),
-            "open_energy"
-            if open_faces
-            or label.startswith("free_slip")
-            or float(abs(budget.polarisation_absolute).max()) > 0
-            else "energy",
+            "open_energy",
             run=run,
         )
         for name in balance:
@@ -121,7 +113,7 @@ def audit(study, run, label, *, nonlinear=False):
                 study.check(
                     name + "/" + label,
                     float(abs(balance[name]).max()),
-                    "open_particles" if open_faces else "particles",
+                    "open_particles",
                     run=run,
                 )
     vort = particle_inventory(run).vorticity
@@ -160,6 +152,12 @@ def audit(study, run, label, *, nonlinear=False):
         initial_energy = float(inventory.plasma_native.isel(t=0))
         cumulative = lambda rate: float(
             cumulative_trapezoid(rate, x=budget.t, initial=0)[-1]
+        )
+        study.check(
+            "solenoidal_energy/" + label,
+            cumulative(budget.solenoidal_absolute) / initial_energy,
+            limit=study.criteria["solenoidal_energy"][label],
+            minimum=True,
         )
         if "dirichlet" in label:
             study.check(
@@ -220,28 +218,28 @@ def audit(study, run, label, *, nonlinear=False):
 def main():
     cli = parser(__doc__)
     cli.set_defaults(timeout=600)
-    cli.add_argument(
-        "--reynolds-reconstruction", choices=("xppm", "central"), default="xppm"
-    )
     args = cli.parse_args()
-    run_overrides = partial(overrides, reconstruction=args.reynolds_reconstruction)
     with Study(HERE, args) as study:
         runs, rotations = {}, []
         for mode in ("fixed", "free_slip", "no_slip"):
             for ac in ("neumann", "dirichlet"):
                 label = mode + "-" + ac
-                runs[label] = study.run(label, run_overrides(mode, ac))
+                runs[label] = study.run(label, overrides(mode, ac))
                 audit(study, runs[label], label, nonlinear=True)
         diagnosed = runs["no_slip-dirichlet"]
         diagnostic_names = [
             name
             for name in diagnosed.data
-            if name.startswith(("ion_", "Div", "ddt(", "particle_pol_", "S"))
+            if (
+                name.startswith(
+                    ("ion_", "Div", "ddt(", "particle_pol_", "polarisation_flux_", "S")
+                )
+                and name != "ion_chi"
+            )
             or name
             in (
                 "phi_wall_rate",
                 "reynolds_work",
-                "reynolds_heating",
                 "kinematic_viscosity",
                 "kinematic_viscous_heating",
                 "electron_viscous_heating",
@@ -249,7 +247,15 @@ def main():
             )
         ]
         stripped = replace(diagnosed, data=diagnosed.data.drop_vars(diagnostic_names))
-        incomplete = wall_budget(stripped)
+        complete = wall_budget(stripped)
+        study.check(
+            "coverage/without-diagnostics",
+            int(complete.attrs["coverage"] != "complete"),
+            "coverage",
+        )
+        incomplete = wall_budget(
+            replace(stripped, data=stripped.data.drop_vars("ion_chi"))
+        )
         study.check(
             "coverage/stripped",
             int(incomplete.attrs["coverage"] != "incomplete"),
@@ -260,7 +266,7 @@ def main():
         for nx in (16, 32):
             rigid = study.run(
                 f"rigid-{nx}",
-                run_overrides("no_slip", "neumann", nx=nx, profile="rigid"),
+                overrides("no_slip", "neumann", nx=nx, profile="rigid"),
             )
             rigid_runs.append(rigid)
             audit(study, rigid, f"no_slip-rigid-{nx}")
@@ -281,7 +287,7 @@ def main():
             minimum=True,
         )
         uniform = study.run(
-            "uniform-16", run_overrides("no_slip", "neumann", nx=16, profile="uniform")
+            "uniform-16", overrides("no_slip", "neumann", nx=16, profile="uniform")
         )
         audit(study, uniform, "no_slip-uniform-16")
         study.check(
@@ -296,7 +302,7 @@ def main():
             short = study.run(
                 mode + "-checkpoint",
                 [
-                    *run_overrides(mode, "neumann", profile=profile, outputs=outputs),
+                    *overrides(mode, "neumann", profile=profile, outputs=outputs),
                     "evolve_vorticity_ion_energy:diagnose=true",
                 ],
             )
@@ -309,7 +315,7 @@ def main():
             resumed = study.run(
                 mode + "-restart",
                 [
-                    *run_overrides(mode, "neumann", profile=profile, outputs=1),
+                    *overrides(mode, "neumann", profile=profile, outputs=1),
                     "restart=true",
                     "append=false",
                     "dump_on_restart=true",

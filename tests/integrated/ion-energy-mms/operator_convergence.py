@@ -29,14 +29,13 @@ from energy_analysis.inventory import energy_densities
 from energy_analysis.operators import perpendicular_operator
 from energy_analysis.transport import (
     arakawa,
-    central_advection_faces,
     face_divergence,
     face_work,
     fv_xz,
-    neighbor,
     reynolds_face_fluxes,
     reynolds_lambda,
     solenoidal_reynolds_faces,
+    weighted_faces,
     xppm_faces,
 )
 
@@ -73,7 +72,7 @@ def expressions(variant):
     continuum = {"Lambda": lam, **{k: exact.div(v) for k, v in split.items()}}
     continuum.update(
         DivJReynolds=-exact.div(Gamma),
-        DivEReynolds=exact.div(kinetic * exact.drift(phi)),
+        DivEExB_perpendicular=exact.div(kinetic * exact.drift(phi)),
         work=Gamma.dot(exact.grad(Phi)),
     )
     for name, weight in weights.items():
@@ -91,7 +90,7 @@ def sample(expression, x, z, y, time):
     )
 
 
-def discrete(fields, weights, geometry, reconstruction):
+def discrete(fields, weights, geometry):
     wall = SimpleNamespace(mxg=2)
     phi = fill_wall_guards(fields["phi"], wall, "zero")
     psi = fill_wall_guards(fields["psi"], wall, "pressure")
@@ -100,19 +99,16 @@ def discrete(fields, weights, geometry, reconstruction):
     lam = reynolds_lambda(c, phi, geometry)
     guarded_lam = fill_wall_guards(lam, wall, "free_o2")
     Q = fill_wall_guards(arakawa(phi, psi, geometry.dx, geometry.dz), wall, "zero")
-    limiter = None if reconstruction == "central" else "mc"
     parts = {
-        "omega_vE": xppm_faces(omega / 2, phi, geometry, limiter=limiter),
+        "omega_vE": xppm_faces(omega / 2, phi, geometry),
         "Q": {
             d: fv_xz(c / 2, Q, geometry, boundary_flux=False)["flux_" + d]
             for d in ("x", "z")
         },
-        "Lambda_U": xppm_faces(guarded_lam, Phi, geometry, limiter=limiter),
+        "Lambda_U": xppm_faces(guarded_lam, Phi, geometry, limiter=None),
     }
-    faces = reynolds_face_fluxes(
-        c, omega, phi, psi, geometry, reconstruction=reconstruction
-    )
-    curl = solenoidal_reynolds_faces(c, phi, Phi, geometry, walls=True)
+    faces = reynolds_face_fluxes(c, omega, phi, psi, geometry)
+    curl = solenoidal_reynolds_faces(c, phi, Phi, geometry)
     kinetic = perpendicular_operator(c, Phi, geometry).kperp
     result = {
         "Lambda": lam,
@@ -120,15 +116,13 @@ def discrete(fields, weights, geometry, reconstruction):
     }
     result.update(
         DivJReynolds=-face_divergence(faces, geometry),
-        DivEReynolds=face_divergence(
-            central_advection_faces(kinetic, phi, geometry), geometry
+        DivEExB_perpendicular=face_divergence(
+            xppm_faces(kinetic, phi, geometry), geometry
         ),
         work=face_work(faces, Phi, geometry),
     )
     for name, weight in weights.items():
-        weighted = lambda flux, weight=weight: {
-            d: f * (weight + neighbor(weight, d)) / 2 for d, f in flux.items()
-        }
+        weighted = lambda flux, weight=weight: weighted_faces(flux, weight)
         result["transport_" + name] = -face_divergence(weighted(faces), geometry)
         result["S_grad_" + name] = face_divergence(weighted(curl), geometry)
     return result
@@ -201,8 +195,8 @@ def convergence(args):
                 }
             )
             expected = {name: evaluate(expr) for name, expr in continuum.items()}
-            for reconstruction in args.reconstruction:
-                actual = discrete(fields, w, g, reconstruction)
+            for reconstruction in ("mixed",):
+                actual = discrete(fields, w, g)
                 terms = reference.setdefault(reconstruction, {})
                 for name in continuum:
                     terms.setdefault(name, {})[str(n)] = errors(
@@ -239,11 +233,6 @@ def convergence(args):
         psi = density.pressure_potential
         c = run.scalar_option("average_atomic_mass") / ds.Bxy**2
         omega = fill_wall_guards(ds.Vort, run, "neumann")
-        reconstruction = (
-            str(ds.options[run.model]["reynolds_reconstruction"])
-            if "reynolds_reconstruction" in ds.options[run.model]
-            else "xppm"
-        )
         faces = reynolds_face_fluxes(
             c,
             omega,
@@ -251,26 +240,36 @@ def convergence(args):
             psi,
             ds,
             mxg=run.mxg,
-            reconstruction=reconstruction,
             fill_guards=lambda f: fill_transport_guards(f, run, False, True),
         )
         work = face_work(faces, ds.phi + psi, ds)
         energy = face_divergence(
-            central_advection_faces(density.ion_perpendicular, ds.phi, ds, mxg=run.mxg),
+            xppm_faces(ds.Eion, ds.phi, ds, mxg=run.mxg),
             ds,
         )
+        chi_faces = fv_xz(c, ds.ion_chi, ds, mxg=run.mxg, boundary_flux=False)
+        polarisation = {
+            "polarisation_flux_" + d: -faces[d] - chi_faces["flux_" + d]
+            for d in ("x", "z")
+        }
         agreement = compare_flux_diagnostics(
             run,
             xr.Dataset(
                 {
                     "DivJReynolds": -face_divergence(faces, ds),
-                    "DivEReynolds": energy,
+                    "DivEExB": energy,
                     "reynolds_work": work,
-                    "reynolds_heating": work - energy,
+                    **polarisation,
                 }
             ),
         )
-        required = ("DivJReynolds", "DivEReynolds", "reynolds_work", "reynolds_heating")
+        required = (
+            "DivJReynolds",
+            "DivEExB",
+            "reynolds_work",
+            "polarisation_flux_x",
+            "polarisation_flux_z",
+        )
         for name in required:
             if (
                 not agreement[name]["available"]
@@ -292,12 +291,6 @@ def main():
         default=("baseline", "curvature"),
     )
     cli.add_argument("--sizes", nargs="+", type=int, default=(16, 32, 64))
-    cli.add_argument(
-        "--reconstruction",
-        nargs="+",
-        choices=("xppm", "central"),
-        default=("xppm", "central"),
-    )
     cli.add_argument("--y", type=float, default=2.91)
     cli.add_argument("--time", type=float, default=0.1)
     cli.add_argument(

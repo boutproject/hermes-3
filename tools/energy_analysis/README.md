@@ -55,12 +55,17 @@ Complete from ordinary state, geometry and resolved options:
 - Energy inventories and recovery consistency in supported slab geometry.
 - Closed energy/particle/charge drift, including periodic domains.
 - Static physical pressure and density source powers, with their SI conversion.
-- Closed polarisation wall faces, stored wall midpoint histories, and viscous
-  wall fluxes from saved `phi`, `Vort` and viscosity.
+- Polarisation particle, momentum and energy wall exchanges from saved `phi`,
+  `Vort`, species state and the standard `ion_chi` output; stored wall midpoint
+  histories and viscous wall fluxes.
 - Electron curvature work for explicit constant Z curvature and FFT derivatives.
 
-Open AC polarisation wall faces need chi, which is normally a diagnostic.
-When it is absent, that wall term reports incomplete coverage. Sheaths,
+`ion_chi` is saved even with `diagnose=false`. The unpinned Reynolds curl
+crosses both radial walls with zero net charge. `wall_budget` applies Neumann
+weights and reports signed exchange by wall and physical Y row for energy,
+particles and momentum, plus their totals and absolute face-flux sums. Open
+chi wall faces require `ion_chi`; old snapshots without it report incomplete
+coverage for that contribution. Sheaths,
 unrecognised source components, unsaved mesh sources, time-dependent source
 prefactors, core-only source masks, and unimplemented geometry also report
 missing terms. Collisional heat exchange cancels in the plasma total.
@@ -77,3 +82,22 @@ Run Python checks with `python -m pytest tests/python`, or use CTest's
 `energy-analysis-python`. Plotting is optional; the
 [publication example](../../examples/tokamak-2D-driftplane/2D-energy/README.md)
 uses `matplotlib`.
+
+`reconstruct_fluxes` rebuilds the MC vorticity, central Lambda, Q and unpinned
+curl contributions, then adds the chi faces to form the common polarisation
+current. `DivJpol`, species particle and momentum transport, and `DivEpol` use
+face averages of each weight, with the interior value on physical wall faces.
+The optional `polarisation_flux_x/z` diagnostics include area integration and
+use the lower-cell face index; their comparisons include the lower X wall and
+exclude undefined outer guards. Saved chi is used directly; an auxiliary solve
+supports older snapshots that lack it.
+
+`DivEExB` now advects `Eion`. Post-processing provides
+`DivEExB_perpendicular`, `DivEExB_thermal_parallel` and `reynolds_heating`.
+The perpendicular part uses MC reconstruction of the discrete Kperp. Since MC
+is nonlinear, the thermal-plus-parallel part is the total flux minus this part,
+so the two add exactly, including their reconstruction errors. Heating is
+`reynolds_work - DivEExB_perpendicular`; only `reynolds_work` is saved by the
+solver. Full flux reconstruction retains the uniform orthogonal slab contract;
+the face-based perpendicular operator itself supports varying J, spacing and
+g13, and the wall budget reconstructs the unpinned curl directly.

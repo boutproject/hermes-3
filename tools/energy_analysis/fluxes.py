@@ -21,7 +21,6 @@ from .transfers import (
 )
 from .transport import (
     arakawa,
-    central_advection_faces,
     central_parallel,
     face_work,
     flux_dataset,
@@ -32,6 +31,7 @@ from .transport import (
     parallel_kinetic_flux,
     reynolds_face_fluxes,
     solenoidal_reynolds_faces,
+    weighted_faces,
     xppm,
 )
 
@@ -626,13 +626,7 @@ def reconstruct_fluxes(run, *, sources=None):
         psi,
         ds,
         mxg=run.mxg,
-        walls=not periodic_x,
         periodic_x=periodic_x,
-        reconstruction=(
-            str(ds.options[run.model]["reynolds_reconstruction"])
-            if "reynolds_reconstruction" in ds.options[run.model]
-            else "xppm"
-        ),
         fill_guards=lambda f: fill_transport_guards(f, run, periodic_x, periodic_y),
     )
     reynolds = flux_dataset({d: -f for d, f in reynolds_faces.items()}, ds)
@@ -666,40 +660,39 @@ def reconstruct_fluxes(run, *, sources=None):
     e = next(s for s in run.species if s.name == "e")
     mass_density = sum(s.mass * ds["N" + s.name] for s in run.species)
     electron_heat = viscous_heat * e.mass * ds.Ne / mass_density
-    dphi = solve_polarisation(
-        run, reynolds.divergence + dia + viscous.divergence, periodic_x, periodic_y
+    dphi = ds.get("ion_chi")
+    if dphi is None:
+        dphi = solve_polarisation(
+            run, reynolds.divergence + dia + viscous.divergence, periodic_x, periodic_y
+        )
+    chi_faces = fv_xz(
+        c,
+        dphi,
+        ds,
+        mxg=run.mxg,
+        boundary_flux=polarisation_ac_boundary(run) == "dirichlet",
+        periodic_x=periodic_x,
     )
+    polarisation_faces = {
+        d: -reynolds_faces[d] - chi_faces["flux_" + d] for d in ("x", "z")
+    }
 
     def pol(weight):
-        return combine(
-            (
-                -1,
-                fv_xz(
-                    weight * c,
-                    dphi,
-                    ds,
-                    boundary_flux=polarisation_ac_boundary(run) == "dirichlet",
-                    periodic_x=periodic_x,
-                ),
+        return flux_dataset(
+            weighted_faces(
+                polarisation_faces, weight, mxg=run.mxg, periodic_x=periodic_x
             ),
-            (
-                -1,
-                flux_dataset(
-                    {
-                        d: f * (weight + neighbor(weight, d)) / 2
-                        for d, f in reynolds_faces.items()
-                    },
-                    ds,
-                ),
-            ),
+            ds,
         )
 
-    families["DivEExB"] = xppm(1.5 * pi + densities.ion_parallel, phi, ds)
-    families["DivEReynolds"] = flux_dataset(
-        central_advection_faces(
-            calculate_kperp(c, Phi, ds, mxg=run.mxg), phi, ds, mxg=run.mxg
-        ),
-        ds,
+    families["DivEExB"] = xppm(ds.Eion, phi, ds, mxg=run.mxg)
+    # MC is nonlinear: assign the difference to the thermal/parallel part so
+    # these two reconstructed families add exactly to the saved total flux.
+    families["DivEExB_perpendicular"] = xppm(
+        calculate_kperp(c, Phi, ds, mxg=run.mxg), phi, ds, mxg=run.mxg
+    )
+    families["DivEExB_thermal_parallel"] = combine(
+        (1, families["DivEExB"]), (-1, families["DivEExB_perpendicular"])
     )
     advected = polarisation_energy_coefficient(run)
     families["DivEpol"] = pol(advected.total)
@@ -716,8 +709,9 @@ def reconstruct_fluxes(run, *, sources=None):
         "electron_exb_work": work,
         "reynolds_work": face_work(reynolds_faces, Phi, ds),
         "reynolds_heating": face_work(reynolds_faces, Phi, ds)
-        - families["DivEReynolds"].divergence,
+        - families["DivEExB_perpendicular"].divergence,
         "arakawa": bracket,
+        **{"polarisation_flux_" + d: f for d, f in polarisation_faces.items()},
     }
     jion = xr.zeros_like(phi)
     je = xr.zeros_like(phi)
@@ -821,7 +815,6 @@ def reconstruct_fluxes(run, *, sources=None):
                 families[n].divergence
                 for n in (
                     "DivEExB",
-                    "DivEReynolds",
                     "DivEpol",
                     "DivEparallel",
                     "DivEelectric",
@@ -1020,12 +1013,29 @@ def compare_flux_diagnostics(run, fluxes):
                 abs(run.integrate(error)).max().compute()
             ),
         }
+    for dim in ("x", "z"):
+        name = "polarisation_flux_" + dim
+        if name not in run.data or name not in fluxes:
+            result[name] = {"available": False}
+            continue
+        region = {
+            "x": slice(run.mxg - (dim == "x"), -run.mxg),
+            "y": slice(run.myg, run.data.sizes["y"] - run.myg),
+        }
+        error = (fluxes[name] - run.data[name]).isel(**region)
+        if not bool(np.isfinite(error).all().compute()):
+            raise AuditError(f"Nonfinite face diagnostic comparison for {name}")
+        absolute = float(abs(error).max().compute())
+        scale = float(abs(run.data[name].isel(**region)).max().compute())
+        result[name] = {
+            "available": True,
+            "max_absolute_error_normalised": absolute,
+            "max_relative_error": absolute / max(scale, np.finfo(float).tiny),
+        }
     for name in (
         "DivEExB",
-        "DivEReynolds",
         "DivJReynolds",
         "reynolds_work",
-        "reynolds_heating",
         "DivEelectric",
         "DivEparallel",
         "DivEpol",
@@ -1043,9 +1053,8 @@ def closed_slab_outward_power(run, *, densities=None):
     """Global SI face powers without solving for an interior auxiliary flow.
 
     In this singleton-Y contract, chi and species ExB radial faces are closed
-    and Z is periodic. Pinned Reynolds corners close every weighted wall flux.
-    Kinetic advection and viscous energy faces are
-    reconstructed separately. No interior auxiliary solve or regional divergence
+    and Z is periodic. The unpinned Reynolds curl carries weighted wall fluxes.
+    Viscous energy faces are reconstructed separately. No interior auxiliary solve or regional divergence
     is supplied.
     """
     if run.formulation != "total_energy":
@@ -1068,12 +1077,6 @@ def closed_slab_outward_power(run, *, densities=None):
     densities = energy_densities(run) if densities is None else densities
     Phi = ds.phi + densities.pressure_potential
     c = run.scalar_option("average_atomic_mass") / ds.Bxy**2
-    reynolds = flux_dataset(
-        central_advection_faces(
-            calculate_kperp(c, Phi, ds, mxg=run.mxg), ds.phi, ds, mxg=run.mxg
-        ),
-        ds,
-    )
     nu = run.scalar_option("viscosity", 0) / (run.length_scale**2 * run.frequency)
     viscosity = xr.ones_like(ds.phi) * nu
     vort = fill_transport_guards(ds.Vort, run, periodic_x, periodic_y)
@@ -1091,15 +1094,20 @@ def closed_slab_outward_power(run, *, densities=None):
     viscous = flux_dataset(
         {d: (Phi + neighbor(Phi, d)) / 2 * current["flux_" + d] for d in ("x", "z")}, ds
     )
-    curl = solenoidal_reynolds_faces(
-        c, ds.phi, Phi, ds, mxg=run.mxg, walls=not periodic_x
+    curl = solenoidal_reynolds_faces(c, ds.phi, Phi, ds)
+    pol = flux_dataset(
+        weighted_faces(
+            {d: -f for d, f in curl.items()},
+            polarisation_energy_coefficient(run).total,
+            mxg=run.mxg,
+            periodic_x=periodic_x,
+        ),
+        ds,
     )
-    if not periodic_x:
-        assert bool((curl["x"].isel(x=[run.mxg - 1, -run.mxg - 1]) == 0).all())
     powers = {}
     scale = run.energy_scale * run.length_scale**3 * run.frequency
     for name, family in (
-        ("Reynolds", reynolds),
+        ("polarisation", pol),
         ("viscous", viscous),
     ):
         faces = xr.Dataset(

@@ -4,11 +4,22 @@ import numpy as np
 import xarray as xr
 
 from .dataset import AuditError
-from .fluxes import fill_wall_guards, polarisation_ac_boundary, radial_boundary_mode
+from .fluxes import (
+    fill_wall_guards,
+    polarisation_ac_boundary,
+    radial_boundary_mode,
+    species_velocity,
+)
 from .inventory import energy_densities
 from .sources import components, coverage, option_bool
 from .transfers import polarisation_energy_coefficient
-from .transport import flux_dataset, fv_xz, neighbor, solenoidal_reynolds_faces
+from .transport import (
+    flux_dataset,
+    fv_xz,
+    neighbor,
+    solenoidal_reynolds_faces,
+    weighted_faces,
+)
 
 
 def absolute_wall_flux(run, transport):
@@ -22,7 +33,8 @@ def absolute_wall_flux(run, transport):
 def wall_budget(run):
     """Return outward energy/particle fluxes and the measured wall rate.
 
-    Reynolds faces are impermeable for every weight. Open chi faces require saved chi;
+    Unpinned Reynolds faces exchange weighted quantities at each wall.
+    Open chi faces require the standard saved ion_chi output;
     this missing term is reported independently of reconstructable viscosity.
     Time is SI; potential and midpoint rates use Hermes potential units.
     """
@@ -35,10 +47,13 @@ def wall_budget(run):
         "vorticity_rate": zero.copy(),
         "viscous_vorticity_absolute": zero.copy(),
         "polarisation_absolute": zero.copy(),
+        "solenoidal_absolute": zero.copy(),
     }
     ions = [s for s in run.species if s.name != "e" and abs(s.charge) > 1e-5]
     fields.update({"particles_" + s.name: zero.copy() for s in ions})
     fields.update({"particles_absolute_" + s.name: zero.copy() for s in ions})
+    fields.update({"momentum_" + s.name: zero.copy() for s in ions})
+    fields.update({"momentum_absolute_" + s.name: zero.copy() for s in ions})
     missing = []
     periodic = option_bool(ds.options, "periodicX")
     for name, kind in components(run):
@@ -103,45 +118,83 @@ def wall_budget(run):
                 )
             c = run.scalar_option("average_atomic_mass") / ds.Bxy**2
             advected = polarisation_energy_coefficient(run).total
-            curl = solenoidal_reynolds_faces(
-                c, ds.phi, Phi, ds, mxg=run.mxg, walls=True
-            )
+            curl = solenoidal_reynolds_faces(c, ds.phi, Phi, ds)
             ix = xr.DataArray(np.arange(ds.sizes["x"]), dims="x", coords={"x": ds.x})
-            wall_curl = curl["x"].where(
-                (ix == run.mxg - 1) | (ix == ds.sizes["x"] - run.mxg - 1), 0
-            )
-            assert bool((wall_curl == 0).all()), "Reynolds wall flux is not zero"
+            wall_mask = (ix == run.mxg - 1) | (ix == ds.sizes["x"] - run.mxg - 1)
+            wall_curl = curl["x"].where(wall_mask, 0)
             chi_open = polarisation_ac_boundary(run) == "dirichlet"
             chi = ds.get("ion_chi", ds.get("ddt(Phi)"))
             if chi_open and chi is None:
                 missing.append("open polarisation wall flux (chi is not saved)")
             else:
+                chi_wall = xr.zeros_like(wall_curl)
+                if chi_open:
+                    chi_wall = fv_xz(
+                        c, chi, ds, mxg=run.mxg, boundary_flux=True
+                    ).flux_x.where(wall_mask, 0)
 
-                def wall_transport(weight):
-                    faces = {"x": xr.zeros_like(wall_curl)}
-                    if chi_open:
-                        current = fv_xz(
-                            -c * weight, chi, ds, mxg=run.mxg, boundary_flux=True
-                        )
-                        faces["x"] += current.flux_x.where(
-                            (ix == run.mxg - 1) | (ix == ds.sizes["x"] - run.mxg - 1), 0
-                        )
-                    return flux_dataset(faces, ds)
+                def wall_transport(weight, *, solenoidal=False):
+                    current = -wall_curl if solenoidal else -wall_curl - chi_wall
+                    return flux_dataset(
+                        weighted_faces({"x": current}, weight, mxg=run.mxg), ds
+                    )
+
+                def exchange(transport):
+                    # Positive is outward; keep each wall and physical Y row.
+                    return xr.concat(
+                        [
+                            (-transport.flux_x.isel(x=run.mxg - 1, drop=True))
+                            .sum("z", skipna=False)
+                            .expand_dims(boundary=["inner"]),
+                            transport.flux_x.isel(x=-run.mxg - 1, drop=True)
+                            .sum("z", skipna=False)
+                            .expand_dims(boundary=["outer"]),
+                        ],
+                        "boundary",
+                    ).isel(y=slice(run.myg, ds.sizes["y"] - run.myg))
 
                 pol = wall_transport(advected)
-                fields["polarisation_outward"] = run.integrate(pol.divergence) * scale
+                fields["polarisation_wall_exchange"] = exchange(pol) * scale
+                fields["polarisation_outward"] = fields[
+                    "polarisation_wall_exchange"
+                ].sum(("boundary", "y"))
                 fields["polarisation_absolute"] = absolute_wall_flux(run, pol) * scale
-                rho = sum(s.mass * ds["N" + s.name] for s in ions)
+                solenoidal = wall_transport(advected, solenoidal=True)
+                fields["solenoidal_wall_exchange"] = exchange(solenoidal) * scale
+                fields["solenoidal_absolute"] = (
+                    absolute_wall_flux(run, solenoidal) * scale
+                )
+                rho = sum(s.mass * ds["N" + s.name] for s in ions).clip(
+                    min=run.scalar_option("average_atomic_mass")
+                    * run.scalar_option("density_floor", 1e-7)
+                )
+                pscale = ds.metadata["Nnorm"] * run.length_scale**3 * run.frequency
+                mscale = run.energy_scale * run.length_scale**2
                 for species in ions:
-                    particle = wall_transport(
+                    weight = (
                         species.mass * ds["N" + species.name] / (species.charge * rho)
                     )
-                    pscale = ds.metadata["Nnorm"] * run.length_scale**3 * run.frequency
+                    particle = wall_transport(weight)
+                    fields["particles_wall_exchange_" + species.name] = (
+                        exchange(particle) * pscale
+                    )
                     fields["particles_" + species.name] = (
-                        run.integrate(particle.divergence) * pscale
+                        exchange(particle).sum(("boundary", "y")) * pscale
                     )
                     fields["particles_absolute_" + species.name] = (
                         absolute_wall_flux(run, particle) * pscale
+                    )
+                    momentum = wall_transport(
+                        weight * species.mass * species_velocity(run, species)
+                    )
+                    fields["momentum_wall_exchange_" + species.name] = (
+                        exchange(momentum) * mscale
+                    )
+                    fields["momentum_" + species.name] = (
+                        exchange(momentum).sum(("boundary", "y")) * mscale
+                    )
+                    fields["momentum_absolute_" + species.name] = (
+                        absolute_wall_flux(run, momentum) * mscale
                     )
         except AuditError as error:
             missing.append(str(error))
@@ -152,6 +205,8 @@ def wall_budget(run):
         result[name].attrs["units"] = (
             "s^-1"
             if name.startswith("particles_")
+            else "N"
+            if name.startswith("momentum_")
             else "hermes potential"
             if name == "phi_boundary"
             else "hermes potential/s"

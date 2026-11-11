@@ -1101,3 +1101,157 @@ def test_collisional_heat_exchange_is_internal_without_diagnostics(dataset):
     assert (exchange["d+"] > 0).all()
     assert (exchange.impurity > 0).all()
     assert_allclose(exchange.net, 0, atol=1e-12 * float(abs(exchange.e).max()))
+
+
+def shared_current_case(dataset):
+    """Resolved uniform slab with saved chi and spatially varying wall weights."""
+    from energy_analysis.fluxes import fill_wall_guards
+
+    ds = dataset.copy(deep=True)
+    ds.attrs["metadata"] = {
+        **ds.metadata,
+        "HERMES_SLOPE_LIMITER": "MC",
+        "ixseps1": 12,
+        "ixseps2": 12,
+        "jyseps1_1": -1,
+        "jyseps2_2": 0,
+    }
+    ds["g13"] = xr.zeros_like(ds.J)
+    for name in ("g23", "g_23"):
+        ds[name] = xr.zeros_like(ds.J)
+    ds["g_22"] = xr.ones_like(ds.J)
+    options = ds.options
+    options["periodicX"] = "false"
+    options["mesh:paralleltransform:type"] = "identity"
+    options["mesh:ddz:first"] = "FFT"
+    options["mesh:ddz:fft_filter"] = 0
+    options["mesh:bxcvz"] = 0
+    options["mesh:bxcvx"] = 0
+    options["mesh:bxcvy"] = 0
+    options["evolve_vorticity_ion_energy:poloidal_flows"] = "false"
+    options["evolve_vorticity_ion_energy:radial_boundary"] = "fixed"
+    options["evolve_vorticity_ion_energy:polarisation_ac_boundary"] = "dirichlet"
+    for s in ("e", "d+", "impurity"):
+        options[s]["type"] = (
+            "quasineutral, evolve_pressure, zero_current"
+            if s == "e"
+            else "evolve_density, evolve_momentum"
+        )
+        options[s]["bndry_flux"] = "false"
+        options[s]["use_div_par_fvv"] = "true"
+        options[s]["numerical_viscous_heating"] = "false"
+    phase = 2 * np.pi * ds.z / ds.sizes["z"]
+    ds["Nd+"] *= 1 + 0.1 * np.cos(phase)
+    ds["Nimpurity"] *= 1 - 0.1 * np.cos(phase)
+    ds["Ne"] = ds["Nd+"] + 2 * ds["Nimpurity"]
+    run = open_run(ds)
+    run.data["phi"] = fill_wall_guards(
+        0.02 * np.sin(0.5 * ds.x) * np.cos(phase) + xr.zeros_like(ds.phi), run, "zero"
+    )
+    run.data["ion_chi"] = fill_wall_guards(
+        0.03 * np.cos(0.4 * ds.x) * np.sin(phase) + xr.zeros_like(ds.phi), run, "zero"
+    )
+    run.data.ion_chi.attrs["units_type"] = "hermes"
+    return run
+
+
+def test_common_polarisation_faces_and_diagnostic_comparison(dataset):
+    from energy_analysis import compare_flux_diagnostics, reconstruct_fluxes
+    from energy_analysis.transport import face_divergence
+
+    run = shared_current_case(dataset)
+    fluxes = reconstruct_fluxes(run)
+    assert_allclose(
+        run.interior(
+            face_divergence(
+                {d: fluxes["polarisation_flux_" + d] for d in ("x", "z")}, run.data
+            )
+        ),
+        run.interior(fluxes.DivJpol),
+        atol=1e-14,
+    )
+    assert_allclose(
+        run.interior(fluxes["particle_pol_d+"] + 2 * fluxes.particle_pol_impurity),
+        run.interior(fluxes.DivJpol),
+        atol=1e-14,
+    )
+    assert_allclose(
+        run.interior(fluxes.DivEExB_perpendicular + fluxes.DivEExB_thermal_parallel),
+        run.interior(fluxes.DivEExB),
+        atol=1e-14,
+    )
+    assert_allclose(run.integrate(fluxes.DivEExB), 0, atol=1e-14)
+    for dim in ("x", "z"):
+        name = "polarisation_flux_" + dim
+        run.data[name] = fluxes[name]
+    partial = compare_flux_diagnostics(run, fluxes[["DivJpol"]])
+    assert not partial["polarisation_flux_x"]["available"]
+    comparisons = compare_flux_diagnostics(run, fluxes)
+    assert comparisons["polarisation_flux_x"]["max_absolute_error_normalised"] == 0
+    assert comparisons["polarisation_flux_z"]["max_absolute_error_normalised"] == 0
+    run.data["polarisation_flux_x"] = run.data.polarisation_flux_x.copy()
+    run.data["polarisation_flux_x"][{"x": run.mxg - 1}] += 1e-4
+    assert (
+        compare_flux_diagnostics(run, fluxes)["polarisation_flux_x"][
+            "max_absolute_error_normalised"
+        ]
+        >= 1e-4 - 1e-15
+    )
+
+
+def test_wall_exchange_for_density_momentum_and_energy_without_diagnostics(dataset):
+    from energy_analysis import wall_budget
+    from energy_analysis.fluxes import species_velocity
+    from energy_analysis.transport import fv_xz, solenoidal_reynolds_faces
+
+    run = shared_current_case(dataset)
+    ds = run.data
+    budget = wall_budget(run)
+    assert budget.attrs["coverage"] == "complete"
+    assert float(budget.solenoidal_absolute.max()) > 0
+    c = run.scalar_option("average_atomic_mass") / ds.Bxy**2
+    Phi = ds.phi + energy_densities(run).pressure_potential
+    curl = solenoidal_reynolds_faces(c, ds.phi, Phi, ds)
+    chi = fv_xz(c, ds.ion_chi, ds)
+    rho = sum(s.mass * ds["N" + s.name] for s in run.species if s.name != "e")
+    weights = {"polarisation": polarisation_energy_coefficient(run).total}
+    for species in run.species:
+        if species.name == "e":
+            continue
+        w = species.mass * ds["N" + species.name] / (species.charge * rho)
+        weights["particles_" + species.name] = w
+        weights["momentum_" + species.name] = (
+            w * species.mass * species_velocity(run, species)
+        )
+    for key, weight in weights.items():
+        scale = (
+            ds.metadata["Nnorm"] * run.length_scale**3 * run.frequency
+            if key.startswith("particles")
+            else run.energy_scale * run.length_scale**2
+            if key.startswith("momentum")
+            else run.energy_scale * run.length_scale**3 * run.frequency
+        )
+        output = (
+            "polarisation_wall_exchange"
+            if key == "polarisation"
+            else key.replace("_", "_wall_exchange_", 1)
+        )
+        for side, face, cell, sign in (("inner", 1, 2, -1), ("outer", -3, -3, 1)):
+            expected = (
+                sign
+                * weight.isel(x=cell, drop=True)
+                * (-curl["x"] - chi.flux_x).isel(x=face, drop=True)
+            ).sum("z") * scale
+            xr.testing.assert_allclose(
+                budget[output].sel(boundary=side, drop=True) / scale,
+                (expected / scale)
+                .assign_coords(t=budget.t)
+                .transpose(*budget[output].sel(boundary=side, drop=True).dims),
+                atol=1e-14,
+                rtol=1e-13,
+            )
+    # The default chi output is sufficient after every optional diagnostic is removed.
+    run.data = ds.drop_vars(
+        [n for n in ds if n.startswith(("Div", "polarisation_flux_"))]
+    )
+    assert wall_budget(run).attrs["coverage"] == "complete"

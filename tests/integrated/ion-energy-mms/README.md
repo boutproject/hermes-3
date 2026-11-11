@@ -37,8 +37,8 @@ python tests/integrated/ion-energy-mms/mms.py --all --check --check-files
 
 The standalone diagnostic needs SymPy, not Hermes. `--y`/`--time` select the
 analytic X-Z plane; `--run PATH` checks C++ Reynolds diagnostics. It reports
-16/32/64 term errors and maxima for both reconstructions. Zero-phi variants
-have zero analytic Reynolds terms and undefined orders. Runner results save
+16/32/64 term errors and maxima for the MC-omega/central-Lambda reconstruction.
+Zero-phi variants have zero analytic Reynolds terms and undefined orders. Runner results save
 errors, effective limits and per-variant times; all failing gates stay enabled.
 
 ## Known failures
@@ -160,3 +160,14 @@ Default CTest timeout is 6000 s, exceeding twice that profile time; long is
 36000 s. Per-case limits remain 3600 / 10800 s.
 
 The four C++ Reynolds diagnostics agree with the mirror within `4.2e-17` on the baseline-8 output. Timing includes concurrent validation load.
+
+The current operator uses unpinned Reynolds corners, MC omega and central
+Lambda. `DivEExB` advects total `Eion`; the perpendicular contribution and
+Reynolds heating are reconstructed rather than saved separately. The
+`operator_convergence.py` diagnostic applies Neumann weights at radial walls
+and compares `DivJReynolds`, `DivEExB`, `reynolds_work` and both polarisation
+face arrays with saved outputs.
+The tables above describe historical runs; new before/after orders and enabled
+gate failures are recorded in the PR validation description. Manufactured
+physics, grids, final time, error caps, tolerances and correction counts are
+unchanged.

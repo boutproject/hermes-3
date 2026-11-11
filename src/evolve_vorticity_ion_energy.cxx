@@ -8,6 +8,7 @@
 #include <bout/field.hxx>
 #include <bout/field3d.hxx>
 #include <bout/fv_ops.hxx>
+#include <bout/fv_ops_impl.hxx>
 #include <bout/globals.hxx>
 #include <bout/initialprofiles.hxx>
 #include <bout/invert_pardiv.hxx>
@@ -31,12 +32,22 @@
 #include <cmath>
 #include <memory>
 #include <string>
+#include <tuple>
 #include <utility>
 
 using bout::globals::mesh;
 
 namespace {
 /// Update every physical radial guard column, preserving interior and Y guards.
+///
+/// @param[in,out] field Field whose owned X-wall guards are overwritten at physical
+///                     Y rows and every local Z index, using the field's mesh.
+/// @param value Callback returning each guard value in field's units. Called as
+///              value(interior_x, step, layer, y, z), where step points outwards
+///              (-1 or +1) and layer starts at 1; interior_x is the wall-adjacent cell.
+///
+/// Returns no value. Periodic X is a no-op. No communication occurs; any further
+/// side effects come from the callback.
 template <typename Field, typename Value>
 void fillRadialGuards(Field& field, Value value) {
   auto* localmesh = field.getMesh();
@@ -89,6 +100,7 @@ BoutReal meanZ(const Field& field, int x, int y) {
 ///
 /// This MPI collective must be called by every rank in that Y communicator.
 /// Callers restrict it to a first-X core surface and assume positive weights.
+/// Uses the global mesh; values and geometry are preserved.
 BoutReal fluxSurfaceAverage(const std::vector<BoutReal>& values, int interior,
                             int guard) {
   const auto* coord = mesh->getCoordinates();
@@ -115,6 +127,7 @@ BoutReal fluxSurfaceAverage(const std::vector<BoutReal>& values, int interior,
 /// @param outer Read-only outer wall values, with the same convention as inner.
 ///
 /// Uses the global mesh without communication. Periodic X leaves field unchanged.
+/// Returns no value; the output is written directly into field.
 void writeRadialValues(Field3D& field, const std::vector<BoutReal>& inner,
                        const std::vector<BoutReal>& outer) {
   if (mesh->periodicX) {
@@ -137,7 +150,15 @@ void writeRadialValues(Field3D& field, const std::vector<BoutReal>& inner,
   }
 }
 
-/// Call a function with each ion species
+/// Visit charged non-electron species through permission-checked option handles.
+///
+/// @param allspecies Species section; children named "e", without a charge, or
+///                   with absolute charge below 1e-5 are skipped.
+/// @param func Callback receiving each selected GuardedOptions child by value.
+///             It may read or modify species state within its granted permissions.
+///
+/// Returns no value. Traversal reads options without writing fields or communicating;
+/// state changes and other side effects are those of func.
 template <typename Function>
 void forAllIons(GuardedOptions allspecies, Function func) {
   for (auto& kv : allspecies.getChildren()) {
@@ -156,6 +177,14 @@ void forAllIons(GuardedOptions allspecies, Function func) {
     func(species);
   }
 }
+/// Visit charged non-electron species in a read-only options tree.
+///
+/// @param allspecies Species section, with the same selection as the guarded overload:
+///                   skip "e", missing charge, and absolute charge below 1e-5.
+/// @param func Callback receiving each selected child as a const Options reference.
+///
+/// Returns no value. The species tree is preserved and no communication occurs;
+/// func may have side effects on other state it captures.
 template <typename Function>
 void forAllIons(const Options& allspecies, Function func) {
   for (const auto& kv : allspecies.getChildren()) {
@@ -175,54 +204,19 @@ void forAllIons(const Options& allspecies, Function func) {
   }
 }
 
-// Each mixed term comes from the same corner bilinear form. In particular,
-// averaging transverse derivatives independently at faces would not give a
-// symmetric operator on a nonuniform mesh.
-bout::ion_energy::PerpendicularFaceFluxes
-geometricPerpendicularFaceFluxes(const Field3D& a, const Field3D& f, const Ind3D& i) {
-  const auto* coord = f.getCoordinates();
-  const auto& J = coord->J();
-  const auto& g11 = coord->g11();
-  const auto& g33 = coord->g33();
-  const auto& g13 = coord->g13();
-  const auto& dx = coord->dx();
-  const auto& dz = coord->dz();
-
-  const auto xflux = [&](const Ind3D& l) {
-    const auto r = l.xp();
-    return 0.5 * (a[l] + a[r]) * ((J[l] * g11[l] * dz[l]) + (J[r] * g11[r] * dz[r]))
-           * (f[r] - f[l]) / (dx[l] + dx[r]);
-  };
-  const auto zflux = [&](const Ind3D& l) {
-    const auto r = l.zp();
-    return 0.5 * (a[l] + a[r]) * ((J[l] * g33[l] * dx[l]) + (J[r] * g33[r] * dx[r]))
-           * (f[r] - f[l]) / (dz[l] + dz[r]);
-  };
-  const auto corner = [&](const Ind3D& l) {
-    const auto x = l.xp();
-    const auto z = l.zp();
-    const auto xz = x.zp();
-    const BoutReal coefficient =
-        0.0625 * (a[l] + a[x] + a[z] + a[xz])
-        * ((J[l] * g13[l]) + (J[x] * g13[x]) + (J[z] * g13[z]) + (J[xz] * g13[xz]));
-    // Centre-to-centre lengths cancel against the corner area in the
-    // integrated cross flux. These are averaged differences, not derivatives.
-    return std::pair<BoutReal, BoutReal>{0.5 * coefficient * (f[x] - f[l] + f[xz] - f[z]),
-                                         0.5 * coefficient
-                                             * (f[z] - f[l] + f[xz] - f[x])};
-  };
-  const auto pp = corner(i);
-  const auto mp = corner(i.xm());
-  const auto pm = corner(i.zm());
-  const auto mm = corner(i.xm().zm());
-  return {xflux(i) + 0.5 * (pp.second + pm.second),
-          xflux(i.xm()) + 0.5 * (mp.second + mm.second),
-          zflux(i) + 0.5 * (pp.first + mp.first),
-          zflux(i.zm()) + 0.5 * (pm.first + mm.first)};
-}
 } // namespace
 
 namespace bout::ion_energy {
+/// Impose mean Neumann and zero AC midpoint conditions on a wall pressure field.
+///
+/// @param[in,out] f Pressure or pressure-potential field. Each owned radial guard
+///                 layer is set to 2*DC(f)(interior,y) - f(interior,y,z), using the
+///                 wall-adjacent interior cell for every layer.
+///
+/// Returns no value. Only physical Y rows at physical X walls are written;
+/// interior cells and Y guards are preserved. Periodic X is a no-op and no
+/// communication occurs.
+/// @throws BoutException If nonperiodic X does not have complete local periodic Z lines.
 void applyWallPressureBoundary(Field3D& f) {
   auto* localmesh = f.getMesh();
   if (localmesh->periodicX) {
@@ -238,18 +232,50 @@ void applyWallPressureBoundary(Field3D& f) {
       f, [&](int x, int, int, int y, int z) { return 2.0 * mean(x, y) - f(x, y, z); });
 }
 
+/// Fill vorticity guards for stress-free or Neumann radial walls.
+///
+/// @param[in,out] w Vorticity-like field whose owned radial guards are overwritten.
+/// @param midpoint_zero True copies minus the wall-adjacent interior value, giving
+///                      a zero face midpoint; false copies it with the same sign.
+///
+/// Returns no value. Every radial layer uses the same adjacent interior cell;
+/// only physical Y rows are written. Interior cells and Y guards are preserved,
+/// periodic X is a no-op, and no communication occurs.
 void applyVorticityWallBoundary(Field3D& w, bool midpoint_zero) {
   fillRadialGuards(w, [&](int x, int, int, int y, int z) {
     return midpoint_zero ? -w(x, y, z) : w(x, y, z);
   });
 }
 
+/// Recover the inward wall-face derivative from a stored potential midpoint.
+///
+/// @param phi_midpoint Arithmetic guard/interior midpoint, usually Z-averaged.
+/// @param phi0 Potential of the wall-adjacent interior cell in the same units.
+/// @param dx0 Positive x-coordinate width of that interior cell.
+/// @returns 2*(phi0 - phi_midpoint)/dx0, directed into the domain at either wall.
+///          This is a coordinate derivative; the normal metric is not included.
+///
+/// No state is changed and no communication occurs.
 BoutReal wallInwardDerivative(BoutReal phi_midpoint, BoutReal phi0, BoutReal dx0) {
   // The stored midpoint is the arithmetic mean of a mirrored guard/interior
   // pair. The finite-volume solve determines its wall-face gradient.
   return 2.0 * (phi0 - phi_midpoint) / dx0;
 }
 
+/// Reflect auxiliary-potential guards about a prescribed DC wall midpoint.
+///
+/// @param[in,out] chi Auxiliary potential whose physical X-wall guards are updated.
+/// @param ac Neumann retains each mirrored interior layer's Z fluctuations;
+///           Dirichlet negates them to impose a zero AC midpoint.
+/// @param dc_inner Optional inner-wall DC midpoints in chi's units, indexed by local
+///                 Y with LocalNy entries; nullptr imposes a zero DC midpoint.
+/// @param dc_outer Optional outer-wall DC midpoints with the same convention.
+///
+/// Returns no value. Each radial guard reflects its corresponding interior layer's
+/// mean about the DC value. All local Y rows, including guards, are processed;
+/// interior cells and the supplied DC arrays are preserved. Periodic X is a no-op.
+/// No communication occurs.
+/// @throws BoutException If nonperiodic X does not have complete local periodic Z lines.
 void applyPolarisationBoundary(Field3D& chi, PolarisationACBoundary ac,
                                const std::vector<BoutReal>* dc_inner,
                                const std::vector<BoutReal>* dc_outer) {
@@ -291,98 +317,174 @@ void applyPolarisationBoundary(Field3D& chi, PolarisationACBoundary ac,
   }
 }
 
-PerpendicularFaceFluxes perpendicularFaceFluxes(const Field3D& a, const Field3D& f,
-                                                const Ind3D& i, bool bndry_flux) {
-  auto flux = geometricPerpendicularFaceFluxes(a, f, i);
-  if (!bndry_flux && !f.getMesh()->periodicX) {
-    if (f.getMesh()->firstX() && i.x() == f.getMesh()->xstart) {
-      flux.xm = 0.0;
-    }
-    if (f.getMesh()->lastX() && i.x() == f.getMesh()->xend) {
-      flux.xp = 0.0;
-    }
-  }
-  return flux;
-}
-
-Field3D Div_a_Grad_perp_XZ(const Field3D& a, const Field3D& f, bool bndry_flux) {
-  ASSERT0(a.getLocation() == f.getLocation());
-  Field3D result{zeroFrom(f)};
-  const auto* coord = f.getCoordinates();
-  BOUT_FOR(i, result.getRegion("RGN_NOBNDRY")) {
-    const auto flux = perpendicularFaceFluxes(a, f, i, bndry_flux);
-    // A zero X derivative alone does not eliminate the g13 normal flux.
-    result[i] = (flux.xp - flux.xm + flux.zp - flux.zm)
-                / (coord->J()[i] * coord->dx()[i] * coord->dz()[i]);
-  }
-  return result;
-}
-
-Field3D kineticEnergyPerp(const Field3D& a, const Field3D& f) {
-  ASSERT0(a.getLocation() == f.getLocation());
-  Field3D result{zeroFrom(f)};
-  const auto* coord = f.getCoordinates();
-  BOUT_FOR(i, result.getRegion("RGN_NOBNDRY")) {
-    const auto flux = perpendicularFaceFluxes(a, f, i, true);
-    // Half of each face's 1/2 * delta(f) * flux belongs to this cell.
-    result[i] = ((f[i.xp()] - f[i]) * flux.xp + (f[i] - f[i.xm()]) * flux.xm
-                 + (f[i.zp()] - f[i]) * flux.zp + (f[i] - f[i.zm()]) * flux.zm)
-                / (4. * coord->J()[i] * coord->dx()[i] * coord->dz()[i]);
-  }
-  return result;
-}
 namespace {
-// Corner (i+1/2,k+1/2) stream function; two-point differences match XPPM.
-BoutReal streamCorner(const Field3D& f, const Ind3D& i) {
-  return 0.25 * (f[i] + f[i.xp()] + f[i.zp()] + f[i.xp().zp()]);
+/// Get or create a mesh-owned region for X faces or X-Z corners.
+///
+/// @param[in,out] m Mesh supplying index dimensions and owning the cached region.
+/// @param name Cache key; an existing region is reused without checking its bounds.
+/// @param low Inclusive lower X index, used only when creating the region.
+/// @param high Inclusive upper X index, used only when creating the region.
+/// @returns A mesh-owned reference covering the requested X range, physical Y
+///          rows and all local Z cells, valid for the lifetime of m.
+///
+/// First use adds to the mesh region registry; no communication occurs. Mesh
+/// ownership prevents stale pointer caches when a test mesh is destroyed.
+const Region<Ind3D>& faceRegion(Mesh* m, const std::string& name, int low, int high) {
+  if (!m->hasRegion3D(name)) {
+    m->addRegion3D(name, Region<Ind3D>{low, high, m->ystart, m->yend, 0, m->LocalNz - 1,
+                                       m->LocalNy, m->LocalNz});
+  }
+  return m->getRegion3D(name);
 }
-
-XZFaceFluxes advectionFaces(const Field3D& n, const Field3D& f, bool limited,
-                            bool close_radial_faces = true) {
-  auto* m = f.getMesh();
-  const auto* coord = f.getCoordinates();
-  XZFaceFluxes flux{zeroFrom(f), zeroFrom(f)};
-  const auto edge = [&](const Ind3D& i, bool x, bool right) {
-    const BoutReal a = 2.0 * (n[x ? i.xp() : i.zp()] - n[i]);
-    const BoutReal b = 0.5 * (n[x ? i.xp() : i.zp()] - n[x ? i.xm() : i.zm()]);
-    const BoutReal c = 2.0 * (n[i] - n[x ? i.xm() : i.zm()]);
-    const BoutReal slope =
-        (a * b <= 0.0 || a * c <= 0.0)
-            ? 0.0
-            : std::copysign(std::min({std::abs(a), std::abs(b), std::abs(c)}), a);
-    return n[i] + (right ? 0.5 : -0.5) * slope;
-  };
-  for (int x = m->xstart - 1; x <= m->xend; ++x) {
-    for (int y = m->ystart; y <= m->yend; ++y) {
-      for (int z = 0; z < m->LocalNz; ++z) {
-        const Ind3D i =
-            Ind3D((x * m->LocalNy + y) * m->LocalNz + z, m->LocalNy, m->LocalNz);
-        const auto r = i.xp();
-        if (!(close_radial_faces
-              && ((x == m->xstart - 1 && m->firstX()) || (x == m->xend && m->lastX())))) {
-          const BoutReal velocity = 0.5 * (coord->J()[i] + coord->J()[r])
-                                    * (streamCorner(f, i) - streamCorner(f, i.zm()))
-                                    / coord->dz()[i];
-          const BoutReal nf =
-              limited ? (velocity > 0 ? edge(i, true, true) : edge(r, true, false))
-                      : 0.5 * (n[i] + n[r]);
-          flux.x[i] = velocity * nf * coord->dy()[i] * coord->dz()[i];
-        }
-        if (x >= m->xstart) {
-          const BoutReal velocity = coord->J()[i]
-                                    * (streamCorner(f, i.xm()) - streamCorner(f, i))
-                                    / coord->dx()[i];
-          const BoutReal nf =
-              limited ? (velocity > 0 ? edge(i, false, true) : edge(i.zp(), false, false))
-                      : 0.5 * (n[i] + n[i.zp()]);
-          flux.z[i] = velocity * nf * coord->dx()[i] * coord->dy()[i];
+/// Get the local X faces adjoining physical cells, including both end faces.
+///
+/// @param[in,out] m Mesh owning the region cache.
+/// @returns Mesh-owned indices xstart-1 through xend, physical Y and all local Z.
+///          Index i denotes face (i+1/2,j,k) or corner (i+1/2,j,k+1/2).
+///
+/// First use creates the ion_energy_xfaces region; no communication occurs.
+const Region<Ind3D>& xFaces(Mesh* m) {
+  return faceRegion(m, "ion_energy_xfaces", m->xstart - 1, m->xend);
+}
+/// Get only the physical radial wall faces owned by this rank.
+///
+/// @param[in,out] m Mesh supplying wall ownership and owning the region cache.
+/// @returns Indices at xstart-1 for an owned inner wall and xend for an owned outer
+///          wall, at physical Y and all local Z. Periodic X or no owned walls gives
+///          an empty region; periodic X uses a static, rather than mesh-owned, region.
+///
+/// First nonperiodic use creates the ion_energy_walls region in m. No communication
+/// occurs, and inter-rank faces are excluded.
+const Region<Ind3D>& wallFaces(Mesh* m) {
+  if (m->periodicX) {
+    static const Region<Ind3D> empty;
+    return empty;
+  }
+  if (!m->hasRegion3D("ion_energy_walls")) {
+    Region<Ind3D>::RegionIndices indices;
+    for (int x : {m->xstart - 1, m->xend}) {
+      if ((x == m->xstart - 1 && m->firstX()) || (x == m->xend && m->lastX())) {
+        for (int y = m->ystart; y <= m->yend; ++y) {
+          for (int z = 0; z < m->LocalNz; ++z) {
+            indices.emplace_back((x * m->LocalNy + y) * m->LocalNz + z, m->LocalNy,
+                                 m->LocalNz);
+          }
         }
       }
     }
+    m->addRegion3D("ion_energy_walls", Region<Ind3D>{indices});
   }
-  return flux;
+  return m->getRegion3D("ion_energy_walls");
 }
-
+/// Interpolate a cell-centred field to the upper X-Z corner with equal weights.
+///
+/// @param f Read-only 2D or 3D field with valid values at i, xp, zp and xp.zp.
+/// @param i Lower-X, lower-Z cell of the four-cell corner stencil.
+/// @returns Arithmetic corner mean in f's units; a 2D field is constant in Z.
+///
+/// Reads supplied guards as needed; no boundary filling, communication or mutation.
+template <typename Field>
+BoutReal cornerAverage(const Field& f, const Ind3D& i) {
+  return 0.25 * (f[i] + f[i.xp()] + f[i.zp()] + f[i.xp().zp()]);
+}
+/// Construct the symmetric cross-metric contributions to a perpendicular flux.
+///
+/// @param a Read-only cell-centred coefficient, averaged to the corner.
+/// @param f Read-only scalar whose transverse jumps supply the gradients.
+/// @param coord Read-only geometry; J*g13 is averaged over the four corner cells.
+/// @param i Lower-X, lower-Z cell of the corner stencil.
+/// @returns Pair of corner contributions: first to the X flux from Z jumps,
+///          second to the Z flux from X jumps. The transverse dy factor is omitted;
+///          perpendicularX/Z average these corner values onto faces and apply dy.
+///
+/// Requires valid stencil values, including guards. No boundary filling,
+/// communication or input mutation occurs.
+std::pair<BoutReal, BoutReal> crossCorner(const Field3D& a, const Field3D& f,
+                                          const Coordinates& coord, const Ind3D& i) {
+  const auto x = i.xp(), z = i.zp(), xz = x.zp();
+  const auto& J = coord.J();
+  const auto& g13 = coord.g13();
+  const BoutReal coefficient =
+      0.25 * cornerAverage(a, i)
+      * (J[i] * g13[i] + J[x] * g13[x] + J[z] * g13[z] + J[xz] * g13[xz]);
+  return {0.5 * coefficient * (f[z] - f[i] + f[xz] - f[x]),
+          0.5 * coefficient * (f[x] - f[i] + f[xz] - f[z])};
+}
+/// Combine diagonal and corner cross terms on one increasing-X face.
+///
+/// @param a Read-only cell-centred coefficient of a*grad_perp(f).
+/// @param f Read-only scalar with a valid jump from i to i.xp().
+/// @param cross Read-only crossCorner contributions stored at corner indices;
+///              cross.x at i and i.zm() must be defined, without a dy factor.
+/// @param coord Read-only J, g11 and cell widths at the face stencil.
+/// @param i Lower-X cell adjoining face (i+1/2,j,k).
+/// @returns Area-integrated flux towards increasing X, including dy and g13.
+///
+/// No wall closure, boundary filling, communication or input mutation occurs.
+BoutReal perpendicularX(const Field3D& a, const Field3D& f, const XZFaceFluxes& cross,
+                        const Coordinates& coord, const Ind3D& i) {
+  const auto r = i.xp();
+  return (0.5 * (a[i] + a[r])
+              * (coord.J()[i] * coord.g11()[i] * coord.dz()[i]
+                 + coord.J()[r] * coord.g11()[r] * coord.dz()[r])
+              * (f[r] - f[i]) / (coord.dx()[i] + coord.dx()[r])
+          + 0.5 * (cross.x[i] + cross.x[i.zm()]))
+         * coord.dy()[i];
+}
+/// Combine diagonal and corner cross terms on one increasing-Z face.
+///
+/// @param a Read-only cell-centred coefficient of a*grad_perp(f).
+/// @param f Read-only scalar with a valid jump from i to i.zp().
+/// @param cross Read-only crossCorner contributions stored at corner indices;
+///              cross.z at i and i.xm() must be defined, without a dy factor.
+/// @param coord Read-only J, g33 and cell widths at the face stencil.
+/// @param i Lower-Z cell adjoining face (i,j,k+1/2).
+/// @returns Area-integrated flux towards increasing Z, including dy and g13.
+///
+/// No wall closure, boundary filling, communication or input mutation occurs.
+BoutReal perpendicularZ(const Field3D& a, const Field3D& f, const XZFaceFluxes& cross,
+                        const Coordinates& coord, const Ind3D& i) {
+  const auto r = i.zp();
+  return (0.5 * (a[i] + a[r])
+              * (coord.J()[i] * coord.g33()[i] * coord.dx()[i]
+                 + coord.J()[r] * coord.g33()[r] * coord.dx()[r])
+              * (f[r] - f[i]) / (coord.dz()[i] + coord.dz()[r])
+          + 0.5 * (cross.z[i] + cross.z[i.xm()]))
+         * coord.dy()[i];
+}
+/// Reconstruct the donor-side scalar at a face with the MC slope limiter.
+///
+/// @tparam direction Stencil direction, X or Z.
+/// @param n Read-only cell-centred scalar with a valid three-point donor stencil.
+/// @param i Lower-coordinate cell adjoining the requested face.
+/// @param velocity Signed face velocity or integrated velocity; only its sign is
+///                 used. Positive selects i's right edge; otherwise the upper
+///                 neighbour's left edge is used, including when velocity is zero.
+/// @returns Reconstructed scalar in n's units, before multiplication by velocity.
+///
+/// X-face reconstruction can read two radial guard layers. No boundary filling,
+/// communication or input mutation occurs.
+template <DIRECTION direction>
+BoutReal upwind(const Field3D& n, const Ind3D& i, BoutReal velocity) {
+  const auto donor = velocity > 0 ? i : i.plus<1, direction>();
+  FV::Stencil1D stencil;
+  stencil.m = n[donor.template minus<1, direction>()];
+  stencil.c = n[donor];
+  stencil.p = n[donor.template plus<1, direction>()];
+  FV::MC{}(stencil);
+  return velocity > 0 ? stencil.R : stencil.L;
+}
+/// Build the metric-dependent Lambda field used in the central Reynolds current.
+///
+/// @param c Read-only Boussinesq polarisation coefficient with valid guards.
+/// @param phi Read-only electric potential with valid guards and geometry.
+/// @returns Lambda = 0.5*c*D*J*div(grad_perp(phi)/(J*D)), where
+///          D = g11*g33 - g13*g13 and J*D must be nonzero. The returned field has
+///          communicated guards and linear extrapolation at physical X walls.
+///
+/// Applies neumann_o2 to the temporary Lambda, overwrites its physical radial
+/// guards with linear extrapolation, and communicates it. May initialise mesh
+/// face-region caches through the forward operator; c and phi are preserved.
 Field3D reynoldsLambda(const Field3D& c, const Field3D& phi) {
   const auto* coord = phi.getCoordinates();
   const Field3D D{
@@ -398,28 +500,120 @@ Field3D reynoldsLambda(const Field3D& c, const Field3D& phi) {
 }
 } // namespace
 
-XZFaceFluxes xppmFaceFluxes(const Field3D& n, const Field3D& stream) {
-  return advectionFaces(n, stream, true);
+/// Suppress a flux through physical X walls while retaining all other faces.
+///
+/// @param[in,out] flux Face fields in the XZFaceFluxes index convention. Only flux.x
+///                    at owned physical wall rows and physical Y is set to zero;
+///                    flux.z, interior faces and inter-rank faces are preserved.
+///
+/// Returns no value. Allocates or detaches flux.x storage even for periodic X,
+/// whose values are unchanged. May create the mesh's wall-region cache; no
+/// communication occurs.
+void closeRadialFaces(XZFaceFluxes& flux) {
+  flux.x.allocate();
+  BOUT_FOR(i, wallFaces(flux.x.getMesh())) { flux.x[i] = 0.0; }
 }
-
-XZFaceFluxes centralAdvectionFaceFluxes(const Field3D& n, const Field3D& stream) {
-  return advectionFaces(n, stream, false);
+/// Construct the shared finite-volume faces for a*grad_perp(f), including g13.
+///
+/// @param a Read-only cell-centred coefficient at the same location as f.
+/// @param f Read-only scalar with valid adjacent guard values and geometry.
+/// @returns Area-integrated fluxes, including dy, towards increasing X and Z.
+///          x(i,j,k) is face (i+1/2,j,k), defined from xstart-1 through xend;
+///          z(i,j,k) is face (i,j,k+1/2), defined on physical cells. Both use
+///          physical Y and all local Z; unused guard entries are zero.
+///
+/// Physical wall gradients are retained. No boundary filling, communication or
+/// input mutation occurs; the mesh's face-region cache may be initialised.
+XZFaceFluxes perpendicularFaces(const Field3D& a, const Field3D& f) {
+  ASSERT0(a.getLocation() == f.getLocation());
+  const auto* coord = f.getCoordinates();
+  XZFaceFluxes cross{zeroFrom(f), zeroFrom(f)}, flux{zeroFrom(f), zeroFrom(f)};
+  BOUT_FOR(i, xFaces(f.getMesh())) {
+    const auto value = crossCorner(a, f, *coord, i);
+    cross.x[i] = value.first;
+    cross.z[i] = value.second;
+  }
+  BOUT_FOR(i, xFaces(f.getMesh())) { flux.x[i] = perpendicularX(a, f, cross, *coord, i); }
+  BOUT_FOR(i, f.getRegion("RGN_NOBNDRY")) {
+    flux.z[i] = perpendicularZ(a, f, cross, *coord, i);
+  }
+  return flux;
 }
-
+/// Evaluate div(a*grad_perp(f)) with the shared conservative X-Z face stencil.
+///
+/// @param a Read-only cell-centred coefficient at the same location as f.
+/// @param f Read-only scalar with valid guards for perpendicularFaces.
+/// @param bndry_flux True retains geometric physical X-wall fluxes; false sets
+///                   only those faces to zero, preserving periodic and inter-rank faces.
+/// @returns Divergence per cell volume on physical cells, with unused guards zero.
+///
+/// No input mutation, boundary filling or communication occurs. Temporary faces
+/// may be closed, and mesh face/wall-region caches may be initialised.
+Field3D Div_a_Grad_perp_XZ(const Field3D& a, const Field3D& f, bool bndry_flux) {
+  auto flux = perpendicularFaces(a, f);
+  if (!bndry_flux) {
+    closeRadialFaces(flux);
+  }
+  return divergence(flux);
+}
+/// Calculate perpendicular kinetic energy consistent with the forward face operator.
+///
+/// @param a Read-only kinetic-energy coefficient, at the same location as f.
+/// @param f Read-only total drift potential, with valid adjacent guard values.
+/// @returns 0.5*faceWork(perpendicularFaces(a,f),f) on physical cells, with unused
+///          guards zero. Each adjacent face contributes one quarter of its
+///          potential jump times integrated flux, divided by cell volume.
+///
+/// Uses geometric faces, including wall gradients, without wall closure. No input
+/// mutation, boundary filling or communication occurs; mesh face-region caches
+/// may be initialised.
+Field3D kineticEnergyPerp(const Field3D& a, const Field3D& f) {
+  // faceWork assigns half the jump*flux to each cell; energy supplies another half.
+  return 0.5 * faceWork(perpendicularFaces(a, f), f);
+}
+/// Take a conservative cell-volume divergence, optionally weighting each face.
+///
+/// @param flux Read-only area-integrated, increasing-coordinate face fluxes. Each
+///             physical cell's two X faces and periodic Z faces must be defined.
+/// @param weight Optional read-only cell-centred scalar, averaged arithmetically
+///               across each face. Inter-rank guards must already be communicated;
+///               physical radial guards are replaced by Neumann values in a copy.
+/// @returns Net outward weighted flux divided by J*dx*dy*dz on physical cells,
+///          with unused guards zero. nullptr uses the supplied flux without weighting.
+///
+/// Inputs are preserved. Only the temporary weight copy's guards are changed;
+/// no communication or flux closure occurs.
 Field3D divergence(const XZFaceFluxes& flux, const Field3D* weight) {
   Field3D result = zeroFrom(flux.x);
   const auto* coord = result.getCoordinates();
-  BOUT_FOR(i, result.getRegion("RGN_NOBNDRY")) {
-    const auto w = [&](const Ind3D& j) {
-      return weight ? 0.5 * ((*weight)[i] + (*weight)[j]) : 1.0;
-    };
-    result[i] = (w(i.xp()) * flux.x[i] - w(i.xm()) * flux.x[i.xm()]
-                 + w(i.zp()) * flux.z[i] - w(i.zm()) * flux.z[i.zm()])
-                / (coord->J()[i] * coord->dx()[i] * coord->dy()[i] * coord->dz()[i]);
+  if (weight == nullptr) {
+    BOUT_FOR(i, result.getRegion("RGN_NOBNDRY")) {
+      result[i] = (flux.x[i] - flux.x[i.xm()] + flux.z[i] - flux.z[i.zm()])
+                  / (coord->J()[i] * coord->dx()[i] * coord->dy()[i] * coord->dz()[i]);
+    }
+  } else {
+    Field3D w = copy(*weight);
+    fillRadialGuards(w, [&](int x, int, int, int y, int z) { return w(x, y, z); });
+    BOUT_FOR(i, result.getRegion("RGN_NOBNDRY")) {
+      result[i] =
+          0.5
+          * ((w[i] + w[i.xp()]) * flux.x[i] - (w[i] + w[i.xm()]) * flux.x[i.xm()]
+             + (w[i] + w[i.zp()]) * flux.z[i] - (w[i] + w[i.zm()]) * flux.z[i.zm()])
+          / (coord->J()[i] * coord->dx()[i] * coord->dy()[i] * coord->dz()[i]);
+    }
   }
   return result;
 }
-
+/// Allocate half of each face's flux-times-potential-jump work to each adjacent cell.
+///
+/// @param flux Read-only area-integrated fluxes towards increasing X and Z, with
+///             both X faces and periodic Z faces of every physical cell defined.
+/// @param f Read-only potential with valid neighbours, including wall guards.
+/// @returns Half the sum of the four integrated face fluxes times their respective
+///          increasing-coordinate jumps in f, divided by J*dx*dy*dz. Defined on
+///          physical cells, with unused guards zero.
+///
+/// No input mutation, boundary filling, communication or flux closure occurs.
 Field3D faceWork(const XZFaceFluxes& flux, const Field3D& f) {
   Field3D result = zeroFrom(f);
   const auto* coord = f.getCoordinates();
@@ -431,125 +625,79 @@ Field3D faceWork(const XZFaceFluxes& flux, const Field3D& f) {
   }
   return result;
 }
-
+/// Construct the Reynolds polarisation current with a solenoidal corner curl.
+///
+/// @param c Read-only Boussinesq polarisation coefficient.
+/// @param vort Read-only physical vorticity; omega = vort/2 is MC-upwinded.
+/// @param phi Read-only electric potential driving omega advection.
+/// @param psi Read-only ion pressure potential; Phi = phi + psi drives the central
+///            Lambda term and enters the curl stream function.
+/// @returns Area-integrated increasing-X/Z current faces with the XZFaceFluxes
+///          convention: X from xstart-1 through xend, Z on physical cells, physical
+///          Y and all local Z. Unused guards are zero. Physical X-wall faces carry
+///          only the unpinned curl; advective and Q-gradient wall terms are closed.
+///          Periodic faces are retained, and the returned fluxes are not communicated.
+///
+/// Inputs must share a mesh/location, have valid wall and communicated guards,
+/// and provide at least two radial guard layers. Uniform dy in each X-Z plane
+/// makes the curl divergence and each wall's Z-summed charge vanish.
+/// Creates temporary Q = bracket(phi,psi) with odd radial guards and Lambda with
+/// linearly extrapolated radial guards; applies neumann_o2 and communicates both.
+/// Mesh face/wall-region caches may be initialised; all inputs are preserved.
 XZFaceFluxes reynoldsFaceFluxes(const Field3D& c, const Field3D& vort, const Field3D& phi,
-                                const Field3D& psi, const RadialBoundaryModel& model,
-                                ReynoldsReconstruction reconstruction) {
+                                const Field3D& psi) {
   auto* m = phi.getMesh();
+  ASSERT0(m->xstart >= 2);
   const auto* coord = phi.getCoordinates();
-  const Field3D Phi = phi + psi;
+  const Field3D Phi = phi + psi, omega = 0.5 * vort, half_c = 0.5 * c;
   Field3D Q = bracket(phi, psi, BRACKET_ARAKAWA);
   Q.applyBoundary("neumann_o2");
   applyVorticityWallBoundary(Q, true);
   m->communicate(Q);
-  const auto advection = [&](const Field3D& n, const Field3D& stream) {
-    // The shared XPPM helper closes firstX/lastX even on periodic meshes.
-    // Central Reynolds transport needs the periodic seam for skew pairing.
-    return reconstruction == ReynoldsReconstruction::central
-               ? advectionFaces(n, stream, false, !m->periodicX)
-               : xppmFaceFluxes(n, stream);
-  };
-  const auto omega = advection(0.5 * vort, phi);
-  const auto lambda = advection(reynoldsLambda(c, phi), Phi);
-  XZFaceFluxes flux{omega.x + lambda.x, omega.z + lambda.z};
-  const Field3D half_c = 0.5 * c;
-  BOUT_FOR(i, phi.getRegion("RGN_NOBNDRY")) {
-    const auto q = perpendicularFaceFluxes(half_c, Q, i, false);
-    flux.x[i] += q.xp * coord->dy()[i];
-    if (i.x() == m->xstart) {
-      flux.x[i.xm()] += q.xm * coord->dy()[i];
-    }
-    flux.z[i] += q.zp * coord->dy()[i];
-  }
-  const auto curl = solenoidalReynoldsFaceFluxes(c, phi, Phi, model.walls);
-  BOUT_FOR(i, phi.getRegion("RGN_NOBNDRY")) {
-    flux.x[i] += curl.x[i];
-    flux.z[i] += curl.z[i];
-    if (i.x() == m->xstart) {
-      flux.x[i.xm()] += curl.x[i.xm()];
-    }
-    if (model.walls && !m->periodicX) {
-      if (m->firstX() && i.x() == m->xstart) {
-        flux.x[i.xm()] = curl.x[i.xm()];
-        ASSERT2(flux.x[i.xm()] == 0.0);
-      }
-      if (m->lastX() && i.x() == m->xend) {
-        flux.x[i] = curl.x[i];
-        ASSERT2(flux.x[i] == 0.0);
-      }
-    }
-  }
-  return flux;
-}
-
-XZFaceFluxes solenoidalReynoldsFaceFluxes(const Field3D& c, const Field3D& phi,
-                                          const Field3D& Phi, bool walls) {
-  auto* m = phi.getMesh();
-  const auto* coord = phi.getCoordinates();
-  XZFaceFluxes flux{zeroFrom(phi), zeroFrom(phi)};
-  Field3D stream = zeroFrom(phi);
-  const auto average = [](const auto& f, const Ind3D& i) {
-    return 0.25 * (f[i] + f[i.xp()] + f[i.zp()] + f[i.xp().zp()]);
-  };
-  const Field3D cJ = c * coord->J();
-  if (walls && !m->periodicX) {
-    ASSERT0(m->getNZPE() == 1 && m->zstart == 0 && m->zend + 1 == m->LocalNz);
-  }
-  for (int x = m->xstart - 1; x <= m->xend; ++x) {
-    for (int y = m->ystart; y <= m->yend; ++y) {
-      for (int z = 0; z < m->LocalNz; ++z) {
-        const Ind3D i =
-            Ind3D((x * m->LocalNy + y) * m->LocalNz + z, m->LocalNy, m->LocalNz);
-        const auto gradient = [&](const Field3D& f) {
-          return std::pair<BoutReal, BoutReal>{
-              (f[i.xp()] - f[i] + f[i.xp().zp()] - f[i.zp()])
-                  / (2 * average(coord->dx(), i)),
-              (f[i.zp()] - f[i] + f[i.xp().zp()] - f[i.xp()])
-                  / (2 * average(coord->dz(), i))};
-        };
-        const auto p = gradient(phi), h = gradient(Phi);
-        stream[i] =
-            -0.5 * average(cJ, i)
-            * (average(coord->g11(), i) * p.first * h.first
-               + average(coord->g13(), i) * (p.first * h.second + p.second * h.first)
-               + average(coord->g33(), i) * p.second * h.second);
-      }
-    }
-  }
-  if (walls && !m->periodicX) {
-    const auto pin = [&](int x) {
-      for (int y = m->ystart; y <= m->yend; ++y) {
-        BoutReal mean = 0.0;
-        for (int z = 0; z < m->LocalNz; ++z) {
-          mean += stream(x, y, z);
-        }
-        mean /= m->LocalNz;
-        for (int z = 0; z < m->LocalNz; ++z) {
-          stream(x, y, z) = mean;
-        }
-      }
+  const Field3D lambda = reynoldsLambda(c, phi), cJ = c * coord->J();
+  Field3D phi_corner = zeroFrom(phi), Phi_corner = zeroFrom(phi), stream = zeroFrom(phi);
+  XZFaceFluxes cross{zeroFrom(phi), zeroFrom(phi)}, flux{zeroFrom(phi), zeroFrom(phi)};
+  BOUT_FOR(i, xFaces(m)) {
+    phi_corner[i] = cornerAverage(phi, i);
+    Phi_corner[i] = cornerAverage(Phi, i);
+    const auto q = crossCorner(half_c, Q, *coord, i);
+    cross.x[i] = q.first;
+    cross.z[i] = q.second;
+    const auto gradient = [&](const Field3D& f) {
+      return std::pair<BoutReal, BoutReal>{(f[i.xp()] - f[i] + f[i.xp().zp()] - f[i.zp()])
+                                               / (2 * cornerAverage(coord->dx(), i)),
+                                           (f[i.zp()] - f[i] + f[i.xp().zp()] - f[i.xp()])
+                                               / (2 * cornerAverage(coord->dz(), i))};
     };
-    // Constant wall corners eliminate each normal flux, including all weights,
-    // while the corner curl still telescopes in every physical cell.
-    if (m->firstX()) {
-      pin(m->xstart - 1);
-    }
-    if (m->lastX()) {
-      pin(m->xend);
-    }
+    const auto p = gradient(phi), h = gradient(Phi);
+    stream[i] =
+        -0.5 * cornerAverage(cJ, i)
+        * (cornerAverage(coord->g11(), i) * p.first * h.first
+           + cornerAverage(coord->g13(), i) * (p.first * h.second + p.second * h.first)
+           + cornerAverage(coord->g33(), i) * p.second * h.second);
   }
-  for (int x = m->xstart - 1; x <= m->xend; ++x) {
-    for (int y = m->ystart; y <= m->yend; ++y) {
-      for (int z = 0; z < m->LocalNz; ++z) {
-        const Ind3D i =
-            Ind3D((x * m->LocalNy + y) * m->LocalNz + z, m->LocalNy, m->LocalNz);
-        flux.x[i] = (stream[i] - stream[i.zm()]) * coord->dy()[i];
-        if (x >= m->xstart) {
-          flux.z[i] -= (stream[i] - stream[i.xm()]) * coord->dy()[i];
-        }
-      }
-    }
+  BOUT_FOR(i, xFaces(m)) {
+    const auto r = i.xp();
+    const BoutReal J = 0.5 * (coord->J()[i] + coord->J()[r]);
+    const BoutReal velocity = J * (phi_corner[i] - phi_corner[i.zm()]);
+    flux.x[i] =
+        (velocity * upwind<DIRECTION::X>(omega, i, velocity)
+         + J * (Phi_corner[i] - Phi_corner[i.zm()]) * 0.5 * (lambda[i] + lambda[r])
+         + stream[i] - stream[i.zm()])
+            * coord->dy()[i]
+        + perpendicularX(half_c, Q, cross, *coord, i);
   }
+  BOUT_FOR(i, phi.getRegion("RGN_NOBNDRY")) {
+    const BoutReal velocity = coord->J()[i] * (phi_corner[i.xm()] - phi_corner[i]);
+    flux.z[i] = (velocity * upwind<DIRECTION::Z>(omega, i, velocity)
+                 + coord->J()[i] * (Phi_corner[i.xm()] - Phi_corner[i]) * 0.5
+                       * (lambda[i] + lambda[i.zp()])
+                 + stream[i.xm()] - stream[i])
+                    * coord->dy()[i]
+                + perpendicularZ(half_c, Q, cross, *coord, i);
+  }
+  // Physical wall rows carry only the unpinned curl; its Z sum is zero.
+  BOUT_FOR(i, wallFaces(m)) { flux.x[i] = (stream[i] - stream[i.zm()]) * coord->dy()[i]; }
   return flux;
 }
 } // namespace bout::ion_energy
@@ -680,11 +828,6 @@ EvolveVorticityIonEnergy::EvolveVorticityIonEnergy(std::string name, Options& al
 
   poloidal_flows =
       options["poloidal_flows"].doc("Include poloidal ExB flow").withDefault<bool>(false);
-
-  reynolds_reconstruction =
-      options["reynolds_reconstruction"]
-          .doc("X-Z Reynolds face reconstruction: xppm (MC limited) or central")
-          .withDefault(bout::ion_energy::ReynoldsReconstruction::xppm);
 
   density_floor = options["density_floor"].doc("Minimum density floor").withDefault(1e-7);
 
@@ -908,8 +1051,6 @@ void EvolveVorticityIonEnergy::transform_impl(GuardedOptions& state) {
         max(abs(Vort - Div_a_Grad_perp_XZ(boussinesq_coeff, phi + psi, true)), true);
     ++iteration;
 
-    //output.write("Iteration {} phi_err {}\n", iteration, phi_err);
-
     if (phi_err <= phi_rtol && vort_err <= vort_tolerance) {
       break;
     }
@@ -968,9 +1109,8 @@ void EvolveVorticityIonEnergy::transform_impl(GuardedOptions& state) {
   // Reynolds stress
 
   const Field3D Phi = phi + psi;
-  const auto reynolds =
-      bout::ion_energy::reynoldsFaceFluxes(Field3D{boussinesq_coeff}, vorticity, phi, psi,
-                                           radial_model, reynolds_reconstruction);
+  const auto reynolds = bout::ion_energy::reynoldsFaceFluxes(Field3D{boussinesq_coeff},
+                                                             vorticity, phi, psi);
   DivJReynolds = -bout::ion_energy::divergence(reynolds);
   // Preserve the shared poloidal X-Y terms; the skew construction is X-Z only.
   Field3D lambda;
@@ -981,14 +1121,8 @@ void EvolveVorticityIonEnergy::transform_impl(GuardedOptions& state) {
                     + Div_n_bxGrad_f_B_XPPM(lambda, Phi, false, true)
                     - Div_n_bxGrad_f_B_XPPM(lambda, Phi, false, false);
   }
-  Field3D kinetic_perp =
-      bout::ion_energy::kineticEnergyPerp(Field3D{boussinesq_coeff}, Phi);
-  mesh->communicate(kinetic_perp); // Supply central averages at inter-rank X faces.
-  DivEReynolds = bout::ion_energy::divergence(
-      bout::ion_energy::centralAdvectionFaceFluxes(kinetic_perp, phi));
   if (diagnose) {
     reynolds_work = bout::ion_energy::faceWork(reynolds, Phi);
-    reynolds_heating = reynolds_work - DivEReynolds;
   }
 
   //////////////////////////////////////////////////////////
@@ -1035,9 +1169,9 @@ void EvolveVorticityIonEnergy::transform_impl(GuardedOptions& state) {
   //////////////////////////////////////////////////////////
   // ExB drift
 
-  // ExB drift of thermal and parallel ion kinetic energy
-  DivEExB = Div_n_bxGrad_f_B_XPPM((3. / 2) * Pi_sum + ion_KE_parallel, phi, false,
-                                  poloidal_flows, true);
+  // ExB drift of total ion energy. This includes the Reynolds work that
+  // is the advection of K_perp by ExB for the choice of G used here.
+  DivEExB = Div_n_bxGrad_f_B_XPPM(Eion, phi, false, poloidal_flows, true);
 
   // The total electron energy exchange is phi * Div(J_e). evolve_pressure
   // evolves thermal energy, so only ExB compression belongs in energy_source.
@@ -1073,21 +1207,32 @@ void EvolveVorticityIonEnergy::transform_impl(GuardedOptions& state) {
   const Field3D dVortdt = DivJReynolds + DivJdia + DivJviscous;
   solvePolarisationPotential(dVortdt);
 
-  // Explicit wall closure for transport, distinct from the full current solve.
+  // One common transport current; only the curl crosses closed chi walls.
+  auto chi_faces = bout::ion_energy::perpendicularFaces(Field3D{boussinesq_coeff}, chi);
+  if (!radial_model.chi_wall_flux) {
+    bout::ion_energy::closeRadialFaces(chi_faces);
+  }
+  polarisation_flux = {-reynolds.x - chi_faces.x, -reynolds.z - chi_faces.z};
   const auto divPol = [&](const Field3D& weight) -> Field3D {
-    Field3D result =
-        -Div_a_Grad_perp_XZ(weight * boussinesq_coeff, chi, radial_model.chi_wall_flux)
-        - bout::ion_energy::divergence(reynolds, &weight);
+    Field3D result = bout::ion_energy::divergence(polarisation_flux, &weight);
     if (poloidal_flows) {
-      result -=
-          Div_n_bxGrad_f_B_XPPM(0.5 * vorticity, phi, false, true, false, &weight)
-          - Div_n_bxGrad_f_B_XPPM(0.5 * vorticity, phi, false, false, false, &weight)
-          + Div_n_bxGrad_f_B_XPPM(lambda, Phi, false, true, false, &weight)
-          - Div_n_bxGrad_f_B_XPPM(lambda, Phi, false, false, false, &weight);
+      Field3D w = copy(weight);
+      fillRadialGuards(w, [&](int x, int, int, int y, int z) { return w(x, y, z); });
+      result -= Div_n_bxGrad_f_B_XPPM(0.5 * vorticity, phi, false, true, false, &w)
+                - Div_n_bxGrad_f_B_XPPM(0.5 * vorticity, phi, false, false, false, &w)
+                + Div_n_bxGrad_f_B_XPPM(lambda, Phi, false, true, false, &w)
+                - Div_n_bxGrad_f_B_XPPM(lambda, Phi, false, false, false, &w);
     }
     return result;
   };
   DivJpol = divPol(Field3D{1.0});
+  bout::ion_energy::XZFaceFluxes wall_flux;
+  if (diagnose) {
+    wall_flux = {zeroFrom(phi), zeroFrom(phi)};
+    BOUT_FOR(i, bout::ion_energy::wallFaces(mesh)) {
+      wall_flux.x[i] = polarisation_flux.x[i];
+    }
+  }
 
   // Jps = (A_s n_s / rho) Jpol, Gamma_ps = Jps / Z_s. Use the actual
   // mass density, so the species currents sum to Jpol above the floor.
@@ -1104,27 +1249,9 @@ void EvolveVorticityIonEnergy::transform_impl(GuardedOptions& state) {
     add(species["density_source"], density_source);
     polarisation_sources[species.name()]["density"] = density_source;
     if (diagnose) {
-      const Field3D particle_coefficient = coefficient * N * boussinesq_coeff;
-      // Outward particle loss per cell volume, supported only next to X walls.
-      // Its volume integral is the signed particle flux through those walls.
-      Field3D loss =
-          Div_a_Grad_perp_XZ(particle_coefficient, chi, false)
-          - Div_a_Grad_perp_XZ(particle_coefficient, chi, radial_model.chi_wall_flux);
       const Field3D weight = coefficient * N;
-      const auto* coord = loss.getCoordinates();
-      if (radial_model.walls) {
-        BOUT_FOR(i, loss.getRegion("RGN_NOBNDRY")) {
-          const BoutReal volume =
-              coord->J()[i] * coord->dx()[i] * coord->dy()[i] * coord->dz()[i];
-          if (mesh->firstX() && i.x() == mesh->xstart) {
-            loss[i] += 0.5 * (weight[i] + weight[i.xm()]) * reynolds.x[i.xm()] / volume;
-          }
-          if (mesh->lastX() && i.x() == mesh->xend) {
-            loss[i] -= 0.5 * (weight[i] + weight[i.xp()]) * reynolds.x[i] / volume;
-          }
-        }
-      }
-      polarisation_sources[species.name()]["wall_loss"] = loss;
+      polarisation_sources[species.name()]["wall_loss"] =
+          bout::ion_energy::divergence(wall_flux, &weight);
     }
     E_adv += coefficient * (5. / 2) * P;
     if (species.isSet("velocity")) {
@@ -1180,40 +1307,29 @@ void EvolveVorticityIonEnergy::finally(const Options& state) {
 
   Eion_src = sumIonEnergySources(state["species"]);
 
-  ddt(Eion) =
-      -(DivEExB + DivEReynolds + DivEelectric + DivEparallel + DivEpol + DivEviscous)
-      - phi_Div_Je - electron_viscous_heating + Eion_src;
+  ddt(Eion) = -(DivEExB + DivEelectric + DivEparallel + DivEpol + DivEviscous)
+              - phi_Div_Je - electron_viscous_heating + Eion_src;
 }
 
 void EvolveVorticityIonEnergy::calculateViscosity() {
   const Field3D nu{viscosity};
   const Field3D Phi = phi + psi;
-  const auto* coord = mesh->getCoordinates();
-  DivJviscous = zeroFrom(vorticity);
+  auto flux = bout::ion_energy::perpendicularFaces(nu, vorticity);
+  if (!radial_model.viscous_wall_flux) {
+    bout::ion_energy::closeRadialFaces(flux);
+  }
+  DivJviscous = bout::ion_energy::divergence(flux);
   DivEviscous = zeroFrom(vorticity);
-  viscous_heating = zeroFrom(vorticity);
   electron_viscous_heating = 0.0;
+  const auto* coord = mesh->getCoordinates();
   BOUT_FOR(i, vorticity.getRegion("RGN_NOBNDRY")) {
-    const auto flux = bout::ion_energy::perpendicularFaceFluxes(
-        nu, vorticity, i, radial_model.viscous_wall_flux);
-    const BoutReal inverse_volume =
-        1. / (coord->J()[i] * coord->dx()[i] * coord->dz()[i]);
-    DivJviscous[i] = (flux.xp - flux.xm + flux.zp - flux.zm) * inverse_volume;
-    // Weight the common current at faces, rather than interpolating nu*Phi.
-    // In particular a zero viscosity face must also have zero energy flux.
     DivEviscous[i] =
         0.5
-        * ((Phi[i] + Phi[i.xp()]) * flux.xp - (Phi[i] + Phi[i.xm()]) * flux.xm
-           + (Phi[i] + Phi[i.zp()]) * flux.zp - (Phi[i] + Phi[i.zm()]) * flux.zm)
-        * inverse_volume;
-    // Discrete product rule: Qnu = Phi*DivJviscous - DivEviscous.
-    // Ion total energy carries the flux, not an additional Qnu source.
-    viscous_heating[i] =
-        -0.5
-        * ((Phi[i.xp()] - Phi[i]) * flux.xp + (Phi[i] - Phi[i.xm()]) * flux.xm
-           + (Phi[i.zp()] - Phi[i]) * flux.zp + (Phi[i] - Phi[i.zm()]) * flux.zm)
-        * inverse_volume;
+        * ((Phi[i] + Phi[i.xp()]) * flux.x[i] - (Phi[i] + Phi[i.xm()]) * flux.x[i.xm()]
+           + (Phi[i] + Phi[i.zp()]) * flux.z[i] - (Phi[i] + Phi[i.zm()]) * flux.z[i.zm()])
+        / (coord->J()[i] * coord->dx()[i] * coord->dy()[i] * coord->dz()[i]);
   }
+  viscous_heating = Phi * DivJviscous - DivEviscous;
 }
 
 void EvolveVorticityIonEnergy::outputVars(Options& state) {
@@ -1263,6 +1379,15 @@ void EvolveVorticityIonEnergy::outputVars(Options& state) {
                   {"long_name", "plasma potential"},
                   {"source", "evolve_vorticity_ion_energy"}});
 
+  set_with_attrs(
+      state["ion_chi"], chi,
+      {{"time_dimension", "t"},
+       {"units", "V s^-1"},
+       {"conversion", Tnorm * Omega_ci},
+       {"long_name", "Auxiliary polarisation current potential"},
+       {"description", "DC wall value is d(phi_b)/dt during relaxation; "
+                       "the wall rate of the pressure potential is neglected"}});
+
   if (diagnose) {
     set_with_attrs(state["DivJReynolds"], DivJReynolds,
                    {{"time_dimension", "t"},
@@ -1278,14 +1403,6 @@ void EvolveVorticityIonEnergy::outputVars(Options& state) {
                       {"long_name", "Outward polarisation particle loss per volume"},
                       {"species", species}});
     }
-    set_with_attrs(
-        state["ion_chi"], chi,
-        {{"time_dimension", "t"},
-         {"units", "V s^-1"},
-         {"conversion", Tnorm * Omega_ci},
-         {"long_name", "Auxiliary polarisation current potential"},
-         {"description", "DC wall value is d(phi_b)/dt during relaxation; "
-                         "the wall rate of the pressure potential is neglected"}});
     if (radial_model.walls) {
       Field3D wall_rate = zeroFrom(phi);
       writeRadialValues(wall_rate, wall_rate_inner, wall_rate_outer);
@@ -1323,10 +1440,25 @@ void EvolveVorticityIonEnergy::outputVars(Options& state) {
                       {"conversion", Pnorm * Omega_ci},
                       {"long_name", "Kinematic viscous energy flux divergence"}});
     }
+    for (const auto& [name, faces, indexing] :
+         {std::tuple{"polarisation_flux_x", &polarisation_flux.x,
+                     "x(i,j,k): face (i+1/2,j,k)"},
+          std::tuple{"polarisation_flux_z", &polarisation_flux.z,
+                     "z(i,j,k): face (i,j,k+1/2)"}}) {
+      set_with_attrs(
+          state[name], *faces,
+          {{"time_dimension", "t"},
+           {"units", "A"},
+           {"conversion", SI::qe * Nnorm * Omega_ci * pow(rho_s0, 3)},
+           {"long_name", "Area-integrated X-Z polarisation current"},
+           {"description", "Increasing-coordinate current: minus Reynolds and chi faces; "
+                           "X-Z contribution, excluding optional poloidal X-Y transport"},
+           {"face_index", indexing}});
+    }
     set_with_attrs(state["DivJpol"], DivJpol,
                    {{"time_dimension", "t"},
                     {"units", "A m^-3"},
-                    {"long_name", "Closed polarisation transport current divergence"},
+                    {"long_name", "Polarisation transport current divergence"},
                     {"conversion", SI::qe * Nnorm * Omega_ci}});
     set_with_attrs(state["ion_pressure_potential"], psi,
                    {{"time_dimension", "t"}, {"units", "V"}, {"conversion", Tnorm}});
@@ -1338,7 +1470,7 @@ void EvolveVorticityIonEnergy::outputVars(Options& state) {
          {"long_name", "Auxiliary polarisation current potential"},
          {"description", "Fixed-correction approximation to L(chi)=physical ddt(Vort); "
                          "nonperiodic X: midpoint Dirichlet DC, "
-                         "radial Neumann AC; "
+                         "radial AC selected by polarisation_ac_boundary; "
                          "approximate, not exact ddt(phi+psi)"}});
     set_with_attrs(state["ion_phi_iterations"], phi_iterations,
                    {{"time_dimension", "t"},
@@ -1363,15 +1495,8 @@ void EvolveVorticityIonEnergy::outputVars(Options& state) {
         state["DivEExB"], DivEExB,
         {{"time_dimension", "t"}, {"units", "W m^-3"}, {"conversion", Pnorm * Omega_ci}});
     set_with_attrs(
-        state["DivEReynolds"], DivEReynolds,
+        state["reynolds_work"], reynolds_work,
         {{"time_dimension", "t"}, {"units", "W m^-3"}, {"conversion", Pnorm * Omega_ci}});
-    for (const auto& diagnostic : {std::pair{"reynolds_work", &reynolds_work},
-                                   std::pair{"reynolds_heating", &reynolds_heating}}) {
-      set_with_attrs(state[diagnostic.first], *diagnostic.second,
-                     {{"time_dimension", "t"},
-                      {"units", "W m^-3"},
-                      {"conversion", Pnorm * Omega_ci}});
-    }
     set_with_attrs(
         state["DivEelectric"], DivEelectric,
         {{"time_dimension", "t"}, {"units", "W m^-3"}, {"conversion", Pnorm * Omega_ci}});
@@ -1595,6 +1720,30 @@ Field3D EvolveVorticityIonEnergy::correctPotential(const Field3D& rhs,
   return potential + correction;
 }
 
+/// Approximate the auxiliary potential using a fixed number of defect corrections.
+///
+/// @param coefficient Read-only Boussinesq coefficient c in div(c*grad_perp(chi)),
+///                    nonzero on physical cells, with valid geometry and guards.
+/// @param rhs Read-only physical vorticity rate; only interior values enter the
+///            residual, excluding encoded wall-potential rates in radial guards.
+/// @param[in,out] inverse Approximate spectral inverse configured for coefficient
+///                       and homogeneous correction boundaries. Its solve method
+///                       is invoked once initially and once per defect correction.
+/// @param corrections Nonnegative number of finite-volume defect corrections.
+/// @param ac Radial condition on the Z-dependent part of chi.
+/// @param dc_inner Optional inner-wall DC midpoints in chi's units, indexed by local
+///                 Y with LocalNy entries; nullptr imposes zero.
+/// @param dc_outer Optional outer-wall DC midpoints with the same convention.
+/// @returns A new chi field, starting from zero on every call, with imposed radial
+///          guards and communicated inter-rank guards. A fixed correction count
+///          can leave a finite forward-operator residual; no warm start is retained.
+///
+/// Uses the global mesh to communicate temporary chi and correction fields;
+/// mesh face-region caches and the inverse's internal solver state may change.
+/// Supplied fields and DC arrays are preserved. Wall values enter through each
+/// finite-volume residual while spectral corrections use homogeneous boundaries.
+/// @throws BoutException If corrections is negative or a nonperiodic X mesh lacks
+///                       complete local periodic Z lines.
 Field3D bout::ion_energy::fixedPolarisationPotential(
     const Field3D& coefficient, const Field3D& rhs, Laplacian& inverse, int corrections,
     PolarisationACBoundary ac, const std::vector<BoutReal>* dc_inner,

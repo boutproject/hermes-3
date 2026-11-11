@@ -3,6 +3,7 @@
 
 #include "fake_mesh_fixture.hxx"
 #include "fake_solver.hxx"
+#include "ion_energy_operators_reference.hxx"
 #include "reynolds_reference.hxx"
 #include "test_extras.hxx"
 
@@ -588,9 +589,15 @@ TEST_F(EvolveVorticityIonEnergyTest,
   for (const BoutReal weight : {1.0, 0.7, -0.2, 2.5, 0.03, 0.4}) {
     const Field3D a =
         makeField<Field3D>([&](const Ind3D& i) { return weight * (1.0 + 0.1 * i.x()); });
+    const auto full_faces = bout::ion_energy::perpendicularFaces(a, f);
+    auto closed_faces = full_faces;
+    bout::ion_energy::closeRadialFaces(closed_faces);
     for (const auto& i : f.getRegion("RGN_NOBNDRY")) {
-      const auto full = bout::ion_energy::perpendicularFaceFluxes(a, f, i);
-      const auto closed = bout::ion_energy::perpendicularFaceFluxes(a, f, i, false);
+      const ion_energy_reference::CellFaces full{full_faces.x[i], full_faces.x[i.xm()],
+                                                 full_faces.z[i], full_faces.z[i.zm()]};
+      const ion_energy_reference::CellFaces closed{
+          closed_faces.x[i], closed_faces.x[i.xm()], closed_faces.z[i],
+          closed_faces.z[i.zm()]};
       EXPECT_DOUBLE_EQ(closed.zp, full.zp);
       EXPECT_DOUBLE_EQ(closed.zm, full.zm);
       if (i.x() == mesh->xstart) {
@@ -744,10 +751,9 @@ TEST_F(EvolveVorticityIonEnergyTest, ViscousFluxObeysProductRuleWithCrossMetric)
   EXPECT_NEAR(integral(heat), integral(Field3D{Phi * current}), 1e-12);
   const Field3D rhs_balance =
       solver.getTimeDerivs()["Eion"].as<Field3D>() + output["DivEExB"].as<Field3D>()
-      + output["DivEReynolds"].as<Field3D>() + output["DivEelectric"].as<Field3D>()
-      + output["DivEparallel"].as<Field3D>() + output["DivEpol"].as<Field3D>()
-      + energy_flux + output["phi_Div_Je"].as<Field3D>() + electron_heat
-      - output["Eion_src"].as<Field3D>();
+      + output["DivEelectric"].as<Field3D>() + output["DivEparallel"].as<Field3D>()
+      + output["DivEpol"].as<Field3D>() + energy_flux + output["phi_Div_Je"].as<Field3D>()
+      + electron_heat - output["Eion_src"].as<Field3D>();
   EXPECT_TRUE(IsFieldEqual(rhs_balance, 0.0, "RGN_NOBNDRY", 1e-12));
 }
 
@@ -833,8 +839,7 @@ TEST_F(EvolveVorticityIonEnergyTest, IonCurrentUsesIonMomentumWithoutElectronMom
       IsFieldEqual(output["DivEelectric"].as<Field3D>(), expected, "RGN_NOBNDRY", 1e-12));
   const Field3D energy_balance =
       solver.getTimeDerivs()["Eion"].as<Field3D>() + output["DivEExB"].as<Field3D>()
-      + output["DivEReynolds"].as<Field3D>() + output["DivEpol"].as<Field3D>()
-      + output["DivEparallel"].as<Field3D>() + expected;
+      + output["DivEpol"].as<Field3D>() + output["DivEparallel"].as<Field3D>() + expected;
   EXPECT_TRUE(IsFieldEqual(energy_balance, 0.0, "RGN_NOBNDRY", 1e-12));
 }
 
@@ -1531,9 +1536,7 @@ TEST_F(EvolveVorticityIonEnergyTest, PoloidalPolarisationUsesUpwindCurrentStream
   const Field3D downwind = poloidal(0.5 * vort, -phi) + poloidal(lambda, -phi - psi);
   ASSERT_GT(max(abs(upwind), false), 1e-7);
   ASSERT_GT(max(abs(upwind - downwind), false), 1e-7);
-  RadialBoundaryModel model;
-  model.walls = true;
-  const auto reynolds = reynoldsFaceFluxes(c, vort, phi, psi, model);
+  const auto reynolds = reynoldsFaceFluxes(c, vort, phi, psi);
   const Field3D current = output["DivJReynolds"].as<Field3D>();
   const Field3D poloidal_current = current + divergence(reynolds);
   // FakeMesh communication does not populate Y halos of the reconstructed
@@ -1544,8 +1547,13 @@ TEST_F(EvolveVorticityIonEnergyTest, PoloidalPolarisationUsesUpwindCurrentStream
     }
   }
   const Field3D expected = current - Div_a_Grad_perp_XZ(c, chi, false);
-  EXPECT_TRUE(
-      IsFieldEqual(output["DivJpol"].as<Field3D>(), expected, "RGN_NOBNDRY", 1e-12));
+  const Field3D actual = output["DivJpol"].as<Field3D>();
+  // As above, FakeMesh does not communicate the internal Lambda Y halos.
+  for (const auto& i : phi.getRegion("RGN_NOBNDRY")) {
+    if (i.y() > mesh->ystart && i.y() < mesh->yend) {
+      EXPECT_NEAR(actual[i], expected[i], 1e-12);
+    }
+  }
 }
 
 TEST_F(EvolveVorticityIonEnergyTest, MixedAuxiliaryBoundaryIsIndependentOfRHSHistories) {
@@ -1669,6 +1677,10 @@ TEST_F(EvolveVorticityIonEnergyTest, MixedAuxiliaryConvergesWithNonuniformCrossM
       } else {
         EXPECT_LT(residual, 2e-10);
       }
+      const auto full_faces =
+          bout::ion_energy::perpendicularFaces(coefficient, potential);
+      auto closed_faces = full_faces;
+      bout::ion_energy::closeRadialFaces(closed_faces);
       BoutReal normal_ac = 0.0;
       for (int x : {mesh->xstart, mesh->xend}) {
         for (int y = mesh->ystart; y <= mesh->yend; ++y) {
@@ -1678,8 +1690,9 @@ TEST_F(EvolveVorticityIonEnergyTest, MixedAuxiliaryConvergesWithNonuniformCrossM
           for (int z = 0; z < nz; ++z) {
             dc += potential(x, y, z) / nz;
             const Ind3D i{(x * ny + y) * nz + z, ny, nz};
-            const auto full =
-                bout::ion_energy::perpendicularFaceFluxes(coefficient, potential, i);
+            const ion_energy_reference::CellFaces full{
+                full_faces.x[i], full_faces.x[i.xm()], full_faces.z[i],
+                full_faces.z[i.zm()]};
             flux_dc += (x == mesh->xstart ? full.xm : full.xp) / nz;
           }
           for (int z = 0; z < nz; ++z) {
@@ -1688,12 +1701,14 @@ TEST_F(EvolveVorticityIonEnergyTest, MixedAuxiliaryConvergesWithNonuniformCrossM
             EXPECT_NEAR(potential(guard, y, z),
                         potential(x, y, z) - 2 * dc + 2 * wall_rate, 1e-12);
             const Ind3D i{(x * ny + y) * nz + z, ny, nz};
-            const auto full =
-                bout::ion_energy::perpendicularFaceFluxes(coefficient, potential, i);
+            const ion_energy_reference::CellFaces full{
+                full_faces.x[i], full_faces.x[i.xm()], full_faces.z[i],
+                full_faces.z[i.zm()]};
             normal_ac = std::max(normal_ac,
                                  abs((x == mesh->xstart ? full.xm : full.xp) - flux_dc));
-            const auto closed = bout::ion_energy::perpendicularFaceFluxes(
-                coefficient, potential, i, false);
+            const ion_energy_reference::CellFaces closed{
+                closed_faces.x[i], closed_faces.x[i.xm()], closed_faces.z[i],
+                closed_faces.z[i.zm()]};
             EXPECT_EQ(x == mesh->xstart ? closed.xm : closed.xp, 0.0);
           }
         }
@@ -1883,16 +1898,12 @@ TEST_F(EvolveVorticityIonEnergyTest, WallModelsPairParticleChargeAndEnergyBudget
         }
       }
       EXPECT_NEAR(integral(output["DivJReynolds"].as<Field3D>()), 0.0, 1e-12);
-      EXPECT_NEAR(integral(output["DivEReynolds"].as<Field3D>()), 0.0, 1e-12);
       EXPECT_NEAR(integral(output["DivEExB"].as<Field3D>()), 0.0, 1e-12);
       for (const auto* species : {"d+", "he++"}) {
         const Field3D loss =
             output[std::string{"particle_pol_wall_loss_"} + species].as<Field3D>();
         EXPECT_NEAR(integral(state["species"][species]["density_source"].as<Field3D>()),
                     -integral(loss), 1e-12);
-        if (std::string{ac} == "neumann") {
-          EXPECT_DOUBLE_EQ(max(abs(loss), true), 0.0); // every Reynolds weight is closed
-        }
       }
       EXPECT_NEAR(integral(solver.getTimeDerivs()["Vort"].as<Field3D>()),
                   integral(output["DivJviscous"].as<Field3D>()), 1e-12);
@@ -1920,7 +1931,7 @@ TEST_F(EvolveVorticityIonEnergyTest, XPPMFacesMatchSharedDivergenceAndWeights) {
   });
   const Field3D weight =
       makeField<Field3D>([](const Ind3D& i) { return 0.3 + 0.1 * sin(i.x() + i.z()); });
-  const auto faces = xppmFaceFluxes(n, f);
+  const auto faces = reynoldsFaceFluxes(Field3D{1.0}, 2 * n, f, -f);
   for (const auto* w : {static_cast<const Field3D*>(nullptr), &weight}) {
     const Field3D expected = Div_n_bxGrad_f_B_XPPM(n, f, false, false, false, w);
     const Field3D actual = divergence(faces, w);
@@ -1929,7 +1940,7 @@ TEST_F(EvolveVorticityIonEnergyTest, XPPMFacesMatchSharedDivergenceAndWeights) {
   }
 }
 
-TEST_F(EvolveVorticityIonEnergyTest, ReynoldsCurlIsSolenoidalAndWallsImpermeable) {
+TEST_F(EvolveVorticityIonEnergyTest, UnpinnedCurlAndNeumannWallWeights) {
   using namespace bout::ion_energy;
   auto* coord = mesh->getCoordinates();
   coord->setJ(makeField<Coordinates::FieldMetric>(
@@ -1945,78 +1956,68 @@ TEST_F(EvolveVorticityIonEnergyTest, ReynoldsCurlIsSolenoidalAndWallsImpermeable
   applyWallPressureBoundary(psi);
   const Field3D c = makeField<Field3D>(
       [](const Ind3D& i) { return 1.0 + 0.1 * cos(i.x() + 2 * PI * i.z() / nz); });
-  const auto unpinned = solenoidalReynoldsFaceFluxes(c, phi, phi + psi, false);
-  const auto curl = solenoidalReynoldsFaceFluxes(c, phi, phi + psi, true);
-  EXPECT_LT(max(abs(divergence(curl) - divergence(unpinned))), 1e-13);
-  EXPECT_LT(max(abs(divergence(curl))), 1e-13);
-  RadialBoundaryModel model;
-  model.walls = true;
-  const auto flux =
-      reynoldsFaceFluxes(c, Div_a_Grad_perp_XZ(c, phi + psi), phi, psi, model);
-  // Positive weights include independent guard values: global cancellation
-  // of the unweighted wall current is insufficient for impermeability.
+  const auto curl = ion_energy_reference::solenoidalReynoldsFaceFluxes(c, phi, phi + psi);
+  EXPECT_LT(max(abs(divergence(curl)), true), 1e-13);
+  const auto flux = reynoldsFaceFluxes(c, Div_a_Grad_perp_XZ(c, phi + psi), phi, psi);
   std::mt19937 generator(1729);
   std::uniform_real_distribution<BoutReal> distribution(0.1, 2.0);
   const Field3D weight =
       makeField<Field3D>([&](const Ind3D&) { return distribution(generator); });
-  const Field3D one = 1.0 + zeroFrom(phi);
-  const BoutReal scale = std::max(1.0, max(abs(flux.x)));
-  for (int x : {mesh->xstart - 1, mesh->xend}) {
-    for (int y = mesh->ystart; y <= mesh->yend; ++y) {
-      for (int z = 0; z < nz; ++z) {
-        EXPECT_DOUBLE_EQ(flux.x(x, y, z), 0.0);
-        for (const auto* w : {&one, &weight}) {
-          EXPECT_LE(std::abs(flux.x(x, y, z) * 0.5 * ((*w)(x, y, z) + (*w)(x + 1, y, z)))
-                        / scale,
-                    1e-14);
-        }
-      }
+  Field3D changed = copy(weight);
+  for (const auto& i : changed.getRegion("RGN_ALL")) {
+    if (i.x() < mesh->xstart || i.x() > mesh->xend) {
+      changed[i] = 100 * distribution(generator);
     }
   }
-  // Compare the complete pinned current with the same split and unpinned curl.
-  const XZFaceFluxes before{flux.x - curl.x + unpinned.x, flux.z - curl.z + unpinned.z};
-  EXPECT_LT(max(abs(divergence(flux) - divergence(before)))
-                / std::max(1.0, max(abs(divergence(before)))),
+  EXPECT_TRUE(IsFieldEqual(divergence(flux, &weight), divergence(flux, &changed),
+                           "RGN_NOBNDRY", 0.0));
+  BoutReal boundary_work = 0, weighted_outward = 0, signal = 0;
+  for (int x : {mesh->xstart - 1, mesh->xend}) {
+    const int interior = x == mesh->xend ? x : x + 1;
+    const BoutReal sign = x == mesh->xend ? 1 : -1;
+    for (int y = mesh->ystart; y <= mesh->yend; ++y) {
+      BoutReal charge = 0;
+      for (int z = 0; z < nz; ++z) {
+        const auto F = flux.x(x, y, z);
+        EXPECT_DOUBLE_EQ(F, curl.x(x, y, z));
+        charge += F;
+        signal += std::abs(F);
+        boundary_work +=
+            sign * F * 0.5
+            * (phi(x, y, z) + psi(x, y, z) + phi(x + 1, y, z) + psi(x + 1, y, z));
+        weighted_outward += sign * F * weight(interior, y, z);
+      }
+      EXPECT_NEAR(charge, 0.0, 1e-14);
+    }
+  }
+  EXPECT_GT(signal, 1e-6);
+  EXPECT_NEAR(integral(divergence(flux, &weight)), weighted_outward, 1e-12);
+  EXPECT_NEAR(integral(faceWork(flux, phi + psi)),
+              boundary_work - integral((phi + psi) * divergence(flux)), 1e-12);
+  const Field3D complement = 1.0 - weight;
+  EXPECT_LT(max(abs(divergence(flux, &weight) + divergence(flux, &complement)
+                    - divergence(flux)),
+                true),
             1e-13);
-  const BoutReal work = integral(faceWork(flux, phi + psi));
-  const BoutReal adjoint_work = -integral((phi + psi) * divergence(flux));
-  ASSERT_GT(std::abs(work), 1e-6);
-  EXPECT_LT(std::abs(work - adjoint_work) / std::abs(work), 1e-13);
-  const auto weighted = divergence(flux, &c);
-  const Field3D complement = 1.0 - c;
-  EXPECT_LT(max(abs(weighted + divergence(flux, &complement) - divergence(flux))), 1e-13);
-  output_info.write(
-      "Reynolds fixture max |D/Bxy^2 - 1| = {}\n",
-      max(abs((coord->g11() * coord->g33() - SQ(coord->g13())) / SQ(coord->Bxy())
-              - 1.0)));
 }
 
-TEST_F(EvolveVorticityIonEnergyTest, CentralReynoldsKeepsPeriodicSeamFlow) {
+TEST_F(EvolveVorticityIonEnergyTest, ReynoldsKeepsPeriodicSeamFlow) {
   using namespace bout::ion_energy;
   mesh->periodicX = true;
-  auto* coord = mesh->getCoordinates();
-  coord->setJ(1.0);
-  coord->setDy(1.0);
   const Field3D phi =
       makeField<Field3D>([](const Ind3D& i) { return sin(2 * PI * i.z() / nz); });
-  // Phi=0 isolates omega advection, including nonzero normal seam velocity.
-  const Field3D psi = -phi;
   const Field3D one = 1.0 + zeroFrom(phi);
-  RadialBoundaryModel model;
-  const auto central =
-      reynoldsFaceFluxes(one, one, phi, psi, model, ReynoldsReconstruction::central);
-  const auto limited = reynoldsFaceFluxes(one, one, phi, psi, model);
+  const auto flux = reynoldsFaceFluxes(one, one, phi, -phi);
   for (int x : {mesh->xstart - 1, mesh->xend}) {
     for (int y = mesh->ystart; y <= mesh->yend; ++y) {
       for (int z = 0; z < nz; ++z) {
         const BoutReal expected =
             0.25 * (sin(2 * PI * (z + 1) / nz) - sin(2 * PI * (z - 1) / nz));
-        EXPECT_NEAR(central.x(x, y, z), expected, 1e-13);
-        EXPECT_DOUBLE_EQ(limited.x(x, y, z), 0.0);
+        EXPECT_NEAR(flux.x(x, y, z), expected, 1e-14);
       }
     }
   }
-  EXPECT_GT(max(abs(central.x)), 0.1);
+  EXPECT_GT(max(abs(flux.x), true), 0.1);
 }
 
 // The analytic reference is generated from covariant derivatives with
@@ -2053,10 +2054,8 @@ public:
     const Field3D phi = field(reynolds_reference::phi);
     const Field3D psi = field(reynolds_reference::psi);
     const Field3D expected = field(reynolds_reference::expected);
-    RadialBoundaryModel model;
-    model.walls = true;
     const Field3D actual = divergence(reynoldsFaceFluxes(
-        field(reynolds_reference::c), field(reynolds_reference::omega), phi, psi, model));
+        field(reynolds_reference::c), field(reynolds_reference::omega), phi, psi));
     BoutReal sum = 0;
     int count = 0;
     for (const auto& i : expected.getRegion("RGN_NOBNDRY")) {
@@ -2083,4 +2082,143 @@ TEST(IonEnergyReynoldsConvergence, LimitedCurrentConvergesInShearedAnnulus) {
                     order);
   output_info.write("Annulus max |D/Bxy^2 - 1|: {}, {}\n", coarse_metric, fine_metric);
   EXPECT_GE(order, 1.5);
+}
+
+TEST_F(EvolveVorticityIonEnergyTest, FaceRefactorMatchesIndependentCellFormula) {
+  auto* coord = mesh->getCoordinates();
+  coord->setJ(makeField<Field2D>([](const Ind2D& i) { return 1.0 + 0.03 * i.x(); }));
+  coord->setDx(makeField<Field2D>([](const Ind2D& i) { return 0.7 + 0.02 * i.x(); }));
+  coord->setDy(0.6);
+  coord->setContravariantMetricTensor(
+      ContravariantMetricTensor{1.4, 1.0, 1.2, 0.0, 0.3, 0.0});
+  const auto a = makeField<Field3D>(
+      [](const Ind3D& i) { return 1.0 + 0.05 * i.x() + 0.1 * cos(2 * PI * i.z() / nz); });
+  const auto f = makeField<Field3D>([](const Ind3D& i) {
+    return 0.2 * i.x() + sin(0.4 * i.x() + 2 * PI * i.z() / nz);
+  });
+  for (bool periodic : {false, true}) {
+    mesh->periodicX = periodic;
+    for (bool open : {false, true}) {
+      const auto expected = ion_energy_reference::Div_a_Grad_perp_XZ(a, f, open);
+      const auto actual = bout::ion_energy::Div_a_Grad_perp_XZ(a, f, open);
+      EXPECT_LE(max(abs(actual - expected), true)
+                    / std::max(1.0, max(abs(expected), true)),
+                1e-14);
+    }
+    const auto expected = ion_energy_reference::kineticEnergyPerp(a, f);
+    const auto actual = bout::ion_energy::kineticEnergyPerp(a, f);
+    EXPECT_LE(max(abs(actual - expected), true) / std::max(1.0, max(abs(expected), true)),
+              1e-14);
+  }
+}
+
+TEST_F(EvolveVorticityIonEnergyTest, UpwindRefactorMatchesInlineMCReference) {
+  auto* coord = mesh->getCoordinates();
+  coord->setJ(makeField<Coordinates::FieldMetric>(
+      [](const auto& i) { return 1.0 + 0.03 * i.x(); }));
+  coord->setDx(makeField<Coordinates::FieldMetric>(
+      [](const auto& i) { return 0.7 + 0.02 * i.x(); }));
+  coord->setContravariantMetricTensor(
+      ContravariantMetricTensor{1.4, 1.0, 1.2, 0.0, 0.3, 0.0});
+  const auto n = makeField<Field3D>(
+      [](const Ind3D& i) { return 1.0 + sin(0.4 * i.x() + 2 * PI * i.z() / nz); });
+  const auto f = makeField<Field3D>([](const Ind3D& i) {
+    return 0.2 * i.x() + cos(0.6 * i.x() + 2 * PI * i.z() / nz);
+  });
+  for (bool periodic : {false, true}) {
+    mesh->periodicX = periodic;
+    const auto expected = ion_energy_reference::advectionFaces(n, f, true, !periodic);
+    const auto actual = bout::ion_energy::reynoldsFaceFluxes(Field3D{1.0}, 2 * n, f, -f);
+    for (int x = mesh->xstart - 1; x <= mesh->xend; ++x) {
+      for (int y = mesh->ystart; y <= mesh->yend; ++y) {
+        for (int z = 0; z < nz; ++z) {
+          EXPECT_NEAR(actual.x(x, y, z), expected.x(x, y, z), 1e-14);
+          if (x >= mesh->xstart) {
+            EXPECT_NEAR(actual.z(x, y, z), expected.z(x, y, z), 1e-14);
+          }
+        }
+      }
+    }
+    // Shared XPPM intentionally still closes the periodic-X seam.
+    if (!periodic) {
+      const auto shared = Div_n_bxGrad_f_B_XPPM(n, f, false, false);
+      EXPECT_LE(max(abs(bout::ion_energy::divergence(actual) - shared), true)
+                    / std::max(1.0, max(abs(shared), true)),
+                1e-14);
+    }
+  }
+}
+
+TEST_F(EvolveVorticityIonEnergyTest, ReynoldsRefactorMatchesIndependentComponents) {
+  auto* coord = mesh->getCoordinates();
+  coord->setJ(makeField<Field2D>([](const Ind2D& i) { return 1.0 + 0.03 * i.x(); }));
+  coord->setDx(makeField<Field2D>([](const Ind2D& i) { return 0.7 + 0.02 * i.x(); }));
+  coord->setDy(0.6);
+  coord->setContravariantMetricTensor(
+      ContravariantMetricTensor{1.4, 1.0, 1.2, 0.0, 0.3, 0.0});
+  const auto c = makeField<Field3D>(
+      [](const Ind3D& i) { return 1.0 + 0.05 * i.x() + 0.1 * cos(2 * PI * i.z() / nz); });
+  const auto phi = makeField<Field3D>([](const Ind3D& i) {
+    return 0.2 * i.x() + sin(0.4 * i.x() + 2 * PI * i.z() / nz);
+  });
+  const Field3D psi = 0.2 * phi, vort = sin(phi);
+  for (bool periodic : {false, true}) {
+    mesh->periodicX = periodic;
+    const auto expected = ion_energy_reference::reynoldsFaces(c, vort, phi, psi, false);
+    const auto actual = bout::ion_energy::reynoldsFaceFluxes(c, vort, phi, psi);
+    for (int x = mesh->xstart - 1; x <= mesh->xend; ++x) {
+      for (int y = mesh->ystart; y <= mesh->yend; ++y) {
+        for (int z = 0; z < nz; ++z) {
+          EXPECT_NEAR(actual.x(x, y, z), expected.x(x, y, z),
+                      1e-14 * std::max(1.0, std::abs(expected.x(x, y, z))));
+          if (x >= mesh->xstart) {
+            EXPECT_NEAR(actual.z(x, y, z), expected.z(x, y, z),
+                        1e-14 * std::max(1.0, std::abs(expected.z(x, y, z))));
+          }
+        }
+      }
+    }
+  }
+}
+
+TEST_F(EvolveVorticityIonEnergyTest, TotalEnergyAndPolarisationOutputsUseSharedFaces) {
+  for (bool diagnose : {false, true}) {
+    FakeSolver solver;
+    auto options = makeOptions();
+    options["test"]["diagnose"].force(diagnose);
+    EvolveVorticityIonEnergy component("test", options, &solver);
+    declareSpecies(component);
+    const auto energy = makeField<Field3D>(
+        [](const Ind3D& i) { return 6.0 + 0.1 * cos(2 * PI * i.z() / nz); });
+    const auto vort = makeField<Field3D>(
+        [](const Ind3D& i) { return 0.002 * sin(0.4 * i.x() + 2 * PI * i.z() / nz); });
+    solver.setState({{"Vort", vort}, {"Eion", energy}});
+    auto state = makeState();
+    component.transform(state);
+    component.finally(state);
+    const auto output = diagnostics(component);
+    EXPECT_TRUE(output.isSet("ion_chi"));
+    EXPECT_EQ(output.isSet("polarisation_flux_x"), diagnose);
+    EXPECT_EQ(output.isSet("polarisation_flux_z"), diagnose);
+    EXPECT_FALSE(output.isSet("DivEReynolds"));
+    EXPECT_FALSE(output.isSet("reynolds_heating"));
+    if (diagnose) {
+      const Field3D phi = output["phi"].as<Field3D>();
+      const Field3D exb = output["DivEExB"].as<Field3D>();
+      EXPECT_TRUE(IsFieldEqual(exb,
+                               Div_n_bxGrad_f_B_XPPM(energy, phi, false, false, true),
+                               "RGN_NOBNDRY", 0.0));
+      EXPECT_NEAR(integral(exb), 0.0, 1e-12);
+      const bout::ion_energy::XZFaceFluxes faces{
+          output["polarisation_flux_x"].as<Field3D>(),
+          output["polarisation_flux_z"].as<Field3D>()};
+      EXPECT_TRUE(IsFieldEqual(bout::ion_energy::divergence(faces),
+                               output["DivJpol"].as<Field3D>(), "RGN_NOBNDRY", 1e-14));
+      const Field3D charge =
+          state["species"]["d+"]["density_source"].as<Field3D>()
+          + 2 * state["species"]["he++"]["density_source"].as<Field3D>();
+      EXPECT_TRUE(IsFieldEqual(charge, Field3D{-output["DivJpol"].as<Field3D>()},
+                               "RGN_NOBNDRY", 1e-13));
+    }
+  }
 }
