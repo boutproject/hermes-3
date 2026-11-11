@@ -4,9 +4,13 @@ updates:
   - package-ecosystem: "gitsubmodule"
     schedule:
         interval: "daily"
+    cooldown:
+      default-days: 0
     directory: "/"
 
   - package-ecosystem: "github-actions"
     schedule:
       interval: "weekly"
+    cooldown:
+      default-days: 3
     directory: "/"
