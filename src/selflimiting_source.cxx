@@ -37,22 +37,7 @@ SelflimitingSource::SelflimitingSource(std::string name, Options& alloptions, So
                  .doc("Output additional diagnostics?")
                  .withDefault<bool>(false);
 
-  BoutReal densitysource_normalisation = Nnorm * Omega_ci;
-
   auto& soptions = options["selflimiting_source"];
-
-  selflimiting_densityform = soptions["density_form"]
-                                 .doc("Form of the selflimiting density source.")
-                                 .withDefault<Field3D>(Field3D{0.0})
-                             / densitysource_normalisation;
-
-  BoutReal pressuresource_normalisation =
-      SI::qe * Nnorm * Tnorm * Omega_ci; // [Pa/s] or [W/m^3] if converted to energy
-
-  selflimiting_pressureform = soptions["pressure_form"]
-                                  .doc("Form of the selflimiting pressure source.")
-                                  .withDefault<Field3D>(Field3D{0.0})
-                              / pressuresource_normalisation;
 
   selflimiting_density = soptions["density_setpoint"]
                              .doc("Density [m^-3] above which the source term will be "
@@ -67,26 +52,48 @@ SelflimitingSource::SelflimitingSource(std::string name, Options& alloptions, So
           .withDefault<BoutReal>(-1.0)
       / Tnorm;
 
-  selflimiting_density_overshoot =
-      soptions["density_overshoot"]
-          .doc("Density [m^-3] interval in which the source term is "
-               "dampened when selflimiting_density > 0.")
-          .withDefault<BoutReal>(2e18)
-      / Nnorm;
+  if (selflimiting_density > 0.0) {
 
-  selflimiting_temperature_overshoot =
-      soptions["temperature_overshoot"]
-          .doc("Temperature [eV] interval in which the source term is "
-               "dampened when selflimiting_temperature > 0.")
-          .withDefault<BoutReal>(10.0)
-      / Tnorm;
+    BoutReal densitysource_normalisation = Nnorm * Omega_ci;
 
-  if (selflimiting_density_overshoot <= 0.0) {
-    throw BoutException("Density overshoot must be positive but is {}", density_overshoot);
+    selflimiting_densityform = soptions["density_form"]
+                                   .doc("Form of the selflimiting density source.")
+                                   .withDefault<Field3D>(Field3D{0.0})
+                               / densitysource_normalisation;
+
+    selflimiting_density_overshoot =
+        soptions["density_overshoot"]
+            .doc("Density [m^-3] interval in which the source term is "
+                 "dampened when selflimiting_density > 0.")
+            .withDefault<BoutReal>(2e18)
+        / Nnorm;
+
+    if (selflimiting_density_overshoot <= 0.0) {
+      throw BoutException("Density overshoot must be positive but is {}",
+                          selflimiting_density_overshoot);
+    }
   }
 
-  if (selflimiting_temperature_overshoot <= 0.0) {
-    throw BoutException("Temperature overshoot must be positive but is {}", temperature_overshoot);
+  if (selflimiting_temperature > 0.0) {
+    BoutReal pressuresource_normalisation =
+        SI::qe * Nnorm * Tnorm * Omega_ci; // [Pa/s] or [W/m^3] if converted to energy
+
+    selflimiting_pressureform = soptions["pressure_form"]
+                                    .doc("Form of the selflimiting pressure source.")
+                                    .withDefault<Field3D>(Field3D{0.0})
+                                / pressuresource_normalisation;
+
+    selflimiting_temperature_overshoot =
+        soptions["temperature_overshoot"]
+            .doc("Temperature [eV] interval in which the source term is "
+                 "dampened when selflimiting_temperature > 0.")
+            .withDefault<BoutReal>(10.0)
+        / Tnorm;
+
+    if (selflimiting_temperature_overshoot <= 0.0) {
+      throw BoutException("Temperature overshoot must be positive but is {}",
+                          temperature_overshoot);
+    }
   }
 
   substitutePermissions("name", {name});
