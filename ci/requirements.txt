@@ -6,3 +6,4 @@ zoidberg>=0.3.1
 boutdata @ git+https://github.com/boutproject/boutdata.git@83c2d858ac9bb2db04767fc454f6cf4fadb5127d
 xbout @ git+https://github.com/boutproject/xbout.git@028bea942008d7248a314c62994ec324fc435522
 xhermes @ git+https://github.com/boutproject/xhermes.git@84ddc4f8eb5ed9f0873c72d7bf41a0c824be2dee
+snaptol @ git+https://github.com/PlasmaFAIR/snaptol.git@ef07a300c6242b8ce52a518532ab13fadc04278c

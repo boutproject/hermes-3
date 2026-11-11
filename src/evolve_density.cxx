@@ -278,7 +278,7 @@ void EvolveDensity::finally(const Options& state) {
     // Wave speed used for numerical diffusion
     // Note: For simulations where ion density is evolved rather than electron density,
     // the fast electron dynamics still determine the stability.
-    Field3D fastest_wave;
+    Field3DParallel fastest_wave;
     if (state.isSet("fastest_wave")) {
       fastest_wave = get<Field3D>(state["fastest_wave"]);
     } else {
