@@ -60,7 +60,7 @@ jobs:
       jupyter: ${{ steps.filter.outputs.jupyter }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: Detect affected images
         uses: dorny/paths-filter@v4
@@ -120,7 +120,7 @@ jobs:
     timeout-minutes: 240
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           fetch-depth: 1
 
@@ -149,7 +149,7 @@ jobs:
     steps:
       # Only the local composite action is needed here, not the build context.
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           fetch-depth: 1
           sparse-checkout: .github/actions
@@ -196,7 +196,7 @@ jobs:
     timeout-minutes: 120
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           fetch-depth: 1
 
@@ -222,7 +222,7 @@ jobs:
     steps:
       # Only the local composite action is needed here, not the build context.
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           fetch-depth: 1
           sparse-checkout: .github/actions
@@ -258,7 +258,7 @@ jobs:
     timeout-minutes: 60
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           fetch-depth: 1
 
