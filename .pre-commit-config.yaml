@@ -1,6 +1,8 @@
 # This file requires prek rather than pre-commit
 # See https://pre-commit.com for more information
 # See https://pre-commit.com/hooks.html for more hooks
+exclude: ".*/__snapshots__/*"
+
 repos:
 - repo: builtin
   hooks:

@@ -142,7 +142,7 @@ void EvolveMomentum::finally(const Options& state) {
   const Field3D Nlim = softFloor(N.asField3DParallel(), density_floor);
 
   // Typical wave speed used for numerical diffusion
-  Field3D fastest_wave;
+  Field3DParallel fastest_wave;
   if (state.isSet("fastest_wave")) {
     fastest_wave = get<Field3D>(state["fastest_wave"]);
   } else {
