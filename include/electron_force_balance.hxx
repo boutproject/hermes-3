@@ -20,16 +20,14 @@
 ///
 struct ElectronForceBalance : public NamedComponent<ElectronForceBalance> {
   ElectronForceBalance(std::string name, Options& alloptions, Solver*)
-      : NamedComponent(name,
-                       {readOnly("species:e:pressure"),
-                        readOnly("species:e:density", Regions::Interior),
-                        readOnly("species:e:charge"),
-                        // FIXME: Only writes if already exists
-                        readWrite("species:e:momentum_source"),
-                        readIfSet("species:{non_electrons}:density", Regions::Interior),
-                        readIfSet("species:{non_electrons}:charge"),
-                        // FIXME: Only written if density and charge have been set.
-                        readWrite("species:{non_electrons}:momentum_source")}) {
+      : NamedComponent(
+            name, {readOnly("species:e:pressure"),
+                   readOnly("species:e:density", Regions::Interior),
+                   readOnly("species:e:charge"), readIfSet("species:e:momentum_source"),
+                   readIfSet("species:{non_electrons}:density", Regions::Interior),
+                   readIfSet("species:{non_electrons}:charge"),
+                   // FIXME: Only written if density and charge have been set.
+                   readWrite("species:{non_electrons}:momentum_source")}) {
     auto& options = alloptions[name];
     diagnose = options["diagnose"]
                    .doc("Save additional output diagnostics")
