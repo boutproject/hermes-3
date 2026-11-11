@@ -189,18 +189,17 @@ LowNSources::LowNSources(const std::string& name, Options& options)
  * @brief Add species to their respective groups, rejecting duplicate entries in each category.
  */
 void LowNSources::append_species_by_type(const SpeciesParser& species, SpeciesType type) {
+  const std::string element_str = species.get_element();
+  // Use the original string supplied to the SpeciesParser for state lookups
+  const std::string species_str = species.get_supplied_str();
   if (type != SpeciesType::electron
       and (species.get_charge() < 0 or species.get_charge() > 1)) {
     output_warn.write(
         "LowNSources: species '{}' has unsupported ion charge {}; no low-n sources "
         "will be added for this species.\n",
-        species.get_str(), species.get_charge());
+        species_str, species.get_charge());
     return;
   }
-
-  // The full species string
-  const std::string& species_str = species.get_str();
-  const std::string element_str = species.get_element();
 
   // First, register the species as an ion/neutral/molecule of a particular element
   auto [element_group_it, element_group_inserted] =
@@ -223,7 +222,7 @@ void LowNSources::append_species_by_type(const SpeciesParser& species, SpeciesTy
   // If the species is molecular add a separate group
   //  (Since molecules and molecular ions may need to exchange particles)
   if (species.is_molecule()) {
-    // Get the neutral molecule base (which is the same as species_str for neutral molecules, but not for molecular ions)
+    // Use the (parsed) neutral molecule base for grouping
     const std::string& mol_str = species.get_base_species();
     auto [mol_group_it, mol_group_inserted] = this->species_groups.try_emplace(mol_str);
     if (mol_group_inserted) {

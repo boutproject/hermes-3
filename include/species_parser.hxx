@@ -47,6 +47,8 @@ public:
   int get_charge() const { return this->charge; }
   std::string get_base_species() const { return this->base_species; }
   std::string get_str() const { return this->species_str; }
+  /// Retrieve the species string that was supplied to the parser
+  std::string get_supplied_str() const { return this->supplied_species_str; }
   SpeciesType get_type() const;
 
   /**
@@ -93,8 +95,11 @@ private:
   /// Flag indicating if the species is a molecule
   bool _is_molecule;
 
-  /// Species string
+  /// Canonical/sanitised species string
   std::string species_str;
+
+  /// Original species string supplied to the parser
+  std::string supplied_species_str;
 };
 
 #endif // SPECIES_PARSER_H

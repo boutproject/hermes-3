@@ -197,6 +197,7 @@ TEST_F(SpeciesParserTest, ParseElectron) {
   EXPECT_EQ(parser2.get_charge(), -1);
   EXPECT_EQ(parser2.get_base_species(), "e");
   EXPECT_EQ(parser2.get_str(), "e");
+  EXPECT_EQ(parser2.get_supplied_str(), "e-");
 
   // Charges other than -1 throw for electrons
   ASSERT_THROW(SpeciesParser("e-2"), BoutException);
@@ -232,6 +233,7 @@ TEST_F(SpeciesParserTest, ParseNegativelyCharged) {
   EXPECT_EQ(parser1.get_base_species(), "he");
   EXPECT_EQ(parser1.get_charge(), -1);
   EXPECT_EQ(parser1.get_str(), "he-");
+  EXPECT_EQ(parser1.get_supplied_str(), "He-1");
 
   SpeciesParser parser2("li-2");
   EXPECT_EQ(parser2.get_base_species(), "li");
@@ -251,6 +253,7 @@ TEST_F(SpeciesParserTest, ParseNeutral) {
   EXPECT_EQ(parser.get_charge(), 0);
   // Species string should not include the prefix number and should be lower case
   EXPECT_EQ(parser.get_str(), "he");
+  EXPECT_EQ(parser.get_supplied_str(), "2he");
 }
 
 /// @brief Extract every component in a prefixed molecular ion.
@@ -261,6 +264,7 @@ TEST_F(SpeciesParserTest, ParsePrefixedMolecularIon) {
   EXPECT_TRUE(parser.is_molecule());
   EXPECT_EQ(parser.get_charge(), -2);
   EXPECT_EQ(parser.get_str(), "he10-2");
+  EXPECT_EQ(parser.get_supplied_str(), "12He10-2");
 }
 
 /// @brief Check parsing of various positively charged species.
@@ -274,6 +278,7 @@ TEST_F(SpeciesParserTest, ParsePositivelyCharged) {
   EXPECT_EQ(parser2.get_base_species(), "he");
   EXPECT_EQ(parser2.get_charge(), 2);
   EXPECT_EQ(parser2.get_str(), "he+2");
+  EXPECT_EQ(parser2.get_supplied_str(), "He+2");
 
   SpeciesParser parser3("ne+8");
   EXPECT_EQ(parser3.get_base_species(), "ne");

@@ -80,7 +80,8 @@ SpeciesType SpeciesParser::get_type() const {
 }
 
 ///
-SpeciesParser::SpeciesParser(const std::string& species_str) {
+SpeciesParser::SpeciesParser(const std::string& species_str)
+    : supplied_species_str(species_str) {
 
   // Capture 1. base species (element with optional molecule count), 2. charge sign and
   // 3. charge magnitude. Any leading number is discarded in a non-capturing group.
@@ -119,7 +120,8 @@ SpeciesParser::SpeciesParser(const std::string& species_str) {
 SpeciesParser::SpeciesParser(const SpeciesParser& other, const int charge)
     : base_species(other.base_species), charge(charge), element(other.element),
       _is_molecule(other._is_molecule),
-      species_str(construct_species_str(other.base_species, charge)) {}
+      species_str(construct_species_str(other.base_species, charge)),
+      supplied_species_str(species_str) {}
 
 ///
 std::string SpeciesParser::long_name() const {
