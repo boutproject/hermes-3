@@ -662,9 +662,11 @@ it is recommended to set ``dneut`` according to the field line pitch at the targ
 2D/3D: neutral_mixed
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+Equations
+^^^^^^^^^
 
-The below describes the `neutral_mixed` component used for 2D and 3D simulations. Note that all dimensionalities
-are compatible with the `neutral_boundary` component which facilitates energy losses to the wall through neutral reflection.
+The below describes the `neutral_mixed` component used for 2D and 3D simulations. See :ref:`sec-neutral_mixed_bc` for the
+corresponding boundary conditions and :ref:`sec-neutral_boundary` on enabling wall energy losses due to neutral reflection.
 
 The `neutral_mixed` component solves fluid equations along :math:`y`
 (parallel to the magnetic field), and uses diffusive transport in :math:`x`
@@ -680,12 +682,12 @@ new AFN (Advanced Fluid Neutral) model in SOLPS-ITER [N. Horsten, N.F. (2017)].
          &    + S \\
    \frac{\partial}{\partial t}\left(m_nn_nv_{\parallel, n}\right) =& -m_n \nabla\cdot\left(n_n v_{\parallel, n} (\mathbf{b}v_{||n} + \mathbf{v}_{\perp n}\right)) \\
          &    - \nabla_{\parallel}p_n \\
-         &    + \nabla \cdot (\eta_{n} (\nabla_{\perp} v_{\parallel n} + \mathbf{b} \nabla_{\parallel} v_{\parallel n} )) \\
+         &    + \nabla \cdot (\eta_{n,\perp} \nabla_{\perp} v_{\parallel n} + \mathbf{b} \eta_{n,\parallel} \nabla_{\parallel} v_{\parallel n} ) \\
          &    + F \\
    \frac{\partial p_n}{\partial t} =& -\frac{5}{3} \nabla\cdot\left(p_n\mathbf{b}v_{\parallel, n} +  p_n\mathbf{v}_{\perp n}\right) \\
          &    + \frac{2}{3}v_{\parallel, n} \nabla_{\parallel} p_n \\
-         &    + \frac{2}{3} \nabla\cdot\left(\kappa_n \left(\nabla_\perp T_n + \mathbf{b} \nabla_{\parallel} T_n\right)\right) \\
-         &    - \frac{2}{3} v_{\parallel,n} \nabla \cdot \left(\eta_{n} \left( \nabla_{\perp} v_{\parallel n} + \mathbf{b} \nabla_{\parallel} v_{\parallel n} \right) \right) \\
+         &    + \frac{2}{3} \nabla\cdot\left(\kappa_{n,\perp} \nabla_\perp T_n + \mathbf{b} \kappa_{n,\parallel} \nabla_{\parallel} T_n\right) \\
+         &    - \frac{2}{3} v_{\parallel,n} \nabla \cdot \left( \eta_{n,\perp} \nabla_{\perp} v_{\parallel n} + \mathbf{b} \eta_{n,\parallel} \nabla_{\parallel} v_{\parallel n} \right) \\
          &    + \frac{2}{3}E \\
 
    \end{aligned}
@@ -759,83 +761,293 @@ enabled for neutrals (set in the `braginskii_collisions` component), but ionisat
 is neglected.  ``afn`` is the recommended mode, and is based on the Advanced Fluid Neutral
 model in SOLPS-ITER.
 
+Flux limiting
+^^^^^^^^^^^^^
 
-The primary mechanism for limiting the diffusivity is the flux limiter, which
-smoothly limits :math:`D_n` to :math:`D_{n,\max}`, calculated from a
-user-set fraction of the free-streaming neutral particle flux:
+The diffusive closure places no bound on the transport speed. As the neutral
+mean free path grows, the collision frequency falls and the transport
+coefficients tend towards infinity. This unphysical behaviour is mitigated
+by flux limitation where a flux cap is calculated from a user-specified fraction
+of the free-streaming flux.
+Hermes-3 limits all three diffusive transport channels: perpendicular
+particle diffusion :math:`D_n`, heat conduction :math:`\kappa_n` and viscosity
+:math:`\eta_n`.
 
+Each channel is treated in the same four steps:
+
+1. The unlimited coefficient is calculated from the collisionality, as described
+   above.
+2. The maximum coefficient according to the desired free-streaming fraction
+   is calculated.
+3. Optionally, an additional, explicit user-set diffusion coefficient cap
+   is blended with the free-streaming maximum. The model can also run with a
+   purely explicit cap and no free-streaming based limit.
+4. The unlimited coefficient and the maximum are blended into the final
+   coefficient using a smooth limiter function.
+
+Each flux is the product of a coefficient and a gradient, so step 2 is a
+division by the local gradient. That gradient is first regularised using the
+function :math:`R`, which is described in the next section:
 
 .. math::
 
    \begin{aligned}
-   D_{n,\max} =& \frac{\alpha \frac{1}{4} \bar{v}_{n}}{g_{reg}}, \\
+   D_{n,\max} =& \alpha_{D} \frac{1}{4} \bar{v}_{n}
+       \;\Big/\; R\!\left(\nabla_{\perp}\ln p_n\right) \\
+   \kappa_{n,\max}^{\perp,\parallel} =& \alpha_{\kappa}^{\perp,\parallel}
+       \frac{1}{2} \bar{v}_{n} n_n
+       \;\Big/\; R\!\left(\nabla_{\perp,\parallel} T_n / T_n\right) \\
+   \eta_{n,\max}^{\perp,\parallel} =& \alpha_{\eta}^{\perp,\parallel} p_n
+       \;\Big/\; R_{\eta}\!\left(\nabla_{\perp,\parallel} v_{\parallel n}\right) \\
    \end{aligned}
 
-where :math:`\alpha` is the free-streaming fraction set by the ``flux_limit`` option
-and :math:`\bar{v}_{n} = \sqrt{8T_n / \pi m_n}` is the mean speed of a
-non-drifting Maxwellian, with the :math:`\frac{1}{4}` due to the 1D free-streaming particle
-flux being calculated as :math:`\frac{1}{4} n_n \bar{v}_n`. The denominator
-:math:`g_{reg}` is a regularised inverse pressure-gradient length, where it is smoothly
-clamped to to the range
-:math:`[g_{\min}, g_{\max}]`, where :math:`g_{\max}` and :math:`g_{\min}` are set by
-``limiter_gradient_ceiling`` and ``limiter_gradient_floor`` respectively:
+Here :math:`\bar{v}_{n} = \sqrt{8T_n / \pi m_n}` is the mean speed of a
+non-drifting Maxwellian [Stangeby eq. 2.21, p.67]. The numerators are the
+free-streaming fluxes of each quantity: :math:`\frac{1}{4} n_n \bar{v}_n` for
+particles [Stangeby, under eq. 2.24, p.67], :math:`\frac{1}{2} p_n \bar{v}_n`
+for heat, and :math:`p_n` for parallel momentum. The density factor cancels in
+:math:`D_{n,\max}` because the perpendicular particle flux is
+:math:`\Gamma_{\perp} = -D_n n_n \nabla_{\perp} \ln p_n`.
+
+Conduction and viscosity are limited separately in the parallel and
+perpendicular directions, each using the corresponding component of its
+gradient. Only the perpendicular direction is
+limited for particle transport, because parallel particle transport is
+advective rather than diffusive.
+
+Regularising the gradient
+^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The gradient in the denominator is smoothly clamped to the range
+:math:`[g_{\min}, g_{\max}]` before the division:
 
 .. math::
 
    \begin{aligned}
-   g =& \nabla_{\perp}\ln p_n = \frac{1}{p_n} \nabla_{\perp} p_n \\
-   g_{ceil} =&
-      \frac{g\,g_{\max}}{\sqrt{g^2 + g_{\max}^2}} \\
-   g_{reg} =& \sqrt{g_{ceil}^2 + g_{\min}^2}. \\
+   R(g) =& \sqrt{\frac{g^{2} g_{\max}^{2}}{g^{2} + g_{\max}^{2}} + g_{\min}^{2}}
    \end{aligned}
 
-The floor prevents division by zero, helping to regularise the fraction in regions
-of small gradient at the cost of a small additional reduction in flux. It is applied
-in a way to prevent a non-differentiable kink at :math:`g=0`.
+This has three limits:
 
-The ceiling improves numerical robustness at very steep gradients when the flux limiter
-is saturated. By default, it is set to a value which should only activate during
-the initial transients of a simulation where it can prevent crashes and performance
-degradation. The numerical instability is due to the fact that
-the neutral transport becomes advective in the saturated limit, where the central difference
-scheme implemented for this term is not stable. In the future, a blended operator will be implemented
-which transitions to upwind in the advective limit.
+- :math:`|g| \ll g_{\min}`: :math:`R \rightarrow g_{\min}`. The floor prevents
+  division by zero where the gradient vanishes. It is applied as a sum of
+  squares so that :math:`R` remains smooth at :math:`g = 0` instead of
+  developing a kink. The cost is a small additional reduction of the flux limit
+  in shallow gradients.
+- :math:`g_{\min} \ll |g| \ll g_{\max}`: :math:`R \rightarrow |g|`, so the
+  gradient passes through unmodified.
+- :math:`|g| \gg g_{\max}`: :math:`R \rightarrow g_{\max}`. The ceiling stops
+  the maximum coefficient from becoming arbitrarily small at very steep
+  gradients, which improves robustness where the limiter is saturated. In the
+  saturated limit the neutral transport depends on the free-streaming speed
+  without a dependence on a gradient, making it behave like an advective term.
+  This makes the central difference scheme implemented in its operator unstable
+  due to the risk of checkerboarding. The gradient ceiling ensures that the term
+  can never become fully advective and improves simulation robustness during transients.
+  The default value is set so that it has very little impact in steady state.
 
-Both the floor and the ceiling are in SI units of :math:`m^{-1}`.
+When separate limiters are used, special handling of the regularisation terms is required.
+The particle and conduction limiters divide by an inverse gradient length in
+:math:`m^{-1}`, while the viscosity limiter divides by a velocity gradient in
+:math:`s^{-1}`. In order for all three channels to share regularisation settings,
+the viscosity floor and ceiling are calculated from the shared settings by multiplying
+them by the local mean thermal speed :math:`\bar{v}_{n}`, which converts them from the
+inverse lengths used by the other channels into the velocity gradient units this limiter
+needs. That scaled pair is written :math:`R_{\eta}` above. The viscosity floor therefore
+follows the local neutral temperature rather than being a single value across the domain.
 
-The final diffusion coefficient is a smooth blend of the unlimited
-coefficient and the :math:`D_{n,\max}` cap, using a smooth limiter function:
+Separating the limiters also introduces separate limitation for parallel and perpendicular
+conduction and viscosity. The parallel floor is derived from
+``limiter_gradient_floor`` by dividing it by the setting ``limiter_gradient_floor_ratio``,
+to account for the much shallower gradients typically seen in the parallel direction. This is
+set to 40 by default. The gradient ceiling is shared between the perpendicular and parallel
+directions.
+
+.. list-table::
+   :header-rows: 1
+   :widths: 26 14 12 24 24
+
+   * - Gradient
+     - Used in
+     - Units
+     - Floor option (default)
+     - Ceiling option (default)
+   * - :math:`\nabla_{\perp}\ln p_n`
+     - :math:`D_{n,\max}`
+     - :math:`m^{-1}`
+     - ``limiter_gradient_floor`` (10)
+     - ``limiter_gradient_ceiling`` (100)
+   * - :math:`\nabla_{\perp,\parallel} T_n / T_n`
+     - :math:`\kappa_{n,\max}`
+     - :math:`m^{-1}`
+     - ``limiter_gradient_floor`` (10) for :math:`\perp`, divided by
+       ``limiter_gradient_floor_ratio`` (40) for :math:`\parallel`
+     - ``limiter_gradient_ceiling`` (100)
+   * - :math:`\nabla_{\perp,\parallel} v_{\parallel n}`
+     - :math:`\eta_{n,\max}`
+     - :math:`s^{-1}`
+     - ``limiter_gradient_floor`` (10) :math:`\times \bar{v}_n` for
+       :math:`\perp`, divided by ``limiter_gradient_floor_ratio`` (40) for
+       :math:`\parallel`
+     - ``limiter_gradient_ceiling`` (100) :math:`\times \bar{v}_n`
+
+Raising a floor or lowering a ceiling improves robustness but changes the
+answer, so both should be checked for convergence.
+
+Applying the limit
+^^^^^^^^^^^^^^^^^^
+
+The final coefficient is a smooth blend of the unlimited coefficient and the
+maximum. Writing this for :math:`D_n`, and with the same form used for
+:math:`\kappa_n` and :math:`\eta_n`:
 
 .. math::
+
    \begin{aligned}
    D_n = D_{n,unlim}
       \left[1 + \left(\frac{D_{n,unlim}}{D_{n,\max}}\right)^\gamma
       \right]^{-1/\gamma},
    \end{aligned}
 
-where :math:`\gamma` is ``flux_limiter_sharpness``. The default :math:`\gamma=1`
-gives the harmonic mean
+where :math:`\gamma` is set by ``flux_limiter_sharpness``. The default
+:math:`\gamma = 1` gives the harmonic mean
 
 .. math::
+
    \begin{aligned}
    D_n = \frac{D_{n,unlim}D_{n,\max}}
-              {D_{n,unlim} + D_{n,\max}} .
+              {D_{n,unlim} + D_{n,\max}} ,
    \end{aligned}
 
-Larger values of :math:`\gamma` make the transition sharper. Setting
-``flux_limit`` below zero disables the flux limiter. The separate
-``diffusion_limit`` option can also impose a hard upper bound on
-:math:`D_{n,\max}`.
+and larger values of :math:`\gamma` make the transition sharper.
 
-The neutral conductivity and viscosity coefficients, which control
-both the parallel and perpendicular diffusion of temperature and
-parallel momentum, are then calculated from the limited diffusion coefficient:
+The flux limit fraction :math:`\alpha` also acts as a switch on its channel:
+
+- :math:`\alpha < 0` disables the free-streaming limiter, so the unlimited
+  coefficient is used unless an explicit cap is set.
+- :math:`\alpha = 0` sets the coefficient to zero, switching the channel off.
+  Note that with ``combined_limiters = true``, setting ``flux_limit = 0``
+  switches off diffusion, conduction and viscosity together.
+
+Explicit coefficient caps
+^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Each channel can also be capped by an explicit, user-set maximum coefficient,
+using ``diffusion_limit``, ``conduction_limit`` and ``viscosity_limit``. These
+are set in SI units and are negative by default, which disables them.
+
+If both the flux limit fraction and the explicit cap are set for a channel, the
+maximum coefficient is the harmonic mean of the two. If only the explicit cap is
+set, the maximum coefficient is that value. If neither is set, the channel is
+not limited at all.
+
+Combined and separate limiters
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The conduction and viscosity coefficients are related to the diffusion
+coefficient by the Chapman-Enskog approximation:
 
 .. math::
+
    \begin{aligned}
-   \kappa_{n} =& \frac{5}{2} D_n N_n \\
+   \kappa_{n} =& \frac{5}{2} D_n n_n \\
    \eta_{n} =& \frac{2}{5} m_n \kappa_{n} \\
    \end{aligned}
+
+This relation always holds for the unlimited coefficients. Whether it also holds
+for the limited coefficients is controlled by ``combined_limiters``.
+
+With ``combined_limiters = true``, which is the default, only :math:`D_n` is
+limited, and the limited :math:`\kappa_n` and :math:`\eta_n` are calculated from
+the limited :math:`D_n` using the relation above. The limiting is then isotropic
+and is driven by the pressure gradient alone. This is cheaper and more robust,
+but less physically accurate. In this mode, the conduction and viscosity limiter
+options have no effect, and setting any of ``flux_limit_cond_perp``,
+``flux_limit_cond_par``, ``flux_limit_visc_perp``, ``flux_limit_visc_par``,
+``conduction_limit`` or ``viscosity_limit`` raises an exception rather than
+being silently ignored.
+
+With ``combined_limiters = false``, each channel is limited by its own
+free-streaming flux and its own gradient, separately in the parallel and
+perpendicular directions, as described above.
+
+Flux limiter options
+^^^^^^^^^^^^^^^^^^^^
+
+.. list-table::
+   :header-rows: 1
+   :widths: 30 18 52
+
+   * - Option
+     - Default
+     - Meaning
+   * - ``combined_limiters``
+     - ``true``
+     - Derive the :math:`\kappa_n` and :math:`\eta_n` limits from :math:`D_n`
+   * - ``flux_limit``
+     - 0.5
+     - :math:`\alpha_{D}`, fraction of free-streaming particle flux
+   * - ``flux_limit_cond_perp``
+     - ``flux_limit``
+     - :math:`\alpha_{\kappa}^{\perp}`, fraction of free-streaming heat flux
+   * - ``flux_limit_cond_par``
+     - ``flux_limit_cond_perp``
+     - :math:`\alpha_{\kappa}^{\parallel}`
+   * - ``flux_limit_visc_perp``
+     - ``flux_limit``
+     - :math:`\alpha_{\eta}^{\perp}`, fraction of free-streaming momentum flux
+   * - ``flux_limit_visc_par``
+     - ``flux_limit_visc_perp``
+     - :math:`\alpha_{\eta}^{\parallel}`
+   * - ``flux_limiter_sharpness``
+     - 1.0
+     - :math:`\gamma`, sharpness of the blend between unlimited and maximum
+   * - ``diffusion_limit``
+     - -1
+     - Explicit cap on :math:`D_n` in :math:`m^{2} s^{-1}`
+   * - ``conduction_limit``
+     - -1
+     - Explicit cap on :math:`\kappa_n` in :math:`W\,m^{-1}\,eV^{-1}`
+   * - ``viscosity_limit``
+     - -1
+     - Explicit cap on :math:`\eta_n` in :math:`Pa\,s`
+   * - ``limiter_gradient_floor``
+     - 10
+     - :math:`g_{\min}` for every perpendicular channel, in :math:`m^{-1}`
+   * - ``limiter_gradient_floor_ratio``
+     - 40
+     - Parallel floor is ``limiter_gradient_floor`` divided by this
+   * - ``limiter_gradient_ceiling``
+     - 100
+     - :math:`g_{\max}` for every channel, in :math:`m^{-1}`
+
+Setting a flux limit fraction or an explicit cap below zero disables it.
+
+Flux limiter diagnostics
+^^^^^^^^^^^^^^^^^^^^^^^^
+
+Setting ``diagnose = true`` writes the coefficients at each stage of the
+limiting to the output. The names below are for a species ``d``.
+
+.. list-table::
+   :header-rows: 1
+   :widths: 34 66
+
+   * - Diagnostic
+     - Meaning
+   * - ``Dnnd_unlimited``, ``kappa_d_unlimited``, ``eta_d_unlimited``
+     - Coefficients from the collisionality, before any limiting
+   * - ``Dnnd_max``, ``kappa_d_max_perp``, ``kappa_d_max_par``,
+       ``eta_d_max_perp``, ``eta_d_max_par``
+     - Maximum coefficients, after any explicit cap is blended in
+   * - ``Dnnd``, ``kappa_d_perp``, ``kappa_d_par``, ``eta_d_perp``,
+       ``eta_d_par``
+     - Final coefficients used in the equations
+
+The maximum coefficients are only written if the corresponding limiter is
+enabled. With ``combined_limiters = true``, the conduction and viscosity
+maximums are derived from ``Dnnd_max`` and are written for diagnostic purposes
+only.
 
 .. doxygenstruct:: NeutralMixed
    :members:
@@ -1021,43 +1233,46 @@ potential is calculated. Other drifts can be added with the following components
 diamagnetic_drift
 ~~~~~~~~~~~~~~~~~
 
-Adds diamagnetic drift terms to all species' density, pressure and parallel momentum
-equations. Calculates the diamagnetic drift velocity as
+Adds diamagnetic drift terms to charged species' density, pressure and parallel
+momentum equations. In physical units, the effective diamagnetic drift velocity is
 
 .. math::
 
-   \mathbf{v}_{dia} = \frac{T}{q} \nabla\times\left(\frac{\mathbf{b}}{B}\right)
+   \mathbf{v}_{dia} = \frac{T}{q}\mathbf{C},
+   \qquad \mathbf{C} = \nabla\times\left(\frac{\mathbf{b}}{B}\right)
 
-where the curvature vector :math:`\nabla\times\left(\frac{\mathbf{b}}{B}\right)`
-is read from the `bxcv` mesh input variable.
+where :math:`\mathbf{b}` is the unit vector along the magnetic field,
+:math:`B` is its magnitude [T], and :math:`q` is the species charge [C]. The
+temperature :math:`T` is specified in eV and expressed as an energy [J] in
+these SI equations. The curvature vector :math:`\mathbf{C}` is constructed
+from the contravariant ``bxcv`` mesh vector, including conversion and code
+normalisation.
 
-Two forms are available, which are implemented differently for density, momentum, and pressure equations. In the density equation, form 0 uses the diamagnetic velocity perpendicular to b and the gradient of P;
-at the boundaries this velocity is perpendicular to the boundary. Form 1 uses the magnetic gyro-center drifts, which are mostly vertical;
-at the boundaries this form produces a flow through the boundary.
-Forms 0 and 1 are analytically equivalent and should give the same result away from boundaries,
-but form 0 doesn't produce flows through boundaries. This is an approach that UEDGE uses to avoid unphysical boundary flows.
+For a transported quantity :math:`f`, define :math:`g=fT/q`. The gradient
+form applies :math:`\mathbf{C}\cdot\nabla g`, while the divergence form
+uses :math:`\nabla\cdot(f\mathbf{v}_{dia})`. These are analytically
+equivalent because their difference is :math:`g\nabla\cdot\mathbf{C}`,
+which vanishes for a curl. Their discrete forms and boundary treatments
+are described below.
 
-
-However, Form 1 is nice because the flow velocity depends on the temperature, not the pressure gradient.
-This usually makes it better behaved numerically. To make the most of both, the `diamagnetic_drift` component allows the forms to be mixed
-using the ``diamag_form`` setting. For example, the :code:`tcv-x21` example blends it such that form 0 is at the boundary:
-
-
-.. code-block:: ini
-
-   [diamagnetic_drift]
-   diamag_form = x * (1 - x)  # 0 = gradient; 1 = divergence
-
-
-A table of the two forms used in Hermes-3, and the corresponding terms in `Simakov & Catto <https://doi.org/10.1063/1.1623492>`_ is shown below, where :math:`\mathbf{C}=\nabla\times\left(\frac{\mathbf{b}}{B}\right)` is the curvature vector. Instead of the diamagnetic velocity, the whole terms associated are shown. The difference among the forms is the divergence of a curl, which vanishes. The diamagnetic velocity :math:`\mathbf{v}_{dia}` is defined above. Notice that Simakov & Catto used Gaussian units, but Hermes-3 uses SI units.
+The following table compares the transport terms with those in
+`Simakov & Catto <https://doi.org/10.1063/1.1623492>`_. Here :math:`n` is
+the number density [m\ :sup:`-3`], :math:`p=nT` is the pressure [Pa],
+:math:`m` is the particle mass [kg], and :math:`v_\parallel` is the
+parallel velocity [m/s]. In the Gaussian-unit expressions, :math:`c`
+denotes the speed of light and :math:`\Omega` the cyclotron frequency.
+The terms are subtracted from the density, momentum and thermal energy
+sources. The pressure equation converts the energy source to a pressure
+source with a factor of :math:`2/3`, as described in
+:ref:`sec-evolve_pressure`.
 
 .. list-table::
    :header-rows: 1
    :widths: 10 20 20 35
 
    * -
-     - Form 0
-     - Form 1
+     - Gradient form
+     - Divergence form
      - Simakov & Catto
    * - Density
      - :math:`\mathbf{C} \cdot \nabla\left(\dfrac{p}{q}\right)`
@@ -1067,12 +1282,189 @@ A table of the two forms used in Hermes-3, and the corresponding terms in `Simak
      - :math:`\mathbf{C} \cdot \nabla\left(\dfrac{mnv_\parallel T}{q}\right)`
      - :math:`\nabla\cdot (mnv_\parallel \mathbf{v}_{dia})`
      - Eq. (64): :math:`\nabla\cdot \left(\dfrac{1}{\Omega} \mathbf{b} \times \nabla(p v_\parallel)\right)`
-   * - Pressure
+   * - Thermal energy
      - :math:`\dfrac{5}{2}\mathbf{C} \cdot \nabla\left(\dfrac{pT}{q}\right)`
      - :math:`\dfrac{5}{2}\nabla\cdot (p \mathbf{v}_{dia})`
      - Eq. (56): :math:`\nabla\cdot\left(\dfrac{5}{2 m \Omega} \mathbf{b} \times \nabla(p T)\right)`
 
-\* Eq.(64) in Simakov & Catto is derived for ion parallel momentum, but it is also applicable to electrons since it comes from the gyro-viscosity and the mass factors of :math:`m_i` or :math:`m_e` cancel out.
+Eq. (64) in Simakov & Catto is derived for ion parallel momentum,
+but it is also applicable to electrons since it comes from the gyro-viscosity
+and the mass factors of :math:`m_i` or :math:`m_e` cancel out.
+
+Options
+^^^^^^^
+
+The defaults select the divergence form with closed radial faces and core-ring
+averaging:
+
+.. code-block:: ini
+
+   [diamagnetic_drift]
+   form = divergence
+   radial_boundary = closed_average
+
+.. list-table::
+   :header-rows: 1
+   :widths: 20 25 15 40
+
+   * - Option
+     - Values
+     - Default
+     - Meaning
+   * - ``form``
+     - ``divergence``, ``gradient``
+     - ``divergence``
+     - Finite-volume flux divergence or C2 gradient form.
+   * - ``radial_boundary``
+     - ``open``, ``closed``, ``closed_average``
+     - ``closed_average``
+     - Treatment of radial (:math:`x`) faces only.
+   * - ``bndry_flux`` (deprecated)
+     - ``true``, ``false``
+     - Unset
+     - Alias for ``radial_boundary``: ``true`` selects ``open`` and
+       ``false`` selects ``closed``. Setting both options is an error.
+
+Boundary treatment
+^^^^^^^^^^^^^^^^^^
+
+Both forms close the sheath (:math:`y`) faces for every value of
+``radial_boundary``. The sheath boundary component supplies the target fluxes.
+The radial treatment is:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 20 40 40
+
+   * - ``radial_boundary``
+     - Divergence form
+     - Gradient form
+   * - ``open``
+     - Retain the finite-volume radial face fluxes.
+     - Retain the radial face fluxes implied by C2 derivatives.
+   * - ``closed``
+     - Set both radial boundary face fluxes to zero.
+     - Remove both implied radial boundary face fluxes.
+   * - ``closed_average``
+     - Apply ``closed``, then average the core-ring sources.
+     - Apply ``closed``, then average the core-ring sources.
+
+Core-ring averaging in the ``closed_average`` radial boundary removes
+the average flux through the core (inner X, periodic Y) boundary, by
+averaging the density, energy and momentum sources over both Y
+and Z. This removes the poloidal variation caused by turning off
+fluxes through the core boundary.
+
+In the divergence form, the target guard temperature is copied from the adjacent
+interior cell in field-aligned coordinates. Together with the sign-reversed guard
+curvature, this makes the face velocity zero even when the supplied guard
+temperature differs from the interior value. The gradient form removes the
+implied target face flux, using a linear continuation of :math:`J C^y` from the
+interior in the field-aligned frame, where :math:`J` is the coordinate Jacobian
+and :math:`C^y` the contravariant :math:`y` component of the curvature. It requires
+a parallel transform that can convert to and from field-aligned coordinates;
+``form = gradient`` is rejected for FCI transforms.
+
+The pressure-gradient diamagnetic flow is tangent to a boundary on which the
+pressure is uniform. The effective curvature-drift velocity can nevertheless
+have a normal component, so its radial face flux is closed by default. Closing
+the face changes the outermost cell's transport term by order
+:math:`f T C^x/(q\Delta x)`, where :math:`C^x` is the radial curvature component
+and :math:`\Delta x` the radial mesh spacing. For fixed curvature and charge,
+the rate relative to :math:`f` scales as :math:`T/\Delta x` and is reduced by
+the low temperatures normally imposed at radial walls.
+
+Conservation
+^^^^^^^^^^^^
+
+The divergence form is a finite-volume flux form. Its volume integral is the
+net boundary flux, to roundoff. With closed radial faces, closed sheath faces
+and periodic toroidal boundaries, its density, thermal energy and parallel
+momentum sources each have zero volume integral.
+
+The gradient form is conservative when the curvature is a discrete curl
+compatible with the C2 derivatives, so that its discrete divergence vanishes.
+For general transported fields, this zero discrete divergence is required;
+an analytic curl sampled on the mesh need not satisfy it. In one coordinate
+direction the C2 stencil has the exact face-flux identity
+
+.. math::
+
+   a_i\frac{g_{i+1}-g_{i-1}}{2}
+   = F_{i+1/2}-F_{i-1/2}
+     - g_i\frac{a_{i+1}-a_{i-1}}{2},
+   \qquad
+   F_{i+1/2}=\frac{a_i g_{i+1}+a_{i+1}g_i}{2}.
+
+Here :math:`i` indexes cells along the coordinate direction and
+:math:`a=J C^x` in the radial direction, with analogous expressions for the
+other directions. Dividing by :math:`J_i\Delta x_i` gives the cell-centred
+transport term. The face fluxes telescope in a volume integral; the remaining
+volume term vanishes only when the discrete divergence of the curvature
+vanishes. Closing a boundary removes its implied face flux, while retaining
+this volume term.
+
+Spatially varying blends of the two cell-centred forms are not conservative,
+even when compatible curvature makes both forms flux divergences. To see this,
+consider a closed one-dimensional domain and a blended sink
+:math:`D_i=w_i D_i^D+(1-w_i)D_i^G`, where :math:`w_i` is the divergence-form
+weight and the superscripts identify the two forms. Summation by parts gives
+
+.. math::
+
+   \sum_i V_i D_i
+   = -\sum_{i+1/2}\left(F^D_{i+1/2}-F^G_{i+1/2}\right)\Delta w_{i+1/2},
+   \qquad \Delta w_{i+1/2}=w_{i+1}-w_i.
+
+Here :math:`V_i` is the cell volume, and :math:`F^D` and :math:`F^G` are
+the integrated face fluxes of the two forms. Fluxes shared by adjacent cells
+are weighted differently, leaving a term proportional to the difference
+between the face fluxes and the change in weight. It does not generally
+cancel, which is why spatial blending has been removed.
+
+Core averaging
+^^^^^^^^^^^^^^
+
+For ``closed_average``, each source :math:`S` in the innermost closed core
+ring is replaced by its volume-weighted mean:
+
+.. math::
+
+   \overline{S} = \frac{\sum_{i\in R} V_i S_i}{\sum_{i\in R}V_i},
+   \qquad V_i=J_i\Delta x_i\Delta y_i\Delta z_i.
+
+Here :math:`R` contains all poloidal and toroidal cells on the innermost core
+ring, including cells on other MPI processors, and :math:`V_i` is the cell
+volume [m\ :sup:`3`]. This preserves the ring integral of each density,
+energy and momentum source, including when the metric varies in the toroidal
+direction. It removes the dipole artefact produced by blocking the inner
+radial face flux and is consistent with holding the evolving fields uniform
+around the core boundary. Private-flux cells and other radial rings are not
+averaged. Where no closed core ring is present, ``closed_average`` acts as
+``closed``.
+
+Migration
+^^^^^^^^^
+
+The ``diamag_form`` option has been removed. Replace ``diamag_form = 1``
+with ``form = divergence`` and ``diamag_form = 0`` with ``form = gradient``,
+and delete the old option: any remaining ``diamag_form`` setting is an error.
+Spatially varying expressions must be replaced by a single form for the whole
+domain, for the conservation reason given above.
+
+The deprecated ``bndry_flux`` alias emits a warning. Replace
+``bndry_flux = true`` with ``radial_boundary = open`` and
+``bndry_flux = false`` with ``radial_boundary = closed``; do not set both
+the alias and ``radial_boundary``. The branch-only switches ``divergence_form``
+and ``average_core`` have also been removed; select ``form`` and
+``radial_boundary`` explicitly instead.
+
+The former master defaults were effectively divergence form with open radial
+faces. The defaults are now ``form = divergence`` and
+``radial_boundary = closed_average``. To retain the former open radial
+treatment, set ``radial_boundary = open`` explicitly. The gradient form now
+always uses C2 derivatives, independently of the mesh's default derivative
+settings.
 
 
 .. doxygenstruct:: DiamagneticDrift
