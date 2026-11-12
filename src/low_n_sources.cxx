@@ -10,6 +10,7 @@
 
 #include "guarded_options.hxx"
 #include "pseudo_reaction.hxx"
+#include "reaction_parser.hxx"
 #include "species_parser.hxx"
 
 // ======================= Helper struct and functions ========================
@@ -116,10 +117,8 @@ LowNSources::LowNSources(const std::string& name, Options& options,
  * @brief Main constructor: Read options and set up pseudo-reactions.
  */
 LowNSources::LowNSources(const std::string& name, Options& options)
-    : NamedComponent(name, {readOnly("species:{all_species}:{read_vals}"),
-                            readWrite("species:{all_species}:{write_vals}")}),
+    : NamedComponent(name, {readWrite("species:{all_species}:{write_vals}")}),
       options(options) {
-  substitutePermissions("read_vals", {"AA", "density", "velocity", "temperature"});
   substitutePermissions("write_vals", {"density_source", "momentum_source",
                                        "energy_source", "collision_frequency"});
 
@@ -288,6 +287,35 @@ void LowNSources::instantiate_reactions() {
                                        : this->density_thresholds.at(spec.boost_species);
     spec.external_src_mom_energy_enabled = this->external_src_mom_energy_enabled;
     spec.strategy = this->strategy;
+
+    // Permissions
+    // Read access to densities referenced in the reaction spec
+    for (const auto& species_name :
+         {spec.target_species, spec.gate_species, spec.boost_species}) {
+      if (!species_name.empty()) {
+        setPermissions(readOnly(fmt::format("species:{}:density", species_name)));
+      }
+    }
+
+    // Use the reaction parser to identify heavy species
+    const ReactionParser parser(spec.reaction_str);
+    for (const auto& species_name : parser.get_species(species_filter::heavy)) {
+      // Read access to heavy species masses
+      setPermissions(readOnly(fmt::format("species:{}:AA", species_name)));
+      /*
+      Momentum and energy sources are handled by Reaction::transform_impl in general.
+      This class only needs access to velocities and temperatures if
+        1. the pseudo-reaction is an external source
+        2. momentum and energy sources are enabled for external sources
+        3. the species in question is a 'reactant' in the external source reaction string
+      */
+      if (parser.pop_change(species_name) < 0
+          || (type == PseudoReactionType::external_src
+              && spec.external_src_mom_energy_enabled)) {
+        setPermissions(readOnly(fmt::format("species:{}:velocity", species_name)));
+        setPermissions(readOnly(fmt::format("species:{}:temperature", species_name)));
+      }
+    }
 
     // Instantiate and add to the (pseudo-)reaction list
     this->reactions.emplace_back(
