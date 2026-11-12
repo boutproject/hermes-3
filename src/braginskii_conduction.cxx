@@ -356,7 +356,7 @@ void BraginskiiConduction::transform_impl(GuardedOptions& state) {
        * DOI 10.1002/ctpp.200610001
        */
 
-      // Classical heat flux, optionally already limited by the transit length
+      // Spitzer-Härm heat flux
       const Field3D q_SH = kappa_par * Grad_par(T);
       // Free-streaming flux
       const Field3D q_fl = kappa_limit_alpha * N * T * sqrt(T / AA);
