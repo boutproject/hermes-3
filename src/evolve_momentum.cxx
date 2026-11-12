@@ -313,6 +313,11 @@ void EvolveMomentum::precon(const Options& state, BoutReal gamma) {
   if (frozen == pc::frozen.end()) {
     return;
   }
+  if (NV.isFci())
+  {
+    // FCI version untested, may require modifications
+    return;
+  }
 
   if (state.isSet("scale_timederivs")) {
     throw BoutException("The viscosity preconditioner does not support scale_timederivs");
@@ -321,9 +326,11 @@ void EvolveMomentum::precon(const Options& state, BoutReal gamma) {
     viscosity_inverse = InvertParDiv::create();
   }
   const auto& species = state["species"][name];
+  const auto* coord = NV.getCoordinates();
+  
   const BoutReal AA = get<BoutReal>(species["AA"]);
   const Field3D N = softFloor(get<Field3D>(species["density"]), density_floor);
-  const Field2D B = N.getCoordinates()->Bxy();
+  const Field2D B = DC(coord->Bxy());
   const Field2D sqrtB = sqrt(B);
 
   // With g = sqrtB dV and dNV = AA N dV, the linearised viscous force
@@ -342,10 +349,9 @@ void EvolveMomentum::precon(const Options& state, BoutReal gamma) {
   const Field3D closure = sheathClosure(V);
   Field2D Ash{0.0, mesh};
   Ash.allocate();
-  const auto* coord = N.getCoordinates();
-  const Field2D J = coord->J();
-  const Field2D dy = coord->dy();
-  const Field2D g_22 = coord->g_22();
+  const Field2D J = DC(coord->J());
+  const Field2D dy = DC(coord->dy());
+  const Field2D g_22 = DC(coord->g_22());
   auto face = [&](int x, int y, int yg) {
     if (x < mesh->xstart or x > mesh->xend) {
       return;
