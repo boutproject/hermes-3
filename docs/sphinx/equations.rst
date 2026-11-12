@@ -312,7 +312,7 @@ mode.
 Transit-length conductivity limiter
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-An optional transit-length cap limits conductivity even at small parallel
+An optional transit-length cap limits conductivity at small parallel
 temperature gradients:
 
 .. math::
@@ -335,35 +335,25 @@ Enable it independently for each species:
    kappa_transit_alpha = 1.0
    diagnose = true
 
-The default is ``kappa_transit_limit = false``, preserving existing behavior.
+The default is ``kappa_transit_limit = false``.
 Length options, in order of precedence:
 
 * ``kappa_transit_length`` sets :math:`L_\parallel` in metres as a scalar or field
   expression.
 * Otherwise, :math:`L_\parallel = |q|R`, with independent species overrides
-  ``kappa_transit_q`` (dimensionless) and ``kappa_transit_R`` (metres).
+  ``kappa_transit_q`` (dimensionless) and ``kappa_transit_R`` (meters).
 * Without an override, read a ``Field3D`` from mesh variables ``q`` or ``Rxy``.
-  Scalar and 2D data are supported, including analytic meshes without a grid file.
   Set ``kappa_transit_q_field`` or ``kappa_transit_R_field`` to use other names.
 * Missing values independently default to :math:`q=4` and :math:`R=2\,\mathrm{m}`,
   with a log message, giving :math:`L_\parallel=8\,\mathrm{m}` if both are absent.
 
-``Rxy`` is the local cylindrical radius; set ``kappa_transit_R`` for a fixed major
-radius. The scale is :math:`qR`, not :math:`2\pi qR` or a measured SOL connection
-length. The limiter applies throughout the conducting domain and does not infer
-``q`` from twist shift. Supply a valid length wherever grid ``q`` is undefined.
-
-Strength and length must be finite and positive; invalid values are rejected.
-Larger ``kappa_transit_alpha`` or length weakens limiting. Negative density and
-temperature are clipped to zero in the cap; zero cap gives zero conductivity.
 The existing ``kappa_limit_alpha`` heat-flux limiter, if enabled, is applied
 afterward. The transit cap alone does not bound heat flux at arbitrary gradients.
 
 With ``diagnose = true``, ``kappa_transit_factor_<species>`` saves the reduction
 factor before heat-flux limiting, and ``kappa_transit_length_<species>`` saves the
 length with conversion metadata to metres. Existing operators and preconditioners
-use the final conductivity. Enabling the cap changes the physical closure;
-any performance benefit requires benchmarking.
+use the final conductivity. Enabling the cap changes the physical closure.
 
 
 Species parallel dynamics
