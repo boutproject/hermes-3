@@ -79,6 +79,8 @@ TEST_F(EvolveMomentumTest, Finally) {
 
 TEST_F(EvolveMomentumTest, ViscosityPrecon) {
   namespace pc = hermes::viscosity_precon;
+  // Y must not be periodic: Div_par_fvv then reads two guard cells, and FakeMesh has one
+  static_cast<FakeMesh*>(mesh)->ix_separatrix = 0;
   FakeSolver solver;
 
   Options options{{"units", {{"eV", 1.0}, {"inv_meters_cubed", 1.0}, {"seconds", 1.0}}},

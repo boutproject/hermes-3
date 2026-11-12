@@ -317,6 +317,10 @@ void EvolveMomentum::precon(const Options& state, BoutReal gamma) {
   if (state.isSet("scale_timederivs")) {
     throw BoutException("The viscosity preconditioner does not support scale_timederivs");
   }
+  if constexpr (bout::build::use_metric_3d) {
+    // InvertParDiv has no implementation with 3D metrics (including FCI)
+    return;
+  }
   if (!viscosity_inverse) {
     viscosity_inverse = InvertParDiv::create();
   }
