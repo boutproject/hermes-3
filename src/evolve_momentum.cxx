@@ -321,9 +321,11 @@ void EvolveMomentum::precon(const Options& state, BoutReal gamma) {
     viscosity_inverse = InvertParDiv::create();
   }
   const auto& species = state["species"][name];
+  const auto* coord = NV.getCoordinates();
+
   const BoutReal AA = get<BoutReal>(species["AA"]);
   const Field3D N = softFloor(get<Field3D>(species["density"]), density_floor);
-  const Field2D B = N.getCoordinates()->Bxy();
+  const Field2D B = DC(coord->Bxy());
   const Field2D sqrtB = sqrt(B);
 
   // With g = sqrtB dV and dNV = AA N dV, the linearised viscous force
@@ -340,12 +342,11 @@ void EvolveMomentum::precon(const Options& state, BoutReal gamma) {
   // flux. The recovered dNV still uses the mass term A.
   const Field3D V = get<Field3D>(species["velocity"]);
   const Field3D closure = sheathClosure(V);
-  Field2D Ash{0.0, mesh};
-  Ash.allocate();
-  const auto* coord = N.getCoordinates();
-  const Field2D J = coord->J();
-  const Field2D dy = coord->dy();
-  const Field2D g_22 = coord->g_22();
+  Field2D A_sh{0.0, mesh};
+  A_sh.allocate();
+  const Field2D J = DC(coord->J());
+  const Field2D dy = DC(coord->dy());
+  const Field2D g_22 = DC(coord->g_22());
   auto face = [&](int x, int y, int yg) {
     if (x < mesh->xstart or x > mesh->xend) {
       return;
@@ -358,7 +359,7 @@ void EvolveMomentum::precon(const Options& state, BoutReal gamma) {
     for (int z = 0; z < mesh->LocalNz; z++) {
       factor += 1.0 - closure(x, yg, z) * rho;
     }
-    Ash(x, y) -= b * factor / mesh->LocalNz;
+    A_sh(x, y) -= b * factor / mesh->LocalNz;
   };
   for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
     face(r.ind, mesh->ystart, mesh->ystart - 1);
@@ -366,24 +367,25 @@ void EvolveMomentum::precon(const Options& state, BoutReal gamma) {
   for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
     face(r.ind, mesh->yend, mesh->yend + 1);
   }
-  viscosity_inverse->setCoefA(A + Ash);
+  viscosity_inverse->setCoefA(A + A_sh);
   viscosity_inverse->setCoefB(Bcoef);
 
   Field3D rhs = ddt(NV) / sqrtB;
   rhs.applyBoundary("neumann");
-  // 3D density reconstruction: dNV = AA N dV with the local density
+  // Use the local density (i.e. non-toroidally averaged) to reconstruct
+  // the approximate residual
   ddt(NV) = (AA * N / sqrtB) * viscosity_inverse->solve(rhs);
 }
 
 Field3D EvolveMomentum::sheathClosure(const Field3D& V) const {
-  // Smooth Bohm condition: the sheath boundary publishes the exact local closure
+  // Account for the smooth Bohm boundary condition in the viscsotiy preconditioner
   const auto smooth = hermes::viscosity_precon::sheath_closure.find(name);
   if (smooth != hermes::viscosity_precon::sheath_closure.end()) {
     return smooth->second;
   }
   // The sheath boundary sets V_guard = 2 v_sheath - V in field-aligned coordinates,
-  // with v_sheath independent of V (electrons, subsonic ions), so dV_guard = -dV;
-  // ions leaving supersonically get V_guard = V, so dV_guard = dV.
+  // with v_sheath independent of V, so dV_guard = -dV; ions leaving supersonically
+  // get V_guard = V, so dV_guard = dV.
   const Field3D V_fa = toFieldAligned(V);
   Field3D closure{zeroFrom(V_fa)};
   auto classify = [&](int x, int yi, int yg) {
