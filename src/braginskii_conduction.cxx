@@ -82,6 +82,65 @@ BraginskiiConduction::BraginskiiConduction(const std::string& name, Options& all
             .doc("Flux limiter factor. < 0 means no limit. Typical is 0.2 "
                  "for electrons, 1 for ions.")
             .withDefault(-1.0);
+
+    if (options["kappa_transit_limit"]
+            .doc("Limit conductivity using a parallel transit length?")
+            .withDefault<bool>(false)) {
+      const BoutReal alpha = options["kappa_transit_alpha"]
+                                 .doc("Conductivity cap = alpha * n * sqrt(T/m) * L")
+                                 .withDefault(1.0);
+      if (!std::isfinite(alpha) or alpha <= 0.0) {
+        throw BoutException("{}: kappa_transit_alpha must be finite and positive", name);
+      }
+      if (!std::isfinite(all_kappa_coefficient[name])
+          or all_kappa_coefficient[name] < 0.0) {
+        throw BoutException("{}: transit limiting requires nonnegative kappa_coefficient",
+                            name);
+      }
+
+      auto& length_option = options["kappa_transit_length"];
+      length_option.doc("Parallel transit length [m]; defaults to abs(q) * R");
+      Field3D length;
+      if (length_option.isSet()) {
+        length = length_option.as<Field3D>();
+      } else {
+        // Use the mesh data source, which can also be an analytic input mesh.
+        // Explicit species options take precedence over mesh geometry.
+        auto read_geometry = [&](const std::string& option, const std::string& field,
+                                 BoutReal fallback) {
+          auto& value = options[option];
+          value.doc("Override transit geometry; otherwise read the mesh field");
+          Field3D result;
+          if (value.isSet()) {
+            result = value.as<Field3D>();
+          } else {
+            const auto field_name = options[option + "_field"]
+                                        .doc("Mesh variable for transit geometry")
+                                        .withDefault(field);
+            if (mesh->get(result, field_name, fallback)) {
+              output_info.write("{}: transit limiter missing mesh {}; using {}\n", name,
+                                field_name, fallback);
+            }
+          }
+          return result;
+        };
+        const Field3D q = read_geometry("kappa_transit_q", "q", 4.0);
+        const Field3D R = read_geometry("kappa_transit_R", "Rxy", 2.0);
+        length = abs(q) * R;
+      }
+      const BoutReal Lnorm = alloptions["units"]["meters"].as<BoutReal>();
+      if (!std::isfinite(Lnorm) or Lnorm <= 0.0) {
+        throw BoutException("Transit limiting requires a finite positive length unit");
+      }
+      length /= Lnorm;
+      BOUT_FOR_SERIAL(i, length.getRegion("RGN_ALL")) {
+        if (!std::isfinite(length[i]) or length[i] <= 0.0) {
+          throw BoutException("{}: transit length must be finite and positive", name);
+        }
+      }
+      all_transit_alpha[name] = alpha;
+      all_transit_length[name] = length;
+    }
     all_conduction_collisions_mode[name] =
         options["conduction_collisions_mode"]
             .doc("Can be multispecies: all collisions, or "
@@ -272,6 +331,19 @@ void BraginskiiConduction::transform_impl(GuardedOptions& state) {
     // Note: Coefficient is slightly different for electrons (3.16) and ions (3.9)
     kappa_par = kappa_coefficient * Pfloor * tau / AA;
 
+    if (all_transit_alpha.count(name) != 0) {
+      // Local approximation to Landau-fluid conduction, with |k_parallel| ~ 1/L.
+      // Zholobenko et al., Nucl. Fusion 64 (2024) 106066, equation (4).
+      // This limits the linear response even when Grad_par(T) vanishes.
+      const Field3D cap = all_transit_alpha.at(name) * floor(N, 0.0)
+                          * sqrt(floor(T, 0.0) / AA) * all_transit_length.at(name);
+      // The denominator floor only resolves the zero-conductivity/zero-cap case.
+      // This form also gives zero conductivity when the cap is zero.
+      auto& factor = all_transit_factor[name];
+      factor = cap / floor(kappa_par + cap, 1e-30);
+      kappa_par *= factor;
+    }
+
     if (kappa_limit_alpha > 0.0) {
       /*
        * Flux limiter, as used in SOLPS.
@@ -284,14 +356,16 @@ void BraginskiiConduction::transform_impl(GuardedOptions& state) {
        * DOI 10.1002/ctpp.200610001
        */
 
-      // Spitzer-Harm heat flux
+      // Classical heat flux, optionally already limited by the transit length
       const Field3D q_SH = kappa_par * Grad_par(T);
       // Free-streaming flux
       const Field3D q_fl = kappa_limit_alpha * N * T * sqrt(T / AA);
 
       // This results in a harmonic average of the heat fluxes
       kappa_par /= (1. + abs(q_SH / softFloor(q_fl, 1e-10)));
+    }
 
+    if (kappa_limit_alpha > 0.0 or all_transit_alpha.count(name) != 0) {
       // Values of kappa on cell boundaries are needed for fluxes
       mesh->communicate(kappa_par);
     }
@@ -369,6 +443,21 @@ void BraginskiiConduction::outputVars(Options& state) {
     const Field3D& kappa_par = all_kappa_par[name];
     const Field3D& nu = all_nu[name];
     const Field3D& flow_ylow_conduction = all_flow_ylow_conduction[name];
+    if (all_transit_alpha.count(name) != 0) {
+      set_with_attrs(state["kappa_transit_factor_" + name], all_transit_factor.at(name),
+                     {{"time_dimension", "t"},
+                      {"units", "1"},
+                      {"conversion", 1.0},
+                      {"long_name", "Conductivity reduction before heat-flux limiting"},
+                      {"species", name},
+                      {"source", "braginskii_conduction"}});
+      set_with_attrs(state["kappa_transit_length_" + name], all_transit_length.at(name),
+                     {{"units", "m"},
+                      {"conversion", rho_s0},
+                      {"long_name", "Parallel transit length for conduction"},
+                      {"species", name},
+                      {"source", "braginskii_conduction"}});
+    }
     set_with_attrs(state[std::string("kappa_par_") + name], kappa_par,
                    {{"time_dimension", "t"},
                     {"units", "W / m / eV"},

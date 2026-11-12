@@ -309,6 +309,88 @@ mode.
 .. doxygenstruct:: BraginskiiConduction
    :members:
 
+Transit-length conductivity limiter
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+An optional local approximation to Landau-fluid conduction limits the conductivity
+even for small parallel temperature gradients:
+
+.. math::
+
+   \kappa_{\mathrm{eff}} =
+   \frac{\kappa_B}{1 + \kappa_B / \kappa_L}, \qquad
+   \kappa_L = \alpha_L n \sqrt{T/m}\,L_\parallel.
+
+Here :math:`T` is in energy units; the implementation uses normalised temperature,
+mass and length. This is the local approximation in equation (4) of
+`Zholobenko et al., Nuclear Fusion 64 (2024) 106066
+<https://repositum.tuwien.at/bitstream/20.500.12708/203721/1/Zholobenko-2024-Nuclear%20Fusion-vor.pdf>`_,
+with a prescribed scale :math:`|k_\parallel| \sim 1/L_\parallel`. It is not the
+nonlocal Landau-fluid closure or the neoclassical viscosity correction.
+
+Enable it independently for each species:
+
+.. code-block:: ini
+
+   [e]
+   kappa_transit_limit = true
+   kappa_transit_alpha = 1.0
+   diagnose = true
+
+   [d+]
+   kappa_transit_limit = true
+
+The default is ``kappa_transit_limit = false``, preserving existing calculations.
+When enabled, the length is selected in this order:
+
+* ``kappa_transit_length`` specifies :math:`L_\parallel` directly in metres.
+  This can be a scalar or an input field expression.
+* Otherwise, :math:`L_\parallel = |q|R`. The species options
+  ``kappa_transit_q`` (dimensionless) and ``kappa_transit_R`` (metres) override
+  the respective mesh quantities independently.
+* Without those overrides, the mesh data source is queried for ``q`` and ``Rxy``.
+  The names can be changed using ``kappa_transit_q_field`` and
+  ``kappa_transit_R_field``, for example to use a scalar ``q95`` from a grid.
+  These use BOUT++'s Field3D reader, including its support for scalar and 2D data.
+  An analytic mesh data source can also supply these quantities; a grid file is
+  not required.
+* Missing quantities independently fall back to :math:`q=4` and
+  :math:`R=2\,\mathrm{m}`, with a log message. With neither quantity supplied,
+  the length is therefore :math:`8\,\mathrm{m}`.
+
+For example, a run without grid geometry can specify:
+
+.. code-block:: ini
+
+   [e]
+   kappa_transit_limit = true
+   kappa_transit_q = 4.0
+   kappa_transit_R = 1.65  # m: L_parallel = 6.6 m
+   # Alternatively: kappa_transit_length = 6.6
+
+``Rxy`` is the local cylindrical radius, so the default length may vary poloidally.
+Use an explicit radius to use a fixed major radius instead. The code does not
+infer a safety factor from the mesh twist shift. In particular, :math:`qR` is a
+characteristic parallel wavelength scale, not a measured SOL connection length
+and not :math:`2\pi qR`. A grid's ``q`` need not be defined in the SOL or private
+flux region: supply a suitable finite positive length there. Present but invalid
+geometry is rejected rather than silently replaced. The limiter applies wherever
+the selected species conducts; it does not automatically mask closed field lines.
+
+The strength and length must be finite and positive. A larger
+``kappa_transit_alpha`` or length gives weaker limiting. Negative density and
+temperature are clipped to zero when computing the cap; zero cap gives zero
+conductivity. The existing ``kappa_limit_alpha`` heat-flux limiter, if enabled,
+is applied afterwards. These are distinct controls: the transit cap alone does
+not bound heat flux for arbitrary temperature gradients.
+
+With ``diagnose = true``, ``kappa_transit_factor_<species>`` saves the conductivity
+reduction before the heat-flux limiter, and ``kappa_transit_length_<species>``
+saves the selected length (with its conversion to metres). The final limited
+``kappa_par`` is used by the conduction operator, magnetic-flutter terms and
+existing pressure/energy preconditioners. A reduction in CVODE solve cost must
+be established by benchmarking; enabling this option changes the physical closure.
+
 
 Species parallel dynamics
 -------------------------

@@ -1,3 +1,5 @@
+#include <cmath>
+#include <limits>
 #include <string>
 #include <utility>
 
@@ -72,6 +74,25 @@ public:
 
   Field3D getDeriv(const Options& state) {
     return state["species"]["test+"]["energy_source"];
+  }
+
+  Options uniformState(BoutReal nu = 1.0, BoutReal temperature = 2.0,
+                       BoutReal density = 1.0) {
+    auto state = state_base.copy();
+    auto& species = state["species"]["test+"];
+    species["charge"] = 1;
+    species["temperature"] = Field3D(temperature);
+    species["density"] = Field3D(density);
+    species["pressure"] = Field3D(density * temperature);
+    species["collision_frequencies"]["test+_test+_coll"] = Field3D(nu);
+    return state;
+  }
+
+  void run(Options& state, Options& diagnostics) {
+    BraginskiiConduction component("braginskii_conduction", options, nullptr);
+    component.declareAllSpecies({"test+"});
+    component.transform(state);
+    component.outputVars(diagnostics);
   }
 };
 
@@ -186,6 +207,156 @@ TEST_F(BraginskiiConductionTest, ConductionCollisionsMode) {
   BOUT_FOR_SERIAL(i, conduction_brag.getRegion("RGN_NOBNDRY")) {
     EXPECT_NE(conduction_brag[i], 0.);
     EXPECT_DOUBLE_EQ(conduction_brag[i], 2 * conduction_multi[i]);
+  }
+}
+
+TEST_F(BraginskiiConductionTest, TransitDisabledByDefault) {
+  auto state = uniformState();
+  run(state, output_base);
+  EXPECT_TRUE(IsFieldEqual(get<Field3D>(state["species"]["test+"]["kappa_par"]), 3.9,
+                           "RGN_NOBNDRY"));
+  EXPECT_FALSE(output_base.isSet("kappa_transit_factor_test+"));
+}
+
+TEST_F(BraginskiiConductionTest, TransitNoGridDefaultsAndZeroGradient) {
+  options["test+"]["kappa_transit_limit"] = true;
+  auto state = uniformState();
+  run(state, output_base);
+  EXPECT_TRUE(IsFieldEqual(get<Field3D>(output_base["kappa_transit_length_test+"]), 8.0));
+  EXPECT_TRUE(IsFieldEqual(get<Field3D>(state["species"]["test+"]["kappa_par"]),
+                           3.9 * 8.0 / (3.9 + 8.0), "RGN_NOBNDRY"));
+  EXPECT_TRUE(IsFieldEqual(getDeriv(state), 0.0, "RGN_NOBNDRY"));
+  EXPECT_TRUE(IsFieldEqual(get<Field3D>(output_base["kappa_transit_factor_test+"]),
+                           8.0 / (3.9 + 8.0), "RGN_NOBNDRY"));
+}
+
+TEST_F(BraginskiiConductionTest, TransitMeshGeometryAndNormalisation) {
+  options["test+"]["kappa_transit_limit"] = true;
+  options["units"]["meters"].force(0.5);
+  Field3D q = linearGradient(-2., 0., 0., -1., 0., 0., 0.);
+  static_cast<FakeMesh*>(mesh)->setGridDataSource(
+      new FakeGridDataSource({{"q", q}, {"Rxy", 1.5}}));
+  auto state = uniformState();
+  run(state, output_base);
+  const Field3D length = get<Field3D>(output_base["kappa_transit_length_test+"]);
+  const Field3D kappa = get<Field3D>(state["species"]["test+"]["kappa_par"]);
+  BOUT_FOR_SERIAL(i, length.getRegion("RGN_NOBNDRY")) {
+    EXPECT_DOUBLE_EQ(length[i], std::abs(q[i]) * 3.0);
+    EXPECT_NEAR(kappa[i], 3.9 * length[i] / (3.9 + length[i]), 1e-14);
+  }
+}
+
+TEST_F(BraginskiiConductionTest, TransitCustomMeshNamesAndPartialFallback) {
+  options["test+"]["kappa_transit_limit"] = true;
+  options["test+"]["kappa_transit_q_field"] = "q95";
+  static_cast<FakeMesh*>(mesh)->setGridDataSource(new FakeGridDataSource({{"q95", 3.0}}));
+  auto state = uniformState();
+  run(state, output_base);
+  EXPECT_TRUE(IsFieldEqual(get<Field3D>(output_base["kappa_transit_length_test+"]), 6.0));
+}
+
+TEST_F(BraginskiiConductionTest, TransitExplicitGeometryOverridesMesh) {
+  options["test+"]["kappa_transit_limit"] = true;
+  options["test+"]["kappa_transit_q"] = -3.0;
+  options["test+"]["kappa_transit_R"] = 2.0;
+  static_cast<FakeMesh*>(mesh)->setGridDataSource(
+      new FakeGridDataSource({{"q", 9.0}, {"Rxy", 4.0}}));
+  auto state = uniformState();
+  run(state, output_base);
+  EXPECT_TRUE(IsFieldEqual(get<Field3D>(output_base["kappa_transit_length_test+"]), 6.0));
+}
+
+TEST_F(BraginskiiConductionTest, TransitExplicitLengthOverridesGeometry) {
+  options["test+"]["kappa_transit_limit"] = true;
+  options["test+"]["kappa_transit_length"] = 3.0;
+  options["test+"]["kappa_transit_q"] = 0.0; // Unused when length is supplied
+  options["test+"]["kappa_transit_alpha"] = 0.5;
+  auto state = uniformState();
+  run(state, output_base);
+  EXPECT_TRUE(IsFieldEqual(get<Field3D>(output_base["kappa_transit_length_test+"]), 3.0));
+  EXPECT_TRUE(IsFieldEqual(get<Field3D>(state["species"]["test+"]["kappa_par"]),
+                           3.9 * 1.5 / (3.9 + 1.5), "RGN_NOBNDRY"));
+}
+
+TEST_F(BraginskiiConductionTest, TransitCollisionalAndCollisionlessLimits) {
+  options["test+"]["kappa_transit_limit"] = true;
+  for (const BoutReal nu : {1e8, 1e-8}) {
+    auto state = uniformState(nu);
+    auto diagnostics = output_base.copy();
+    run(state, diagnostics);
+    const Field3D kappa = get<Field3D>(state["species"]["test+"]["kappa_par"]);
+    const BoutReal limit = nu > 1.0 ? 3.9 / nu : 8.0;
+    BOUT_FOR_SERIAL(i, kappa.getRegion("RGN_NOBNDRY")) {
+      EXPECT_NEAR(kappa[i] / limit, 1.0, 1e-7);
+      EXPECT_LE(kappa[i], 8.0);
+    }
+  }
+}
+
+TEST_F(BraginskiiConductionTest, TransitVacuumAndColdCellsAreFinite) {
+  options["test+"]["kappa_transit_limit"] = true;
+  for (const auto& values : {std::pair{0.0, 1.0}, std::pair{2.0, 0.0}}) {
+    auto state = uniformState(1.0, values.first, values.second);
+    auto diagnostics = output_base.copy();
+    run(state, diagnostics);
+    const Field3D kappa = get<Field3D>(state["species"]["test+"]["kappa_par"]);
+    BOUT_FOR_SERIAL(i, kappa.getRegion("RGN_NOBNDRY")) {
+      EXPECT_TRUE(std::isfinite(kappa[i]));
+      EXPECT_DOUBLE_EQ(kappa[i], 0.0);
+    }
+  }
+}
+
+TEST_F(BraginskiiConductionTest, TransitRejectsInvalidParameters) {
+  options["test+"]["kappa_transit_limit"] = true;
+  for (const auto& key : {"kappa_transit_alpha", "kappa_transit_length"}) {
+    for (const BoutReal value : {0.0, -1.0, std::numeric_limits<BoutReal>::infinity()}) {
+      auto invalid = options.copy();
+      invalid["test+"][key] = value;
+      EXPECT_THROW(BraginskiiConduction("braginskii_conduction", invalid, nullptr),
+                   BoutException);
+    }
+  }
+}
+
+TEST_F(BraginskiiConductionTest, TransitLimitsSmallPerturbationResponse) {
+  // The existing flux limiter alone leaves the Braginskii linear response.
+  options["test+"]["kappa_limit_alpha"] = 0.2;
+  const BoutReal factor = 8.0 / (3.9 + 8.0);
+  for (const BoutReal amplitude : {1e-5, 1e-7}) {
+    auto state = uniformState();
+    const Field3D temperature = 2.0 + amplitude * temp1;
+    state["species"]["test+"]["temperature"] = temperature;
+    state["species"]["test+"]["pressure"] = temperature;
+    auto limited = state.copy();
+    auto diagnostics = output_base.copy();
+    options["test+"]["kappa_transit_limit"].force(false);
+    run(state, diagnostics);
+    diagnostics = output_base.copy();
+    options["test+"]["kappa_transit_limit"].force(true);
+    run(limited, diagnostics);
+    const Field3D baseline = getDeriv(state);
+    const Field3D response = getDeriv(limited);
+    BOUT_FOR_SERIAL(i, response.getRegion("RGN_NOBNDRY")) {
+      ASSERT_NE(baseline[i], 0.0);
+      EXPECT_NEAR(response[i] / baseline[i], factor, 100.0 * amplitude);
+    }
+  }
+}
+
+TEST_F(BraginskiiConductionTest, TransitMassAndDensityScaling) {
+  options["test+"]["kappa_transit_limit"] = true;
+  for (const BoutReal mass : {1.0 / 1836.0, 2.0, 12.0}) {
+    auto state = uniformState(1e-8, 2.0, 3.0);
+    state["species"]["test+"]["AA"].force(mass);
+    auto diagnostics = output_base.copy();
+    run(state, diagnostics);
+    const Field3D kappa = get<Field3D>(state["species"]["test+"]["kappa_par"]);
+    const BoutReal cap = 3.0 * std::sqrt(2.0 / mass) * 8.0;
+    BOUT_FOR_SERIAL(i, kappa.getRegion("RGN_NOBNDRY")) {
+      EXPECT_NEAR(kappa[i] / cap, 1.0, 1e-7);
+      EXPECT_LE(kappa[i], cap);
+    }
   }
 }
 

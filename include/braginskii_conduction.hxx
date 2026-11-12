@@ -38,6 +38,13 @@ struct BraginskiiConduction : public NamedComponent<BraginskiiConduction> {
   /// - <species name>
   ///   - type                  Checks whether energy or pressure are evolved
   ///   - thermal_conduction    Include parallel heat conduction? Default is true
+  ///   - kappa_transit_limit   Enable a local transit-length cap? Default false
+  ///   - kappa_transit_alpha   Cap multiplier, default 1
+  ///   - kappa_transit_length  Explicit parallel length [m], default abs(q) * R
+  ///   - kappa_transit_q       Explicit safety factor overriding the mesh
+  ///   - kappa_transit_R       Explicit radius [m] overriding the mesh
+  ///   - kappa_transit_q_field Mesh safety-factor variable, default q; fallback 4
+  ///   - kappa_transit_R_field Mesh radius variable, default Rxy; fallback 2 m
   ///
   BraginskiiConduction(const std::string& name, Options& alloptions, Solver*);
 
@@ -58,6 +65,10 @@ private:
       all_kappa_coefficient; ///< Leading numerical coefficient in parallel heat flux
                              ///< calculation
   std::map<std::string, BoutReal> all_kappa_limit_alpha; ///< Flux limit if >0
+  /// Optional local transit-length conductivity cap (not a nonlocal closure).
+  std::map<std::string, BoutReal> all_transit_alpha;
+  std::map<std::string, Field3D> all_transit_length; ///< Normalised parallel length
+  std::map<std::string, Field3D> all_transit_factor; ///< Before heat-flux limiting
   std::map<std::string, Field3D>
       all_flow_ylow_conduction; ///< Conduction energy flow diagnostics
   /// Save more diagnostics?
