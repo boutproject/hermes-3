@@ -1,0 +1,46 @@
+# MMS test of ion parallel heat conduction on a Dommaschk (stellarator) FCI grid.
+# The grids, the manufactured solution and the source are created by mms.py.
+
+nout = 20
+timestep = 50
+
+
+[mesh]
+
+extrapolate_y = false
+
+[mesh:paralleltransform]
+type = fci
+
+[input:grid_variables]
+# Manufactured solution and source, written into the grid file by mms.py
+mms_Nh = field3d
+mms_Ph_solution = field3d
+mms_Ph_source = field3d
+
+[solver]
+mxstep = 10000
+rtol = 1e-8
+atol = 1e-12
+mms = true  # Run with MMS sources and output diagnostics
+mms_initialise = true
+
+[hermes]
+components = h+, braginskii_collisions, braginskii_conduction
+
+Nnorm = 1e18
+Bnorm = 1
+Tnorm = 5
+
+[h+]
+type = fixed_density, evolve_pressure
+charge = 1.0
+AA = 1.0
+
+density = gridvar:mms_Nh * hermes:Nnorm
+
+[Ph+]
+solution = gridvar:mms_Ph_solution
+source = gridvar:mms_Ph_source
+
+bndry_all = free_o3

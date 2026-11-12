@@ -1,0 +1,118 @@
+#!/usr/bin/env python3
+
+# Python script to run and analyse MMS test of ion heat conduction
+# on Dommaschk FCI grids
+
+import subprocess
+import sys
+from pathlib import Path
+from time import time
+
+from boutdata.collect import collect
+from boututils.run_wrapper import launch_safe, shell
+from numpy import abs, array, log, max, mean, polyfit, sqrt
+
+# Grid resolutions (nx, ny, nz). Must be the same as in mms.py
+resolutions = [(20, 4, 32), (36, 8, 64)]
+
+
+def gridname(nx, ny, nz):
+    return f"dommaschk_{nx}_{ny}_{nz}.fci.grid.nc"
+
+
+# Create the grids, including the MMS solution and source, if they don't exist
+if not all(Path(gridname(*res)).exists() for res in resolutions):
+    print("Creating grids")
+    start = time()
+    subprocess.run([sys.executable, "mms.py"], check=True)
+    print(f"Created grids in {time() - start:.1f}s")
+
+nout = 20
+timestep = 50
+
+nproc = 1
+
+var = "Ph+"
+
+results = {"l2": [], "inf": []}
+
+for nx, ny, nz in resolutions:
+    args = f"mesh:file={gridname(nx, ny, nz)} nout={nout} timestep={timestep}"
+    print("Running with " + args)
+
+    # Delete old data
+    shell("rm data/BOUT.dmp.*.nc")
+
+    # Command to run
+    cmd = "../../../hermes-3 " + args
+    # Launch using MPI
+    start = time()
+    _, out = launch_safe(cmd, nproc=nproc, pipe=True)
+    Path(f"run.log.{ny}").write_text(out)
+    runtime = time() - start
+
+    # Collect data
+    E = collect("E_" + var, tind=[nout, nout], path="data", info=False)
+    # Exclude guard cells, and the first and last rows where the field-line maps
+    # are clamped into the domain, as well as their neighbours
+    E = E[:, 4:-4, :, :]
+
+    l2 = float(sqrt(mean(E**2)))
+    linf = float(max(abs(E)))
+    results["l2"].append(l2)
+    results["inf"].append(linf)
+
+    print(f"Error norm {var}: l-2 {l2:e} l-inf {linf:e} ({runtime:.1f}s)")
+
+# Calculate grid spacing. All directions are refined together
+dy = 1.0 / array([ny for _, ny, _ in resolutions])
+
+l2 = results["l2"]
+for i in range(1, len(resolutions)):
+    order = log(l2[i] / l2[i - 1]) / log(dy[i] / dy[i - 1])
+    print(
+        f"Convergence order {var} ({resolutions[i - 1]} -> {resolutions[i]}) = {order:f}"
+    )
+
+fit_order = polyfit(log(dy), log(l2), 1)[0]
+print(f"Convergence order {var} (fit) = {fit_order:f}")
+
+# Check the convergence order of the finest pair
+success = order >= 1.8
+
+# plot errors
+try:
+    import matplotlib.pyplot as plt
+
+    inf = results["inf"]
+
+    plt.plot(dy, l2, "-o", label=r"$l_2$")
+    plt.plot(dy, inf, "-x", label=r"$l_\infty$")
+    plt.plot(dy, l2[-1] * (dy / dy[-1]) ** order, "--", label=f"Order {order:.1f}")
+
+    plt.legend(loc="upper left")
+    plt.grid()
+
+    plt.yscale("log")
+    plt.xscale("log")
+
+    plt.xlabel(r"Mesh spacing $\delta y$")
+    plt.ylabel("Error norm")
+
+    plt.savefig("conduction_norm.pdf")
+    plt.savefig("conduction_norm.png")
+
+    # plt.show()
+    plt.close()
+except:  # noqa
+    # Plotting could fail for any number of reasons, and the actual
+    # error raised may depend on, among other things, the current
+    # matplotlib backend, so catch everything
+    pass
+
+if success:
+    print(" => Test passed")
+    sys.exit(0)
+else:
+    print(" => Test failed")
+    sys.exit(1)

@@ -431,6 +431,12 @@ if(HERMES_TESTS)
   hermes_add_integrated_test(2D-fluid-anomalous-fci REQUIRES BOUT_USE_METRIC_3D)
   hermes_add_integrated_test(1D-conduction-fci REQUIRES BOUT_USE_METRIC_3D)
   hermes_add_integrated_test(1D-golden-answer-fci REQUIRES BOUT_USE_METRIC_3D)
+  hermes_add_integrated_test(3D-ionconduction-dommaschk-fci REQUIRES
+                             BOUT_USE_METRIC_3D)
+  if(TEST 3D-ionconduction-dommaschk-fci)
+    # The first run creates the grids with zoidberg, which takes several minutes
+    set_tests_properties(3D-ionconduction-dommaschk-fci PROPERTIES TIMEOUT 900)
+  endif()
 
   option(HERMES_UNIT_TESTS "Build the unit tests" ON)
   option(HERMES_DIVOPS_MMS_TESTS "Build the differential operator MMS tests" ON)
