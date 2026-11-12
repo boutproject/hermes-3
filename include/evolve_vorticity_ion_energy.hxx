@@ -34,8 +34,6 @@ struct RadialBoundaryModel {
   bool vorticity_wall_zero{false};
   /// Retain viscous current through free_slip walls; otherwise close its X faces.
   bool viscous_wall_flux{false};
-  /// Retain chi current through Dirichlet AC walls; otherwise close its X faces.
-  bool chi_wall_flux{false};
   /// Average inner-wall potential midpoints and rates over a closed core Y surface.
   /// True only on first-X ranks with physical walls and periodic Y at xstart.
   bool core_flux_surface_average{false};
@@ -70,8 +68,8 @@ void closeRadialFaces(XZFaceFluxes& flux);
 Field3D Div_a_Grad_perp_XZ(const Field3D& a, const Field3D& f, bool bndry_flux = true);
 /// Face-based energy density consistent with Div_a_Grad_perp_XZ.
 Field3D kineticEnergyPerp(const Field3D& a, const Field3D& f);
-/// MC-upwinded omega, central Lambda, closed Q and unpinned corner curl.
-/// Physical wall faces carry only the curl, with zero net charge on each wall.
+/// MC-upwinded omega, central Lambda, geometric Q and unpinned corner curl.
+/// Retains full wall faces; the curl alone has zero net charge on each wall.
 /// Y-plane widths dy must be uniform in X-Z for the curl identity.
 XZFaceFluxes reynoldsFaceFluxes(const Field3D& c, const Field3D& vorticity,
                                 const Field3D& phi, const Field3D& psi);
@@ -125,8 +123,8 @@ void applyPolarisationBoundary(Field3D& chi, PolarisationACBoundary ac,
 /// and the mesh, with no initial guess retained from earlier RHS evaluations.
 ///
 /// @param coefficient Boussinesq coefficient c in L(chi) = div(c grad_perp chi).
-/// @param rhs Physical vorticity rate to reproduce with L(chi), excluding encoded
-///            wall-state rates. Only physical interior cells supply the residual.
+/// @param rhs Selected current-continuity RHS to reproduce with L(chi), excluding
+///            encoded wall-state rates. Only interior cells supply the residual.
 /// @param[in,out] inverse Spectral approximate inverse configured for coefficient
 ///                       and the appropriate homogeneous correction boundaries.
 /// @param corrections Nonnegative number of FV corrections after the first solve.
@@ -167,6 +165,7 @@ struct EvolveVorticityIonEnergy : public NamedComponent<EvolveVorticityIonEnergy
   ///   - diagnose             Output additional diagnostic fields? Default false
   ///   - poloidal_flows       Include poloidal ExB flows? Default false
   ///   - viscosity            Kinematic viscosity [m^2/s], default 0.0
+  ///   - include_divjviscous  Include viscous current in chi/transport? Default false
   ///   - phi_max_iterations   Recovery iteration limit, default 100
   ///   - phi_atol             Potential convergence scale [eV], default 1.0
   ///   - phi_rtol             Recovery relative tolerance, default 1e-3
@@ -209,7 +208,9 @@ private:
   bool poloidal_flows;          ///< Include poloidal (Y) flows?
   BoutReal density_floor;       ///< Used to calculate Ti
 
-  bool include_viscosity;                ///< Was kinematic viscosity specified?
+  bool include_viscosity; ///< Was kinematic viscosity specified?
+  /// Add viscous current to chi/transport; diffusion and energy pairing remain active.
+  bool include_divjviscous{false};
   Coordinates::FieldMetric viscosity;    ///< Normalised kinematic viscosity
   Field3D viscous_heating{0.0};          ///< Face-based -nu grad(Vort) dot grad(Phi)
   Field3D electron_viscous_heating{0.0}; ///< Electron mass fraction of viscous heating
@@ -252,7 +253,7 @@ private:
   Field3D reynolds_work; ///< Face work of the X-Z Reynolds current
   Field3D DivJReynolds;  ///< Divergence of Reynolds stress current
   bout::ion_energy::XZFaceFluxes polarisation_flux; ///< Common Reynolds + chi current
-  Field3D DivJpol; ///< Polarisation transport divergence with the selected wall closure
+  Field3D DivJpol; ///< Full polarisation transport divergence, including wall currents
   Field3D DivJviscous{0.0}; ///< Divergence of nu grad_perp(Vort)
 
   // Divergence of energy fluxes

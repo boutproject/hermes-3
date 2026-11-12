@@ -16,8 +16,8 @@ from energy_analysis.walls import rotation_decay, uniform_drift
 from scipy.integrate import cumulative_trapezoid
 
 HERE = Path(__file__).resolve().parent
-OUTPUTS = 200
-OUTPUT_STEP = 2
+OUTPUTS = 1600
+OUTPUT_STEP = 0.25
 
 
 def overrides(mode, ac, *, nx=8, profile="perturbed", outputs=None):
@@ -45,6 +45,9 @@ def overrides(mode, ac, *, nx=8, profile="perturbed", outputs=None):
         args += [
             f"solver:output_step={OUTPUT_STEP}",
             f"solver:nout={outputs if outputs is not None else OUTPUTS}",
+            # Save every state, but flush/verify at the previous two-unit cadence.
+            # This does not change the output monitor or recovery warm starts.
+            "output:flush_frequency=8",
         ]
     return args
 
@@ -122,7 +125,7 @@ def audit(study, run, label, *, nonlinear=False):
     study.check(
         "vorticity/" + label,
         float(np.max(abs(np.asarray(vort - vort.isel(t=0)) - supplied))) / volume,
-        "open_vorticity" if label.startswith("free_slip") else "vorticity",
+        "open_vorticity",
         run=run,
     )
     if "no_slip" not in label:
@@ -217,7 +220,7 @@ def audit(study, run, label, *, nonlinear=False):
 
 def main():
     cli = parser(__doc__)
-    cli.set_defaults(timeout=600)
+    cli.set_defaults(timeout=4800)
     args = cli.parse_args()
     with Study(HERE, args) as study:
         runs, rotations = {}, []

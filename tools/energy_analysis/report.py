@@ -8,6 +8,7 @@ from pathlib import Path
 import numpy as np
 
 from .balance import energy_balance, regular_timestep
+from .fluxes import component_version, polarisation_viscosity_enabled
 from .inventory import compare_diagnostics, energy_densities, energy_inventory
 
 
@@ -44,6 +45,8 @@ def summary(run):
     drift, power, walls = closed_balance(run), external_power(run), wall_budget(run)
     report = {
         "source": run.source,
+        "evolve_vorticity_ion_energy_version": component_version(run),
+        "include_divjviscous": polarisation_viscosity_enabled(run),
         "time_s": inventory.t.values.tolist(),
         "inventory_J": {name: inventory[name].values.tolist() for name in inventory},
         "particles": {name: particles[name].values.tolist() for name in particles},
@@ -120,6 +123,8 @@ def inventory_report(run):
     report = {
         "schema_version": 1,
         "source": run.source,
+        "evolve_vorticity_ion_energy_version": component_version(run),
+        "include_divjviscous": polarisation_viscosity_enabled(run),
         "python": sys.executable,
         "hermes_revision": run.data.metadata.get("HERMES_REVISION"),
         "analysis_checkout": revision(Path(__file__).resolve().parents[2]),

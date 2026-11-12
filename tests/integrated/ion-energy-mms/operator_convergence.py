@@ -22,8 +22,8 @@ import manufactured as exact
 from energy_analysis import open_run
 from energy_analysis.fluxes import (
     compare_flux_diagnostics,
-    fill_transport_guards,
     fill_wall_guards,
+    reconstruct_reynolds_faces,
 )
 from energy_analysis.inventory import energy_densities
 from energy_analysis.operators import perpendicular_operator
@@ -102,7 +102,7 @@ def discrete(fields, weights, geometry):
     parts = {
         "omega_vE": xppm_faces(omega / 2, phi, geometry),
         "Q": {
-            d: fv_xz(c / 2, Q, geometry, boundary_flux=False)["flux_" + d]
+            d: fv_xz(c / 2, Q, geometry, boundary_flux=True)["flux_" + d]
             for d in ("x", "z")
         },
         "Lambda_U": xppm_faces(guarded_lam, Phi, geometry, limiter=None),
@@ -111,7 +111,8 @@ def discrete(fields, weights, geometry):
     curl = solenoidal_reynolds_faces(c, phi, Phi, geometry)
     kinetic = perpendicular_operator(c, Phi, geometry).kperp
     result = {
-        "Lambda": lam,
+        "Lambda": guarded_lam,
+        "Q_value": Q,
         **{k: face_divergence(v, geometry) for k, v in parts.items()},
     }
     result.update(
@@ -133,6 +134,11 @@ def errors(actual, expected, n, x, z):
     maximum = np.unravel_index(np.argmax(abs(error)), error.shape)
     return {
         "all_l2": float(np.sqrt(np.mean(error**2))),
+        "wall_l2": float(np.sqrt(np.mean(error[[0, -1]] ** 2))),
+        "wall_maximum": float(abs(error[[0, -1]]).max()),
+        "outer_three_l2": float(
+            np.sqrt(np.mean(np.concatenate((error[:3], error[-3:])) ** 2))
+        ),
         "interior_l2": float(np.sqrt(np.mean(error[2:-2] ** 2))),
         "maximum": float(abs(error[maximum])),
         "maximum_cell": [int(i) for i in maximum],
@@ -209,7 +215,7 @@ def convergence(args):
             )
             for name, values in terms.items():
                 orders = {}
-                for region in ("all", "interior"):
+                for region in ("all", "interior", "wall", "outer_three"):
                     err = np.array([values[str(n)][region + "_l2"] for n in args.sizes])
                     # Zero-phi variants have identically zero Reynolds terms.
                     # Their orders are undefined, rather than NaN/Infinity.
@@ -232,22 +238,19 @@ def convergence(args):
         density = energy_densities(run)
         psi = density.pressure_potential
         c = run.scalar_option("average_atomic_mass") / ds.Bxy**2
-        omega = fill_wall_guards(ds.Vort, run, "neumann")
-        faces = reynolds_face_fluxes(
-            c,
-            omega,
-            ds.phi,
-            psi,
-            ds,
-            mxg=run.mxg,
-            fill_guards=lambda f: fill_transport_guards(f, run, False, True),
-        )
+        faces = reconstruct_reynolds_faces(run, ds.phi, psi)
         work = face_work(faces, ds.phi + psi, ds)
         energy = face_divergence(
             xppm_faces(ds.Eion, ds.phi, ds, mxg=run.mxg),
             ds,
         )
-        chi_faces = fv_xz(c, ds.ion_chi, ds, mxg=run.mxg, boundary_flux=False)
+        chi_faces = fv_xz(
+            c,
+            ds.ion_chi,
+            ds,
+            mxg=run.mxg,
+            boundary_flux=True,
+        )
         polarisation = {
             "polarisation_flux_" + d: -faces[d] - chi_faces["flux_" + d]
             for d in ("x", "z")

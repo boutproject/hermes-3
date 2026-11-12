@@ -6,8 +6,8 @@ import xarray as xr
 from .dataset import AuditError
 from .fluxes import (
     fill_wall_guards,
-    polarisation_ac_boundary,
     radial_boundary_mode,
+    reconstruct_reynolds_faces,
     species_velocity,
 )
 from .inventory import energy_densities
@@ -34,7 +34,7 @@ def wall_budget(run):
     """Return outward energy/particle fluxes and the measured wall rate.
 
     Unpinned Reynolds faces exchange weighted quantities at each wall.
-    Open chi faces require the standard saved ion_chi output;
+    Full chi faces require the standard saved ion_chi output, including Neumann AC;
     this missing term is reported independently of reconstructable viscosity.
     Time is SI; potential and midpoint rates use Hermes potential units.
     """
@@ -122,19 +122,24 @@ def wall_budget(run):
             ix = xr.DataArray(np.arange(ds.sizes["x"]), dims="x", coords={"x": ds.x})
             wall_mask = (ix == run.mxg - 1) | (ix == ds.sizes["x"] - run.mxg - 1)
             wall_curl = curl["x"].where(wall_mask, 0)
-            chi_open = polarisation_ac_boundary(run) == "dirichlet"
+            reynolds = reconstruct_reynolds_faces(
+                run, ds.phi, densities.pressure_potential
+            )
+            wall_reynolds = reynolds["x"].where(wall_mask, 0)
+            fields["vorticity_rate"] -= (
+                run.integrate(flux_dataset({"x": wall_reynolds}, ds).divergence)
+                * run.frequency
+            )
             chi = ds.get("ion_chi", ds.get("ddt(Phi)"))
-            if chi_open and chi is None:
+            if chi is None:
                 missing.append("open polarisation wall flux (chi is not saved)")
             else:
-                chi_wall = xr.zeros_like(wall_curl)
-                if chi_open:
-                    chi_wall = fv_xz(
-                        c, chi, ds, mxg=run.mxg, boundary_flux=True
-                    ).flux_x.where(wall_mask, 0)
+                chi_wall = fv_xz(
+                    c, chi, ds, mxg=run.mxg, boundary_flux=True
+                ).flux_x.where(wall_mask, 0)
 
                 def wall_transport(weight, *, solenoidal=False):
-                    current = -wall_curl if solenoidal else -wall_curl - chi_wall
+                    current = -wall_curl if solenoidal else -wall_reynolds - chi_wall
                     return flux_dataset(
                         weighted_faces({"x": current}, weight, mxg=run.mxg), ds
                     )

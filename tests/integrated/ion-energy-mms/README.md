@@ -5,8 +5,12 @@ vorticity and total ion energy through t=0.1. Default runs baseline/curvature
 at 8/16 X/Z cells; long runs all four variants at 8/16/32 on two MPI ranks.
 Y resolution is twice X/Z. Baseline/curvature have nonzero potential and
 varying composition; skew/viscosity have zero potential and high psi harmonics.
-`PROFILES` and `--variants` select coverage. Physics, grids, end time, error
-caps and order gates (1.7 / 1.8) are unchanged; recovery/diagnostics use `1e-10`.
+`PROFILES` and `--variants` select coverage. Every generated input explicitly
+sets `include_divjviscous=false`. The viscosity variant retains vorticity
+diffusion, viscous energy flux and electron heating, with zero analytic chi
+and polarisation transport. Its continuum sources are regenerated for this
+closure. Grids, end time, error caps and order gates (1.7 / 1.8) are unchanged;
+recovery/diagnostics use `1e-10`.
 
 Every case saves 20 intervals of 0.005, retaining the end time 0.1. Errors
 and orders use only the final saved output for evolved and recovered fields.
@@ -42,6 +46,10 @@ Zero-phi variants have zero analytic Reynolds terms and undefined orders. Runner
 errors, effective limits and per-variant times; all failing gates stay enabled.
 
 ## Known failures
+
+The recorded tables below predate the optional viscous polarisation current.
+Their viscosity results used that current; the regenerated default-off
+viscosity MMS describes a different transport closure.
 
 “Before” is the split operator (`82ab0ec`); curvature has no split reference.
 L2 norms exclude guards; interior norms also omit two X cells at either wall.

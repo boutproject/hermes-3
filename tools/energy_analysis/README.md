@@ -63,9 +63,8 @@ Complete from ordinary state, geometry and resolved options:
 `ion_chi` is saved even with `diagnose=false`. The unpinned Reynolds curl
 crosses both radial walls with zero net charge. `wall_budget` applies Neumann
 weights and reports signed exchange by wall and physical Y row for energy,
-particles and momentum, plus their totals and absolute face-flux sums. Open
-chi wall faces require `ion_chi`; old snapshots without it report incomplete
-coverage for that contribution. Sheaths,
+particles and momentum, plus their totals and absolute face-flux sums. Full-current wall budgets require `ion_chi` with both AC conditions;
+snapshots without it report incomplete coverage for that contribution. Sheaths,
 unrecognised source components, unsaved mesh sources, time-dependent source
 prefactors, core-only source masks, and unimplemented geometry also report
 missing terms. Collisional heat exchange cancels in the plasma total.
@@ -100,4 +99,37 @@ so the two add exactly, including their reconstruction errors. Heating is
 `reynolds_work - DivEExB_perpendicular`; only `reynolds_work` is saved by the
 solver. Full flux reconstruction retains the uniform orthogonal slab contract;
 the face-based perpendicular operator itself supports varying J, spacing and
-g13, and the wall budget reconstructs the unpinned curl directly.
+g13. The wall budget recovers full Reynolds/chi wall currents on rectangular
+grids with varying metrics without requiring complete RHS coverage.
+
+## Component version and radial currents
+
+The output tag `evolve_vorticity_ion_energy_version=1` identifies the component's
+equation and discretisation contract. Untagged development snapshots use
+version 1; unknown versions are rejected. Analysis always retains full
+Reynolds/chi wall faces. Neumann AC constrains a chi potential derivative;
+its DC and cross-metric wall currents
+remain in transport. Vorticity budgets include the signed full Reynolds wall
+current; only the curl has zero Z-summed wall charge.
+
+The `include_divjviscous` option defaults to `false`. Chi reconstruction adds
+viscous current to its RHS only when this option is true. Saved chi takes
+precedence over reconstruction. Viscous vorticity diffusion, the paired energy
+flux and electron heating remain active whenever viscosity is enabled.
+Reports record both the component version and this option. The
+odd-Q/linear-Lambda guard reconstruction remains in production.
+
+For unit single-ion density weight, the full-current pointwise identity is
+`-DivJpol = DivJdia + alpha_nu * DivJviscous - Rchi`, including wall cells,
+where `alpha_nu` is one when `include_divjviscous=true` and zero otherwise.
+Saved-history
+budgets integrate the same weighted currents and remain sensitive to output
+cadence. Chi's DC wall-rate approximation still neglects the DC pressure-potential
+rate; this is separate from face reconstruction.
+
+The active boundary-convergence regression currently fails: retaining full
+currents fixes the demonstrated lost-face source, but does not resolve the
+remaining viscous wall structure under refinement. Trial derivative
+reconstructions were rejected after trajectory failures. The wall-layer
+validation report records the remaining work; these results must not be
+interpreted as boundary-regularity acceptance.

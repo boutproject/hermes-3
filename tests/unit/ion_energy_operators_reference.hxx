@@ -222,15 +222,13 @@ inline XZFaceFluxes reynoldsFaces(const Field3D& c, const Field3D& vort,
     }
   }
   m->communicate(lambda, Q);
-  const auto omega =
-      advectionFaces(0.5 * vort, phi, true, lambda_limited || !m->periodicX);
-  const auto rotation =
-      advectionFaces(lambda, Phi, lambda_limited, lambda_limited || !m->periodicX);
+  const auto omega = advectionFaces(0.5 * vort, phi, true, false);
+  const auto rotation = advectionFaces(lambda, Phi, lambda_limited, false);
   const auto curl = solenoidalReynoldsFaceFluxes(c, phi, Phi);
   XZFaceFluxes result{omega.x + rotation.x + curl.x, omega.z + rotation.z + curl.z};
   const Field3D half_c = 0.5 * c;
   for (const auto& i : phi.getRegion("RGN_NOBNDRY")) {
-    const auto q = perpendicularFaceFluxes(half_c, Q, i, false);
+    const auto q = perpendicularFaceFluxes(half_c, Q, i, true);
     result.x[i] += q.xp * coord->dy()[i];
     if (i.x() == m->xstart) {
       result.x[i.xm()] += q.xm * coord->dy()[i];

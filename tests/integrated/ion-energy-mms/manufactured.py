@@ -1,7 +1,8 @@
 """Continuum two-ion slab MMS, differentiated in normalised physical coordinates.
 
 No numerical operator or finest-grid solution enters the reference or sources.
-The auxiliary chi solves the physical current equation before BOUT MMS forcing.
+The auxiliary chi excludes viscosity, matching include_divjviscous=false,
+before BOUT MMS forcing. Viscosity still diffuses vorticity and exchanges energy.
 """
 
 from functools import cache, lru_cache
@@ -157,7 +158,7 @@ def model(variant="baseline"):
     chi = (s.pi / LENGTH) ** 2 * amp_phi * amp_psi * chi_shape(a, theta)
     if variant in ("skew", "viscosity"):
         reynolds = s.zeros(2, 1)
-        chi = nu * omega / c
+        chi = s.Integer(0)
     if curvature:
         chi += -curvature * r(1, 50) / (4 * c * k) * s.cos(2 * a) * s.cos(theta)
     # Negative skew current differs from the legacy split by a solenoidal curl.
@@ -174,9 +175,10 @@ def model(variant="baseline"):
         terms["Vort.curvature"] = curvature * s.diff(pe + pressure, Z)
     if nu:
         terms["Vort.viscosity"] = div(jnu)
+        rhs["Vort"] += terms["Vort.viscosity"]
 
     def polarisation(weight):
-        return -grad(weight).dot(jpol) if not (nu or curvature) else -div(weight * jpol)
+        return -grad(weight).dot(jpol) if not curvature else -div(weight * jpol)
 
     for name, n, v, m, p, mass, charge in (
         ("i", ni, vi, mi, pi, 2, 1),
@@ -302,7 +304,8 @@ def preflight(variant="baseline"):
             for name in ("chi", "Vort"):
                 assert s.simplify(fields[name].subs(X, face)) == 0
             assert s.simplify((H * grad(fields["psi"]))[0].subs(X, face)) == 0
-        assert s.simplify(2 * lap(fields["chi"], H) - rhs["Vort"]) == 0
+        assert fields["chi"] == 0
+        assert s.simplify(rhs["Vort"] - terms.get("Vort.viscosity", 0)) == 0
     for face in (0, LENGTH):
         assert s.simplify(fields["phi"].subs(X, face)) == 0
         for name in ("Ni", "Nj", "NVi", "NVj", "Pe", "Pi", "pi", "pj", "Tion", "psi"):
@@ -336,13 +339,21 @@ def preflight(variant="baseline"):
         if variant == "viscosity":
             for key in (
                 "Vort.viscosity",
-                "Ni.polarisation",
                 "Eion.viscous_flux",
                 "Pe.viscous_heating",
             ):
                 assert magnitudes[key] > 1e-12, key
+            for key in (
+                "Ni.polarisation",
+                "Nj.polarisation",
+                "NVi.polarisation",
+                "NVj.polarisation",
+                "Eion.polarisation",
+            ):
+                assert terms[key] == 0, key
     return {
         "variant": variant,
+        "include_divjviscous": False,
         "elliptic_and_X_boundaries": "verified symbolically",
         "reynolds_skew_identity": "verified symbolically",
         "positive_primitives": True,

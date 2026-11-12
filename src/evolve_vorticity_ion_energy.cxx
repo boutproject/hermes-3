@@ -634,9 +634,9 @@ Field3D faceWork(const XZFaceFluxes& flux, const Field3D& f) {
 ///            Lambda term and enters the curl stream function.
 /// @returns Area-integrated increasing-X/Z current faces with the XZFaceFluxes
 ///          convention: X from xstart-1 through xend, Z on physical cells, physical
-///          Y and all local Z. Unused guards are zero. Physical X-wall faces carry
-///          only the unpinned curl; advective and Q-gradient wall terms are closed.
-///          Periodic faces are retained, and the returned fluxes are not communicated.
+///          Y and all local Z. Unused guards are zero. Geometric wall and periodic
+///          faces are retained, including Q gradients and the unpinned curl.
+///          The returned fluxes are not communicated.
 ///
 /// Inputs must share a mesh/location, have valid wall and communicated guards,
 /// and provide at least two radial guard layers. Uniform dy in each X-Z plane
@@ -696,8 +696,6 @@ XZFaceFluxes reynoldsFaceFluxes(const Field3D& c, const Field3D& vort, const Fie
                     * coord->dy()[i]
                 + perpendicularZ(half_c, Q, cross, *coord, i);
   }
-  // Physical wall rows carry only the unpinned curl; its Z sum is zero.
-  BOUT_FOR(i, wallFaces(m)) { flux.x[i] = (stream[i] - stream[i.zm()]) * coord->dy()[i]; }
   return flux;
 }
 } // namespace bout::ion_energy
@@ -747,8 +745,8 @@ EvolveVorticityIonEnergy::EvolveVorticityIonEnergy(std::string name, Options& al
   radial_model.evolve_wall_potential = radial_model.mode == RadialBoundary::no_slip;
   radial_model.vorticity_wall_zero = radial_model.mode == RadialBoundary::free_slip;
   radial_model.viscous_wall_flux = radial_model.vorticity_wall_zero;
-  radial_model.chi_wall_flux = radial_model.chi_ac == PolarisationACBoundary::dirichlet;
-  radial_model.chi_flags = radial_model.chi_wall_flux ? 0 : INVERT_AC_GRAD;
+  radial_model.chi_flags =
+      radial_model.chi_ac == PolarisationACBoundary::neumann ? INVERT_AC_GRAD : 0;
   radial_model.core_flux_surface_average =
       radial_model.walls && mesh->firstX() && mesh->periodicY(mesh->xstart);
 
@@ -801,13 +799,13 @@ EvolveVorticityIonEnergy::EvolveVorticityIonEnergy(std::string name, Options& al
   output_info.write(
       "{}: radial_boundary={}, walls={}, polarisation_ac_boundary={}, "
       "evolve_wall_potential={}, vorticity_wall_zero={}, viscous_wall_flux={}, "
-      "chi_wall_flux={}, core_flux_surface_average={}, "
+      "core_flux_surface_average={}, "
       "phi_boundary_velocity(normalised)={}, phi_flags={}, chi_flags={}\n",
       name, toString(radial_model.mode), radial_model.walls,
       toString(radial_model.chi_ac), radial_model.evolve_wall_potential,
       radial_model.vorticity_wall_zero, radial_model.viscous_wall_flux,
-      radial_model.chi_wall_flux, radial_model.core_flux_surface_average,
-      radial_model.phi_boundary_velocity, radial_model.phi_flags, radial_model.chi_flags);
+      radial_model.core_flux_surface_average, radial_model.phi_boundary_velocity,
+      radial_model.phi_flags, radial_model.chi_flags);
 
   // Evolve the vorticity and ion energy in time
   solver->add(Vort, "Vort");
@@ -847,6 +845,11 @@ EvolveVorticityIonEnergy::EvolveVorticityIonEnergy(std::string name, Options& al
   if (include_viscosity) {
     setPermissions(readIfSet("species:e:density", Regions::Interior));
   }
+  include_divjviscous =
+      options["include_divjviscous"]
+          .doc("Include viscous current in the auxiliary polarisation solve; "
+               "vorticity diffusion and viscous energy exchange remain enabled")
+          .withDefault<bool>(false);
 
   // Add phi to restart files so that the value in the boundaries
   // is restored on restart. This is done even when phi is not evolving,
@@ -1203,15 +1206,18 @@ void EvolveVorticityIonEnergy::transform_impl(GuardedOptions& state) {
 
   // Auxiliary current-continuity potential, independent of phi relaxation.
   // DC Dirichlet fixes the constant mode; the AC enum controls the auxiliary
-  // guards and whether its normal potential-flow current enters transport.
-  const Field3D dVortdt = DivJReynolds + DivJdia + DivJviscous;
-  solvePolarisationPotential(dVortdt);
-
-  // One common transport current; only the curl crosses closed chi walls.
-  auto chi_faces = bout::ion_energy::perpendicularFaces(Field3D{boussinesq_coeff}, chi);
-  if (!radial_model.chi_wall_flux) {
-    bout::ion_energy::closeRadialFaces(chi_faces);
+  // potential guards. Transport retains the currents used by the forward solve.
+  // Artificial viscosity damps vorticity without polarisation transport unless
+  // explicitly included in the current closure.
+  Field3D chi_rhs = DivJReynolds + DivJdia;
+  if (include_divjviscous) {
+    chi_rhs += DivJviscous;
   }
+  solvePolarisationPotential(chi_rhs);
+
+  // Use the same geometric chi currents as the residual, including wall faces.
+  const auto chi_faces =
+      bout::ion_energy::perpendicularFaces(Field3D{boussinesq_coeff}, chi);
   polarisation_flux = {-reynolds.x - chi_faces.x, -reynolds.z - chi_faces.z};
   const auto divPol = [&](const Field3D& weight) -> Field3D {
     Field3D result = bout::ion_energy::divergence(polarisation_flux, &weight);
@@ -1336,6 +1342,12 @@ void EvolveVorticityIonEnergy::outputVars(Options& state) {
   // Outputs follow an RHS evaluation at the accepted output state.
   // Update the recovery guess here so it remains fixed between outputs.
   acceptWarmStart();
+
+  set_with_attrs(
+      state["evolve_vorticity_ion_energy_version"], 1,
+      {{"description", "Component equation and discretisation version: "
+                       "full Reynolds/chi faces and optional viscous "
+                       "polarisation current; independent of restart layout"}});
 
   // Normalisations
   auto Nnorm = get<BoutReal>(state["Nnorm"]);
@@ -1468,7 +1480,8 @@ void EvolveVorticityIonEnergy::outputVars(Options& state) {
          {"units", "V s^-1"},
          {"conversion", Tnorm * Omega_ci},
          {"long_name", "Auxiliary polarisation current potential"},
-         {"description", "Fixed-correction approximation to L(chi)=physical ddt(Vort); "
+         {"description", "Fixed-correction auxiliary solve; viscosity enters its RHS "
+                         "only when include_divjviscous=true; "
                          "nonperiodic X: midpoint Dirichlet DC, "
                          "radial AC selected by polarisation_ac_boundary; "
                          "approximate, not exact ddt(phi+psi)"}});
@@ -1480,10 +1493,12 @@ void EvolveVorticityIonEnergy::outputVars(Options& state) {
                    {{"time_dimension", "t"},
                     {"description", "Auxiliary chi solver calls: one initial solve plus "
                                     "polarisation_corrections defect corrections"}});
-    set_with_attrs(state["ion_chi_residual"], chi_residual,
-                   {{"time_dimension", "t"},
-                    {"description", "Maximum absolute normalised finite-volume residual "
-                                    "of L(chi)=physical ddt(Vort) over physical cells"}});
+    set_with_attrs(
+        state["ion_chi_residual"], chi_residual,
+        {{"time_dimension", "t"},
+         {"description", "Maximum absolute normalised finite-volume residual "
+                         "of L(chi)=selected polarisation RHS over physical cells; "
+                         "viscosity included only when include_divjviscous=true"}});
     set_with_attrs(state["ion_KE_parallel"], ion_KE_parallel,
                    {{"time_dimension", "t"}, {"units", "J m^-3"}, {"conversion", Pnorm}});
     set_with_attrs(state["ion_KE_perp"], ion_KE_perp,
@@ -1724,7 +1739,7 @@ Field3D EvolveVorticityIonEnergy::correctPotential(const Field3D& rhs,
 ///
 /// @param coefficient Read-only Boussinesq coefficient c in div(c*grad_perp(chi)),
 ///                    nonzero on physical cells, with valid geometry and guards.
-/// @param rhs Read-only physical vorticity rate; only interior values enter the
+/// @param rhs Read-only selected current-continuity RHS; only interior values enter the
 ///            residual, excluding encoded wall-potential rates in radial guards.
 /// @param[in,out] inverse Approximate spectral inverse configured for coefficient
 ///                       and homogeneous correction boundaries. Its solve method

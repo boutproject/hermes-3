@@ -11,7 +11,6 @@ import xarray as xr
 
 from .dataset import AuditError
 from .operators import (
-    close_radial_faces,
     face_divergence,
     face_work,  # noqa: F401 -- public transport API
     neighbor,
@@ -165,7 +164,7 @@ def reynolds_face_fluxes(
     periodic_x=False,
     fill_guards=None,
 ):
-    """MC omega, central Lambda, closed Q and unpinned curl on shared faces.
+    """MC omega, central Lambda, geometric Q and unpinned curl on shared faces.
 
     Physical Q guards have zero midpoint; Lambda guards extrapolate linearly.
     Communication/Y guards are supplied by the orchestration layer.
@@ -183,14 +182,10 @@ def reynolds_face_fluxes(
                 lam[{"x": cell + step * layer}] = lam.isel(x=cell) + layer * (
                     lam.isel(x=cell) - lam.isel(x=cell - step)
                 )
-    omega = xppm_faces(vorticity / 2, phi, geometry, mxg=mxg, periodic_x=periodic_x)
-    rotation = xppm_faces(
-        lam, Phi, geometry, mxg=mxg, limiter=None, periodic_x=periodic_x
-    )
+    omega = xppm_faces(vorticity / 2, phi, geometry, mxg=mxg, periodic_x=True)
+    rotation = xppm_faces(lam, Phi, geometry, mxg=mxg, limiter=None, periodic_x=True)
     q = perpendicular_faces(c / 2, Q, geometry, mxg=mxg)
     split = {d: omega[d] + rotation[d] + q[d] for d in ("x", "z")}
-    if not periodic_x:
-        split = close_radial_faces(split, phi, mxg)
     curl = solenoidal_reynolds_faces(c, phi, Phi, geometry)
     return {d: split[d] + curl[d] for d in ("x", "z")}
 

@@ -30,7 +30,6 @@ from .transport import (
     parallel_flux,
     parallel_kinetic_flux,
     reynolds_face_fluxes,
-    solenoidal_reynolds_faces,
     weighted_faces,
     xppm,
 )
@@ -191,6 +190,17 @@ def slab_contract(run):
     }
     if components != {run.model, *(s.name for s in run.species)}:
         raise AuditError("Additional components leave source/flux coverage incomplete")
+    return transport_topology(run)
+
+
+def transport_topology(run):
+    """Return X/Y periodicity for assembled rectangular snapshots with Y halos.
+
+    Check the mesh connections only. Individual X-Z currents can be recovered
+    with varying metrics and additional species physics, even when the complete
+    RHS lies outside slab_contract's stricter reconstruction coverage.
+    """
+    options, meta = run.data.options, run.data.metadata
     # Exactly a core-periodic or all-open rectangle, without branch connections.
     periodic_y = meta.get("ixseps1") == meta.get("nx")
     rectangle = meta.get("ixseps1") == 0 and meta.get("ixseps2") == 0
@@ -237,6 +247,56 @@ def radial_boundary_mode(run):
     if run.formulation == "pressure":
         return "no_slip" if section.get_bool("phi_boundary_relax") else "fixed"
     return str(section["radial_boundary"]) if "radial_boundary" in section else "fixed"
+
+
+def component_version(run):
+    """Validate the ion-energy equation/discretisation version, defaulting to 1.
+
+    Unversioned development snapshots use the current model. Other formulations
+    do not use this component's version. Unknown versions require a new analysis
+    implementation rather than an assumed wall-current reconstruction.
+    """
+    if run.formulation != "total_energy":
+        return None
+    version = run.data.metadata.get("evolve_vorticity_ion_energy_version", 1)
+    if version != 1:
+        raise AuditError(f"Unsupported evolve_vorticity_ion_energy version: {version}")
+    return int(version)
+
+
+def polarisation_viscosity_enabled(run):
+    """Read include_divjviscous, with the component's default of false."""
+    section = run.data.options[run.model]
+    return (
+        section.get_bool("include_divjviscous")
+        if "include_divjviscous" in section
+        else False
+    )
+
+
+def reconstruct_reynolds_faces(run, phi, psi):
+    """Recover full X-Z Reynolds faces with valid guards for the current version.
+
+    Metrics and coefficients may vary; this current alone does not require the
+    complete species transport/source coverage enforced by slab_contract.
+    """
+    component_version(run)
+    periodic_x, periodic_y = transport_topology(run)
+    vort = fill_transport_guards(run.data.Vort, run, periodic_x, periodic_y)
+    if not periodic_x:
+        vort = fill_wall_guards(
+            vort, run, "zero" if radial_boundary_mode(run) == "free_slip" else "neumann"
+        )
+    return reynolds_face_fluxes(
+        run.scalar_option("average_atomic_mass") / run.data.Bxy**2,
+        vort,
+        phi,
+        psi,
+        run.data,
+        mxg=run.mxg,
+        periodic_x=periodic_x,
+        fill_guards=lambda f: fill_transport_guards(f, run, periodic_x, periodic_y),
+    )
 
 
 def polarisation_ac_boundary(run):
@@ -619,16 +679,7 @@ def reconstruct_fluxes(run, *, sources=None):
         }
         return flux_dataset(fluxes, ds)
 
-    reynolds_faces = reynolds_face_fluxes(
-        c,
-        ds.Vort,
-        phi,
-        psi,
-        ds,
-        mxg=run.mxg,
-        periodic_x=periodic_x,
-        fill_guards=lambda f: fill_transport_guards(f, run, periodic_x, periodic_y),
-    )
+    reynolds_faces = reconstruct_reynolds_faces(run, phi, psi)
     reynolds = flux_dataset({d: -f for d, f in reynolds_faces.items()}, ds)
     curl = (
         2 * run.length_scale**2 * ds.options["mesh"].evaluate_scalar("bxcvz") / ds.Bxy
@@ -662,15 +713,16 @@ def reconstruct_fluxes(run, *, sources=None):
     electron_heat = viscous_heat * e.mass * ds.Ne / mass_density
     dphi = ds.get("ion_chi")
     if dphi is None:
-        dphi = solve_polarisation(
-            run, reynolds.divergence + dia + viscous.divergence, periodic_x, periodic_y
-        )
+        chi_rhs = reynolds.divergence + dia
+        if polarisation_viscosity_enabled(run):
+            chi_rhs = chi_rhs + viscous.divergence
+        dphi = solve_polarisation(run, chi_rhs, periodic_x, periodic_y)
     chi_faces = fv_xz(
         c,
         dphi,
         ds,
         mxg=run.mxg,
-        boundary_flux=polarisation_ac_boundary(run) == "dirichlet",
+        boundary_flux=True,
         periodic_x=periodic_x,
     )
     polarisation_faces = {
@@ -1050,20 +1102,18 @@ def compare_flux_diagnostics(run, fluxes):
 
 
 def closed_slab_outward_power(run, *, densities=None):
-    """Global SI face powers without solving for an interior auxiliary flow.
+    """Signed SI wall powers for a singleton-Y slab with closed species ExB faces.
 
-    In this singleton-Y contract, chi and species ExB radial faces are closed
-    and Z is periodic. The unpinned Reynolds curl carries weighted wall fluxes.
-    Viscous energy faces are reconstructed separately. No interior auxiliary solve or regional divergence
-    is supplied.
+    Uses the complete wall budget, including full Reynolds/chi currents for new
+    outputs. Missing chi yields incomplete coverage even with Neumann AC.
+    No interior auxiliary solve is used. The optional densities argument remains
+    accepted for existing callers; wall_budget recovers the same reservoirs.
     """
+    from .walls import wall_budget
+
     if run.formulation != "total_energy":
         raise AuditError("Closed slab boundary audit requires total ion energy")
-    periodic_x, periodic_y = slab_contract(run)
-    if not periodic_x and polarisation_ac_boundary(run) != "neumann":
-        raise AuditError(
-            "Closed slab boundary audit requires polarisation_ac_boundary=neumann"
-        )
+    slab_contract(run)
     if run.data.sizes["y"] != 1 or run.myg:
         raise AuditError("Fast boundary audit requires singleton Y without guards")
     if any(bool((species_velocity(run, s) != 0).any().compute()) for s in run.species):
@@ -1073,60 +1123,12 @@ def closed_slab_outward_power(run, *, densities=None):
             raise AuditError(
                 "Closed slab boundary audit requires closed species ExB faces"
             )
-    ds = run.data
-    densities = energy_densities(run) if densities is None else densities
-    Phi = ds.phi + densities.pressure_potential
-    c = run.scalar_option("average_atomic_mass") / ds.Bxy**2
-    nu = run.scalar_option("viscosity", 0) / (run.length_scale**2 * run.frequency)
-    viscosity = xr.ones_like(ds.phi) * nu
-    vort = fill_transport_guards(ds.Vort, run, periodic_x, periodic_y)
-    if not periodic_x:
-        vort = fill_wall_guards(
-            vort, run, "zero" if radial_boundary_mode(run) == "free_slip" else "neumann"
-        )
-    current = fv_xz(
-        viscosity,
-        vort,
-        ds,
-        boundary_flux=radial_boundary_mode(run) == "free_slip",
-        periodic_x=periodic_x,
+    budget = wall_budget(run)
+    return xr.Dataset(
+        {
+            "outward": budget.outward,
+            "polarisation_outward": budget.polarisation_outward,
+            "viscous_outward": budget.viscous_outward,
+        },
+        attrs={**budget.attrs, "local_transport_coverage": False},
     )
-    viscous = flux_dataset(
-        {d: (Phi + neighbor(Phi, d)) / 2 * current["flux_" + d] for d in ("x", "z")}, ds
-    )
-    curl = solenoidal_reynolds_faces(c, ds.phi, Phi, ds)
-    pol = flux_dataset(
-        weighted_faces(
-            {d: -f for d, f in curl.items()},
-            polarisation_energy_coefficient(run).total,
-            mxg=run.mxg,
-            periodic_x=periodic_x,
-        ),
-        ds,
-    )
-    powers = {}
-    scale = run.energy_scale * run.length_scale**3 * run.frequency
-    for name, family in (
-        ("polarisation", pol),
-        ("viscous", viscous),
-    ):
-        faces = xr.Dataset(
-            {
-                "family": family.divergence,
-                **{"family_flux_" + d: family["flux_" + d] for d in ("x", "z")},
-            },
-            attrs={"periodic_y": periodic_y},
-        )
-        powers[name + "_outward"] = net_face_flux(run, faces, "family") * scale
-    powers["outward"] = sum(powers.values())
-    result = xr.Dataset(powers).assign_coords(t=ds.t / run.frequency)
-    for name in result:
-        result[name].attrs = {
-            "units": "W",
-            "provenance": "reconstructed global closed-slab faces",
-        }
-    result.attrs = {
-        "coverage": "global outward power; closed species ExB/chi/Reynolds faces, no parallel flow, periodic Z",
-        "local_transport_coverage": False,
-    }
-    return result

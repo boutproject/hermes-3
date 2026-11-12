@@ -111,29 +111,35 @@ corresponding interior layer, with even AC reflection for ``neumann`` and
 odd AC reflection for ``dirichlet``. Chi guards are filled at all local Y
 rows, including Y guards; the other three wall helpers use physical Y only.
 
-Closed finite-volume wall faces must remove the entire normal flux,
-including ``g13`` contributions. The advective and Q-gradient parts of the
-X--Z Reynolds current are closed at physical walls, while the unpinned corner
-curl remains open in every mode. Its discrete divergence and its Z-summed
-charge flux at each wall and Y row vanish to roundoff when ``dy`` is uniform
-in each X--Z plane. Species, momentum and energy weights can vary in Z, so
-their weighted wall exchanges need not vanish. Viscous current and energy
-faces open only for
-``free_slip`` and use the same face current, with the viscosity coefficient
-continued from the interior. The chi contribution to polarisation particle,
-momentum and energy transport opens only for ``dirichlet`` AC. The auxiliary
-residual always uses the full FV operator with its physical wall currents;
-transport masking is applied separately.
+The complete X--Z Reynolds and chi faces are retained at physical walls,
+including Q gradients, DC chi current and cross-metric terms. The unpinned
+corner curl has zero discrete divergence and zero Z-summed charge flux at
+each wall and Y row when ``dy`` is uniform in each X--Z plane. The complete
+Reynolds current can have nonzero net wall charge; weighted species, momentum
+and energy exchanges are signed and can enter or leave the domain. Viscous
+current and energy faces remain closed for ``fixed`` and ``no_slip`` and open
+for ``free_slip``, using the same current and an interior viscosity coefficient.
+``polarisation_ac_boundary`` controls chi potential guards and inverse flags;
+it does not mask transport faces after the solve.
+
+``include_divjviscous`` defaults to ``false`` and gates only the viscous term
+in the chi RHS. Vorticity diffusion, the paired viscous energy flux and the
+electron heating share remain active. ``ion_chi_residual`` is measured against
+this selected RHS rather than the full vorticity derivative. Analysis uses the
+same switch when chi must be reconstructed. The standard component version
+``evolve_vorticity_ion_energy_version = 1`` identifies the equation and
+discretisation contract; missing tags use the current model and unknown
+versions are rejected.
 
 ``reynoldsFaceFluxes()`` reconstructs :math:`\Omega/2` with the MC limiter
-and :math:`\Lambda` with central face averages. Q has odd radial guards;
+and :math:`\Lambda` with central face averages. Q retains odd radial guards;
 Lambda uses linear radial extrapolation. ``perpendicularFaces()`` supplies
 the same diagonal and cross-metric faces to the forward operator, kinetic
 energy, viscosity and chi current. These face fields include the transverse
 ``dy`` factor and use the index convention in ``XZFaceFluxes``. Mesh-owned
 regions cache the X-face and physical-wall indices.
 
-Polarisation transport combines minus the Reynolds and selected chi faces
+Polarisation transport combines minus the full Reynolds and chi faces
 once, then ``divergence()`` applies arithmetic face averages of each species
 or energy weight to that common current. It fills physical radial guards of
 a weight copy with Neumann values, preserving the supplied weight and ignoring
@@ -1692,7 +1698,10 @@ Four integrated tests exercise ``evolve_vorticity_ion_energy``:
   potential, E×B transport and Reynolds stress; all variants have varying
   composition and finite parallel flows. The focused skew and viscosity
   variants retain wall-compatible zero potential. Periodic Y uses twice the
-  X/Z resolution. Known convergence failures remain enabled and are listed in
+  X/Z resolution. All MMS inputs explicitly use ``include_divjviscous = false``;
+  the viscosity variant has zero analytic chi/polarisation transport while
+  retaining viscous vorticity diffusion, energy flux and electron heating.
+  Known convergence failures remain enabled and are listed in
   the MMS README. The added curvature variant uses a finite cosine total-pressure
   mode and its analytic chi inverse while retaining nonzero potential. The
   ``long`` profile uses two MPI ranks.
@@ -1704,15 +1713,17 @@ stress discretisation.
 
 The runners use ``tools/energy_analysis`` for inventories, physical sources,
 wall powers and recovery checks. Analysis runs with diagnostics disabled;
-open polarisation wall fluxes report incomplete coverage when chi is absent.
+polarisation wall budgets report incomplete coverage when chi is absent,
+including Neumann AC runs.
 All upper limits have a floor of ``1e-10``. Solver-sensitive limits resolve
 as ``max(floor, rtol_factor * solver:rtol)`` from each run's options; linear
 invariants, recovery and diagnostic comparisons use fixed roundoff floors.
-Free-slip vorticity budgets use ``open_vorticity`` because time integration of
-sampled viscous wall fluxes introduces a cadence error. The perturbed walls
+Vorticity budgets use ``open_vorticity`` because time integration of sampled
+Reynolds and viscous wall fluxes introduces a cadence error. The perturbed walls
 use ``rtol = 1e-7`` and ``atol = 1e-10``; analytic cases retain tighter tolerances.
 The unpinned Reynolds curl carries weighted wall fluxes with both AC conditions,
-so particle and energy budgets use the open-wall limits even for Neumann AC.
+so particle, energy and vorticity budgets use the open-wall limits even for
+Neumann AC. Full Reynolds wall current is included in the vorticity balance.
 The runner integrates signed wall exchanges in those balances and separately
 checks a minimum cumulative absolute solenoidal energy exchange in each
 nonlinear case. Free-slip viscous wall power still introduces output-sampling
@@ -1740,7 +1751,8 @@ not require an environment in the source tree.
 
 ``operator_convergence.py`` samples analytic MMS fields on X-Z planes at
 16/32/64, applies the component wall guards, and reports all-cell and interior
-L2 orders and error maxima for each Reynolds term and each species/energy
+L2 orders, first/last-cell and outer-three-cell errors, and error maxima
+for each Reynolds term and each species/energy
 weight, including the weighted solenoidal contribution. It uses the production
 MC-vorticity/central-Lambda reconstruction and needs SymPy, but no Hermes run.
 ``--y`` and ``--time`` select the analytic plane; ``--run`` checks the mirror
@@ -1765,8 +1777,17 @@ independently of its divergence, and checks the legacy slab limit.
 ``tests/unit/generate_reynolds_reference.py`` generates
 that continuum reference without using the implemented split/curl identity.
 ``IonEnergyReynoldsConvergence.LimitedCurrentConvergesInShearedAnnulus`` uses
-the generated expressions on two FakeMesh resolutions with varying c, J and D
-and nonzero g13, checking limited-current convergence at order 1.5 or above.
+the generated expressions on three FakeMesh resolutions with varying c, J and D
+and nonzero g13. Its interior convergence gate remains 1.5; it also reports
+boundary-cell maxima, whose errors do not converge with the present wall stencil.
+
+The active Python ``test_reynolds_wall_curvature_converges`` regression also
+checks boundary cells, the outer three cells and the interior, using a potential
+recovered from the same finite-volume Dirichlet problem. It currently fails:
+full wall currents remove the lost-face source but leave a nonconvergent Reynolds
+boundary truncation error. Nonlinear viscosity/no-viscosity refinement also
+retains a growing viscous wall excess. These results do not establish radial
+wall regularity; the existing odd Q and linear Lambda guards remain unchanged.
 
 The legacy ``2D-energy`` regression retains its existing registration. The
 publication refinement scan is an example in

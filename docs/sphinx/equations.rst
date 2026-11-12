@@ -1793,8 +1793,18 @@ Electron thermal energy receives
 work is accounted for by the electron momentum equation.
 
 Polarisation transport uses an auxiliary potential :math:`\chi` obtained
-from an approximate solution of :math:`\mathcal{L}(\chi)=\partial_t\Omega`
-to calculate
+from an approximate solution of :math:`\mathcal{L}(\chi)=S_\chi`, where
+
+.. math::
+
+   S_\chi=-\nabla\cdot\boldsymbol{\Gamma}
+          +\nabla\cdot(\mathbf{J}_{\mathrm{dia},i}+\mathbf{J}_{\mathrm{dia},e})
+          +\alpha_\nu\nabla\cdot\mathbf{J}_\nu.
+
+Here :math:`\alpha_\nu` is one when ``include_divjviscous = true`` and zero
+by default. Vorticity always retains its viscous term when viscosity is enabled;
+with the default switch, :math:`S_\chi` excludes that part of
+:math:`\partial_t\Omega`. The transport current is
 :math:`\mathbf{J}_{\mathrm{pol}}=-c\nabla_\perp\chi-\boldsymbol{\Gamma}`.
 Each ion species receives polarisation particle and momentum fluxes
 
@@ -1810,8 +1820,8 @@ These weights use the local mixture mass density, with a floor of
 :math:`\overline{A}` times ``density_floor``. Shared, limited face fluxes
 preserve the species partition of the polarisation current above that floor.
 The implementation first combines the area-integrated faces into
-:math:`F_{\mathrm{pol}}=-F_\Gamma-F_\chi`, closing the chi wall faces when
-selected below. For each particle, momentum or energy weight :math:`w`, it uses
+:math:`F_{\mathrm{pol}}=-F_\Gamma-F_\chi`, including the full radial wall
+faces of both currents. For each particle, momentum or energy weight :math:`w`, it uses
 
 .. math::
 
@@ -1848,8 +1858,12 @@ Kinematic viscosity is enabled by setting ``viscosity`` in
    \qquad \mathbf{Q}_\nu = \Phi\mathbf{J}_\nu,
    \qquad H_\nu = -\mathbf{J}_\nu\cdot\nabla_\perp\Phi.
 
-The viscous current is included in both the vorticity RHS and the auxiliary
-current solve. Current, energy flux and heating use the same X--Z faces,
+The viscous term is always included in the vorticity RHS when viscosity is
+enabled. It enters the auxiliary current solve only with
+``include_divjviscous = true`` (default ``false``). The default treats viscosity
+as artificial flow damping without its polarisation particle, parallel-momentum
+or enthalpy transport. This changes the physical current-continuity closure;
+it preserves the viscous energy pairing. Current, energy flux and heating use the same X--Z faces,
 including :math:`g^{13}`, and satisfy a discrete product rule. This heating
 differs from the cell-centred gradient product in ``vorticity`` at finite
 resolution. The radial viscosity coefficient is continued from the interior;
@@ -2010,8 +2024,8 @@ Physical vorticity has radial Neumann guards in ``fixed`` and ``no_slip``;
 fluxes share the same faces: closed in ``fixed`` and ``no_slip``, open in
 ``free_slip``. The viscosity coefficient retains its interior value at each
 radial face so that the free-slip condition permits diffusion. Normal E×B
-energy advection is closed in every mode. The X--Z advective and Q-gradient
-parts of the Reynolds current are also closed at physical walls. Its
+energy advection is closed in every mode. The complete X--Z Reynolds
+current retains its geometric wall faces, including Q gradients. Its
 solenoidal part remains permeable: the unpinned corner stream function gives
 :math:`F_x=\Delta y\,\Delta_z\Psi`, where :math:`\Delta_z\Psi` is the
 difference of adjacent corner values. Uniform :math:`\Delta y` in each X--Z
@@ -2019,8 +2033,8 @@ plane gives :math:`\sum_z F_x=0` at each wall and Y row.
 It therefore carries zero net charge while exchanging species, momentum and
 energy. Every transported weight uses the adjacent interior value at a wall
 face (zero gradient), independently of species and recovery guard conditions.
-:math:`Q` has zero wall midpoint and :math:`\Lambda` uses linear radial
-extrapolation for reconstruction. The corner curl leaves the discrete
+:math:`Q` retains zero wall midpoint guards and :math:`\Lambda` uses linear
+radial extrapolation for reconstruction. The corner curl leaves the discrete
 vorticity divergence unchanged to roundoff.
 Diamagnetic current and its electrical energy flux use the geometry-dependent
 ``Div`` operator; this component does not explicitly close their radial faces.
@@ -2034,26 +2048,16 @@ avoids this sign-indefinite contribution. Periodic Reynolds faces retain
 normal flow across the X seam. The additional poloidal X-Y transport, when
 enabled, continues to use the shared XPPM operator.
 
-The auxiliary solve uses the physical vorticity RHS and the full FV
-operator, including wall currents. Its transport faces are selected separately.
-``polarisation_ac_boundary`` selects the auxiliary AC wall condition:
-``neumann`` (default) sets :math:`\partial_x\widetilde{\chi}=0` and closes
-the chi contribution to normal polarisation transport of particles, momentum
-and energy by setting its complete face flux to zero, including cross-metric
-terms. The unpinned solenoidal current still carries weighted wall fluxes.
-The boundary cells acquire a
-charge mismatch from the dropped chi wall flux, in
-addition to any error from the finite-correction auxiliary inverse.
-A Neumann derivative alone is not insulating when :math:`g^{13}\ne0`: the
-normal current also contains
-:math:`g^{13}\partial_z\widetilde{\chi}`. This term vanishes on orthogonal
-shifted-metric grids; explicit face closure removes it on other grids.
-
-``dirichlet`` sets :math:`\widetilde{\chi}=0` at the wall midpoint and opens
-the chi part of polarisation transport, allowing particle, momentum and energy
-exchange consistently with the current solve. The flux is signed and may
-enter or leave the plasma; no one-way loss constraint is imposed. The
-solenoidal Reynolds transport remains open with either AC condition. Chi
+The auxiliary solve and polarisation transport use the same full finite-volume
+chi faces, including wall currents. ``polarisation_ac_boundary`` selects the
+auxiliary AC potential condition: ``neumann`` (default) sets
+:math:`\partial_x\widetilde{\chi}=0`, while ``dirichlet`` sets
+:math:`\widetilde{\chi}=0` at the wall midpoint. Neither option imposes zero
+total normal particle current. DC chi current can remain under Neumann AC,
+and a nonorthogonal metric also permits the normal contribution
+:math:`g^{13}\partial_z\widetilde{\chi}`. All these currents remain in
+transport. Wall exchanges are signed, allowing entry and loss.
+Chi
 reflects each radial guard layer from the corresponding interior layer, evenly
 for Neumann AC and oddly for Dirichlet AC, including all local Y guard rows.
 The DC midpoint of chi is zero for ``fixed`` and ``free_slip``, and
@@ -2069,14 +2073,13 @@ every RHS evaluation, the component performs
 
    \left.\chi^{(0)}\right|_{\mathrm{interior}}=0, \qquad
    \chi^{(j+1)}=\chi^{(j)}
-      +\mathcal{P}\left(\frac{\partial\Omega}{\partial t}
-                        -\mathcal{L}(\chi^{(j)})\right),
+      +\mathcal{P}\left(S_\chi-\mathcal{L}(\chi^{(j)})\right),
    \qquad j=0,\ldots,N,
 
 where :math:`N` is ``polarisation_corrections``. There are :math:`N+1`
 solver calls: one initial solve and :math:`N` FV defect corrections. The
 residual uses the full FV operator, retaining its physical boundary currents;
-the AC option controls transport face closure. The selected guards, including
+the AC option controls the potential boundary condition only. The selected guards, including
 any nonzero DC wall rate, are imposed before every residual, including the
 first, and after the final correction. Each spectral correction uses
 homogeneous boundary conditions. This gives a deterministic auxiliary solve with no
@@ -2088,8 +2091,22 @@ The DC value fixes the constant mode without subtracting the mean source
 or solution.
 With Neumann AC, orthogonal metrics and coefficients independent of Z,
 the AC normal potential-flow current is already zero. DC current can remain;
-on nonorthogonal grids cross-metric current can also remain. The Neumann
-transport choice closes all these normal wall contributions.
+on nonorthogonal grids cross-metric current can also remain. Both are retained.
+For a single ion with unit density weight, define
+
+.. math::
+
+   R_\chi=\mathrm{DivJReynolds}+\mathrm{DivJdia}+\alpha_\nu\mathrm{DivJviscous}
+             -\mathcal{L}(\chi).
+
+The discrete pointwise continuity identity, including boundary cells, is
+
+.. math::
+
+   -\mathrm{DivJpol}=\mathrm{DivJdia}+\alpha_\nu\mathrm{DivJviscous}-R_\chi.
+
+Discarding a solved wall face would add its flux divided by the boundary-cell
+volume to this balance, creating a source that grows as the mesh is refined.
 
 Other options in ``[evolve_vorticity_ion_energy]`` are:
 
@@ -2099,6 +2116,9 @@ Other options in ``[evolve_vorticity_ion_energy]`` are:
   (default ``false``).
 - ``density_floor``: Normalised total ion density floor (default ``1e-7``).
 - ``viscosity``: Kinematic viscosity in m^2/s (default ``0.0``).
+- ``include_divjviscous``: Include viscosity in the chi RHS and polarisation
+  transport (default ``false``). Viscous vorticity diffusion, energy flux and
+  electron heating remain active independently of this switch.
 - ``phi_max_iterations``: Maximum number of pressure/potential recovery
   iterations (default ``100``). Failure to converge
   raises an error.
@@ -2132,6 +2152,13 @@ The ion-energy radial wall model is selected by ``radial_boundary``.
 guard fills and wall-state evolution; selecting ``no_slip`` still reads and
 validates ``phi_boundary_velocity``.
 
+Standard output metadata ``evolve_vorticity_ion_energy_version = 1`` identifies
+the component equations and discretisation, including full Reynolds/chi wall
+faces and optional viscous polarisation current, independently of restart
+wall storage. Analysis uses the current model when the tag is absent and
+rejects unsupported versions. The resolved ``include_divjviscous`` setting
+selects the auxiliary RHS, with the same default of ``false``.
+
 The default outputs are ``Eion``, ``Tion``, ``Vort``, ``phi`` and ``ion_chi``.
 Pressure/potential recovery starts from the phi and perpendicular kinetic
 energy saved as guesses at the last output state. The initial thermal
@@ -2148,9 +2175,8 @@ With ``diagnose = true``, the component also saves ``ion_KE_parallel``,
 divergences ``DivEExB``, ``DivEelectric``, ``DivEparallel``
 and ``DivEpol``, and the exchange/source terms ``phi_Div_Je``,
 ``electron_exb_work`` and ``Eion_src``. ``DivJpol`` is the divergence of the
-selected polarisation transport current: the chi wall flux is closed for
-Neumann AC and open for Dirichlet AC; the solenoidal Reynolds wall flux
-is open in both cases. ``DivJReynolds`` records the Reynolds current divergence.
+full polarisation transport current, retaining Reynolds and chi wall fluxes
+with both AC conditions. ``DivJReynolds`` records the Reynolds current divergence.
 ``DivEExB`` is :math:`\nabla\cdot(E_i\mathbf{v}_E)`, including the Reynolds
 work flux :math:`K_\perp\mathbf{v}_E`. The perpendicular and thermal-plus-parallel
 parts and the heating :math:`W-\nabla\cdot(K_\perp\mathbf{v}_E)` can be
@@ -2163,8 +2189,8 @@ in W m\ :sup:`-3`. Its volume integral includes the boundary work:
 ``polarisation_flux_x`` and ``polarisation_flux_z`` save the area-integrated
 X-Z current :math:`-\boldsymbol{\Gamma}-c\nabla_\perp\chi` in A. Index
 ``(i,j,k)`` holds the face ``(i+1/2,j,k)`` for X and ``(i,j,k+1/2)`` for Z;
-the lower radial wall is at ``xstart-1``. These faces include the selected chi
-wall closure. They exclude optional poloidal X-Y transport. With poloidal
+the lower radial wall is at ``xstart-1``. These faces include all Reynolds
+and chi wall currents. They exclude optional poloidal X-Y transport. With poloidal
 flows disabled, their divergence equals ``DivJpol``. Face-index conventions
 are also stored in output attributes.
 
@@ -2179,7 +2205,8 @@ values. It is zero for ``fixed`` and ``free_slip``. Normal output ``Vort``
 remains physical vorticity; restart files also store the potential boundary
 state. ``particle_pol_wall_loss_<species>`` gives the signed outward
 polarisation particle loss per cell volume (m\ :sup:`-3`/s), nonzero only next
-to radial walls. Both AC conditions include the solenoidal exchange. Its
+to radial walls. Both AC conditions include the complete Reynolds and chi
+exchange. Its
 volume integral is the particle
 wall flux.
 
