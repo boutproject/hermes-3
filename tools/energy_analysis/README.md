@@ -82,7 +82,7 @@ Run Python checks with `python -m pytest tests/python`, or use CTest's
 [publication example](../../examples/tokamak-2D-driftplane/2D-energy/README.md)
 uses `matplotlib`.
 
-`reconstruct_fluxes` rebuilds the MC vorticity, central Lambda, Q and unpinned
+`reconstruct_fluxes` rebuilds the MC vorticity and Lambda, Q and unpinned
 curl contributions, then adds the chi faces to form the common polarisation
 current. `DivJpol`, species particle and momentum transport, and `DivEpol` use
 face averages of each weight, with the interior value on physical wall faces.
@@ -91,7 +91,7 @@ use the lower-cell face index; their comparisons include the lower X wall and
 exclude undefined outer guards. Saved chi is used directly; an auxiliary solve
 supports older snapshots that lack it.
 
-`DivEExB` now advects `Eion`. Post-processing provides
+`DivEExB` advects `Eion`. Post-processing provides
 `DivEExB_perpendicular`, `DivEExB_thermal_parallel` and `reynolds_heating`.
 The perpendicular part uses MC reconstruction of the discrete Kperp. Since MC
 is nonlinear, the thermal-plus-parallel part is the total flux minus this part,
@@ -104,32 +104,29 @@ grids with varying metrics without requiring complete RHS coverage.
 
 ## Component version and radial currents
 
-The output tag `evolve_vorticity_ion_energy_version=1` identifies the component's
+The output tag `evolve_vorticity_ion_energy_version=2` identifies the component's
 equation and discretisation contract. Untagged development snapshots use
-version 1; unknown versions are rejected. Analysis always retains full
+version 2; other versions are rejected. Version 2 uses MC-upwinded Lambda
+with the velocity from `Phi=phi+psi`.
+Analysis always retains full
 Reynolds/chi wall faces. Neumann AC constrains a chi potential derivative;
 its DC and cross-metric wall currents
 remain in transport. Vorticity budgets include the signed full Reynolds wall
 current; only the curl has zero Z-summed wall charge.
 
-The `include_divjviscous` option defaults to `false`. Chi reconstruction adds
-viscous current to its RHS only when this option is true. Saved chi takes
-precedence over reconstruction. Viscous vorticity diffusion, the paired energy
-flux and electron heating remain active whenever viscosity is enabled.
-Reports record both the component version and this option. The
-odd-Q/linear-Lambda guard reconstruction remains in production.
+Viscous stress has no associated particle flux, so chi reconstruction always
+excludes its current. Saved chi takes precedence over reconstruction.
+Viscous vorticity diffusion, the paired energy flux and electron heating remain
+active whenever viscosity is enabled. Reports record the component version.
+The odd-Q/linear-Lambda guard reconstruction remains in production.
 
 For unit single-ion density weight, the full-current pointwise identity is
-`-DivJpol = DivJdia + alpha_nu * DivJviscous - Rchi`, including wall cells,
-where `alpha_nu` is one when `include_divjviscous=true` and zero otherwise.
+`-DivJpol = DivJdia - Rchi`, including wall cells.
 Saved-history
 budgets integrate the same weighted currents and remain sensitive to output
 cadence. Chi's DC wall-rate approximation still neglects the DC pressure-potential
 rate; this is separate from face reconstruction.
 
-The active boundary-convergence regression currently fails: retaining full
-currents fixes the demonstrated lost-face source, but does not resolve the
-remaining viscous wall structure under refinement. Trial derivative
-reconstructions were rejected after trajectory failures. The wall-layer
-validation report records the remaining work; these results must not be
-interpreted as boundary-regularity acceptance.
+The active boundary-convergence regression currently fails: the Reynolds
+boundary truncation error does not converge with the odd-Q/linear-Lambda
+guards. Passing integral wall budgets does not establish boundary accuracy.

@@ -1739,15 +1739,16 @@ The Clebsch identity requires the metric determinant :math:`D`, which equals
 :math:`D` from the metric in :math:`\Lambda`; the independently normalised
 ``Bxy`` supplies :math:`c`. The corner curl :math:`\mathbf{S}` changes the
 face fluxes while its discrete divergence vanishes to roundoff. Face values
-of :math:`\Omega/2` use MC-limited donor reconstruction; :math:`\Lambda` uses
-central face averages. Corners and faces are evaluated once. Polarisation weights
+of both :math:`\Omega/2` and :math:`\Lambda` use MC-limited donor reconstruction,
+with velocities from :math:`\phi` and :math:`\Phi`, respectively. Corners and
+faces are evaluated once. Polarisation weights
 multiply the common Reynolds plus chi current using arithmetic face averages,
 with zero-gradient weights at physical X walls. E×B energy advection uses
 XPPM on the total ion energy :math:`E_i`, including :math:`K_\perp`.
 The discrete curl identity requires ``dy`` to be uniform within each X--Z plane.
 
 This construction covers X--Z flow. With ``poloidal_flows = true``, the
-existing X--Y contributions of the two XPPM terms are added unchanged to
+X--Y contributions of the two XPPM terms are added to
 the current divergence and weighted polarisation transport. The Reynolds
 work diagnostic below describes the X--Z construction.
 
@@ -1798,13 +1799,11 @@ from an approximate solution of :math:`\mathcal{L}(\chi)=S_\chi`, where
 .. math::
 
    S_\chi=-\nabla\cdot\boldsymbol{\Gamma}
-          +\nabla\cdot(\mathbf{J}_{\mathrm{dia},i}+\mathbf{J}_{\mathrm{dia},e})
-          +\alpha_\nu\nabla\cdot\mathbf{J}_\nu.
+          +\nabla\cdot(\mathbf{J}_{\mathrm{dia},i}+\mathbf{J}_{\mathrm{dia},e}).
 
-Here :math:`\alpha_\nu` is one when ``include_divjviscous = true`` and zero
-by default. Vorticity always retains its viscous term when viscosity is enabled;
-with the default switch, :math:`S_\chi` excludes that part of
-:math:`\partial_t\Omega`. The transport current is
+Viscous stress has no associated particle flux and is excluded from
+:math:`S_\chi`. Vorticity retains its viscous term when viscosity is enabled.
+The transport current is
 :math:`\mathbf{J}_{\mathrm{pol}}=-c\nabla_\perp\chi-\boldsymbol{\Gamma}`.
 Each ion species receives polarisation particle and momentum fluxes
 
@@ -1858,12 +1857,11 @@ Kinematic viscosity is enabled by setting ``viscosity`` in
    \qquad \mathbf{Q}_\nu = \Phi\mathbf{J}_\nu,
    \qquad H_\nu = -\mathbf{J}_\nu\cdot\nabla_\perp\Phi.
 
-The viscous term is always included in the vorticity RHS when viscosity is
-enabled. It enters the auxiliary current solve only with
-``include_divjviscous = true`` (default ``false``). The default treats viscosity
-as artificial flow damping without its polarisation particle, parallel-momentum
-or enthalpy transport. This changes the physical current-continuity closure;
-it preserves the viscous energy pairing. Current, energy flux and heating use the same X--Z faces,
+The viscous term is included in the vorticity RHS when viscosity is enabled.
+It dissipates perpendicular kinetic energy without a polarisation particle,
+parallel-momentum or enthalpy flux, so it is excluded from the auxiliary current
+solve. The viscous energy pairing is retained. Current, energy flux and heating
+use the same X--Z faces,
 including :math:`g^{13}`, and satisfy a discrete product rule. This heating
 differs from the cell-centred gradient product in ``vorticity`` at finite
 resolution. The radial viscosity coefficient is continued from the interior;
@@ -1882,6 +1880,9 @@ fraction of the heating when their mass and density are available:
 This electron thermal source is subtracted from ``Eion`` as an internal
 transfer, conserving the combined ion and electron energy. The mass-density
 denominator is floored using ``average_atomic_mass * density_floor``.
+The discrete heating measures this current/energy-flux pairing. It does not
+imply a monotonic decrease of total perpendicular kinetic energy in a warm-ion
+wall update, where the pressure-potential boundary values also evolve.
 
 For nonperiodic X, ``radial_boundary`` selects the wall model:
 
@@ -1952,11 +1953,7 @@ where :math:`n` is the physical inward normal at each wall. The required option
 and has no default. Its normalised value is
 :math:`\widehat{\kappa}=\kappa/(L_{\mathrm{norm}}\Omega_{ci})`, where
 :math:`L_{\mathrm{norm}}\Omega_{ci}` is
-``units:meters / units:seconds``. This component does not read
-``phi_boundary_timescale``; that option still applies to the legacy
-``vorticity`` and ``relax_potential`` components. For a boundary cell of
-physical width :math:`h_b`, :math:`\kappa=h_b/(2\tau)` matches the local
-strength of the previous timescale law at that resolution. With a fixed
+``units:meters / units:seconds``. With a fixed
 velocity, fixed vorticity and negligible evolution of the mean pressure
 potential, the rigid-rotation relaxation time in a slab of physical width
 :math:`L` is :math:`L/(2\kappa)`. The
@@ -2039,12 +2036,14 @@ vorticity divergence unchanged to roundoff.
 Diamagnetic current and its electrical energy flux use the geometry-dependent
 ``Div`` operator; this component does not explicitly close their radial faces.
 
-The vorticity term is upwinded with the MC limiter and the :math:`\Lambda`
-term is central. Vorticity upwinding dissipates :math:`K_\perp`; upwinding
-:math:`\Lambda` pairs its reconstruction error with
+Both vorticity and :math:`\Lambda` are upwinded with the MC limiter, using
+the face velocities from :math:`\phi` and :math:`\Phi=\phi+\psi`, respectively.
+Vorticity upwinding dissipates :math:`K_\perp` in the uniform, periodic,
+pressure-free limit. Upwinding :math:`\Lambda` pairs its reconstruction error with
 :math:`\nabla_\perp^2\Phi=\nabla_\perp^2\phi+\nabla_\perp^2\psi`, whose pressure
-part can reverse the sign of the work. The central :math:`\Lambda` term
-avoids this sign-indefinite contribution. Periodic Reynolds faces retain
+part can reverse the sign of the work. Lambda upwinding therefore does not
+guarantee perpendicular kinetic-energy dissipation in the coupled system.
+Periodic Reynolds faces retain
 normal flow across the X seam. The additional poloidal X-Y transport, when
 enabled, continues to use the shared XPPM operator.
 
@@ -2096,14 +2095,14 @@ For a single ion with unit density weight, define
 
 .. math::
 
-   R_\chi=\mathrm{DivJReynolds}+\mathrm{DivJdia}+\alpha_\nu\mathrm{DivJviscous}
+   R_\chi=\mathrm{DivJReynolds}+\mathrm{DivJdia}
              -\mathcal{L}(\chi).
 
 The discrete pointwise continuity identity, including boundary cells, is
 
 .. math::
 
-   -\mathrm{DivJpol}=\mathrm{DivJdia}+\alpha_\nu\mathrm{DivJviscous}-R_\chi.
+   -\mathrm{DivJpol}=\mathrm{DivJdia}-R_\chi.
 
 Discarding a solved wall face would add its flux divided by the boundary-cell
 volume to this balance, creating a source that grows as the mesh is refined.
@@ -2116,9 +2115,6 @@ Other options in ``[evolve_vorticity_ion_energy]`` are:
   (default ``false``).
 - ``density_floor``: Normalised total ion density floor (default ``1e-7``).
 - ``viscosity``: Kinematic viscosity in m^2/s (default ``0.0``).
-- ``include_divjviscous``: Include viscosity in the chi RHS and polarisation
-  transport (default ``false``). Viscous vorticity diffusion, energy flux and
-  electron heating remain active independently of this switch.
 - ``phi_max_iterations``: Maximum number of pressure/potential recovery
   iterations (default ``100``). Failure to converge
   raises an error.
@@ -2152,12 +2148,11 @@ The ion-energy radial wall model is selected by ``radial_boundary``.
 guard fills and wall-state evolution; selecting ``no_slip`` still reads and
 validates ``phi_boundary_velocity``.
 
-Standard output metadata ``evolve_vorticity_ion_energy_version = 1`` identifies
-the component equations and discretisation, including full Reynolds/chi wall
-faces and optional viscous polarisation current, independently of restart
-wall storage. Analysis uses the current model when the tag is absent and
-rejects unsupported versions. The resolved ``include_divjviscous`` setting
-selects the auxiliary RHS, with the same default of ``false``.
+Output metadata ``evolve_vorticity_ion_energy_version = 2`` identifies the
+component equations and discretisation, including MC-upwinded vorticity and
+Lambda, full Reynolds/chi wall faces, and exclusion of viscous stress from
+polarisation transport, independently of restart wall storage. Analysis uses
+the current model when the tag is absent and rejects unsupported versions.
 
 The default outputs are ``Eion``, ``Tion``, ``Vort``, ``phi`` and ``ion_chi``.
 Pressure/potential recovery starts from the phi and perpendicular kinetic

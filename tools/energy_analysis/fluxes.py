@@ -250,7 +250,7 @@ def radial_boundary_mode(run):
 
 
 def component_version(run):
-    """Validate the ion-energy equation/discretisation version, defaulting to 1.
+    """Validate the ion-energy equation/discretisation version, defaulting to 2.
 
     Unversioned development snapshots use the current model. Other formulations
     do not use this component's version. Unknown versions require a new analysis
@@ -258,20 +258,10 @@ def component_version(run):
     """
     if run.formulation != "total_energy":
         return None
-    version = run.data.metadata.get("evolve_vorticity_ion_energy_version", 1)
-    if version != 1:
+    version = run.data.metadata.get("evolve_vorticity_ion_energy_version", 2)
+    if version != 2:
         raise AuditError(f"Unsupported evolve_vorticity_ion_energy version: {version}")
     return int(version)
-
-
-def polarisation_viscosity_enabled(run):
-    """Read include_divjviscous, with the component's default of false."""
-    section = run.data.options[run.model]
-    return (
-        section.get_bool("include_divjviscous")
-        if "include_divjviscous" in section
-        else False
-    )
 
 
 def reconstruct_reynolds_faces(run, phi, psi):
@@ -714,8 +704,6 @@ def reconstruct_fluxes(run, *, sources=None):
     dphi = ds.get("ion_chi")
     if dphi is None:
         chi_rhs = reynolds.divergence + dia
-        if polarisation_viscosity_enabled(run):
-            chi_rhs = chi_rhs + viscous.divergence
         dphi = solve_polarisation(run, chi_rhs, periodic_x, periodic_y)
     chi_faces = fv_xz(
         c,

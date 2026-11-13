@@ -119,7 +119,6 @@ bndry_xout = neumann
 average_atomic_mass = 2
 poloidal_flows = false
 radial_boundary = fixed
-include_divjviscous = false
 density_floor = 1e-10
 # phi_atol is a denominator scale: effective absolute update tolerance is
 # phi_atol*phi_rtol. Avoid requesting sub-roundoff updates where phi crosses 0.

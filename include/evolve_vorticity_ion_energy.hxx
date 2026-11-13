@@ -68,7 +68,7 @@ void closeRadialFaces(XZFaceFluxes& flux);
 Field3D Div_a_Grad_perp_XZ(const Field3D& a, const Field3D& f, bool bndry_flux = true);
 /// Face-based energy density consistent with Div_a_Grad_perp_XZ.
 Field3D kineticEnergyPerp(const Field3D& a, const Field3D& f);
-/// MC-upwinded omega, central Lambda, geometric Q and unpinned corner curl.
+/// MC-upwinded omega and Lambda, geometric Q and unpinned corner curl.
 /// Retains full wall faces; the curl alone has zero net charge on each wall.
 /// Y-plane widths dy must be uniform in X-Z for the curl identity.
 XZFaceFluxes reynoldsFaceFluxes(const Field3D& c, const Field3D& vorticity,
@@ -146,8 +146,8 @@ Field3D fixedPolarisationPotential(const Field3D& coefficient, const Field3D& rh
 ///
 /// These are evolved together because the ion perpendicular kinetic energy
 /// depends on the ion pressure through the diamagnetic drift.
-/// This formulation means that dissipation in the vorticity equation
-/// is automatically converted to ion heating.
+/// Viscous loss of perpendicular kinetic energy heats ions through the recovered
+/// thermal-energy partition, with the electron share transferred explicitly.
 /// All species energy_source fields supply thermal energy. Electron pressure
 /// must be evolved by evolve_pressure; electron parallel electrical work is
 /// accounted for by the electron momentum equation.
@@ -165,7 +165,6 @@ struct EvolveVorticityIonEnergy : public NamedComponent<EvolveVorticityIonEnergy
   ///   - diagnose             Output additional diagnostic fields? Default false
   ///   - poloidal_flows       Include poloidal ExB flows? Default false
   ///   - viscosity            Kinematic viscosity [m^2/s], default 0.0
-  ///   - include_divjviscous  Include viscous current in chi/transport? Default false
   ///   - phi_max_iterations   Recovery iteration limit, default 100
   ///   - phi_atol             Potential convergence scale [eV], default 1.0
   ///   - phi_rtol             Recovery relative tolerance, default 1e-3
@@ -177,14 +176,15 @@ struct EvolveVorticityIonEnergy : public NamedComponent<EvolveVorticityIonEnergy
   EvolveVorticityIonEnergy(std::string name, Options& options, Solver* solver);
 
   ///
-  /// Optional inputs
+  /// Completed-state inputs used during finalisation
   ///
   /// - species
   ///   - <name>
-  ///     - velocity. Must have sound_speed or temperature
+  ///     - density, pressure, temperature, AA and charge for each charged ion
+  ///     - velocity. Optional; enables parallel energy flux and source conversion
   ///     - energy_source. Thermal energy, excluding parallel kinetic energy
-  /// - fields
-  ///   - phi      Electrostatic potential -> ExB drift
+  ///     - density_source and momentum_source. Optional external source conversion
+  /// - fastest_wave. Optional parallel numerical wave speed; otherwise sqrt(T/AA)
   ///
   void finally(const Options& state) override;
 
@@ -204,15 +204,13 @@ private:
   Field3D ion_KE_parallel; ///< Parallel ion kinetic energy K_||i
   Field3D ion_KE_perp;     ///< Perpendicular ion kinetic energy K⊥
 
-  BoutReal average_atomic_mass; ///< Weighted average atomic mass
+  BoutReal average_atomic_mass; ///< Fixed Boussinesq reference atomic mass
   bool poloidal_flows;          ///< Include poloidal (Y) flows?
   BoutReal density_floor;       ///< Used to calculate Ti
 
-  bool include_viscosity; ///< Was kinematic viscosity specified?
-  /// Add viscous current to chi/transport; diffusion and energy pairing remain active.
-  bool include_divjviscous{false};
+  bool include_viscosity;                ///< Was kinematic viscosity specified?
   Coordinates::FieldMetric viscosity;    ///< Normalised kinematic viscosity
-  Field3D viscous_heating{0.0};          ///< Face-based -nu grad(Vort) dot grad(Phi)
+  Field3D viscous_heating{0.0};          ///< Discrete Phi DivJviscous - DivEviscous
   Field3D electron_viscous_heating{0.0}; ///< Electron mass fraction of viscous heating
 
   Field3D phi{0.0}; ///< Electrostatic potential ϕ
@@ -252,7 +250,7 @@ private:
   Field3D DivJdia;       ///< Divergence of diamagnetic current
   Field3D reynolds_work; ///< Face work of the X-Z Reynolds current
   Field3D DivJReynolds;  ///< Divergence of Reynolds stress current
-  bout::ion_energy::XZFaceFluxes polarisation_flux; ///< Common Reynolds + chi current
+  bout::ion_energy::XZFaceFluxes polarisation_flux; ///< Minus Reynolds and chi X-Z faces
   Field3D DivJpol; ///< Full polarisation transport divergence, including wall currents
   Field3D DivJviscous{0.0}; ///< Divergence of nu grad_perp(Vort)
 
@@ -273,15 +271,24 @@ private:
   /// Inputs
   /// - species
   ///   - <name>
-  ///     - AA
+  ///     - AA and charge
   ///     - density
-  ///     - velocity
+  ///     - velocity and momentum (optional)
+  ///   - e
+  ///     - pressure
+  ///     - momentum and AA (optional parallel current)
+  ///     - density and AA (optional viscous heating partition)
   ///
   /// Sets
   /// - species
   ///   - <name>
   ///     - pressure
   ///     - temperature
+  /// Adds
+  /// - species:<ion>:density_source and momentum_source (polarisation transport)
+  /// - species:e:energy_source (diamagnetic work and optional viscous heating)
+  /// Sets
+  /// - fields:phi and fields:vorticity
   ///
   void transform_impl(GuardedOptions& state) override;
 
@@ -341,8 +348,8 @@ private:
 
   /// Recover the auxiliary current potential and update its solver diagnostics.
   ///
-  /// @param rhs Physical interior vorticity rate in normalised units, excluding
-  ///            the encoded radial wall-state rates.
+  /// @param rhs DivJReynolds + DivJdia on physical cells in normalised units,
+  ///            excluding viscous stress and encoded radial wall-state rates.
   ///
   /// Reads boussinesq_coeff, polarisation_corrections and the configured inverse.
   /// In relaxing mode it also reads the current wall_rate_inner/outer as chi's
@@ -354,9 +361,8 @@ private:
 
   /// Calculate ion perpendicular kinetic energy, K⊥ = 1/2 c |∇⊥Φ|^2
   ///
-  /// This should be consistent with the vorticity discretisation,
-  /// so that the integration by parts of Vort * Phi over the domain
-  /// gives the kinetic perpendicular energy plus boundary terms.
+  /// Uses the same geometric faces as the forward vorticity operator, including
+  /// wall gradients and g13, so discrete integration by parts includes boundary work.
   ///
   Field3D calculateKEperp(const Field3D& phi, const Field3D& psi) const;
 

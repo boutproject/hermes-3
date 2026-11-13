@@ -474,7 +474,7 @@ BoutReal upwind(const Field3D& n, const Ind3D& i, BoutReal velocity) {
   FV::MC{}(stencil);
   return velocity > 0 ? stencil.R : stencil.L;
 }
-/// Build the metric-dependent Lambda field used in the central Reynolds current.
+/// Build the metric-dependent Lambda field used in the upwind Reynolds current.
 ///
 /// @param c Read-only Boussinesq polarisation coefficient with valid guards.
 /// @param phi Read-only electric potential with valid guards and geometry.
@@ -630,7 +630,7 @@ Field3D faceWork(const XZFaceFluxes& flux, const Field3D& f) {
 /// @param c Read-only Boussinesq polarisation coefficient.
 /// @param vort Read-only physical vorticity; omega = vort/2 is MC-upwinded.
 /// @param phi Read-only electric potential driving omega advection.
-/// @param psi Read-only ion pressure potential; Phi = phi + psi drives the central
+/// @param psi Read-only ion pressure potential; Phi = phi + psi drives the MC-upwinded
 ///            Lambda term and enters the curl stream function.
 /// @returns Area-integrated increasing-X/Z current faces with the XZFaceFluxes
 ///          convention: X from xstart-1 through xend, Z on physical cells, physical
@@ -680,18 +680,18 @@ XZFaceFluxes reynoldsFaceFluxes(const Field3D& c, const Field3D& vort, const Fie
     const auto r = i.xp();
     const BoutReal J = 0.5 * (coord->J()[i] + coord->J()[r]);
     const BoutReal velocity = J * (phi_corner[i] - phi_corner[i.zm()]);
-    flux.x[i] =
-        (velocity * upwind<DIRECTION::X>(omega, i, velocity)
-         + J * (Phi_corner[i] - Phi_corner[i.zm()]) * 0.5 * (lambda[i] + lambda[r])
-         + stream[i] - stream[i.zm()])
-            * coord->dy()[i]
-        + perpendicularX(half_c, Q, cross, *coord, i);
+    const BoutReal lambda_velocity = J * (Phi_corner[i] - Phi_corner[i.zm()]);
+    flux.x[i] = (velocity * upwind<DIRECTION::X>(omega, i, velocity)
+                 + lambda_velocity * upwind<DIRECTION::X>(lambda, i, lambda_velocity)
+                 + stream[i] - stream[i.zm()])
+                    * coord->dy()[i]
+                + perpendicularX(half_c, Q, cross, *coord, i);
   }
   BOUT_FOR(i, phi.getRegion("RGN_NOBNDRY")) {
     const BoutReal velocity = coord->J()[i] * (phi_corner[i.xm()] - phi_corner[i]);
+    const BoutReal lambda_velocity = coord->J()[i] * (Phi_corner[i.xm()] - Phi_corner[i]);
     flux.z[i] = (velocity * upwind<DIRECTION::Z>(omega, i, velocity)
-                 + coord->J()[i] * (Phi_corner[i.xm()] - Phi_corner[i]) * 0.5
-                       * (lambda[i] + lambda[i.zp()])
+                 + lambda_velocity * upwind<DIRECTION::Z>(lambda, i, lambda_velocity)
                  + stream[i.xm()] - stream[i])
                     * coord->dy()[i]
                 + perpendicularZ(half_c, Q, cross, *coord, i);
@@ -772,9 +772,8 @@ EvolveVorticityIonEnergy::EvolveVorticityIonEnergy(std::string name, Options& al
   if (radial_model.evolve_wall_potential) {
     const BoutReal kappa_SI =
         options["phi_boundary_velocity"]
-            .doc("Velocity relaxing the mean wall-normal E-field to zero [m/s]. "
-                 "For boundary-cell physical width h and an old relaxation "
-                 "timescale tau, kappa = h/(2*tau) matches at that resolution.")
+            .doc("Required finite positive velocity relaxing the mean wall-normal "
+                 "E-field to zero for radial_boundary=no_slip [m/s].")
             .as<BoutReal>();
     if (!std::isfinite(kappa_SI) || kappa_SI <= 0.0) {
       throw BoutException("radial_boundary=no_slip requires finite positive "
@@ -820,8 +819,8 @@ EvolveVorticityIonEnergy::EvolveVorticityIonEnergy(std::string name, Options& al
   const auto* coord = mesh->getCoordinates();
 
   average_atomic_mass = options["average_atomic_mass"]
-                            .doc("Weighted average atomic mass, for polarisation current "
-                                 "(Boussinesq approximation)")
+                            .doc("Fixed reference atomic mass for the Boussinesq "
+                                 "polarisation coefficient")
                             .withDefault<BoutReal>(2.0); // Deuterium
 
   poloidal_flows =
@@ -845,12 +844,6 @@ EvolveVorticityIonEnergy::EvolveVorticityIonEnergy(std::string name, Options& al
   if (include_viscosity) {
     setPermissions(readIfSet("species:e:density", Regions::Interior));
   }
-  include_divjviscous =
-      options["include_divjviscous"]
-          .doc("Include viscous current in the auxiliary polarisation solve; "
-               "vorticity diffusion and viscous energy exchange remain enabled")
-          .withDefault<bool>(false);
-
   // Add phi to restart files so that the value in the boundaries
   // is restored on restart. This is done even when phi is not evolving,
   // so that phi can be saved and re-loaded
@@ -881,13 +874,14 @@ EvolveVorticityIonEnergy::EvolveVorticityIonEnergy(std::string name, Options& al
     phiSolver->setOuterBoundaryFlags(radial_model.phi_flags);
   }
 
-  // Fixed point iteration settings
+  // Coupled pressure/potential recovery settings
   phi_max_iterations = options["phi_max_iterations"]
                            .doc("Maximum number of finite-volume potential iterations")
                            .withDefault(100);
-  phi_atol =
-      options["phi_atol"].doc("phi convergence absolute tolerance [eV]").withDefault(1.0)
-      / Tnorm;
+  phi_atol = options["phi_atol"]
+                 .doc("Potential scale in the relative recovery criterion [eV]")
+                 .withDefault(1.0)
+             / Tnorm;
   phi_rtol =
       options["phi_rtol"].doc("phi convergence relative tolerance").withDefault(1e-3);
   vort_atol = options["vort_atol"]
@@ -1051,7 +1045,8 @@ void EvolveVorticityIonEnergy::transform_impl(GuardedOptions& state) {
     const BoutReal psi_err = max(abs(psi - psi_last) / (abs(psi) + phi_atol), true);
     phi_err = std::max(phi_err, psi_err);
     const BoutReal vort_err =
-        max(abs(Vort - Div_a_Grad_perp_XZ(boussinesq_coeff, phi + psi, true)), true);
+        max(abs(Vort - bout::ion_energy::Div_a_Grad_perp_XZ(boussinesq_coeff, phi + psi)),
+            true);
     ++iteration;
 
     if (phi_err <= phi_rtol && vort_err <= vort_tolerance) {
@@ -1099,7 +1094,7 @@ void EvolveVorticityIonEnergy::transform_impl(GuardedOptions& state) {
 
   //////////////////////////////////////////////////////////
   // Calculate common ion temperature
-  // Set temperature and density of each ion species
+  // Set temperature and pressure of each ion species
 
   Ti = Pi_sum / Ni_sum_floor;
   forAllIons(allspecies, [&](GuardedOptions species) {
@@ -1112,10 +1107,9 @@ void EvolveVorticityIonEnergy::transform_impl(GuardedOptions& state) {
   // Reynolds stress
 
   const Field3D Phi = phi + psi;
-  const auto reynolds = bout::ion_energy::reynoldsFaceFluxes(Field3D{boussinesq_coeff},
-                                                             vorticity, phi, psi);
+  const auto reynolds =
+      bout::ion_energy::reynoldsFaceFluxes(boussinesq_coeff, vorticity, phi, psi);
   DivJReynolds = -bout::ion_energy::divergence(reynolds);
-  // Preserve the shared poloidal X-Y terms; the skew construction is X-Z only.
   Field3D lambda;
   if (poloidal_flows) {
     lambda = bout::ion_energy::reynoldsLambda(Field3D{boussinesq_coeff}, phi);
@@ -1173,7 +1167,7 @@ void EvolveVorticityIonEnergy::transform_impl(GuardedOptions& state) {
   // ExB drift
 
   // ExB drift of total ion energy. This includes the Reynolds work that
-  // is the advection of K_perp by ExB for the choice of G used here.
+  // is the advection of K_perp by ExB for the Reynolds current used here.
   DivEExB = Div_n_bxGrad_f_B_XPPM(Eion, phi, false, poloidal_flows, true);
 
   // The total electron energy exchange is phi * Div(J_e). evolve_pressure
@@ -1207,17 +1201,12 @@ void EvolveVorticityIonEnergy::transform_impl(GuardedOptions& state) {
   // Auxiliary current-continuity potential, independent of phi relaxation.
   // DC Dirichlet fixes the constant mode; the AC enum controls the auxiliary
   // potential guards. Transport retains the currents used by the forward solve.
-  // Artificial viscosity damps vorticity without polarisation transport unless
-  // explicitly included in the current closure.
-  Field3D chi_rhs = DivJReynolds + DivJdia;
-  if (include_divjviscous) {
-    chi_rhs += DivJviscous;
-  }
-  solvePolarisationPotential(chi_rhs);
+  // Viscous stress dissipates perpendicular kinetic energy without a particle
+  // flux, so it does not enter the auxiliary polarisation current closure.
+  solvePolarisationPotential(DivJReynolds + DivJdia);
 
   // Use the same geometric chi currents as the residual, including wall faces.
-  const auto chi_faces =
-      bout::ion_energy::perpendicularFaces(Field3D{boussinesq_coeff}, chi);
+  const auto chi_faces = bout::ion_energy::perpendicularFaces(boussinesq_coeff, chi);
   polarisation_flux = {-reynolds.x - chi_faces.x, -reynolds.z - chi_faces.z};
   const auto divPol = [&](const Field3D& weight) -> Field3D {
     Field3D result = bout::ion_energy::divergence(polarisation_flux, &weight);
@@ -1343,11 +1332,11 @@ void EvolveVorticityIonEnergy::outputVars(Options& state) {
   // Update the recovery guess here so it remains fixed between outputs.
   acceptWarmStart();
 
-  set_with_attrs(
-      state["evolve_vorticity_ion_energy_version"], 1,
-      {{"description", "Component equation and discretisation version: "
-                       "full Reynolds/chi faces and optional viscous "
-                       "polarisation current; independent of restart layout"}});
+  set_with_attrs(state["evolve_vorticity_ion_energy_version"], 2,
+                 {{"description", "Component equation and discretisation version: "
+                                  "MC omega/Lambda with full Reynolds/chi wall currents; "
+                                  "viscous stress excluded from polarisation transport; "
+                                  "independent of restart layout"}});
 
   // Normalisations
   auto Nnorm = get<BoutReal>(state["Nnorm"]);
@@ -1474,17 +1463,16 @@ void EvolveVorticityIonEnergy::outputVars(Options& state) {
                     {"conversion", SI::qe * Nnorm * Omega_ci}});
     set_with_attrs(state["ion_pressure_potential"], psi,
                    {{"time_dimension", "t"}, {"units", "V"}, {"conversion", Tnorm}});
-    set_with_attrs(
-        state["ddt(Phi)"], chi,
-        {{"time_dimension", "t"},
-         {"units", "V s^-1"},
-         {"conversion", Tnorm * Omega_ci},
-         {"long_name", "Auxiliary polarisation current potential"},
-         {"description", "Fixed-correction auxiliary solve; viscosity enters its RHS "
-                         "only when include_divjviscous=true; "
-                         "nonperiodic X: midpoint Dirichlet DC, "
-                         "radial AC selected by polarisation_ac_boundary; "
-                         "approximate, not exact ddt(phi+psi)"}});
+    set_with_attrs(state["ddt(Phi)"], chi,
+                   {{"time_dimension", "t"},
+                    {"units", "V s^-1"},
+                    {"conversion", Tnorm * Omega_ci},
+                    {"long_name", "Auxiliary polarisation current potential"},
+                    {"description", "Fixed-correction auxiliary solve; viscous stress is "
+                                    "excluded from its RHS; "
+                                    "nonperiodic X: midpoint Dirichlet DC, "
+                                    "radial AC selected by polarisation_ac_boundary; "
+                                    "approximate, not exact ddt(phi+psi)"}});
     set_with_attrs(state["ion_phi_iterations"], phi_iterations,
                    {{"time_dimension", "t"},
                     {"description", "Iterations used in the last coupled pressure and "
@@ -1493,12 +1481,11 @@ void EvolveVorticityIonEnergy::outputVars(Options& state) {
                    {{"time_dimension", "t"},
                     {"description", "Auxiliary chi solver calls: one initial solve plus "
                                     "polarisation_corrections defect corrections"}});
-    set_with_attrs(
-        state["ion_chi_residual"], chi_residual,
-        {{"time_dimension", "t"},
-         {"description", "Maximum absolute normalised finite-volume residual "
-                         "of L(chi)=selected polarisation RHS over physical cells; "
-                         "viscosity included only when include_divjviscous=true"}});
+    set_with_attrs(state["ion_chi_residual"], chi_residual,
+                   {{"time_dimension", "t"},
+                    {"description", "Maximum absolute normalised finite-volume residual "
+                                    "of L(chi)=DivJReynolds+DivJdia over physical cells; "
+                                    "viscous stress excluded"}});
     set_with_attrs(state["ion_KE_parallel"], ion_KE_parallel,
                    {{"time_dimension", "t"}, {"units", "J m^-3"}, {"conversion", Pnorm}});
     set_with_attrs(state["ion_KE_perp"], ion_KE_perp,
@@ -1669,8 +1656,9 @@ void EvolveVorticityIonEnergy::restartVars(Options& state) {
                    {{"description", "Restart Vort physical radial boundary cells store "
                                     "phi midpoints in normalised potential units"}});
   }
-  set_with_attrs(state["phi"], phi,
-                 {{"long_name", "plasma potential"}, {"source", "vorticity"}});
+  set_with_attrs(
+      state["phi"], phi,
+      {{"long_name", "plasma potential"}, {"source", "evolve_vorticity_ion_energy"}});
 }
 
 Field3D EvolveVorticityIonEnergy::sumIonEnergySources(const Options& allspecies) const {
@@ -1722,7 +1710,8 @@ Field3D EvolveVorticityIonEnergy::correctPotential(const Field3D& rhs,
   // Homogeneous correction boundaries preserve the separately imposed phi
   // boundaries, including INVERT_SET values supplied by a restart.
   Field3D residual{zeroFrom(rhs)};
-  const Field3D forward = Div_a_Grad_perp_XZ(boussinesq_coeff, potential, true);
+  const Field3D forward =
+      bout::ion_energy::Div_a_Grad_perp_XZ(boussinesq_coeff, potential);
   BOUT_FOR(i, residual.getRegion("RGN_NOBNDRY")) {
     residual[i] = (rhs[i] - forward[i]) / boussinesq_coeff[i];
   }
@@ -1810,5 +1799,6 @@ void EvolveVorticityIonEnergy::solvePolarisationPotential(const Field3D& rhs) {
   chi_iterations = 1 + polarisation_corrections;
 
   // Diagnostic only: residual against the finite-volume operator
-  chi_residual = max(abs(rhs - Div_a_Grad_perp_XZ(boussinesq_coeff, chi, true)), true);
+  chi_residual =
+      max(abs(rhs - bout::ion_energy::Div_a_Grad_perp_XZ(boussinesq_coeff, chi)), true);
 }

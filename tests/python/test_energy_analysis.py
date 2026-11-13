@@ -1158,7 +1158,7 @@ def shared_current_case(dataset):
     return run
 
 
-@pytest.mark.parametrize("version", (None, 1))
+@pytest.mark.parametrize("version", (None, 2))
 def test_component_version(dataset, version):
     from energy_analysis.fluxes import component_version
 
@@ -1167,7 +1167,7 @@ def test_component_version(dataset, version):
             **dataset.metadata,
             "evolve_vorticity_ion_energy_version": version,
         }
-    assert component_version(open_run(dataset)) == 1
+    assert component_version(open_run(dataset)) == 2
 
 
 def test_full_neumann_wall_coverage_requires_chi(dataset):
@@ -1179,7 +1179,7 @@ def test_full_neumann_wall_coverage_requires_chi(dataset):
     run.data.options["evolve_vorticity_ion_energy:polarisation_ac_boundary"] = "neumann"
     run.data.attrs["metadata"] = {
         **run.data.metadata,
-        "evolve_vorticity_ion_energy_version": 1,
+        "evolve_vorticity_ion_energy_version": 2,
     }
     assert wall_budget(run).attrs["coverage"] == "complete"
     missing = wall_budget(replace(run, data=run.data.drop_vars("ion_chi")))
@@ -1187,13 +1187,14 @@ def test_full_neumann_wall_coverage_requires_chi(dataset):
     assert any("chi" in term for term in missing.attrs["missing_terms"])
 
 
-def test_unknown_component_version_is_rejected(dataset):
+@pytest.mark.parametrize("version", (1, 99))
+def test_unknown_component_version_is_rejected(dataset, version):
     from energy_analysis.fluxes import component_version
 
     run = shared_current_case(dataset)
     run.data.attrs["metadata"] = {
         **run.data.metadata,
-        "evolve_vorticity_ion_energy_version": 99,
+        "evolve_vorticity_ion_energy_version": version,
     }
     with pytest.raises(
         AuditError, match="Unsupported evolve_vorticity_ion_energy version"
@@ -1209,7 +1210,7 @@ def test_full_wall_budget_with_parallel_compression(dataset, g13):
     run = shared_current_case(dataset)
     run.data.attrs["metadata"] = {
         **run.data.metadata,
-        "evolve_vorticity_ion_energy_version": 1,
+        "evolve_vorticity_ion_energy_version": 2,
     }
     run.data.options["e:p_div_v"] = "true"
     # Parallel compression prevents a complete RHS reconstruction, but does
@@ -1237,16 +1238,13 @@ def test_unknown_component_version_reports_incomplete_coverage(dataset):
     )
 
 
-@pytest.mark.parametrize("setting", (None, False, True))
-def test_chi_fallback_respects_viscous_polarisation_switch(dataset, setting):
+def test_chi_fallback_excludes_viscous_current(dataset):
     from energy_analysis import reconstruct_fluxes
 
     run = shared_current_case(dataset)
     run.data = run.data.drop_vars("ion_chi")
     options = run.data.options
     options["periodicX"] = "true"
-    if setting is not None:
-        options[run.model]["include_divjviscous"] = str(setting).lower()
     nu = 0.05
     options[run.model]["viscosity"] = str(nu * run.length_scale**2 * run.frequency)
     run.data["phi"] = xr.zeros_like(run.data.phi)
@@ -1260,12 +1258,9 @@ def test_chi_fallback_respects_viscous_polarisation_switch(dataset, setting):
     xr.testing.assert_allclose(
         fluxes["ddt(Vort)"], viscous.transpose(*fluxes["ddt(Vort)"].dims)
     )
-    # Independent Fourier response of the spectral initial solve followed by
-    # two FV defect corrections. Phi's nonviscous current is zero in this case.
-    ratio = 4 * np.sin(np.pi / n) ** 2 / (2 * np.pi / n) ** 2
-    response = 1 - (1 - ratio) ** 3 if setting else 0
-    c = run.scalar_option("average_atomic_mass") / run.data.Bxy**2
-    expected = response * nu * run.data.Vort / c
+    # Phi's nonviscous current is zero, so viscosity alone cannot drive chi
+    # or polarisation transport, despite its finite vorticity diffusion.
+    expected = xr.zeros_like(run.data.Vort)
     assert_allclose(
         run.interior(fluxes["ddt(Phi)"]),
         run.interior(expected.transpose(*fluxes["ddt(Phi)"].dims)),
@@ -1273,7 +1268,7 @@ def test_chi_fallback_respects_viscous_polarisation_switch(dataset, setting):
     )
     assert_allclose(
         run.interior(fluxes.DivJpol),
-        run.interior((-response * viscous).transpose(*fluxes.DivJpol.dims)),
+        run.interior(expected.transpose(*fluxes.DivJpol.dims)),
         atol=1e-14,
     )
 

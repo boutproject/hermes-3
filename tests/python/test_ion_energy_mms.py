@@ -38,7 +38,6 @@ def test_committed_inputs_are_current(tmp_path, variant):
     assert generated.read_bytes() == mms.input_path(variant).read_bytes()
     options = BoutOptionsFile(str(generated))
     assert options["solver"].get_bool("mms")
-    assert not options["evolve_vorticity_ion_energy"].get_bool("include_divjviscous")
     for field in exact.EVOLVED:
         assert "source" in options[field] and "solution" in options[field]
     assert set(mms.REFERENCE_KEYS.values()) <= set(options["mms"].keys())

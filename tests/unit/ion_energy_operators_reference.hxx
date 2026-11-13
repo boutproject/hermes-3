@@ -98,8 +98,7 @@ inline BoutReal streamCorner(const Field3D& f, const Ind3D& i) {
   return 0.25 * (f[i] + f[i.xp()] + f[i.zp()] + f[i.xp().zp()]);
 }
 
-inline XZFaceFluxes advectionFaces(const Field3D& n, const Field3D& f, bool limited,
-                                   bool close_radial_faces = true) {
+inline XZFaceFluxes advectionFaces(const Field3D& n, const Field3D& f) {
   auto* m = f.getMesh();
   const auto* coord = f.getCoordinates();
   XZFaceFluxes flux{zeroFrom(f), zeroFrom(f)};
@@ -119,23 +118,17 @@ inline XZFaceFluxes advectionFaces(const Field3D& n, const Field3D& f, bool limi
         const Ind3D i =
             Ind3D((x * m->LocalNy + y) * m->LocalNz + z, m->LocalNy, m->LocalNz);
         const auto r = i.xp();
-        if (!(close_radial_faces
-              && ((x == m->xstart - 1 && m->firstX()) || (x == m->xend && m->lastX())))) {
-          const BoutReal velocity = 0.5 * (coord->J()[i] + coord->J()[r])
+        const BoutReal velocity_x = 0.5 * (coord->J()[i] + coord->J()[r])
                                     * (streamCorner(f, i) - streamCorner(f, i.zm()))
                                     / coord->dz()[i];
-          const BoutReal nf =
-              limited ? (velocity > 0 ? edge(i, true, true) : edge(r, true, false))
-                      : 0.5 * (n[i] + n[r]);
-          flux.x[i] = velocity * nf * coord->dy()[i] * coord->dz()[i];
-        }
+        const BoutReal nx = velocity_x > 0 ? edge(i, true, true) : edge(r, true, false);
+        flux.x[i] = velocity_x * nx * coord->dy()[i] * coord->dz()[i];
         if (x >= m->xstart) {
           const BoutReal velocity = coord->J()[i]
                                     * (streamCorner(f, i.xm()) - streamCorner(f, i))
                                     / coord->dx()[i];
           const BoutReal nf =
-              limited ? (velocity > 0 ? edge(i, false, true) : edge(i.zp(), false, false))
-                      : 0.5 * (n[i] + n[i.zp()]);
+              velocity > 0 ? edge(i, false, true) : edge(i.zp(), false, false);
           flux.z[i] = velocity * nf * coord->dx()[i] * coord->dy()[i];
         }
       }
@@ -190,9 +183,9 @@ inline XZFaceFluxes solenoidalReynoldsFaceFluxes(const Field3D& c, const Field3D
   return flux;
 }
 
+// MC reconstruct both transported scalars using their respective face velocities.
 inline XZFaceFluxes reynoldsFaces(const Field3D& c, const Field3D& vort,
-                                  const Field3D& phi, const Field3D& psi,
-                                  bool lambda_limited = true) {
+                                  const Field3D& phi, const Field3D& psi) {
   auto* m = phi.getMesh();
   const auto* coord = phi.getCoordinates();
   const Field3D Phi = phi + psi;
@@ -222,8 +215,8 @@ inline XZFaceFluxes reynoldsFaces(const Field3D& c, const Field3D& vort,
     }
   }
   m->communicate(lambda, Q);
-  const auto omega = advectionFaces(0.5 * vort, phi, true, false);
-  const auto rotation = advectionFaces(lambda, Phi, lambda_limited, false);
+  const auto omega = advectionFaces(0.5 * vort, phi);
+  const auto rotation = advectionFaces(lambda, Phi);
   const auto curl = solenoidalReynoldsFaceFluxes(c, phi, Phi);
   XZFaceFluxes result{omega.x + rotation.x + curl.x, omega.z + rotation.z + curl.z};
   const Field3D half_c = 0.5 * c;

@@ -33,6 +33,9 @@ def reference(case="periodic"):
         c = 1 + r(1, 5) * s.sin(x) + r(1, 10) * s.cos(z)
         phi = s.sin(x) * s.cos(z) + r(1, 10) * s.cos(2 * z)
         psi = r(1, 5) * s.cos(2 * x) * s.sin(z)
+        if case == "slab":
+            g11 = g33 = J = c = s.Integer(1)
+            g13 = s.Integer(0)
     H = s.Matrix([[g11, g13], [g13, g33]])
     D = g11 * g33 - g13**2
     G = s.Matrix([[g33, -g13], [-g13, g11]]) / D

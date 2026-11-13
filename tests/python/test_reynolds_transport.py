@@ -20,7 +20,6 @@ from energy_analysis.transport import (
     reynolds_face_fluxes,
     solenoidal_reynolds_faces,
     weighted_faces,
-    xppm_faces,
 )
 
 spec = importlib.util.spec_from_file_location(
@@ -58,7 +57,7 @@ def periodic_halos(field):
     return field
 
 
-@pytest.mark.parametrize("case", ("periodic", "annulus"))
+@pytest.mark.parametrize("case", ("periodic", "annulus", "slab"))
 def test_covariant_skew_convergence(case):
     minimum = 1.5
     errors = []
@@ -79,7 +78,7 @@ def test_covariant_skew_convergence(case):
         boundary = error.isel(x=[2, 3, -4, -3])
         print(
             case,
-            "mixed",
+            "MC omega/Lambda",
             n,
             "interior",
             errors[-1],
@@ -92,7 +91,7 @@ def test_covariant_skew_convergence(case):
     assert np.all(orders >= minimum), (case, errors, orders)
 
 
-@pytest.mark.parametrize("case", ("periodic", "annulus"))
+@pytest.mark.parametrize("case", ("periodic", "annulus", "slab"))
 def test_covariant_current_face_convergence(case):
     minimum = 1.5
     # Divergence alone cannot distinguish the signs of a solenoidal curl.
@@ -125,7 +124,7 @@ def test_covariant_current_face_convergence(case):
             errors[dim].append(float(np.sqrt(np.mean(error**2))))
     for dim, values in errors.items():
         orders = np.log2(np.asarray(values[:-1]) / values[1:])
-        print(case, "mixed", dim, "face errors", values, "orders", orders)
+        print(case, "MC omega/Lambda", dim, "face errors", values, "orders", orders)
         assert np.all(orders >= minimum), (case, dim, values, orders)
 
 
@@ -192,54 +191,7 @@ def test_curl_work_and_wall_identities():
     )
 
 
-def test_flat_slab_agrees_with_legacy_split_interior():
-    errors = []
-    for n in (32, 64, 128):
-        v, g = sample("periodic", n)
-        g["J"], g["g11"], g["g33"], g["g13"] = 1.0, 1.0, 1.0, 0.0
-        phi, psi = v["phi"], v["psi"]
-        c = xr.ones_like(phi)
-        omega = periodic_halos(perpendicular_operator(c, phi + psi, g).divergence)
-        Q = periodic_halos(arakawa(phi, psi, g.dx, g.dz))
-        # The old Delp2 uses FD in X and FFT in Z; the new Lambda uses FV in both.
-        lapz = s.diff(reference.reference("periodic")["phi"], reference.z, 2)
-        h = float(g.dx)
-        xx = (np.arange(n + 4) - 2 + 0.5) * h
-        zz = (np.arange(n) + 0.5) * h
-        analytic_z = xr.DataArray(
-            s.lambdify((reference.x, reference.z), lapz, "numpy")(
-                xx[:, None], zz[None, :]
-            ),
-            dims=("x", "z"),
-        )
-        from energy_analysis.transport import neighbor
-
-        lam = periodic_halos(
-            (
-                (neighbor(phi, "x") - 2 * phi + neighbor(phi, "x", -1)) / h**2
-                + analytic_z
-            )
-            / 2
-        )
-        old_a = xppm_faces(omega / 2, phi, g)
-        old_b = xppm_faces(lam, phi + psi, g, limiter=None)
-        old_q = fv_xz(c / 2, Q, g, periodic_x=True)
-        old = {d: old_a[d] + old_b[d] + old_q["flux_" + d] for d in ("x", "z")}
-        new = reynolds_face_fluxes(
-            c,
-            omega,
-            phi,
-            psi,
-            g,
-            periodic_x=True,
-            fill_guards=periodic_halos,
-        )
-        err = face_divergence(new, g) - face_divergence(old, g)
-        errors.append(float(np.sqrt((err.isel(x=slice(5, -5)) ** 2).mean())))
-    assert np.all(np.log2(np.asarray(errors[:-1]) / errors[1:]) > 1.8), errors
-
-
-def test_unpinned_weighted_boundary_divergence_converges():
+def test_weighted_boundary_divergence_remains_bounded():
     errors = []
     for n in (16, 32, 64):
         v, g = sample("annulus", n)
@@ -250,8 +202,8 @@ def test_unpinned_weighted_boundary_divergence_converges():
         faces = reynolds_face_fluxes(v["c"], omega, phi, psi, g)
         transport = face_divergence(weighted_faces(faces, 1 + 0.1 * np.sin(phi)), g)
         errors.append(float(abs(transport).isel(x=[2, -3]).mean()))
-    # A pinned curl produces a 1/dx boundary-cell layer. The unpinned operator
-    # remains bounded as dx decreases, without weakening convergence gates.
+    # The full wall current remains bounded as dx decreases. This is a
+    # boundedness check; the separate curvature test checks truncation orders.
     assert max(errors) < 2 * errors[0], errors
 
 

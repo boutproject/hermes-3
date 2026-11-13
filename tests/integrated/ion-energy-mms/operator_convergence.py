@@ -105,7 +105,7 @@ def discrete(fields, weights, geometry):
             d: fv_xz(c / 2, Q, geometry, boundary_flux=True)["flux_" + d]
             for d in ("x", "z")
         },
-        "Lambda_U": xppm_faces(guarded_lam, Phi, geometry, limiter=None),
+        "Lambda_U": xppm_faces(guarded_lam, Phi, geometry),
     }
     faces = reynolds_face_fluxes(c, omega, phi, psi, geometry)
     curl = solenoidal_reynolds_faces(c, phi, Phi, geometry)

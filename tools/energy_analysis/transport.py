@@ -164,7 +164,7 @@ def reynolds_face_fluxes(
     periodic_x=False,
     fill_guards=None,
 ):
-    """MC omega, central Lambda, geometric Q and unpinned curl on shared faces.
+    """MC omega and Lambda, geometric Q and unpinned curl on shared faces.
 
     Physical Q guards have zero midpoint; Lambda guards extrapolate linearly.
     Communication/Y guards are supplied by the orchestration layer.
@@ -183,7 +183,7 @@ def reynolds_face_fluxes(
                     lam.isel(x=cell) - lam.isel(x=cell - step)
                 )
     omega = xppm_faces(vorticity / 2, phi, geometry, mxg=mxg, periodic_x=True)
-    rotation = xppm_faces(lam, Phi, geometry, mxg=mxg, limiter=None, periodic_x=True)
+    rotation = xppm_faces(lam, Phi, geometry, mxg=mxg, periodic_x=True)
     q = perpendicular_faces(c / 2, Q, geometry, mxg=mxg)
     split = {d: omega[d] + rotation[d] + q[d] for d in ("x", "z")}
     curl = solenoidal_reynolds_faces(c, phi, Phi, geometry)

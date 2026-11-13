@@ -1,7 +1,7 @@
 """Continuum two-ion slab MMS, differentiated in normalised physical coordinates.
 
 No numerical operator or finest-grid solution enters the reference or sources.
-The auxiliary chi excludes viscosity, matching include_divjviscous=false,
+The auxiliary chi excludes viscous stress, which has no particle flux,
 before BOUT MMS forcing. Viscosity still diffuses vorticity and exchanges energy.
 """
 
@@ -353,7 +353,6 @@ def preflight(variant="baseline"):
                 assert terms[key] == 0, key
     return {
         "variant": variant,
-        "include_divjviscous": False,
         "elliptic_and_X_boundaries": "verified symbolically",
         "reynolds_skew_identity": "verified symbolically",
         "positive_primitives": True,
