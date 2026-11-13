@@ -12,6 +12,7 @@
 #include "component.hxx"
 #include "guarded_options.hxx"
 
+#include <array>
 #include <memory>
 #include <string>
 #include <vector>
@@ -68,8 +69,10 @@ void closeRadialFaces(XZFaceFluxes& flux);
 Field3D Div_a_Grad_perp_XZ(const Field3D& a, const Field3D& f, bool bndry_flux = true);
 /// Face-based energy density consistent with Div_a_Grad_perp_XZ.
 Field3D kineticEnergyPerp(const Field3D& a, const Field3D& f);
-/// Transitional full-vorticity MC advection and unpinned corner curl.
-/// The compact central R is added in the implementation stage.
+/// Full-vorticity MC advection plus compact central R = G_impl - omega*v_E.
+/// R reads one radial potential guard; MC reads two vorticity guards.
+/// Advective X-wall flux is zero for Z-uniform reflected midpoints; R retains
+/// two-point wall gradients. No boundary filling or communication occurs.
 XZFaceFluxes reynoldsFaceFluxes(const Field3D& c, const Field3D& vorticity,
                                 const Field3D& phi, const Field3D& psi);
 /// Conservative divergence on physical cells. Optional weights are averaged
@@ -224,10 +227,13 @@ private:
   Field3D psi;                    ///< Pressure potential Σ A_s p_s / (Abar Z_s)
   Field3D Ti;                     ///< Common ion temperature
   Coordinates::FieldMetric boussinesq_coeff; ///< c = mass / B^2
-  std::unique_ptr<Laplacian> phiSolver;      ///< Laplacian solver in X-Z
-  std::unique_ptr<Laplacian> chiSolver;      ///< Mixed-boundary auxiliary inverse
-  int chi_iterations{0};           ///< Spectral solves in the last chi calculation
-  BoutReal chi_residual{0.0};      ///< Max FV residual of the last chi calculation
+  /// Static bilinear coefficients of J*R, four per face direction, ordered
+  /// Phi_x*phi_x, Phi_x*phi_z, Phi_z*phi_x, Phi_z*phi_z.
+  std::array<Coordinates::FieldMetric, 8> reynolds_coefficients;
+  std::unique_ptr<Laplacian> phiSolver; ///< Laplacian solver in X-Z
+  std::unique_ptr<Laplacian> chiSolver; ///< Mixed-boundary auxiliary inverse
+  int chi_iterations{0};                ///< Spectral solves in the last chi calculation
+  BoutReal chi_residual{0.0};           ///< Max FV residual of the last chi calculation
   int polarisation_corrections{2}; ///< FV defect corrections after the spectral solve
 
   bout::ion_energy::RadialBoundaryModel radial_model;

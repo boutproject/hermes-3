@@ -33,6 +33,7 @@
 #include <memory>
 #include <string>
 #include <tuple>
+#include <type_traits>
 #include <utility>
 
 using bout::globals::mesh;
@@ -410,6 +411,26 @@ std::pair<BoutReal, BoutReal> crossCorner(const Field3D& a, const Field3D& f,
   return {0.5 * coefficient * (f[z] - f[i] + f[xz] - f[x]),
           0.5 * coefficient * (f[x] - f[i] + f[xz] - f[z])};
 }
+/// Area-integrated diagonal X flux, including dy and the physical wall jump.
+/// Reads only the two adjoining cells; no boundary filling or communication.
+BoutReal perpendicularXDiagonal(const Field3D& a, const Field3D& f,
+                                const Coordinates& coord, const Ind3D& i) {
+  const auto r = i.xp();
+  return 0.5 * (a[i] + a[r])
+         * (coord.J()[i] * coord.g11()[i] * coord.dz()[i]
+            + coord.J()[r] * coord.g11()[r] * coord.dz()[r])
+         * (f[r] - f[i]) / (coord.dx()[i] + coord.dx()[r]) * coord.dy()[i];
+}
+/// Area-integrated diagonal Z flux, including dy.
+/// Reads only the two adjoining cells; no boundary filling or communication.
+BoutReal perpendicularZDiagonal(const Field3D& a, const Field3D& f,
+                                const Coordinates& coord, const Ind3D& i) {
+  const auto r = i.zp();
+  return 0.5 * (a[i] + a[r])
+         * (coord.J()[i] * coord.g33()[i] * coord.dx()[i]
+            + coord.J()[r] * coord.g33()[r] * coord.dx()[r])
+         * (f[r] - f[i]) / (coord.dz()[i] + coord.dz()[r]) * coord.dy()[i];
+}
 /// Combine diagonal and corner cross terms on one increasing-X face.
 ///
 /// @param a Read-only cell-centred coefficient of a*grad_perp(f).
@@ -423,13 +444,8 @@ std::pair<BoutReal, BoutReal> crossCorner(const Field3D& a, const Field3D& f,
 /// No wall closure, boundary filling, communication or input mutation occurs.
 BoutReal perpendicularX(const Field3D& a, const Field3D& f, const XZFaceFluxes& cross,
                         const Coordinates& coord, const Ind3D& i) {
-  const auto r = i.xp();
-  return (0.5 * (a[i] + a[r])
-              * (coord.J()[i] * coord.g11()[i] * coord.dz()[i]
-                 + coord.J()[r] * coord.g11()[r] * coord.dz()[r])
-              * (f[r] - f[i]) / (coord.dx()[i] + coord.dx()[r])
-          + 0.5 * (cross.x[i] + cross.x[i.zm()]))
-         * coord.dy()[i];
+  return perpendicularXDiagonal(a, f, coord, i)
+         + 0.5 * (cross.x[i] + cross.x[i.zm()]) * coord.dy()[i];
 }
 /// Combine diagonal and corner cross terms on one increasing-Z face.
 ///
@@ -444,13 +460,8 @@ BoutReal perpendicularX(const Field3D& a, const Field3D& f, const XZFaceFluxes& 
 /// No wall closure, boundary filling, communication or input mutation occurs.
 BoutReal perpendicularZ(const Field3D& a, const Field3D& f, const XZFaceFluxes& cross,
                         const Coordinates& coord, const Ind3D& i) {
-  const auto r = i.zp();
-  return (0.5 * (a[i] + a[r])
-              * (coord.J()[i] * coord.g33()[i] * coord.dx()[i]
-                 + coord.J()[r] * coord.g33()[r] * coord.dx()[r])
-              * (f[r] - f[i]) / (coord.dz()[i] + coord.dz()[r])
-          + 0.5 * (cross.z[i] + cross.z[i.xm()]))
-         * coord.dy()[i];
+  return perpendicularZDiagonal(a, f, coord, i)
+         + 0.5 * (cross.z[i] + cross.z[i.xm()]) * coord.dy()[i];
 }
 /// Reconstruct the donor-side scalar at a face with the MC slope limiter.
 ///
@@ -601,62 +612,175 @@ Field3D faceWork(const XZFaceFluxes& flux, const Field3D& f) {
   }
   return result;
 }
-/// Transitional Reynolds faces: full-vorticity MC advection and corner curl.
-///
-/// @param c Read-only Boussinesq polarisation coefficient.
-/// @param vort Read-only physical vorticity, MC-upwinded in full.
-/// @param phi Read-only electric potential driving omega advection.
-/// @param psi Read-only ion pressure potential entering the curl stream function.
-/// @returns Area-integrated increasing-X/Z current faces with the XZFaceFluxes
-///          convention: X from xstart-1 through xend, Z on physical cells, physical
-///          Y and all local Z. Unused guards are zero. Geometric wall and periodic
-///          faces are retained, including the unpinned curl.
-///          The returned fluxes are not communicated.
-///
-/// Inputs must share a mesh/location, have valid wall and communicated guards,
-/// and provide at least two radial guard layers. Uniform dy in each X-Z plane
-/// makes the curl divergence and each wall's Z-summed charge vanish.
-/// This removal-stage construction is incomplete until the compact R is added.
-/// No boundary filling or communication occurs.
-/// Mesh face/wall-region caches may be initialised; all inputs are preserved.
-XZFaceFluxes reynoldsFaceFluxes(const Field3D& c, const Field3D& vort, const Field3D& phi,
-                                const Field3D& psi) {
+namespace {
+/// Static coefficients of J*R after replacing pure tangential derivatives with
+/// diagonal FV divergences. The order is Phi_x*phi_x, Phi_x*phi_z,
+/// Phi_z*phi_x, Phi_z*phi_z. These expressions follow by symbolic collection
+/// of G_impl-omega*v_E, including the diagonal FV metric-gradient correction.
+template <typename Field>
+std::array<Field, 8> reynoldsMetricCoefficients(const Field& c) {
+  auto* m = c.getMesh();
+  ASSERT0(m->xstart >= 2);
+  const auto* coord = c.getCoordinates();
+  std::array<Field, 8> coeff;
+  for (auto& field : coeff) {
+    field = zeroFrom(c);
+  }
+  const Field cJ = c * coord->J();
+  const Coordinates::FieldMetric det = coord->g11() * coord->g33() - SQ(coord->g13());
+  BOUT_FOR(
+      i, faceRegion(m, "ion_energy_reynolds_coefficients", m->xstart - 1, m->xend + 1)) {
+    if constexpr (std::is_same_v<Field, Field2D>) {
+      if (i.z() != 0) {
+        continue;
+      }
+    }
+    const auto derivativeX = [&](const auto& f) {
+      return (f[i.xp()] - f[i.xm()]) / (2 * coord->dx()[i]);
+    };
+    const auto derivativeZ = [&](const auto& f) {
+      return (f[i.zp()] - f[i.zm()]) / (2 * coord->dz()[i]);
+    };
+    const BoutReal A = cJ[i], Ax = derivativeX(cJ), Az = derivativeZ(cJ);
+    const BoutReal D = det[i], Dx = derivativeX(det), Dz = derivativeZ(det);
+    const BoutReal g11 = coord->g11()[i], g13 = coord->g13()[i], g33 = coord->g33()[i];
+    const BoutReal g11x = derivativeX(coord->g11()), g11z = derivativeZ(coord->g11());
+    const BoutReal g13x = derivativeX(coord->g13()), g13z = derivativeZ(coord->g13());
+    const BoutReal g33x = derivativeX(coord->g33()), g33z = derivativeZ(coord->g33());
+    coeff[0][i] = -1.0 / 2.0 * A * g11z - 1.0 / 2.0 * Az * g11;
+    coeff[1][i] = -1.0 / 2.0 * A * g11x - A * g13z - 1.0 / 2.0 * Ax * g11 - Az * g13;
+    coeff[2][i] = (1.0 / 2.0)
+                  * (A * D * g11x * g33 + 2 * A * D * g13 * g33z - A * Dx * g11 * g33
+                     - A * Dz * g13 * g33 + Az * D * g13 * g33)
+                  / (D * g33);
+    coeff[3][i] =
+        (1.0 / 2.0) * (A * D * g33z - A * Dx * g13 - A * Dz * g33 - Ax * D * g13) / D;
+    coeff[4][i] =
+        -1.0 / 2.0 * (A * D * g11x - A * Dx * g11 - A * Dz * g13 - Az * D * g13) / D;
+    coeff[5][i] = -1.0 / 2.0
+                  * (A * D * g11 * g33z + 2 * A * D * g11x * g13 - A * Dx * g11 * g13
+                     - A * Dz * g11 * g33 + Ax * D * g11 * g13)
+                  / (D * g11);
+    coeff[6][i] = A * g13x + (1.0 / 2.0) * A * g33z + Ax * g13 + (1.0 / 2.0) * Az * g33;
+    coeff[7][i] = (1.0 / 2.0) * A * g33x + (1.0 / 2.0) * Ax * g33;
+  }
+  return coeff;
+}
+
+/// Evaluate the shared current using precomputed, immutable metric coefficients.
+template <typename Field>
+XZFaceFluxes reynoldsFaces(const Field3D& c, const Field3D& vort, const Field3D& phi,
+                           const Field3D& psi, const std::array<Field, 8>& coeff) {
   auto* m = phi.getMesh();
   ASSERT0(m->xstart >= 2);
   const auto* coord = phi.getCoordinates();
-  const Field3D Phi = phi + psi, cJ = c * coord->J();
-  Field3D phi_corner = zeroFrom(phi), stream = zeroFrom(phi);
-  XZFaceFluxes flux{zeroFrom(phi), zeroFrom(phi)};
+  const Field3D Phi = phi + psi;
+  Field3D phi_corner = zeroFrom(phi), Phi_corner = zeroFrom(phi);
+  XZFaceFluxes gradient{zeroFrom(phi), zeroFrom(phi)}, flux{zeroFrom(phi), zeroFrom(phi)};
   BOUT_FOR(i, xFaces(m)) {
     phi_corner[i] = cornerAverage(phi, i);
-    const auto gradient = [&](const Field3D& f) {
-      return std::pair<BoutReal, BoutReal>{(f[i.xp()] - f[i] + f[i.xp().zp()] - f[i.zp()])
-                                               / (2 * cornerAverage(coord->dx(), i)),
-                                           (f[i.zp()] - f[i] + f[i.xp().zp()] - f[i.xp()])
-                                               / (2 * cornerAverage(coord->dz(), i))};
-    };
-    const auto p = gradient(phi), h = gradient(Phi);
-    stream[i] =
-        -0.5 * cornerAverage(cJ, i)
-        * (cornerAverage(coord->g11(), i) * p.first * h.first
-           + cornerAverage(coord->g13(), i) * (p.first * h.second + p.second * h.first)
-           + cornerAverage(coord->g33(), i) * p.second * h.second);
+    Phi_corner[i] = cornerAverage(Phi, i);
+    gradient.x[i] = (Phi[i.xp()] - Phi[i] + Phi[i.xp().zp()] - Phi[i.zp()])
+                    / (2 * cornerAverage(coord->dx(), i));
+    gradient.z[i] = (Phi[i.zp()] - Phi[i] + Phi[i.xp().zp()] - Phi[i.xp()])
+                    / (2 * cornerAverage(coord->dz(), i));
   }
+  const auto volume = [&](const Ind3D& i) {
+    return coord->J()[i] * coord->dx()[i] * coord->dy()[i] * coord->dz()[i];
+  };
+  // Evaluate each diagonal divergence directly from original potential samples.
+  // In particular Lx uses the physical wall-face jumps; no derived guards exist.
+  const auto Lx = [&](const Ind3D& i) {
+    return (perpendicularXDiagonal(c, Phi, *coord, i)
+            - perpendicularXDiagonal(c, Phi, *coord, i.xm()))
+           / volume(i);
+  };
+  const auto Lz = [&](const Ind3D& i) {
+    return (perpendicularZDiagonal(c, Phi, *coord, i)
+            - perpendicularZDiagonal(c, Phi, *coord, i.zm()))
+           / volume(i);
+  };
+  const auto bilinear = [&](const auto& coefficients, size_t offset, const Ind3D& i,
+                            const Ind3D& r, BoutReal hx, BoutReal hz, BoutReal px,
+                            BoutReal pz) {
+    return 0.5
+           * ((coefficients[offset + 0][i] + coefficients[offset + 0][r]) * hx * px
+              + (coefficients[offset + 1][i] + coefficients[offset + 1][r]) * hx * pz
+              + (coefficients[offset + 2][i] + coefficients[offset + 2][r]) * hz * px
+              + (coefficients[offset + 3][i] + coefficients[offset + 3][r]) * hz * pz);
+  };
   BOUT_FOR(i, xFaces(m)) {
     const auto r = i.xp();
     const BoutReal J = 0.5 * (coord->J()[i] + coord->J()[r]);
+    const BoutReal dz = 0.5 * (coord->dz()[i] + coord->dz()[r]);
+    const BoutReal dx = 0.5 * (coord->dx()[i] + coord->dx()[r]);
     const BoutReal velocity = J * (phi_corner[i] - phi_corner[i.zm()]);
+    const BoutReal px = (phi[r] - phi[i]) / dx, pz = velocity / (J * dz);
+    const BoutReal hx = (Phi[r] - Phi[i]) / dx;
+    const BoutReal hz = (Phi_corner[i] - Phi_corner[i.zm()]) / dz;
+    const BoutReal hxz = (gradient.x[i] - gradient.x[i.zm()]) / dz;
+    const BoutReal cf = 0.5 * (c[i] + c[r]);
+    const BoutReal g11 = 0.5 * (coord->g11()[i] + coord->g11()[r]);
+    const BoutReal g13 = 0.5 * (coord->g13()[i] + coord->g13()[r]);
+    const BoutReal g33 = 0.5 * (coord->g33()[i] + coord->g33()[r]);
+    const BoutReal tangential = 0.5 * (Lz(i) + Lz(r));
+    const BoutReal R = -J * cf * (g11 * px + g13 * pz) * hxz
+                       - J * (g13 / g33) * px * tangential
+                       + bilinear(coeff, 0, i, r, hx, hz, px, pz);
+    // The same velocity multiplies omega and the tangential FV diagonal part.
+    // Central omega would cancel that part exactly, including at shared faces.
     flux.x[i] =
-        (velocity * upwind<DIRECTION::X>(vort, i, velocity) + stream[i] - stream[i.zm()])
+        (velocity * (upwind<DIRECTION::X>(vort, i, velocity) - tangential) + dz * R)
         * coord->dy()[i];
   }
   BOUT_FOR(i, phi.getRegion("RGN_NOBNDRY")) {
-    const BoutReal velocity = coord->J()[i] * (phi_corner[i.xm()] - phi_corner[i]);
+    const auto r = i.zp();
+    // Retain the existing integrated Z velocity, including its cell-centred J.
+    const BoutReal J = coord->J()[i], dx = coord->dx()[i];
+    const BoutReal dz = 0.5 * (coord->dz()[i] + coord->dz()[r]);
+    const BoutReal velocity = J * (phi_corner[i.xm()] - phi_corner[i]);
+    const BoutReal px = -velocity / (J * dx), pz = (phi[r] - phi[i]) / dz;
+    const BoutReal hx = (Phi_corner[i] - Phi_corner[i.xm()]) / dx;
+    const BoutReal hz = (Phi[r] - Phi[i]) / dz;
+    const BoutReal hxz = (gradient.z[i] - gradient.z[i.xm()]) / dx;
+    const BoutReal cf = 0.5 * (c[i] + c[r]);
+    const BoutReal g11 = 0.5 * (coord->g11()[i] + coord->g11()[r]);
+    const BoutReal g13 = 0.5 * (coord->g13()[i] + coord->g13()[r]);
+    const BoutReal g33 = 0.5 * (coord->g33()[i] + coord->g33()[r]);
+    const BoutReal tangential = 0.5 * (Lx(i) + Lx(r));
+    const BoutReal R = J * cf * (g13 * px + g33 * pz) * hxz
+                       + J * (g13 / g11) * pz * tangential
+                       + bilinear(coeff, 4, i, r, hx, hz, px, pz);
     flux.z[i] =
-        (velocity * upwind<DIRECTION::Z>(vort, i, velocity) + stream[i.xm()] - stream[i])
+        (velocity * (upwind<DIRECTION::Z>(vort, i, velocity) - tangential) + dx * R)
         * coord->dy()[i];
   }
   return flux;
+}
+} // namespace
+
+/// Construct full-vorticity MC advection plus the compact central remainder R.
+///
+/// @param c Static Boussinesq coefficient, with valid geometry and guards.
+/// @param vort Full physical vorticity, with two valid radial MC guard layers.
+/// @param phi Electric potential, with communicated guards and reflected walls.
+/// @param psi Pressure potential, with communicated guards and reflected AC walls.
+/// @returns Area-integrated increasing-coordinate faces including dy: X indices
+///          xstart-1..xend, Z on physical cells; unused entries are zero.
+///
+/// R reads only one radial guard layer of the input potentials. Tangential
+/// diagonal FV divergences are evaluated from those samples, never extrapolated
+/// or communicated. The MC stencil of vort still reads two layers. Reflected
+/// wall midpoints make the advective X-wall velocity zero; R retains the same
+/// two-point normal wall gradients as perpendicularFaces and their Z differences.
+/// No wall closure, input mutation, boundary filling or communication occurs.
+/// This standalone entry computes geometry coefficients locally; the component
+/// precomputes them once in its constructor and uses the same evaluator.
+/// Coefficient gradients use two supplied geometry/coefficient guard layers;
+/// no derived field guard values are filled or read by the current evaluator.
+XZFaceFluxes reynoldsFaceFluxes(const Field3D& c, const Field3D& vort, const Field3D& phi,
+                                const Field3D& psi) {
+  return reynoldsFaces(c, vort, phi, psi, reynoldsMetricCoefficients(c));
 }
 } // namespace bout::ion_energy
 
@@ -810,6 +934,7 @@ EvolveVorticityIonEnergy::EvolveVorticityIonEnergy(std::string name, Options& al
 
   // Coefficients for Boussinesq solve
   boussinesq_coeff = average_atomic_mass / SQ(coord->Bxy());
+  reynolds_coefficients = bout::ion_energy::reynoldsMetricCoefficients(boussinesq_coeff);
 
   phiSolver = Laplacian::create(&options["laplacian"]);
   phiSolver->setCoefC(boussinesq_coeff);
@@ -1067,8 +1192,8 @@ void EvolveVorticityIonEnergy::transform_impl(GuardedOptions& state) {
   // Reynolds stress
 
   const Field3D Phi = phi + psi;
-  const auto reynolds =
-      bout::ion_energy::reynoldsFaceFluxes(boussinesq_coeff, vorticity, phi, psi);
+  const auto reynolds = bout::ion_energy::reynoldsFaces(
+      Field3D{boussinesq_coeff}, vorticity, phi, psi, reynolds_coefficients);
   DivJReynolds = -bout::ion_energy::divergence(reynolds);
   if (poloidal_flows) {
     DivJReynolds -= Div_n_bxGrad_f_B_XPPM(vorticity, phi, false, true)
@@ -1286,9 +1411,10 @@ void EvolveVorticityIonEnergy::outputVars(Options& state) {
   // Update the recovery guess here so it remains fixed between outputs.
   acceptWarmStart();
 
-  set_with_attrs(state["evolve_vorticity_ion_energy_version"], 2,
+  set_with_attrs(state["evolve_vorticity_ion_energy_version"], 3,
                  {{"description", "Component equation and discretisation version: "
-                                  "MC omega/Lambda with full Reynolds/chi wall currents; "
+                                  "MC full-vorticity advection plus compact central R; "
+                                  "full Reynolds/chi wall currents; "
                                   "viscous stress excluded from polarisation transport; "
                                   "independent of restart layout"}});
 
