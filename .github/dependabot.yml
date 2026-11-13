@@ -3,10 +3,19 @@ version: 2
 updates:
   - package-ecosystem: "gitsubmodule"
     schedule:
-        interval: "daily"
+      interval: "daily"
+      time: "05:00"
+      timezone: "Europe/London"
+    cooldown:
+      default-days: 0
     directory: "/"
 
   - package-ecosystem: "github-actions"
     schedule:
       interval: "weekly"
+      day: "monday"
+      time: "05:00"
+      timezone: "Europe/London"
+    cooldown:
+      default-days: 3
     directory: "/"

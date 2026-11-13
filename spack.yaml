@@ -5,7 +5,7 @@
 spack:
   # add package specs to the `specs` list
   specs:
-  - hermes-3%gcc ^boutpp+petsc+sundials ^petsc+hypre+mumps
+  - hermes-3%gcc ^boutpp+petsc+sundials ^petsc+hypre+mumps+strumpack
   - cmake
   view:
     gcc:
