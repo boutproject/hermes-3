@@ -21,8 +21,6 @@
 */
 
 #include "hermes-3.hxx"
-#include "revision.hxx"
-
 #include "include/adas_carbon.hxx"
 #include "include/adas_lithium.hxx"
 #include "include/adas_neon.hxx"
@@ -66,6 +64,7 @@
 #include "include/recycling.hxx"
 #include "include/relax_potential.hxx"
 #include "include/scale_timederivs.hxx"
+#include "include/selflimiting_source.hxx"
 #include "include/set_temperature.hxx"
 #include "include/sheath_boundary.hxx"
 #include "include/sheath_boundary_fci.hxx"
@@ -83,6 +82,7 @@
 #include "include/upstream_density_feedback.hxx"
 #include "include/vorticity.hxx"
 #include "include/zero_current.hxx"
+#include "revision.hxx"
 #include <bout/boundary_factory.hxx>
 #include <bout/boundary_op.hxx>
 #include <bout/constants.hxx>

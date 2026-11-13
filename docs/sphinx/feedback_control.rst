@@ -13,11 +13,11 @@ Upstream density controller
 This is intended for 1D simulations, where the density at :math:`y=0` is set
 by adjusting an input source. This component uses a PI controller method
 to scale the density source up and down, to maintain the specified upstream
-density. 
-The source, e.g. ``Sd+_feedback``, is calculated as a product of the control signal ``density_source_multiplier``, 
+density.
+The source, e.g. ``Sd+_feedback``, is calculated as a product of the control signal ``density_source_multiplier``,
 and the array ``density_source_shape`` which defines the source region.
 The signal is non-dimensional and the controller depends on the value of ``density_source_shape`` to have a good initial guess of the source.
-It should be set to a reasonable value in the units of ``[m-3s-1]``. 
+It should be set to a reasonable value in the units of ``[m-3s-1]``.
 A good reasonable value is the expected steady state domain particle loss (for example due to unrecycled ions at the target).
 
 
@@ -40,7 +40,7 @@ There are two additional settings which can make the controller more robust with
 ``density_source_positive`` ensures the controller never takes particles away, which can prevent oscillatory
 behaviour. Note that this requires some other domain particle sink to ensure control, or else the particle count can never reduce.
 
-``density_integral_positive`` This makes sure the integral component only adds particles. 
+``density_integral_positive`` This makes sure the integral component only adds particles.
 The integral component takes a long time to change value, which can result in large overshoots if the initial guess was too small.
 This setting mitigates this by disabling the integral term if the density is above the desired value.
 
@@ -359,3 +359,65 @@ Input Parameters
 -  **``debug``**: Controls the level of debugging information printed to
    the screen. A value of ``0`` disables debugging output, ``1`` enables
    basic output, and ``2`` provides extensive debugging information.
+
+
+Selflimiting source
+~~~~~~~~~~~~~~~~~~~
+
+This component is applicable to 1D, 2D and 3D simulations. The controller adjusts
+the density source to target a user-set density in the same cell, or adjusts the
+pressure source to target a temperature. It uses logistic growth to
+smoothly transition the set source term from its full strength to zero. This
+makes it differentiable but potentially stiff. Each cell is individually
+controlled and does not rely on any averaging, which makes it suitable for 3D
+geometries like stellarators.
+
+The density and temperature control is managed in each species section:
+
+.. code-block:: ini
+
+   [d+]
+   type = (evolve_density, ..., selflimiting_source)
+
+   [d+:selflimiting_source]
+   density_setpoint = 1e19                  # in m^-3
+   density_overshoot = 1e18                 # in m^-3
+   density_form = gauss(y, 0.25) * 1e24
+
+   temperature_setpoint = 100               # in eV
+   temperature_overshoot = 2.0              # in eV
+   pressure_form = 2.5e7 * gauss(y, 0.25)
+
+The overshoot sets the width of the transition region. At the setpoint value
+the source is at about 90% of its full strength, it drops to 50% half an
+overshoot above the setpoint, and to about 10% at one overshoot above it. The
+source never reaches exactly zero, and the precise value the density or
+temperature settles at depends on e.g. the source terms.
+
+``density_form`` and ``pressure_form`` can be set via the typical
+`expressions <https://bout-dev.readthedocs.io/en/latest/user_docs/variable_init.html#expressions>`__
+and additionally via
+`grid variables <https://bout-dev.readthedocs.io/en/latest/user_docs/input_grids.html#generating-input-grids>`__.
+``density_form`` is normalized by
+.. ::math
+   N_{norm}\cdot \Omega
+
+and the ``pressure_form`` is normalized by
+.. ::math
+   q_{e} \cdot N_{norm} \cdot T_{norm} \cdot \Omega
+
+The function used for the damping is
+
+.. code-block:: c++
+
+   Field3D selflimiting_sourceterm(const Field3D& thisfield,
+                                   const BoutReal maximum,
+                                   const BoutReal overshoot) {
+     BoutReal k = 5.0 / overshoot;
+     BoutReal x0 = maximum + overshoot / 2.0;
+     return 1.0 - (1.0 / (1.0 + exp(-k * (thisfield - x0))));
+   }
+
+This function is multiplied with ``selflimiting_densityform`` and
+``selflimiting_pressureform`` and the result is added to the
+``density_source`` and ``energy_source`` of the species.
