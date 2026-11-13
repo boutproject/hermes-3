@@ -68,9 +68,8 @@ void closeRadialFaces(XZFaceFluxes& flux);
 Field3D Div_a_Grad_perp_XZ(const Field3D& a, const Field3D& f, bool bndry_flux = true);
 /// Face-based energy density consistent with Div_a_Grad_perp_XZ.
 Field3D kineticEnergyPerp(const Field3D& a, const Field3D& f);
-/// MC-upwinded omega and Lambda, geometric Q and unpinned corner curl.
-/// Retains full wall faces; the curl alone has zero net charge on each wall.
-/// Y-plane widths dy must be uniform in X-Z for the curl identity.
+/// Transitional full-vorticity MC advection and unpinned corner curl.
+/// The compact central R is added in the implementation stage.
 XZFaceFluxes reynoldsFaceFluxes(const Field3D& c, const Field3D& vorticity,
                                 const Field3D& phi, const Field3D& psi);
 /// Conservative divergence on physical cells. Optional weights are averaged

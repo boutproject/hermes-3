@@ -474,30 +474,6 @@ BoutReal upwind(const Field3D& n, const Ind3D& i, BoutReal velocity) {
   FV::MC{}(stencil);
   return velocity > 0 ? stencil.R : stencil.L;
 }
-/// Build the metric-dependent Lambda field used in the upwind Reynolds current.
-///
-/// @param c Read-only Boussinesq polarisation coefficient with valid guards.
-/// @param phi Read-only electric potential with valid guards and geometry.
-/// @returns Lambda = 0.5*c*D*J*div(grad_perp(phi)/(J*D)), where
-///          D = g11*g33 - g13*g13 and J*D must be nonzero. The returned field has
-///          communicated guards and linear extrapolation at physical X walls.
-///
-/// Applies neumann_o2 to the temporary Lambda, overwrites its physical radial
-/// guards with linear extrapolation, and communicates it. May initialise mesh
-/// face-region caches through the forward operator; c and phi are preserved.
-Field3D reynoldsLambda(const Field3D& c, const Field3D& phi) {
-  const auto* coord = phi.getCoordinates();
-  const Field3D D{
-      Coordinates::FieldMetric{coord->g11() * coord->g33() - SQ(coord->g13())}};
-  Field3D lambda = 0.5 * c * D * coord->J()
-                   * Div_a_Grad_perp_XZ(Field3D{1.0 / (coord->J() * D)}, phi, true);
-  lambda.applyBoundary("neumann_o2");
-  fillRadialGuards(lambda, [&](int x, int step, int layer, int y, int z) {
-    return lambda(x, y, z) + layer * (lambda(x, y, z) - lambda(x - step, y, z));
-  });
-  phi.getMesh()->communicate(lambda);
-  return lambda;
-}
 } // namespace
 
 /// Suppress a flux through physical X walls while retaining all other faces.
@@ -625,44 +601,34 @@ Field3D faceWork(const XZFaceFluxes& flux, const Field3D& f) {
   }
   return result;
 }
-/// Construct the Reynolds polarisation current with a solenoidal corner curl.
+/// Transitional Reynolds faces: full-vorticity MC advection and corner curl.
 ///
 /// @param c Read-only Boussinesq polarisation coefficient.
-/// @param vort Read-only physical vorticity; omega = vort/2 is MC-upwinded.
+/// @param vort Read-only physical vorticity, MC-upwinded in full.
 /// @param phi Read-only electric potential driving omega advection.
-/// @param psi Read-only ion pressure potential; Phi = phi + psi drives the MC-upwinded
-///            Lambda term and enters the curl stream function.
+/// @param psi Read-only ion pressure potential entering the curl stream function.
 /// @returns Area-integrated increasing-X/Z current faces with the XZFaceFluxes
 ///          convention: X from xstart-1 through xend, Z on physical cells, physical
 ///          Y and all local Z. Unused guards are zero. Geometric wall and periodic
-///          faces are retained, including Q gradients and the unpinned curl.
+///          faces are retained, including the unpinned curl.
 ///          The returned fluxes are not communicated.
 ///
 /// Inputs must share a mesh/location, have valid wall and communicated guards,
 /// and provide at least two radial guard layers. Uniform dy in each X-Z plane
 /// makes the curl divergence and each wall's Z-summed charge vanish.
-/// Creates temporary Q = bracket(phi,psi) with odd radial guards and Lambda with
-/// linearly extrapolated radial guards; applies neumann_o2 and communicates both.
+/// This removal-stage construction is incomplete until the compact R is added.
+/// No boundary filling or communication occurs.
 /// Mesh face/wall-region caches may be initialised; all inputs are preserved.
 XZFaceFluxes reynoldsFaceFluxes(const Field3D& c, const Field3D& vort, const Field3D& phi,
                                 const Field3D& psi) {
   auto* m = phi.getMesh();
   ASSERT0(m->xstart >= 2);
   const auto* coord = phi.getCoordinates();
-  const Field3D Phi = phi + psi, omega = 0.5 * vort, half_c = 0.5 * c;
-  Field3D Q = bracket(phi, psi, BRACKET_ARAKAWA);
-  Q.applyBoundary("neumann_o2");
-  applyVorticityWallBoundary(Q, true);
-  m->communicate(Q);
-  const Field3D lambda = reynoldsLambda(c, phi), cJ = c * coord->J();
-  Field3D phi_corner = zeroFrom(phi), Phi_corner = zeroFrom(phi), stream = zeroFrom(phi);
-  XZFaceFluxes cross{zeroFrom(phi), zeroFrom(phi)}, flux{zeroFrom(phi), zeroFrom(phi)};
+  const Field3D Phi = phi + psi, cJ = c * coord->J();
+  Field3D phi_corner = zeroFrom(phi), stream = zeroFrom(phi);
+  XZFaceFluxes flux{zeroFrom(phi), zeroFrom(phi)};
   BOUT_FOR(i, xFaces(m)) {
     phi_corner[i] = cornerAverage(phi, i);
-    Phi_corner[i] = cornerAverage(Phi, i);
-    const auto q = crossCorner(half_c, Q, *coord, i);
-    cross.x[i] = q.first;
-    cross.z[i] = q.second;
     const auto gradient = [&](const Field3D& f) {
       return std::pair<BoutReal, BoutReal>{(f[i.xp()] - f[i] + f[i.xp().zp()] - f[i.zp()])
                                                / (2 * cornerAverage(coord->dx(), i)),
@@ -680,21 +646,15 @@ XZFaceFluxes reynoldsFaceFluxes(const Field3D& c, const Field3D& vort, const Fie
     const auto r = i.xp();
     const BoutReal J = 0.5 * (coord->J()[i] + coord->J()[r]);
     const BoutReal velocity = J * (phi_corner[i] - phi_corner[i.zm()]);
-    const BoutReal lambda_velocity = J * (Phi_corner[i] - Phi_corner[i.zm()]);
-    flux.x[i] = (velocity * upwind<DIRECTION::X>(omega, i, velocity)
-                 + lambda_velocity * upwind<DIRECTION::X>(lambda, i, lambda_velocity)
-                 + stream[i] - stream[i.zm()])
-                    * coord->dy()[i]
-                + perpendicularX(half_c, Q, cross, *coord, i);
+    flux.x[i] =
+        (velocity * upwind<DIRECTION::X>(vort, i, velocity) + stream[i] - stream[i.zm()])
+        * coord->dy()[i];
   }
   BOUT_FOR(i, phi.getRegion("RGN_NOBNDRY")) {
     const BoutReal velocity = coord->J()[i] * (phi_corner[i.xm()] - phi_corner[i]);
-    const BoutReal lambda_velocity = coord->J()[i] * (Phi_corner[i.xm()] - Phi_corner[i]);
-    flux.z[i] = (velocity * upwind<DIRECTION::Z>(omega, i, velocity)
-                 + lambda_velocity * upwind<DIRECTION::Z>(lambda, i, lambda_velocity)
-                 + stream[i.xm()] - stream[i])
-                    * coord->dy()[i]
-                + perpendicularZ(half_c, Q, cross, *coord, i);
+    flux.z[i] =
+        (velocity * upwind<DIRECTION::Z>(vort, i, velocity) + stream[i.xm()] - stream[i])
+        * coord->dy()[i];
   }
   return flux;
 }
@@ -1110,13 +1070,9 @@ void EvolveVorticityIonEnergy::transform_impl(GuardedOptions& state) {
   const auto reynolds =
       bout::ion_energy::reynoldsFaceFluxes(boussinesq_coeff, vorticity, phi, psi);
   DivJReynolds = -bout::ion_energy::divergence(reynolds);
-  Field3D lambda;
   if (poloidal_flows) {
-    lambda = bout::ion_energy::reynoldsLambda(Field3D{boussinesq_coeff}, phi);
-    DivJReynolds -= Div_n_bxGrad_f_B_XPPM(0.5 * vorticity, phi, false, true)
-                    - Div_n_bxGrad_f_B_XPPM(0.5 * vorticity, phi, false, false)
-                    + Div_n_bxGrad_f_B_XPPM(lambda, Phi, false, true)
-                    - Div_n_bxGrad_f_B_XPPM(lambda, Phi, false, false);
+    DivJReynolds -= Div_n_bxGrad_f_B_XPPM(vorticity, phi, false, true)
+                    - Div_n_bxGrad_f_B_XPPM(vorticity, phi, false, false);
   }
   if (diagnose) {
     reynolds_work = bout::ion_energy::faceWork(reynolds, Phi);
@@ -1213,10 +1169,8 @@ void EvolveVorticityIonEnergy::transform_impl(GuardedOptions& state) {
     if (poloidal_flows) {
       Field3D w = copy(weight);
       fillRadialGuards(w, [&](int x, int, int, int y, int z) { return w(x, y, z); });
-      result -= Div_n_bxGrad_f_B_XPPM(0.5 * vorticity, phi, false, true, false, &w)
-                - Div_n_bxGrad_f_B_XPPM(0.5 * vorticity, phi, false, false, false, &w)
-                + Div_n_bxGrad_f_B_XPPM(lambda, Phi, false, true, false, &w)
-                - Div_n_bxGrad_f_B_XPPM(lambda, Phi, false, false, false, &w);
+      result -= Div_n_bxGrad_f_B_XPPM(vorticity, phi, false, true, false, &w)
+                - Div_n_bxGrad_f_B_XPPM(vorticity, phi, false, false, false, &w);
     }
     return result;
   };
