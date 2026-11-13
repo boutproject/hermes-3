@@ -281,6 +281,35 @@ The yield as a function of the ion impact energy :math:`E_i` is
 where :math:`\gamma_{max}` is set by ``ion_ee_gamma_max``, :math:`E_{th}` by ``ion_ee_E_th``,
 :math:`E_{max}` by ``ion_ee_E_max``, and :math:`p` by ``ion_ee_p``.
 
+
+Bohm condition smoothing
+""""""""""""""""""""""""
+The Bohm condition is applied to the ion velocity at the sheath, allowing for supersonic flow via
+
+.. math::
+   v_{\parallel,i}^{sheath} = \max\left(C_s, v_{\parallel,i}\right)
+
+where :math:`C_s` is the sound speed and :math:`v_{\parallel,i}>0` here results in flow into the sheath. This function
+is non-smooth at :math:`v_{\parallel_i}^{sheath} = C_s`, which can pose problems for the implicit solver
+(e.g. in 3D turbulence simulations), resulting in slow convergence. The solution is to smooth the transition to
+supersonic flow using a modified Bohm condition,
+
+.. math::
+   v_{\parallel,i}^{sheath} = \frac{1}{2}\left(C_s + v_{\parallel,i} + \sqrt{(C_s - v_{\parallel,i})^2 + (\delta C_s)^2 } \right)
+
+where :math:`\delta` is a smoothing factor. For :math:`\delta=0` (the default), no smoothing is applied. For :math:`\delta>0`,
+this function does result in higher fluxes into the sheath for :math:`v_{\parallel_i}^{sheath}` close to the threshold by a
+maximum factor of :math:`\delta/2`. In practice only very moderate smoothing is required, :math:`\delta \sim 0.005`
+
+This setting is controlled in the input file using `bohm_smoothing`:
+
+
+.. code-block:: ini
+
+   [sheath_boundary]
+   bohm_smoothing = 0.005
+
+
 .. _sec-sheath_boundary_insulating:
 
 sheath_boundary_insulating
