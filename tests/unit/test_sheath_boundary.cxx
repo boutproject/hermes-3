@@ -5,10 +5,21 @@
 #include "test_extras.hxx" // FakeMesh
 
 #include <bout/bout_types.hxx>
+#include <bout/boutexception.hxx>
 #include <bout/output.hxx>
 #include <bout/region.hxx>
 
 #include "../../include/sheath_boundary.hxx"
+
+#include <algorithm>
+#include <cmath>
+
+/// Global mesh
+namespace bout {
+namespace globals {
+extern Mesh* mesh;
+} // namespace globals
+} // namespace bout
 
 // The unit tests use the global mesh
 using namespace bout::globals;
@@ -333,4 +344,74 @@ TEST_F(SheathBoundaryTest, IonSEEYieldFunction) {
 
     ASSERT_DOUBLE_EQ(component.ionSecondaryElectronEmissionGamma(Ei), expected);
   }
+}
+
+TEST_F(SheathBoundaryTest, SheathVelocitySharp) {
+  Options options;
+  options["units"]["eV"] = 1.0;
+
+  // Default bohm_smoothing = 0: sharp max/min
+  SheathBoundary component("test", options, nullptr);
+  const BoutReal C_i = 2.0;
+
+  // Subsonic towards the wall: clamped to the sound speed
+  EXPECT_DOUBLE_EQ(component.upperSheathVelocity(C_i, 1.0), C_i);
+  EXPECT_DOUBLE_EQ(component.lowerSheathVelocity(C_i, -1.0), -C_i);
+
+  // Supersonic towards the wall: end-cell velocity kept
+  EXPECT_DOUBLE_EQ(component.upperSheathVelocity(C_i, 3.0), 3.0);
+  EXPECT_DOUBLE_EQ(component.lowerSheathVelocity(C_i, -3.0), -3.0);
+
+  // Flow away from the wall: clamped to the sound speed towards the wall
+  EXPECT_DOUBLE_EQ(component.upperSheathVelocity(C_i, -5.0), C_i);
+  EXPECT_DOUBLE_EQ(component.lowerSheathVelocity(C_i, 5.0), -C_i);
+}
+
+TEST_F(SheathBoundaryTest, SheathVelocitySmoothValues) {
+  Options options{{"test", {{"bohm_smoothing", 0.2}}}};
+  options["units"]["eV"] = 1.0;
+
+  SheathBoundary component("test", options, nullptr);
+  const BoutReal C_i = 2.0;
+  const BoutReal w = 0.2 * C_i;
+
+  // At V = C_i the smooth maximum is raised by w / 2 above C_i
+  EXPECT_DOUBLE_EQ(component.upperSheathVelocity(C_i, C_i), C_i + 0.5 * w);
+  EXPECT_DOUBLE_EQ(component.lowerSheathVelocity(C_i, -C_i), -(C_i + 0.5 * w));
+
+  // Closed form (C_i + u + sqrt((C_i - u)^2 + w^2)) / 2 at an arbitrary point
+  const BoutReal V = 2.7;
+  const BoutReal expected = 0.5 * (C_i + V + std::sqrt(SQ(C_i - V) + SQ(w)));
+  EXPECT_DOUBLE_EQ(component.upperSheathVelocity(C_i, V), expected);
+}
+
+TEST_F(SheathBoundaryTest, SheathVelocitySmoothProperties) {
+  Options options{{"test", {{"bohm_smoothing", 0.1}}}};
+  options["units"]["eV"] = 1.0;
+
+  SheathBoundary component("test", options, nullptr);
+  const BoutReal C_i = 1.5;
+
+  for (BoutReal V : {-10.0, -2.0, -1.5, -0.3, 0.0, 0.3, 1.5, 2.0, 10.0}) {
+    const BoutReal upper = component.upperSheathVelocity(C_i, V);
+    const BoutReal lower = component.lowerSheathVelocity(C_i, V);
+
+    // Never below the sharp Bohm condition
+    EXPECT_GE(upper, std::max(C_i, V)) << "V = " << V;
+    EXPECT_LE(lower, std::min(-C_i, V)) << "V = " << V;
+
+    // Lower boundary is the mirror image of the upper boundary
+    EXPECT_DOUBLE_EQ(lower, -component.upperSheathVelocity(C_i, -V)) << "V = " << V;
+  }
+
+  // Far from V = C_i the smooth form approaches the sharp one
+  EXPECT_NEAR(component.upperSheathVelocity(C_i, 100.0), 100.0, 1e-4);
+  EXPECT_NEAR(component.upperSheathVelocity(C_i, -100.0), C_i, 1e-4);
+}
+
+TEST_F(SheathBoundaryTest, NegativeBohmSmoothingThrows) {
+  Options options{{"test", {{"bohm_smoothing", -0.1}}}};
+  options["units"]["eV"] = 1.0;
+
+  EXPECT_THROW(SheathBoundary("test", options, nullptr), BoutException);
 }

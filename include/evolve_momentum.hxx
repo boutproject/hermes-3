@@ -4,6 +4,10 @@
 
 #include "component.hxx"
 
+#include <bout/invert_pardiv.hxx>
+
+#include <memory>
+
 /// Evolve parallel momentum
 struct EvolveMomentum : public NamedComponent<EvolveMomentum> {
   EvolveMomentum(std::string name, Options& options, Solver* solver);
@@ -24,6 +28,12 @@ struct EvolveMomentum : public NamedComponent<EvolveMomentum> {
   void finally(const Options& state) override;
 
   void outputVars(Options& state) override;
+
+  /// Parallel viscosity preconditioner, used when braginskii_ion_viscosity or
+  /// braginskii_electron_viscosity sets `precondition` for this species. Inverts the
+  /// viscous force linearised at frozen eta and density, with the sheath-face
+  /// closure at the targets.
+  void precon(const Options& state, BoutReal gamma) override;
 
   static constexpr auto type = "evolve_momentum";
 
@@ -50,7 +60,13 @@ private:
 
   bool diagnose;                   ///< Output additional diagnostics?
   bool fix_momentum_boundary_flux; ///< Fix momentum flux to boundary condition?
-  Field3D flow_xlow, flow_ylow;    ///< Momentum flow diagnostics
+
+  std::unique_ptr<InvertParDiv> viscosity_inverse;
+
+  /// Per target guard cell (field-aligned): -1 where the RHS fixes V at the sheath face
+  /// (V_guard = 2 v_sheath - V), +1 where it extrapolates with zero gradient
+  Field3D sheathClosure(const Field3D& V) const;
+  Field3D flow_xlow, flow_ylow; ///< Momentum flow diagnostics
 
   /// This takes as inputs
   /// - species

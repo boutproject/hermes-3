@@ -2,6 +2,7 @@
 #include "../include/component.hxx"
 #include "../include/guarded_options.hxx"
 #include "../include/permissions.hxx"
+#include "../include/viscosity_precon.hxx"
 
 #include <bout/assert.hxx>
 #include <bout/bout_types.hxx>
@@ -50,7 +51,34 @@ BoutReal limitFree(BoutReal fm, BoutReal fc) {
   return fp;
 }
 
+/// Smooth maximum of the sound speed C_i and the end-cell speed u towards the wall,
+/// (C_i + u + sqrt((C_i - u)^2 + w^2)) / 2 with w = smoothing C_i; never below max(C_i, u)
+BoutReal bohmSpeed(BoutReal C_i, BoutReal u, BoutReal smoothing) {
+  const BoutReal w = smoothing * C_i;
+  return 0.5 * (C_i + u + std::sqrt(SQ(C_i - u) + SQ(w)));
+}
+
+/// d(guard velocity)/d(end-cell velocity) for V_guard = 2 v_sheath - V at frozen C_i:
+/// -1 well below the sound speed, +1 well above
+BoutReal bohmClosure(BoutReal C_i, BoutReal u, BoutReal smoothing) {
+  const BoutReal d = std::sqrt(SQ(C_i - u) + SQ(smoothing * C_i));
+  return d > 0.0 ? (u - C_i) / d : 0.0;
+}
 } // namespace
+
+BoutReal SheathBoundary::lowerSheathVelocity(BoutReal C_i, BoutReal V) const {
+  if (bohm_smoothing > 0.0) {
+    return -bohmSpeed(C_i, -V, bohm_smoothing);
+  }
+  return std::min(-C_i, V);
+}
+
+BoutReal SheathBoundary::upperSheathVelocity(BoutReal C_i, BoutReal V) const {
+  if (bohm_smoothing > 0.0) {
+    return bohmSpeed(C_i, V, bohm_smoothing);
+  }
+  return std::max(C_i, V);
+}
 
 BoutReal SheathBoundary::ionSecondaryElectronEmissionGamma(BoutReal ion_energy) const {
   if (ion_ee_gamma_max < 0.0) {
@@ -128,6 +156,14 @@ SheathBoundary::SheathBoundary(std::string name, Options& alloptions, Solver*)
       options["always_set_phi"]
           .doc("Always set phi field? Default is to only modify if already set")
           .withDefault<bool>(false);
+
+  bohm_smoothing = options["bohm_smoothing"]
+                       .doc("Smooth the Bohm condition |V_i| >= C_i over a width "
+                            "bohm_smoothing * C_i (0 = sharp)")
+                       .withDefault(0.0);
+  if (bohm_smoothing < 0.0) {
+    throw BoutException("sheath_boundary:bohm_smoothing must not be negative");
+  }
 
   // Read wall voltage, convert to normalised units
   wall_potential = options["wall_potential"]
@@ -281,7 +317,7 @@ void SheathBoundary::transform_impl(GuardedOptions& state) {
 
             // Enable supersonic flow
             const BoutReal visheath =
-                std::min(-sqrt(C_i_sq), Vi[i]); // Negative into lower sheath
+                lowerSheathVelocity(sqrt(C_i_sq), Vi[i]); // Negative into lower sheath
 
             // Note: Vzi = |visheath| * sin(α)
             ion_sum[i] += s_i * Zi * sin_alpha[ip] * (-visheath);
@@ -322,7 +358,7 @@ void SheathBoundary::transform_impl(GuardedOptions& state) {
 
             // Enable supersonic flow
             const BoutReal visheath =
-                std::max(sqrt(C_i_sq), Vi[i]); // Positive into upper sheath
+                upperSheathVelocity(sqrt(C_i_sq), Vi[i]); // Positive into upper sheath
 
             ion_sum[i] += s_i * Zi * sin_alpha[im] * visheath;
           }
@@ -384,7 +420,8 @@ void SheathBoundary::transform_impl(GuardedOptions& state) {
                       (ad * ti + zi * s_i * te * grad_ne / grad_ni) / mi, 0., 100.);
 
                   // Negative velocity is outward through the lower-Y sheath
-                  const BoutReal visheath = std::min(-sqrt(C_i_sq), ion.velocity[i]);
+                  const BoutReal visheath =
+                      lowerSheathVelocity(sqrt(C_i_sq), ion.velocity[i]);
 
                   // Positive magnitude of the outgoing ion particle flux divided by ne
                   const BoutReal ion_flux_over_ne = -s_i * sin_alpha[ip] * visheath;
@@ -476,7 +513,8 @@ void SheathBoundary::transform_impl(GuardedOptions& state) {
                       (ad * ti + zi * s_i * te * grad_ne / grad_ni) / mi, 0., 100.);
 
                   // Positive velocity is outward through the upper-Y sheath
-                  const BoutReal visheath = std::max(sqrt(C_i_sq), ion.velocity[i]);
+                  const BoutReal visheath =
+                      upperSheathVelocity(sqrt(C_i_sq), ion.velocity[i]);
 
                   // Positive magnitude of the outgoing ion particle flux divided by ne
                   const BoutReal ion_flux_over_ne = s_i * sin_alpha[im] * visheath;
@@ -715,6 +753,10 @@ void SheathBoundary::transform_impl(GuardedOptions& state) {
                       ? toFieldAligned(getNoBoundary<Field3D>(species["momentum"]))
                       : Mi * Ni * Vi;
 
+    // Smooth Bohm condition: d(guard velocity)/d(end-cell velocity) in the guard cells,
+    // for the viscosity preconditioner (field-aligned)
+    Field3D bohm_closure = bohm_smoothing > 0.0 ? zeroFrom(Ni) : Field3D{};
+
     // Energy source will be modified in the domain
     Field3D energy_source =
         species.isSet("energy_source")
@@ -771,8 +813,12 @@ void SheathBoundary::transform_impl(GuardedOptions& state) {
           // Ion sheath heat transmission coefficient
           const BoutReal gamma_i = 2.5 + (0.5 * Mi * C_i_sq / tisheath);
 
-          const BoutReal visheath = std::min(-sqrt(C_i_sq), // Negative -> into sheath
-                                             Vi[i]);        // Allow supersonic flow
+          // Negative -> into sheath; allow supersonic flow
+          const BoutReal visheath = lowerSheathVelocity(sqrt(C_i_sq), Vi[i]);
+
+          if (bohm_smoothing > 0.0) {
+            bohm_closure[im] = bohmClosure(sqrt(C_i_sq), -Vi[i], bohm_smoothing);
+          }
 
           // Set boundary conditions on flows
           Vi[im] = 2. * visheath - Vi[i];
@@ -871,8 +917,12 @@ void SheathBoundary::transform_impl(GuardedOptions& state) {
 
           const BoutReal gamma_i = 2.5 + (0.5 * Mi * C_i_sq / tisheath); // + Δγ
 
-          const BoutReal visheath = std::max(sqrt(C_i_sq), // Positive -> into sheath
-                                             Vi[i]);       // Allow supersonic flow
+          // Positive -> into sheath; allow supersonic flow
+          const BoutReal visheath = upperSheathVelocity(sqrt(C_i_sq), Vi[i]);
+
+          if (bohm_smoothing > 0.0) {
+            bohm_closure[ip] = bohmClosure(sqrt(C_i_sq), Vi[i], bohm_smoothing);
+          }
 
           // Set boundary conditions on flows
           Vi[ip] = 2. * visheath - Vi[i];
@@ -923,6 +973,12 @@ void SheathBoundary::transform_impl(GuardedOptions& state) {
           }
         }
       }
+    }
+
+    if (bohm_smoothing > 0.0) {
+      hermes::viscosity_precon::sheath_closure[kv.first] = bohm_closure;
+    } else {
+      hermes::viscosity_precon::sheath_closure.erase(kv.first);
     }
 
     // Finished boundary conditions for this species

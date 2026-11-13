@@ -437,6 +437,15 @@ and all other species therefore need to be calculated:
    [hermes]
    components = ..., e, ..., braginskii_collisions, braginskii_electron_viscosity
 
+
+A preconditioner is available for the parallel viscosity, enabled using:
+
+.. code-block:: ini
+
+   [braginskii_electron_viscosity]
+   precondition = true
+
+
 .. doxygenstruct:: BraginskiiElectronViscosity
    :members:
 
@@ -471,6 +480,13 @@ all available collision frequencies involving the chosen species, while `bragins
 ii collisions. The default is `multispecies` and it is recommended when solving
 more than one ion. If you are solving for a single ion and want to recover Braginskii,
 use the `braginskii` mode.
+
+A preconditioner is available for the parallel viscosity, enabled using:
+
+.. code-block:: ini
+
+   [braginskii_ion_viscosity]
+   precondition = true
 
 
 If the `perpendicular` option is set:

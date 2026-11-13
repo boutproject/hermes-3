@@ -20,7 +20,10 @@
 #include "../include/hermes_build_config.hxx"
 #include "../include/hermes_utils.hxx"
 #include "../include/permissions.hxx"
+#include "../include/viscosity_precon.hxx"
 
+#include <algorithm>
+#include <cmath>
 #include <string>
 
 using bout::globals::mesh;
@@ -297,6 +300,115 @@ void EvolveMomentum::finally(const Options& state) {
   // Note: Copy boundary condition so dump file has correct boundary.
   NV_solver.setBoundaryTo(NV);
   NV = NV_solver;
+}
+
+void EvolveMomentum::precon(const Options& state, BoutReal gamma) {
+  namespace pc = hermes::viscosity_precon;
+  // First, check whether the relevant viscosity component's eta has been set.
+  // If it hasn't (i.e. if the input file does not include viscosity in the model,
+  // or it does but precondition=false), this precon function will exit immediately.
+  // This is how the preconditioner for momentum is controlled by options in the
+  // braginskii_ion/electron_viscosity section in the input file.
+  const auto frozen = pc::frozen.find(name);
+  if (frozen == pc::frozen.end()) {
+    return;
+  }
+
+  if (state.isSet("scale_timederivs")) {
+    throw BoutException("The viscosity preconditioner does not support scale_timederivs");
+  }
+  if constexpr (bout::build::use_metric_3d) {
+    // InvertParDiv has no implementation with 3D metrics (including FCI)
+    return;
+  }
+  if (!viscosity_inverse) {
+    viscosity_inverse = InvertParDiv::create();
+  }
+  const auto& species = state["species"][name];
+  const auto* coord = NV.getCoordinates();
+
+  const BoutReal AA = get<BoutReal>(species["AA"]);
+  const Field3D N = softFloor(get<Field3D>(species["density"]), density_floor);
+  const Field2D B = DC(coord->Bxy());
+  const Field2D sqrtB = sqrt(B);
+
+  // With g = sqrtB dV and dNV = AA N dV, the linearised viscous force
+  // sqrtB Div_par((eta/B) Grad_par(sqrtB dV)) gives
+  //   (AA N / B) g - gamma Div_par((eta / B) Grad_par g) = r / sqrtB.
+  // Coefficients are toroidal averages, as in the conduction preconditioner.
+  const Field2D A = AA * DC(N) / B;
+  const Field2D Bcoef = -gamma * DC(frozen->second.eta) / B;
+
+  // Sheath-face closure. The sheath boundary sets V in the target guard cells, so
+  // the face flux b (g_guard - g), with g = sqrtB dV and g_guard = closure rho g
+  // (rho = sqrtB_guard / sqrtB), becomes the extra end-cell diagonal
+  // -b (1 - closure rho), averaged over z; InvertParDiv's own boundary rows keep zero
+  // flux. The recovered dNV still uses the mass term A.
+  const Field3D V = get<Field3D>(species["velocity"]);
+  const Field3D closure = sheathClosure(V);
+  Field2D A_sh{0.0, mesh};
+  A_sh.allocate();
+  const Field2D J = DC(coord->J());
+  const Field2D dy = DC(coord->dy());
+  const Field2D g_22 = DC(coord->g_22());
+  auto face = [&](int x, int y, int yg) {
+    if (x < mesh->xstart or x > mesh->xend) {
+      return;
+    }
+    const BoutReal b = 0.5 * (Bcoef(x, y) + Bcoef(x, yg)) * 0.5 * (J(x, y) + J(x, yg))
+                       / (0.5 * (dy(x, y) + dy(x, yg)) * 0.5 * (g_22(x, y) + g_22(x, yg))
+                          * J(x, y) * dy(x, y));
+    const BoutReal rho = sqrtB(x, yg) / sqrtB(x, y);
+    BoutReal factor = 0.0;
+    for (int z = 0; z < mesh->LocalNz; z++) {
+      factor += 1.0 - closure(x, yg, z) * rho;
+    }
+    A_sh(x, y) -= b * factor / mesh->LocalNz;
+  };
+  for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
+    face(r.ind, mesh->ystart, mesh->ystart - 1);
+  }
+  for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
+    face(r.ind, mesh->yend, mesh->yend + 1);
+  }
+  viscosity_inverse->setCoefA(A + A_sh);
+  viscosity_inverse->setCoefB(Bcoef);
+
+  Field3D rhs = ddt(NV) / sqrtB;
+  rhs.applyBoundary("neumann");
+  // Use the local density (i.e. non-toroidally averaged) to reconstruct
+  // the approximate residual
+  ddt(NV) = (AA * N / sqrtB) * viscosity_inverse->solve(rhs);
+}
+
+Field3D EvolveMomentum::sheathClosure(const Field3D& V) const {
+  // Account for the smooth Bohm boundary condition in the viscsotiy preconditioner
+  const auto smooth = hermes::viscosity_precon::sheath_closure.find(name);
+  if (smooth != hermes::viscosity_precon::sheath_closure.end()) {
+    return smooth->second;
+  }
+  // The sheath boundary sets V_guard = 2 v_sheath - V in field-aligned coordinates,
+  // with v_sheath independent of V, so dV_guard = -dV; ions leaving supersonically
+  // get V_guard = V, so dV_guard = dV.
+  const Field3D V_fa = toFieldAligned(V);
+  Field3D closure{zeroFrom(V_fa)};
+  auto classify = [&](int x, int yi, int yg) {
+    BoutReal scale = 0.0;
+    for (int z = 0; z < mesh->LocalNz; z++) {
+      scale = std::max({scale, std::abs(V_fa(x, yi, z)), std::abs(V_fa(x, yg, z))});
+    }
+    for (int z = 0; z < mesh->LocalNz; z++) {
+      closure(x, yg, z) =
+          std::abs(V_fa(x, yg, z) - V_fa(x, yi, z)) <= 1e-8 * scale ? 1.0 : -1.0;
+    }
+  };
+  for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
+    classify(r.ind, mesh->ystart, mesh->ystart - 1);
+  }
+  for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
+    classify(r.ind, mesh->yend, mesh->yend + 1);
+  }
+  return closure;
 }
 
 void EvolveMomentum::outputVars(Options& state) {
