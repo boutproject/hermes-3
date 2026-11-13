@@ -32,14 +32,14 @@ TEST_F(ZeroCurrentTest, ElectronFlowVelocity) {
   options["species"]["e"]["density"] = 2.0;
   options["species"]["e"]["AA"] = 1. / 1836;
 
-  options["species"]["ion"]["density"] = 1.0;
-  options["species"]["ion"]["charge"] = 2.0;
+  options["species"]["h+"]["density"] = 1.0;
+  options["species"]["h+"]["charge"] = 2.0;
 
   // Set ion velocity
   Field3D Vi = FieldFactory::get()->create3D("y - x", &options, mesh);
-  options["species"]["ion"]["velocity"] = Vi;
+  options["species"]["h+"]["velocity"] = Vi;
 
-  component.declareAllSpecies({"e", "ion"});
+  component.declareAllSpecies({"e", "h+"});
   component.transform(options);
 
   // Electron velocity should be equal to ion velocity

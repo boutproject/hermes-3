@@ -261,6 +261,8 @@ void EvolveMomentum::finally(const Options& state) {
   if (species.isSet("momentum_source")) {
     momentum_source = get<Field3D>(species["momentum_source"]);
     ddt(NV) += momentum_source;
+  } else {
+    momentum_source = 0.0;
   }
 
   // If N < density_floor then NV and NV_solver may differ

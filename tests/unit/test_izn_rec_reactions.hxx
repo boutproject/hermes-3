@@ -7,12 +7,14 @@
 namespace hermes {
 
 struct ConcreteIznReaction : public IznReaction {
-  using IznReaction::IznReaction;
+  ConcreteIznReaction(std::string name, Options& options, Solver* = nullptr)
+      : IznReaction(name, options, true) {}
   static constexpr auto type = "test_izn_reaction";
 };
 
 struct ConcreteRecReaction : public RecReaction {
-  using RecReaction::RecReaction;
+  ConcreteRecReaction(std::string name, Options& options, Solver* = nullptr)
+      : RecReaction(name, options, true) {}
   static constexpr auto type = "test_rec_reaction";
 };
 

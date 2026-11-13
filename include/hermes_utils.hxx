@@ -3,8 +3,13 @@
 #define HERMES_UTILS_H
 
 #include <algorithm>
+#include <cmath>
+#include <map>
+#include <string>
+#include <vector>
 
-#include "bout/bout_enum_class.hxx"
+#include "bout/assert.hxx"
+#include "bout/field3d.hxx"
 #include "bout/traits.hxx"
 
 inline BoutReal floor(BoutReal value, BoutReal min) { return std::max(value, min); }
@@ -79,6 +84,33 @@ inline T clamp(const T& var, BoutReal lo, BoutReal hi,
 }
 
 /**
+ * @brief Map `x` to a smooth sigmoid between `lo` and `hi`.
+ * The transition is centred on (`lo` +`hi`) / 2.
+ *
+ * @param x The value to map
+ * @param lo Lower bound, approached smoothly as x -> -inf
+ * @param hi Upper bound, approached smoothly as x -> +inf
+ * @param width Positive transition scale; smaller is closer to a hard step
+ */
+inline BoutReal sigmoid_map(BoutReal x, BoutReal lo, BoutReal hi, BoutReal width) {
+  ASSERT2(width > 0.0);
+  return lo + (hi - lo) / (1.0 + exp(-(x - 0.5 * (lo + hi)) / width));
+}
+
+/**
+ * @brief Smoothly transition from 0 (ratio <= 1) to 1 (ratio >= 1 + width),
+ * with continuous first and second derivatives.
+ *
+ * @param ratio A value expected to vary around 1 (e.g. density / density_threshold)
+ * @param width Positive transition scale (above ratio = 1)
+ */
+inline BoutReal smooth_gate(BoutReal ratio, BoutReal width) {
+  ASSERT2(width > 0.0);
+  const BoutReal x = std::clamp((ratio - 1.0) / width, 0.0, 1.0);
+  return x * x * x * (10.0 + x * (-15.0 + 6.0 * x));
+}
+
+/**
  * @brief Util function to get the keys of a std::string => T map
  *
  * @tparam T the type of the map values
@@ -91,23 +123,6 @@ static inline std::vector<std::string> str_keys(const std::map<std::string, T>& 
   std::transform(map.begin(), map.end(), std::back_inserter(keys),
                  [](const std::pair<std::string, T>& pair) { return pair.first; });
   return keys;
-}
-
-// TODO: Replace the later SpeciesType with this one. This one
-// doesn't work in elec
-
-/// Enum that identifies the type of a species: electron, ion, neutral
-BOUT_ENUM_CLASS(SpeciesType, electron, ion, neutral);
-
-/// Identify species name string as electron, ion or neutral
-inline SpeciesType identifySpeciesType(const std::string& species) {
-  if (species == "e") {
-    return SpeciesType::electron;
-  } else if ((species == "i") or species.find(std::string("+")) != std::string::npos) {
-    return SpeciesType::ion;
-  }
-  // Not electron or ion -> neutral
-  return SpeciesType::neutral;
 }
 
 template <typename T, typename = bout::utils::EnableIfField<T>>
