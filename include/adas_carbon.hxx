@@ -42,7 +42,7 @@ struct carbon_species {
 template <int level>
 struct ADASCarbonIonisation : public OpenADAS {
   ADASCarbonIonisation(std::string name, Options& alloptions, Solver*)
-      : OpenADAS(std::move(name), alloptions["units"], "scd96_c.json", "plt96_c.json",
+      : OpenADAS(std::move(name), alloptions, "scd96_c.json", "plt96_c.json",
                  carbon_species_name<level>, carbon_species_name<level + 1>, level,
                  -carbon_ionisation_energy[level]) {}
 
@@ -67,9 +67,9 @@ private:
 /// @tparam level  The ionisation level of the ion on the right of the reaction
 template <int level>
 struct ADASCarbonRecombination : public OpenADAS {
-  /// @param alloptions  The top-level options. Only uses the ["units"] subsection.
+  /// @param alloptions  The top-level options.
   ADASCarbonRecombination(std::string name, Options& alloptions, Solver*)
-      : OpenADAS(std::move(name), alloptions["units"], "acd96_c.json", "prb96_c.json",
+      : OpenADAS(std::move(name), alloptions, "acd96_c.json", "prb96_c.json",
                  carbon_species_name<level + 1>, carbon_species_name<level>, level,
                  carbon_ionisation_energy[level]) {}
 
@@ -91,9 +91,9 @@ private:
 /// @tparam Hisotope  The hydrogen isotope ('h', 'd' or 't')
 template <int level, char Hisotope>
 struct ADASCarbonCX : public OpenADASChargeExchange {
-  /// @param alloptions  The top-level options. Only uses the ["units"] subsection.
+  /// @param alloptions  The top-level options.
   ADASCarbonCX(std::string name, Options& alloptions, Solver*)
-      : OpenADASChargeExchange(std::move(name), alloptions["units"], "ccd96_c.json",
+      : OpenADASChargeExchange(std::move(name), alloptions, "ccd96_c.json",
                                carbon_species_name<level + 1>, {Hisotope},
                                carbon_species_name<level>, {Hisotope, '+'}, level) {}
 

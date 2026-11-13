@@ -49,7 +49,7 @@ struct ADASLithiumIonisation : public OpenADAS {
   ADASLithiumIonisation& operator=(const ADASLithiumIonisation&) = delete;
   ADASLithiumIonisation& operator=(ADASLithiumIonisation&&) = delete;
   ADASLithiumIonisation(std::string name, Options& alloptions, Solver*)
-      : OpenADAS(name, alloptions["units"], "scd96_li.json", "plt96_li.json",
+      : OpenADAS(name, alloptions, "scd96_li.json", "plt96_li.json",
                  lithium_species_name<level>, lithium_species_name<level + 1>, level,
                  -lithium_ionisation_energy[level]) {}
   static constexpr auto type = izn_component_name_v<lithium_species, level>;
@@ -73,9 +73,9 @@ private:
 /// @tparam level  The ionisation level of the ion on the right of the reaction
 template <int level>
 struct ADASLithiumRecombination : public OpenADAS {
-  /// @param alloptions  The top-level options. Only uses the ["units"] subsection.
+  /// @param alloptions  The top-level options.
   ADASLithiumRecombination(std::string name, Options& alloptions, Solver*)
-      : OpenADAS(std::move(name), alloptions["units"], "acd96_li.json", "prb96_li.json",
+      : OpenADAS(std::move(name), alloptions, "acd96_li.json", "prb96_li.json",
                  lithium_species_name<level + 1>, lithium_species_name<level>, level,
                  lithium_ionisation_energy[level]) {}
 
@@ -97,9 +97,9 @@ private:
 /// @tparam Hisotope  The hydrogen isotope ('h', 'd' or 't')
 template <int level, char Hisotope>
 struct ADASLithiumCX : public OpenADASChargeExchange {
-  /// @param alloptions  The top-level options. Only uses the ["units"] subsection.
+  /// @param alloptions  The top-level options.
   ADASLithiumCX(std::string name, Options& alloptions, Solver*)
-      : OpenADASChargeExchange(std::move(name), alloptions["units"], "ccd89_li.json",
+      : OpenADASChargeExchange(std::move(name), alloptions, "ccd89_li.json",
                                lithium_species_name<level + 1>, {Hisotope},
                                lithium_species_name<level>, {Hisotope, '+'}, level) {}
 
