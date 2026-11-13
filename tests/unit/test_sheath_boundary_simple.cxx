@@ -240,3 +240,59 @@ TEST_F(SheathBoundarySimpleTest, DiagnoseDoesNotChangeState) {
   const Field3D NVi_off = get<Field3D>(state_off["species"]["h+"]["momentum"]);
   EXPECT_TRUE(IsFieldEqual(NVi_on, NVi_off, "RGN_ALL", 0.0));
 }
+
+TEST_F(SheathBoundarySimpleTest, TargetFaceAreaUsesGuardCell) {
+  // The face area at a target is averaged between the sheath cell and its guard
+  // neighbour, so the Jacobian one row into the domain must not matter, and the guard
+  // Jacobian must scale the ion and electron fluxes alike (the ion lower target once
+  // used the interior neighbour instead of the guard)
+  auto set_row = [](bout::FieldMetric& J, int jy, BoutReal value) {
+    BOUT_FOR_SERIAL(i, J.getRegion("RGN_ALL")) {
+      if (i.y() == jy) {
+        J[i] = value;
+      }
+    }
+  };
+  auto run = [&](int jy_changed, BoutReal value) {
+    bout::FieldMetric J = mesh->getCoordinates()->J();
+    J = 1.0;
+    set_row(J, jy_changed, value);
+    mesh->getCoordinates()->setJ(J, false);
+
+    Options options{{"test", {{"diagnose", true}, {"gamma_e", 4.5}, {"gamma_i", 2.5}}}};
+    options["units"]["eV"] = 1.0;
+    SheathBoundarySimple component("test", options, nullptr);
+    component.declareAllSpecies({"e", "h+"});
+    Options state = sheathEnergyState();
+    component.transform(state);
+    Options outputs = sheathOutputs();
+    component.outputVars(outputs);
+    return std::make_pair(get<Field3D>(outputs["Ee_sheath"]),
+                          get<Field3D>(outputs["Eh+_sheath"]));
+  };
+
+  const auto [Ee_ref, Ei_ref] = run(mesh->ystart, 1.0); // uniform
+  // one row in from each target: nothing at the sheath cells may change
+  const auto [Ee_in_lo, Ei_in_lo] = run(mesh->ystart + 1, 3.0);
+  const auto [Ee_in_up, Ei_in_up] = run(mesh->yend - 1, 3.0);
+  // the guard rows: ion and electron fluxes scale by the same factor
+  const auto [Ee_g_lo, Ei_g_lo] = run(mesh->ystart - 1, 3.0);
+  const auto [Ee_g_up, Ei_g_up] = run(mesh->yend + 1, 3.0);
+
+  for (int ix = mesh->xstart; ix <= mesh->xend; ++ix) {
+    for (int kz = mesh->zstart; kz <= mesh->zend; ++kz) {
+      for (const auto& [jy, Ee_in, Ei_in, Ee_g, Ei_g] :
+           {std::make_tuple(mesh->ystart, Ee_in_lo, Ei_in_lo, Ee_g_lo, Ei_g_lo),
+            std::make_tuple(mesh->yend, Ee_in_up, Ei_in_up, Ee_g_up, Ei_g_up)}) {
+        ASSERT_NE(Ee_ref(ix, jy, kz), 0.0);
+        ASSERT_NE(Ei_ref(ix, jy, kz), 0.0);
+        EXPECT_DOUBLE_EQ(Ee_in(ix, jy, kz), Ee_ref(ix, jy, kz)) << "y = " << jy;
+        EXPECT_DOUBLE_EQ(Ei_in(ix, jy, kz), Ei_ref(ix, jy, kz)) << "y = " << jy;
+        const BoutReal scale_e = Ee_g(ix, jy, kz) / Ee_ref(ix, jy, kz);
+        const BoutReal scale_i = Ei_g(ix, jy, kz) / Ei_ref(ix, jy, kz);
+        EXPECT_GT(scale_e, 1.0 + 1e-6) << "y = " << jy;
+        EXPECT_NEAR(scale_i, scale_e, 1e-12) << "y = " << jy;
+      }
+    }
+  }
+}
