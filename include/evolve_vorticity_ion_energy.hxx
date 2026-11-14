@@ -171,7 +171,8 @@ struct EvolveVorticityIonEnergy : public NamedComponent<EvolveVorticityIonEnergy
   ///   - phi_atol             Potential convergence scale [eV], default 1.0
   ///   - phi_rtol             Recovery relative tolerance, default 1e-3
   ///   - vort_atol            Normalised vorticity residual tolerance, default 1e-10
-  ///   - polarisation_corrections  FV auxiliary defect corrections, default 2
+  ///   - polarisation_corrections  FV auxiliary defect corrections, default 10;
+  ///                               residual limits current and energy partition accuracy
   ///   - laplacian            Approximate potential inverse options
   ///   - polarisation_laplacian  Auxiliary inverse options; type defaults to laplacian
   ///
@@ -234,7 +235,7 @@ private:
   std::unique_ptr<Laplacian> chiSolver; ///< Mixed-boundary auxiliary inverse
   int chi_iterations{0};                ///< Spectral solves in the last chi calculation
   BoutReal chi_residual{0.0};           ///< Max FV residual of the last chi calculation
-  int polarisation_corrections{2}; ///< FV defect corrections after the spectral solve
+  int polarisation_corrections{10}; ///< FV defect corrections after the spectral solve
 
   bout::ion_energy::RadialBoundaryModel radial_model;
   std::vector<BoutReal> wall_rate_inner; ///< Current inner wall dphi/dt, by local y
@@ -264,7 +265,7 @@ private:
   Field3D DivEelectric; ///< Divergence of ion electrical work Div(phi (Jpar + Jdia))
   Field3D DivEparallel; ///< Divergence of parallel ion enthalpy and kinetic energy flux
   Field3D DivEpol;      ///< Divergence of polarisation drift energy flux
-  Field3D DivEviscous{0.0}; ///< Divergence of Phi nu grad_perp(Vort)
+  Field3D DivEviscous{0.0}; ///< Diagnostic Phi stress flux; work is carried by DivEpol
 
   Field3D phi_Div_Je;        ///< Energy transferred to/from electrons
   Field3D electron_exb_work; ///< Thermal work -Jdia_e dot Grad(phi)

@@ -975,8 +975,11 @@ EvolveVorticityIonEnergy::EvolveVorticityIonEnergy(std::string name, Options& al
 
   polarisation_corrections =
       options["polarisation_corrections"]
-          .doc("Finite-volume defect corrections after the spectral chi solve")
-          .withDefault(2);
+          .doc("Finite-volume defect corrections after the spectral chi solve. "
+               "The remaining DivJpol + DivJdia residual limits current continuity "
+               "and introduces potential-dependent error in the local "
+               "thermal/kinetic energy partition.")
+          .withDefault(10);
   if (polarisation_corrections < 0) {
     throw BoutException("polarisation_corrections must be >= 0");
   }
@@ -1029,7 +1032,7 @@ void EvolveVorticityIonEnergy::transform_impl(GuardedOptions& state) {
   vorticity = copy(Vort);
 
   // Start from the guess stored at the last output state, not from whatever
-  // the previous RHS call (possibly a Jacobian probe or rejected stage) left.
+  // the previous RHS call (possibly a Jacobian probe or rejected solver evaluation) left.
   // This keeps the RHS a deterministic function of the state within a step.
   phi = copy(phi_guess);
 
@@ -1261,6 +1264,10 @@ void EvolveVorticityIonEnergy::transform_impl(GuardedOptions& state) {
   //////////////////////////////////////////////////////////
   // Kinematic viscosity
 
+  // The polarisation energy transport already carries viscous drift work and
+  // enthalpy. Do not add a separate Phi-weighted viscous energy flux: that would
+  // count the work twice. Ion heating follows from total-energy recovery;
+  // the discrete stress-work diagnostic supplies the electron heating share.
   if (include_viscosity) {
     calculateViscosity();
     // Match vorticity's mass-density partition, including electrons when
@@ -1282,8 +1289,12 @@ void EvolveVorticityIonEnergy::transform_impl(GuardedOptions& state) {
   // Auxiliary current-continuity potential, independent of phi relaxation.
   // DC Dirichlet fixes the constant mode; the AC enum controls the auxiliary
   // potential guards. Transport retains the currents used by the forward solve.
-  // Viscous stress dissipates perpendicular kinetic energy without a particle
-  // flux, so it does not enter the auxiliary polarisation current closure.
+  // Excluding the viscous rate from chi means the transported polarisation
+  // current contains the ion viscous drift current. Its work and enthalpy are
+  // carried by DivEpol, so subtracting DivEviscous separately would duplicate
+  // that work. This relation uses the actual DivJviscous for either stress-wall
+  // setting: free_slip retains viscous X faces, fixed/no_slip close them, and
+  // polarisation transport retains its own physical X-wall faces in both cases.
   solvePolarisationPotential(DivJReynolds + DivJdia);
 
   // Use the same geometric chi currents as the residual, including wall faces.
@@ -1299,6 +1310,44 @@ void EvolveVorticityIonEnergy::transform_impl(GuardedOptions& state) {
     }
     return result;
   };
+  // Each rank owns complete periodic Z lines, so wall-line means are local.
+  // Uniform weights remove current/weight correlations from wall transport;
+  // net work remains the wall Phi midpoint times the net wall current.
+  if (radial_model.walls
+      && (mesh->getNZPE() != 1 || mesh->zstart != 0 || mesh->zend + 1 != mesh->LocalNz)) {
+    throw BoutException("Polarisation wall transport requires complete periodic Z lines");
+  }
+  const auto* coord = phi.getCoordinates();
+  Field3D wall_energy_weight = zeroFrom(phi);
+  Field3D wall_work_weight = zeroFrom(phi);
+  Field3D wall_thermal_weight = zeroFrom(phi);
+  Field3D wall_pressure_mismatch = zeroFrom(phi);
+  const auto wallWeighted = [&](const Field3D& weight,
+                                const Field3D* prescribed = nullptr) -> Field3D {
+    Field3D result = divPol(weight);
+    for (int x : {mesh->xstart - 1, mesh->xend}) {
+      const bool inner = x == mesh->xstart - 1;
+      if (mesh->periodicX || (inner && !mesh->firstX()) || (!inner && !mesh->lastX())) {
+        continue;
+      }
+      const int cell = inner ? x + 1 : x;
+      for (int y = mesh->ystart; y <= mesh->yend; ++y) {
+        BoutReal mean = 0.0;
+        for (int z = 0; z < mesh->LocalNz; ++z) {
+          mean += weight(cell, y, z);
+        }
+        mean /= mesh->LocalNz;
+        for (int z = 0; z < mesh->LocalNz; ++z) {
+          const BoutReal revised = prescribed ? (*prescribed)(x, y, z) : mean;
+          const BoutReal volume = coord->J()(cell, y, z) * coord->dx()(cell, y, z)
+                                  * coord->dy()(cell, y, z) * coord->dz()(cell, y, z);
+          result(cell, y, z) += (inner ? -1.0 : 1.0) * polarisation_flux.x(x, y, z)
+                                * (revised - weight(cell, y, z)) / volume;
+        }
+      }
+    }
+    return result;
+  };
   DivJpol = divPol(Field3D{1.0});
   bout::ion_energy::XZFaceFluxes wall_flux;
   if (diagnose) {
@@ -1311,7 +1360,12 @@ void EvolveVorticityIonEnergy::transform_impl(GuardedOptions& state) {
   // Jps = (A_s n_s / rho) Jpol, Gamma_ps = Jps / Z_s. Use the actual
   // mass density, so the species currents sum to Jpol above the floor.
   mass_density = floor(mass_density, average_atomic_mass * density_floor);
-  Field3D E_adv = copy(phi);
+  // The pressure potential uses the same reference mass normalisation as Phi
+  // and K_perp. Transporting work as Phi Jpol keeps the local thermal/kinetic
+  // partition independent of a constant potential gauge up to the auxiliary
+  // current residual. Thermal and parallel kinetic weights below retain the
+  // actual species mass-density partition.
+  Field3D E_adv = phi + psi;
   polarisation_sources = Options{};
   forAllIons(allspecies, [&](GuardedOptions species) {
     const BoutReal AA = get<BoutReal>(species["AA"]);
@@ -1319,28 +1373,112 @@ void EvolveVorticityIonEnergy::transform_impl(GuardedOptions& state) {
     const Field3D N = GET_NOBOUNDARY(Field3D, species["density"]);
     const Field3D P = GET_NOBOUNDARY(Field3D, species["pressure"]);
     const Field3D coefficient = (AA / Z) / mass_density;
-    const Field3D density_source = -divPol(coefficient * N);
+    const Field3D density_source = -wallWeighted(coefficient * N);
     add(species["density_source"], density_source);
     polarisation_sources[species.name()]["density"] = density_source;
     if (diagnose) {
       const Field3D weight = coefficient * N;
       polarisation_sources[species.name()]["wall_loss"] =
-          bout::ion_energy::divergence(wall_flux, &weight);
+          wallWeighted(weight) - divPol(weight)
+          + bout::ion_energy::divergence(wall_flux, &weight);
     }
-    E_adv += coefficient * (5. / 2) * P;
+    E_adv += coefficient * (3. / 2) * P;
     if (species.isSet("velocity")) {
       const Field3D V = GET_NOBOUNDARY(Field3D, species["velocity"]);
       E_adv += coefficient * 0.5 * AA * N * SQ(V);
     }
     if (species.isSet("momentum")) {
       const Field3D NV = GET_NOBOUNDARY(Field3D, species["momentum"]);
-      const Field3D momentum_source = -divPol(coefficient * NV);
+      Field3D mean_momentum_weight = zeroFrom(phi);
+      const Field3D V = GET_NOBOUNDARY(Field3D, species["velocity"]);
+      for (int x : {mesh->xstart - 1, mesh->xend}) {
+        const bool inner = x == mesh->xstart - 1;
+        if (mesh->periodicX || (inner && !mesh->firstX()) || (!inner && !mesh->lastX())) {
+          continue;
+        }
+        const int cell = inner ? x + 1 : x;
+        for (int y = mesh->ystart; y <= mesh->yend; ++y) {
+          BoutReal fraction = 0.0, velocity = 0.0;
+          for (int z = 0; z < mesh->LocalNz; ++z) {
+            fraction += AA * N(cell, y, z) / mass_density(cell, y, z);
+            velocity += 0.5 * (V(x, y, z) + V(x + 1, y, z));
+          }
+          fraction /= mesh->LocalNz;
+          velocity /= mesh->LocalNz;
+          for (int z = 0; z < mesh->LocalNz; ++z) {
+            mean_momentum_weight(x, y, z) = AA * fraction * velocity / Z;
+          }
+        }
+      }
+      // Use the product of the mean particle partition and mean per-particle
+      // momentum, matching the particles transported through the wall.
+      const Field3D momentum_source =
+          -wallWeighted(coefficient * NV, &mean_momentum_weight);
       add(species["momentum_source"], momentum_source);
       polarisation_sources[species.name()]["momentum"] = momentum_source;
     }
   });
-  // Sum_s[(5/2 p_s + K_parallel_s) A_s/(Z_s rho)] + phi.
+  // Phi + sum_s[(3/2 p_s + K_parallel_s) A_s/(Z_s rho)].
   DivEpol = divPol(E_adv);
+  for (int x : {mesh->xstart - 1, mesh->xend}) {
+    const bool inner = x == mesh->xstart - 1;
+    if (mesh->periodicX || (inner && !mesh->firstX()) || (!inner && !mesh->lastX())) {
+      continue;
+    }
+    const int cell = inner ? x + 1 : x;
+    for (int y = mesh->ystart; y <= mesh->yend; ++y) {
+      BoutReal work = 0.0, thermal = 0.0, kinetic_parallel = 0.0;
+      BoutReal original_pressure = 0.0;
+      for (int z = 0; z < mesh->LocalNz; ++z) {
+        work += 0.5 * (phi(x, y, z) + phi(x + 1, y, z) + psi(x, y, z) + psi(x + 1, y, z));
+      }
+      work /= mesh->LocalNz;
+      forAllIons(allspecies, [&](GuardedOptions species) {
+        const BoutReal AA = get<BoutReal>(species["AA"]);
+        const BoutReal Z = get<BoutReal>(species["charge"]);
+        const Field3D N = GET_NOBOUNDARY(Field3D, species["density"]);
+        const Field3D T = GET_NOBOUNDARY(Field3D, species["temperature"]);
+        BoutReal fraction = 0.0, temp = 0.0, velocity = 0.0;
+        for (int z = 0; z < mesh->LocalNz; ++z) {
+          fraction += AA * N(cell, y, z) / mass_density(cell, y, z);
+          temp += 0.5 * (T(x, y, z) + T(x + 1, y, z));
+        }
+        fraction /= mesh->LocalNz;
+        temp /= mesh->LocalNz;
+        if (species.isSet("velocity")) {
+          const Field3D V = GET_NOBOUNDARY(Field3D, species["velocity"]);
+          for (int z = 0; z < mesh->LocalNz; ++z) {
+            velocity += 0.5 * (V(x, y, z) + V(x + 1, y, z));
+          }
+          velocity /= mesh->LocalNz;
+        }
+        // Products of separate means give the transported particle flux times
+        // its mean energy per particle; a mean of products would not do so.
+        original_pressure += fraction * temp / Z;
+        thermal += 1.5 * fraction * temp / Z;
+        kinetic_parallel += 0.5 * AA * fraction * velocity * velocity / Z;
+      });
+      for (int z = 0; z < mesh->LocalNz; ++z) {
+        const BoutReal pressure_mid = 0.5 * (psi(x, y, z) + psi(x + 1, y, z));
+        const BoutReal revised = work + (thermal + kinetic_parallel);
+        const BoutReal volume = coord->J()(cell, y, z) * coord->dx()(cell, y, z)
+                                * coord->dy()(cell, y, z) * coord->dz()(cell, y, z);
+        DivEpol(cell, y, z) += (inner ? -1.0 : 1.0) * polarisation_flux.x(x, y, z)
+                               * (revised - E_adv(cell, y, z)) / volume;
+        wall_energy_weight(x, y, z) = revised;
+        wall_work_weight(x, y, z) = work;
+        wall_thermal_weight(x, y, z) = thermal + kinetic_parallel;
+        wall_pressure_mismatch(x, y, z) = original_pressure - pressure_mid;
+      }
+    }
+  }
+  forAllIons(allspecies, [&](GuardedOptions species) {
+    auto& sources = polarisation_sources[species.name()];
+    sources["wall_energy_weight"] = wall_energy_weight;
+    sources["wall_work_weight"] = wall_work_weight;
+    sources["wall_thermal_weight"] = wall_thermal_weight;
+    sources["wall_pressure_mismatch"] = wall_pressure_mismatch;
+  });
 }
 
 void EvolveVorticityIonEnergy::finally(const Options& state) {
@@ -1381,14 +1519,17 @@ void EvolveVorticityIonEnergy::finally(const Options& state) {
 
   Eion_src = sumIonEnergySources(state["species"]);
 
-  ddt(Eion) = -(DivEExB + DivEelectric + DivEparallel + DivEpol + DivEviscous)
-              - phi_Div_Je - electron_viscous_heating + Eion_src;
+  ddt(Eion) = -(DivEExB + DivEelectric + DivEparallel + DivEpol) - phi_Div_Je
+              - electron_viscous_heating + Eion_src;
 }
 
 void EvolveVorticityIonEnergy::calculateViscosity() {
   const Field3D nu{viscosity};
   const Field3D Phi = phi + psi;
   auto flux = bout::ion_energy::perpendicularFaces(nu, vorticity);
+  // The stress diagnostic has the same wall closure as the vorticity rate.
+  // Its Phi-weighted flux is diagnostic only; DivEpol carries the drift work
+  // for both open and closed viscous wall faces.
   if (!radial_model.viscous_wall_flux) {
     bout::ion_energy::closeRadialFaces(flux);
   }
@@ -1411,12 +1552,13 @@ void EvolveVorticityIonEnergy::outputVars(Options& state) {
   // Update the recovery guess here so it remains fixed between outputs.
   acceptWarmStart();
 
-  set_with_attrs(state["evolve_vorticity_ion_energy_version"], 3,
-                 {{"description", "Component equation and discretisation version: "
-                                  "MC full-vorticity advection plus compact central R; "
-                                  "full Reynolds/chi wall currents; "
-                                  "viscous stress excluded from polarisation transport; "
-                                  "independent of restart layout"}});
+  set_with_attrs(
+      state["evolve_vorticity_ion_energy_version"], 4,
+      {{"description", "Component equation and discretisation version: "
+                       "MC full-vorticity advection plus compact central R; "
+                       "Phi-weighted polarisation work with wall-uniform transport; "
+                       "viscous drift energy carried by polarisation transport; "
+                       "independent of restart layout"}});
 
   // Normalisations
   auto Nnorm = get<BoutReal>(state["Nnorm"]);
@@ -1476,6 +1618,16 @@ void EvolveVorticityIonEnergy::outputVars(Options& state) {
                     {"conversion", SI::qe * Nnorm * Omega_ci},
                     {"long_name", "Reynolds current divergence"}});
     for (const auto& [species, sources] : polarisation_sources.getChildren()) {
+      for (const auto* name : {"wall_energy_weight", "wall_work_weight",
+                               "wall_thermal_weight", "wall_pressure_mismatch"}) {
+        set_with_attrs(state[std::string{"polarisation_"} + name],
+                       sources[name].as<Field3D>(),
+                       {{"time_dimension", "t"},
+                        {"units", "V"},
+                        {"conversion", Tnorm},
+                        {"description", "Physical X-wall face transport weight; "
+                                        "uniform along each periodic Z line"}});
+      }
       set_with_attrs(state["particle_pol_wall_loss_" + species],
                      sources["wall_loss"].as<Field3D>(),
                      {{"time_dimension", "t"},
@@ -1515,11 +1667,14 @@ void EvolveVorticityIonEnergy::outputVars(Options& state) {
                       {"units", "A m^-3"},
                       {"conversion", SI::qe * Nnorm * Omega_ci},
                       {"long_name", "Kinematic viscous current divergence"}});
-      set_with_attrs(state["DivEviscous"], DivEviscous,
-                     {{"time_dimension", "t"},
-                      {"units", "W m^-3"},
-                      {"conversion", Pnorm * Omega_ci},
-                      {"long_name", "Kinematic viscous energy flux divergence"}});
+      set_with_attrs(
+          state["DivEviscous"], DivEviscous,
+          {{"time_dimension", "t"},
+           {"units", "W m^-3"},
+           {"conversion", Pnorm * Omega_ci},
+           {"long_name", "Diagnostic Phi-weighted viscous stress flux divergence"},
+           {"description", "Viscous drift energy is carried by "
+                           "polarisation transport"}});
     }
     for (const auto& [name, faces, indexing] :
          {std::tuple{"polarisation_flux_x", &polarisation_flux.x,
