@@ -65,7 +65,7 @@ struct SetTemperature : public NamedComponent<SetTemperature> {
 
 private:
   std::string temperature_from; ///< The species that the temperature is taken from
-  Field3D T;                    ///< The temperature
+  Field3DParallel T;            ///< The temperature
   bool diagnose;                ///< Output diagnostics?
 
   ///
@@ -95,7 +95,7 @@ private:
     if (isSetFinalNoBoundary(species["density"])) {
       // Note: The boundary of N may not be set yet
       auto N = GET_NOBOUNDARY(Field3D, species["density"]);
-      set(species["pressure"], N * T);
+      set(species["pressure"], Field3DParallel(N * T));
     }
   }
 };
