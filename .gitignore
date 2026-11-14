@@ -41,3 +41,7 @@ docker/docker-compose.override.yaml
 # Python-related directories
 *venv/
 dist/
+
+#Temp IB MMS run data
+/examples/ib/mms/**/[0-9]*/
+/examples/ib/mms/out

@@ -88,15 +88,48 @@
 #include <bout/constants.hxx>
 #include <bout/field_factory.hxx>
 #include <bout/immersed_boundary.hxx>
+#include <bout/mesh.hxx>
+#include <bout/sys/generator_context.hxx>
 #include <bout/tokamak_coordinates.hxx>
 
 #include "include/recalculate_metric.hxx"
+
+#include <list>
+#include <memory>
+#include <string>
+#include <utility>
 
 #if !BOUT_USE_METRIC_3D
 // For standard 2D metrics,
 // Hermes operators don't need parallel slices
 BOUT_OVERRIDE_DEFAULT_OPTION("mesh:calcParallelSlices_on_communicate", false);
 #endif
+
+namespace {
+
+/// A 'zn' field: z index normalised between 0 and 1 at the Z boundaries.
+class FieldZnorm : public FieldGenerator {
+public:
+  FieldGeneratorPtr clone(const std::list<FieldGeneratorPtr> args) override {
+    if (!args.empty()) {
+      throw ParseException("Variable 'zn' takes no arguments but got {:d}", args.size());
+    }
+    return std::make_shared<FieldZnorm>();
+  }
+
+  double generate(const bout::generator::Context& ctx) override {
+    auto* localmesh = ctx.getMesh();
+    const double zind = (ctx.z() / TWOPI) * localmesh->GlobalNz;
+    const double zlower = static_cast<double>(localmesh->zstart) - 0.5;
+    const double zupper =
+        static_cast<double>(localmesh->GlobalNz - localmesh->zstart) - 0.5;
+    return (zind - zlower) / (zupper - zlower);
+  }
+
+  std::string str() const override { return "zn"; }
+};
+
+} // namespace
 
 class DecayLengthBoundary : public BoundaryOp {
 public:
@@ -216,6 +249,19 @@ int Hermes::init(bool restarting) {
   // This will make it available as an input option
   // e.g. bndry_sol = decaylength(0.003 / rho_s0) sets up a decay length of 3mm
   BoundaryFactory::getInstance()->add(new DecayLengthBoundary(), "decaylength");
+
+  // Add general normalized psin and zn coordinates for FCI Cartesian meshes.
+  FieldFactory::get()->addGenerator("zn", std::make_shared<FieldZnorm>());
+  if (mesh->sourceHasVar("psin")) {
+    auto& grid_variables = Options::root()["input"]["grid_variables"];
+    if (!grid_variables.isSet("psin")) {
+      grid_variables["psin"] = "field3d";
+    }
+    //IB_TODO: How to do this with singleton like zn?
+    FieldFactory grid_variable_factory(mesh, Options::getRoot());
+    auto psin_generator = grid_variable_factory.parse("gridvar:psin");
+    FieldFactory::get()->addGenerator("psin", psin_generator);
+  }
 
   /////////////////////////////////////////////////////////
   // Load metric tensor from the mesh, passing length and B

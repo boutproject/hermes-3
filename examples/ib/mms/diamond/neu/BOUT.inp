@@ -1,0 +1,41 @@
+# Stellarator diffusion
+
+nout = 20
+timestep = 2e4
+
+[mesh]
+
+file = "../gridfiles/sqrt64.fci.nc"
+
+[mesh:paralleltransform]
+type = fci
+z_periodic = 0
+
+[solver]
+rtol = 1e-7
+atol = 1e-9
+
+[hermes]
+components = h+
+
+Nnorm = 2e18  # Reference density [m^-3]
+Bnorm = 1   # Reference magnetic field [T]
+Tnorm = 5   # Reference temperature [eV]
+
+recalculate_metric = false # Assume a tokomak?
+
+imm_bndry = true
+
+[h+]
+type = evolve_density, anomalous_diffusion
+
+diagnose = 1
+AA = 1
+charge = 1
+anomalous_D = 3 # Density diffusion [m^2/s]
+#anomalous_chi = .4
+#anomalous_nu = 0
+
+[Nh+]
+function = 1 + cos(pi*((x+zn-1.0)/1.4142135623730951+0.17677669529663687)/0.35355339059327373)*cos(pi*((x-zn)/1.4142135623730951+0.17677669529663687)/0.35355339059327373)
+bndry_wall = neumann(0.0)
