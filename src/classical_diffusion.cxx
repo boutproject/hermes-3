@@ -14,12 +14,18 @@ ClassicalDiffusion::ClassicalDiffusion(std::string name, Options& alloptions, So
 
   Bsq = SQ(bout::globals::mesh->getCoordinates()->Bxy());
 
-  diagnose =
-      options["diagnose"].doc("Output additional diagnostics?").withDefault<bool>(false);
-  custom_D =
-      options["custom_D"]
-          .doc("Custom diffusion coefficient override. -1: Off, calculate D normally")
-          .withDefault<BoutReal>(-1);
+  diagnose = options["diagnose"]
+                 .doc("Output the normalised perpendicular particle diffusivity as "
+                      "D_classical with conversion metadata for m^2/s, including "
+                      "any custom override?")
+                 .withDefault<bool>(false);
+  custom_D = options["custom_D"]
+                 .doc("Normalised particle and thermal-energy diffusivity override. "
+                      ">0: constant diffusion; <0: classical diffusion and conduction "
+                      "(default -1); 0: collision-derived particle and carried-energy "
+                      "diffusion without conduction. Multiply positive values by "
+                      "rho_s0^2 * Omega_ci to obtain m^2/s.")
+                 .withDefault<BoutReal>(-1);
 
   substitutePermissions("optional",
                         {"charge", "pressure", "density", "velocity", "temperature"});
@@ -28,9 +34,9 @@ ClassicalDiffusion::ClassicalDiffusion(std::string name, Options& alloptions, So
     e_vals.push_back("collision_frequency");
   }
   substitutePermissions("e_vals", e_vals);
-  // FIXME: momentum and energy sources are only set if velocity and
-  // temperature are defined (respectively). Collision frequency is
-  // only used if temperature is set. Nothing happens if the charge or
+  // Momentum transport requires velocity. Custom thermal-energy diffusion
+  // requires pressure or temperature; classical conduction requires temperature
+  // and collision frequency. Nothing happens in classical mode if charge or
   // density are unset.
   substitutePermissions("output", {"density_source", "momentum_source", "energy_source"});
   if (custom_D < 0.) {
@@ -105,14 +111,22 @@ void ClassicalDiffusion::transform_impl(GuardedOptions& state) {
                                     false));
     }
 
-    if (IS_SET(species["temperature"])) {
+    if (custom_D > 0) {
+      if (IS_SET(species["pressure"]) || IS_SET(species["temperature"])) {
+        const Field3D P = IS_SET(species["pressure"])
+                              ? GET_VALUE(Field3D, species["pressure"])
+                              : N * GET_VALUE(Field3D, species["temperature"]);
+        // Diffuse thermal energy and particles with the same coefficient.
+        add(species["energy_source"],
+            Div_a_Grad_perp_nonorthog(Dn * (3. / 2), P, cls_nef_perp_xlow,
+                                      cls_nef_perp_ylow, false));
+      }
+    } else if (IS_SET(species["temperature"])) {
       const auto T = GET_VALUE(Field3D, species["temperature"]);
-      // add(species["energy_source"], FV::Div_a_Grad_perp(Dn * (3. / 2) * T, N));
       add(species["energy_source"],
           Div_a_Grad_perp_nonorthog(Dn * (3. / 2) * T, N, cls_nef_perp_xlow,
                                     cls_nef_perp_ylow, false));
 
-      // TODO: Figure out what to do with the below
       if (custom_D < 0) {
         // Cross-field heat conduction
         // kappa_perp = 2 * n * nu_ii * rho_i^2
@@ -120,8 +134,6 @@ void ClassicalDiffusion::transform_impl(GuardedOptions& state) {
         const auto AA = GET_VALUE(BoutReal, species["AA"]);
         const Field3D nu =
             floor(GET_VALUE(Field3D, species["collision_frequency"]), 1e-10);
-        // add(species["energy_source"], FV::Div_a_Grad_perp(2. * floor(P, 1e-5) * nu * AA
-        // / Bsq, T));
         add(species["energy_source"],
             Div_a_Grad_perp_nonorthog(2. * floor(P, 1e-5) * nu * AA / Bsq, T,
                                       cls_tef_perp_xlow, cls_tef_perp_ylow, false));
@@ -141,8 +153,8 @@ void ClassicalDiffusion::outputVars(Options& state) {
                    {{"time_dimension", "t"},
                     {"units", "m^2 s^-1"},
                     {"conversion", rho_s0 * rho_s0 * Omega_ci},
-                    {"standard_name", "Classical particle diffusion"},
-                    {"long_name", "Classical cross-field particle diffusion coefficient"},
+                    {"standard_name", "Perpendicular particle diffusion"},
+                    {"long_name", "Perpendicular particle diffusion coefficient"},
                     {"source", "classical_diffusion"}});
   }
 }
