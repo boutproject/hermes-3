@@ -95,9 +95,10 @@ inline Field3D Div_a_Grad_perp_upwind_flows(const Field2D& a, const Field2D& f,
  * This version includes corrections for non-orthogonal meshes
  * in which the g12 and g13 components can be non-zero
  * i.e. X-Y, X-Z and Y-Z coordinates can all be non-orthogonal.
+ * Set bndry_flux=false to close physical X and Y boundary faces.
  */
 Field3D Div_a_Grad_perp_nonorthog(const Field3D& a, const Field3D& x, Field3D& flux_xlow,
-                                  Field3D& flux_ylow);
+                                  Field3D& flux_ylow, bool bndry_flux = true);
 
 namespace FCI {
 
