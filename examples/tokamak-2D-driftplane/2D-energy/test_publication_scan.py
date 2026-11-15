@@ -159,6 +159,109 @@ def test_resolutions_guards_and_cadence(runner):
     assert runner.configuration(args)["outputs"] == 20
 
 
+@pytest.mark.parametrize("coefficient", [1.19, 0.4])
+def test_matched_inputs_include_constant_classical_diffusion(runner, coefficient):
+    config = runner.configuration(
+        runner.parser().parse_args(["--custom-D", str(coefficient), "--diagnose"])
+    )
+    for form in ("pressure", "total_energy"):
+        text = runner.input_text(
+            config, {"nx": 16, "nz": 16, "formulation": form, "boundary": "fixed"}
+        )
+        components = next(
+            line for line in text.splitlines() if line.startswith("components =")
+        )
+        assert "classical_diffusion" in components
+        assert (
+            f"[classical_diffusion]\ncustom_D = {coefficient}\ndiagnose = true" in text
+        )
+
+
+@pytest.mark.parametrize("coefficient", ["0", "-1", "nan", "inf"])
+def test_invalid_custom_diffusion_rejected(runner, coefficient):
+    with pytest.raises(AuditError, match="custom_D must be finite and positive"):
+        runner.configuration(runner.parser().parse_args(["--custom-D=" + coefficient]))
+
+
+@pytest.mark.parametrize("order", [0.5, 2, 4])
+@pytest.mark.parametrize("limit,amplitude", [(3e-7, 2e-6), (-3e-7, -2e-6)])
+def test_thermal_gain_fit_recovers_signed_nonzero_limit(
+    runner, order, limit, amplitude
+):
+    # Neither zero gain nor the finest available value is the continuum limit.
+    h = np.array([0.01, 0.005, 0.0025, 0.00125])
+    gain = limit + amplitude * (h / h[0]) ** order
+    permutation = [2, 0, 3, 1]
+    fitted = runner.fit_thermal_gain(
+        h[permutation], gain[permutation], energy_scale=1e-3
+    )
+    assert fitted["status"] == "fit"
+    assert fitted["order"] == pytest.approx(order, rel=1e-6)
+    assert fitted["limit_J"] == pytest.approx(limit, rel=1e-6)
+    assert fitted["amplitude_J"] == pytest.approx(amplitude, rel=1e-6)
+    assert fitted["reference_spacing_m"] == h[0]
+    assert fitted["residual_rms_J"] < 1e-13
+    assert fitted["R2"] == pytest.approx(1)
+
+
+@pytest.mark.parametrize(
+    "gain,status",
+    [
+        ([1, 2], "at least three grids required"),
+        ([1, 1, 1], "roundoff dominated"),
+        ([1, 1 + 1e-15, 1 + 2e-15], "roundoff dominated"),
+        ([1, 2, 1], "oscillatory gains"),
+        ([1, 2, 4, 8], "no finite positive-order power-law fit"),
+    ],
+)
+def test_thermal_gain_fit_reports_unavailable_sequences(runner, gain, status):
+    h = 0.01 * 0.5 ** np.arange(len(gain))
+    result = runner.fit_thermal_gain(h, gain)
+    assert result["status"] == status
+    assert "order" not in result
+    assert "limit_J" not in result
+    # Cancellation against a much larger initial inventory also limits accuracy.
+    result = runner.fit_thermal_gain(
+        [1, 0.5, 0.25], [1e-10, 2e-10, 3e-10], energy_scale=1e6
+    )
+    assert result["status"] == "roundoff dominated"
+
+
+@pytest.mark.parametrize(
+    "spacing,gain",
+    [
+        ([1, 0, 0.25], [1, 2, 3]),
+        ([1, 1, 0.5], [1, 2, 3]),
+        ([1, 0.5, 0.25], [1, np.nan, 3]),
+    ],
+)
+def test_thermal_gain_fit_rejects_invalid_data(runner, spacing, gain):
+    with pytest.raises(AuditError, match="distinct positive finite spacings"):
+        runner.fit_thermal_gain(spacing, gain)
+
+
+@pytest.mark.parametrize(
+    "grids,expected",
+    [
+        ([8], None),
+        ([8, 16], None),
+        ([8, 16, 32], 2),
+        ([8, 32, 128], 2),
+        ([8, 16, 64], None),
+    ],
+)
+def test_completed_subset_orders_use_actual_refinement(runner, grids, expected):
+    rows = [(("fixed", "total_energy", nx, nx), {"Q": 1 + nx**-2}) for nx in grids]
+    sequence = runner.grid_differences(rows, 2)
+    if expected is None:
+        assert sequence[0]["observed_order"] is None
+    else:
+        assert sequence[0]["observed_order"] == pytest.approx(expected)
+    assert sequence[-1]["finest_difference_J"] is None
+    if grids == [8, 16, 64]:
+        assert sequence[0]["order_status"] == "unequal refinement ratios"
+
+
 def test_relaxing_input_uses_formulation_boundary_parameter(runner):
     config = runner.configuration(runner.parser().parse_args([]))
     for formulation, expected, unused in (
@@ -377,6 +480,152 @@ def test_energy_format_is_plotting_only_and_reaches_reanalysis(
     monkeypatch.setattr(runner, "analyse", lambda *a, **kw: calls.append(kw))
     assert runner.main(argv) == 0
     assert calls[0]["energy_format"] == energy_format
+    assert calls[0]["allow_incomplete"] is True
+
+
+def synthetic_plot_result(nx, gain):
+    """Inventories with a larger intermediate change than the final signed gain."""
+    inventory = xr.Dataset(
+        {
+            "ion_thermal": ("t", [10, 20, 15, 10 + gain]),
+            "electron_thermal": ("t", [5, 5, 5, 5]),
+            "ion_perpendicular": ("t", [0, 1, 2, 3]),
+            "plasma_reconstructed": ("t", [15, 26, 22, 18 + gain]),
+            "plasma_native": ("t", [15, 25, 21, 17 + gain]),
+        },
+        coords={"t": [0, 0.001, 0.002, 0.004]},
+    )
+    return {
+        "inventory": inventory,
+        "lx": 0.05,
+        "lz": 0.05,
+        "x": (np.arange(nx) + 0.5) * 0.05 / nx,
+        "z": np.arange(nx) * 0.05 / nx,
+        "snapshots": [np.ones((nx, nx)) * p for p in (1, 2, 3, 4)],
+        "kinetic_snapshots": [np.ones((nx, nx)) * p for p in (0, 1, 2, 3)],
+        "comparison": np.ones((nx, nx)),
+        "volume": np.ones((nx, nx)),
+        "unit": "Pa",
+        "Q": 1 + nx**-2,
+        "report": {
+            "volume_m3": 0.001,
+            "ion_thermal_gain_J": gain,
+            "final_drift_J": 2 + gain,
+            "max_relative_drift": 0.5,
+            "final_corrected_residual_J": None,
+            "corrected_residual_J": None,
+        },
+    }
+
+
+def test_thermal_gain_pdf_overlays_signed_gains_and_continuum_fit(
+    runner, tmp_path, monkeypatch
+):
+    import json
+
+    import matplotlib.pyplot as plt
+    from matplotlib.figure import Figure
+
+    groups = {
+        "pressure": [
+            (("fixed", "pressure", nx, nx), synthetic_plot_result(nx, -8 / nx))
+            for nx in (8, 16)
+        ],
+        "total_energy": [
+            (
+                ("fixed", "total_energy", nx, nx),
+                synthetic_plot_result(nx, 0.25 + (8 / nx) ** 2),
+            )
+            for nx in (8, 16, 32)
+        ],
+    }
+    captured = []
+    original_savefig = Figure.savefig
+
+    def capture(fig, path, **kw):
+        captured.append(fig.axes[0])
+        original_savefig(fig, path, **kw)
+
+    monkeypatch.setattr(Figure, "savefig", capture)
+    with plt.rc_context({"figure.constrained_layout.use": True, "pdf.fonttype": 42}):
+        runner.thermal_gain_figure(tmp_path, {"end_time": 4}, "fixed", groups)
+    assert (tmp_path / "ion-thermal-gain-fixed.pdf").read_bytes().startswith(b"%PDF-")
+    (axis,) = captured
+    assert axis.get_xscale() == "log"
+    assert axis.get_yscale() == "linear"
+    lines = {line.get_label(): line for line in axis.lines}
+    np.testing.assert_allclose(lines["Pressure evolution"].get_xdata(), [6.25, 3.125])
+    np.testing.assert_allclose(lines["Pressure evolution"].get_ydata(), [-1, -0.5])
+    np.testing.assert_allclose(
+        lines["Total ion energy"].get_ydata(), [1.25, 0.5, 0.3125]
+    )
+    fit_line = next(
+        line for label, line in lines.items() if label.startswith("Ion-energy fit")
+    )
+    assert fit_line.get_xdata().min() < 0.05 / 32 * 1e3
+    limit_line = next(line for label, line in lines.items() if "h\\to0" in label)
+    np.testing.assert_allclose(limit_line.get_ydata(), 0.25, atol=1e-7)
+    report = json.loads((tmp_path / "ion-thermal-gain-fixed.json").read_text())
+    assert report["ion_energy_fit"]["order"] == pytest.approx(2, rel=1e-6)
+    assert report["ion_energy_fit"]["limit_J"] == pytest.approx(0.25, rel=1e-6)
+    assert report["data"][0]["ion_thermal_gain_J"] == -1
+    assert report["data"][0]["initial_ion_thermal_J"] == 10
+    assert report["data"][0]["final_ion_thermal_J"] == 9
+
+
+@pytest.mark.parametrize("formulation", ["pressure", "total_energy"])
+def test_partial_reanalysis_plots_single_completed_formulation(
+    runner, tmp_path, monkeypatch, formulation
+):
+    import json
+
+    config = runner.configuration(runner.parser().parse_args(["--smoke"]))
+    rows = list(runner.grid_rows(config))
+    complete = next(row for row in rows if row["formulation"] == formulation)
+    for row in rows:
+        directory = tmp_path / row["directory"]
+        directory.mkdir()
+        (directory / "BOUT.inp").write_text(runner.input_text(config, row))
+        row["input_sha256"] = runner.digest(directory / "BOUT.inp")
+    runner.save_json(tmp_path / complete["directory"] / "status.json", {"exit_code": 0})
+    monkeypatch.setattr(
+        runner, "analyse_run", lambda *args: synthetic_plot_result(8, -0.5)
+    )
+    manifest = {"configuration": config, "runs": rows}
+    results = runner.analyse(tmp_path, manifest, allow_incomplete=True)
+    assert len(results) == 1
+    boundary = complete["boundary"]
+    report = json.loads((tmp_path / f"ion-thermal-gain-{boundary}.json").read_text())
+    assert [sample["formulation"] for sample in report["data"]] == [formulation]
+    assert report["data"][0]["ion_thermal_gain_J"] == -0.5
+    assert report["ion_energy_fit"]["status"] == (
+        "at least three grids required"
+        if formulation == "total_energy"
+        else "no total-ion-energy runs available"
+    )
+    convergence = json.loads((tmp_path / "convergence-table.json").read_text())
+    assert convergence[0]["observed_order"] is None
+    assert convergence[0]["L2"] is None
+    assert (tmp_path / f"state-{boundary}.pdf").is_file()
+    assert (tmp_path / f"ion-thermal-gain-{boundary}.pdf").is_file()
+    # Partial analysis must retain the input hash guard, including pending runs.
+    pending = next(row for row in rows if row is not complete)
+    (tmp_path / pending["directory"] / "BOUT.inp").write_text("changed")
+    with pytest.raises(AuditError, match="Input was modified"):
+        runner.analyse(tmp_path, manifest, allow_incomplete=True)
+
+
+def test_partial_reanalysis_requires_a_completed_run(runner, tmp_path):
+    config = runner.configuration(runner.parser().parse_args(["--smoke"]))
+    row = next(runner.grid_rows(config))
+    directory = tmp_path / row["directory"]
+    directory.mkdir()
+    (directory / "BOUT.inp").write_text(runner.input_text(config, row))
+    row["input_sha256"] = runner.digest(directory / "BOUT.inp")
+    with pytest.raises(AuditError, match="No completed runs"):
+        runner.analyse(
+            tmp_path, {"configuration": config, "runs": [row]}, allow_incomplete=True
+        )
 
 
 def test_energy_exports_keep_panel_data_and_standalone_legends(

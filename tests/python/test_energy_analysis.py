@@ -1224,6 +1224,46 @@ def test_full_wall_budget_with_parallel_compression(dataset, g13):
     assert wall_budget(run).attrs["coverage"] == "complete"
 
 
+@pytest.mark.parametrize("boundary", ["fixed", "no_slip"])
+def test_closed_wall_diffusion_keeps_local_reconstruction_strict(dataset, boundary):
+    from energy_analysis import reconstruct_fluxes
+    from energy_analysis.fluxes import (
+        boundary_relaxation,
+        closed_slab_outward_power,
+        slab_contract,
+    )
+
+    run = shared_current_case(dataset)
+    run.data.options["evolve_vorticity_ion_energy:radial_boundary"] = boundary
+    run.data.options["evolve_vorticity_ion_energy:phi_boundary_velocity"] = 1000
+    for name in ("NVd+", "NVimpurity", "NVe"):
+        run.data[name] = xr.zeros_like(run.data[name])
+    original = closed_slab_outward_power(run)
+    if boundary == "no_slip":
+        original_rates = boundary_relaxation(run)
+    run.data.options["hermes:components"] += ", classical_diffusion"
+    run.data.options["classical_diffusion:custom_D"] = 1.19
+    diffusive = closed_slab_outward_power(run)
+    assert diffusive.attrs["coverage"] == "complete"
+    assert not diffusive.attrs["local_transport_coverage"]
+    assert_allclose(diffusive.outward, original.outward)
+    if boundary == "no_slip":
+        assert_allclose(
+            boundary_relaxation(run).phi_boundary_rate, original_rates.phi_boundary_rate
+        )
+    with pytest.raises(AuditError, match="Additional components"):
+        slab_contract(run)
+    with pytest.raises(AuditError, match="Additional components"):
+        reconstruct_fluxes(run)
+    run.data.options["classical_diffusion:type"] = "radiation"
+    with pytest.raises(AuditError, match="Additional components"):
+        closed_slab_outward_power(run)
+    run.data.options["classical_diffusion:type"] = "classical_diffusion"
+    run.data.options["hermes:components"] += ", radiation"
+    with pytest.raises(AuditError, match="Additional components"):
+        closed_slab_outward_power(run)
+
+
 def test_unknown_component_version_reports_incomplete_coverage(dataset):
     from energy_analysis.walls import wall_budget
 

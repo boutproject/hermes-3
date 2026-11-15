@@ -57,12 +57,16 @@ max_timestep = ${max_timestep}
 mxstep = 1e6
 
 [hermes]
-components = e, h+, ${components}
+components = e, h+, ${components}, classical_diffusion
 recalculate_metric = false
 normalise_metric = true
 Nnorm = 2e18
 Bnorm = mesh:Bxy
 Tnorm = 5
+
+[classical_diffusion]
+custom_D = ${custom_D}
+diagnose = ${diagnose}
 
 [e]
 type = quasineutral, evolve_pressure

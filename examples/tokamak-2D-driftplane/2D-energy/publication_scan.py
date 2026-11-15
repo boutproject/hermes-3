@@ -128,6 +128,12 @@ def parser():
         help="Total-ion-energy relaxation velocity [m/s]",
     )
     p.add_argument("--viscosity", type=float, default=1)
+    p.add_argument(
+        "--custom-D",
+        type=float,
+        default=1.19,
+        help="Positive normalised classical_diffusion override (multiply by rho_s0² Omega_ci for m²/s)",
+    )
     p.add_argument("--end-time", type=float, default=20000)
     p.add_argument("--outputs", type=int, default=200)
     p.add_argument("--snapshot-times", type=float, nargs=4)
@@ -250,6 +256,7 @@ def configuration(args):
         "phi_rtol",
         "vort_atol",
         "max_timestep",
+        "custom_D",
     ):
         if not np.isfinite(c[key]) or c[key] <= 0:
             raise AuditError(f"{key} must be finite and positive")
@@ -324,6 +331,7 @@ def input_text(config, row):
         "rtol": c["rtol"],
         "max_timestep": c["max_timestep"],
         "viscosity": c["viscosity"],
+        "custom_D": c["custom_D"],
         "diagnose": str(c["diagnose"]).lower(),
         "boundary_options": boundary_options,
         "laplacian_boundary_options": (
@@ -731,6 +739,9 @@ def analyse_run(directory, config):
     if not completed_run(directory, config):
         raise AuditError(f"Refusing failed run {directory}")
     run = open_run(directory)
+    from energy_analysis.sources import components
+
+    diffusion = any(kind == "classical_diffusion" for _, kind in components(run))
     save_json(directory / "resolved-options.json", run.data.options.as_dict())
     snapshots, convergence = validate_times(run, config)
     first = replace(run, data=run.data.isel(t=[0]).compute())
@@ -765,11 +776,20 @@ def analyse_run(directory, config):
             if not np.isfinite(power):
                 raise AuditError("Nonfinite reconstructed boundary power")
             powers.append(power)
-            if config["diagnose"]:
+            if config["diagnose"] and not diffusion:
                 fluxes = reconstruct_fluxes(snapshot, sources=sources).compute()
                 diagnostics.append(compare_flux_diagnostics(snapshot, fluxes))
             else:
-                diagnostics.append({})
+                diagnostics.append(
+                    {
+                        "diffusion_sources": {
+                            "available": False,
+                            "reason": "Interior diffusion sources are not reconstructed; wall power remains covered",
+                        }
+                    }
+                    if config["diagnose"]
+                    else {}
+                )
             defects.append(None)
             coverage = "Complete native total-ion plus electron thermal balance; reconstructed radial faces; zero prescribed sources"
         else:
@@ -860,6 +880,11 @@ def analyse_run(directory, config):
         "initial_native_J": float(native[0]),
         "final_native_J": float(native[-1]),
         "final_drift_J": float(drift[-1]),
+        "initial_ion_thermal_J": float(inventory.ion_thermal.isel(t=0)),
+        "final_ion_thermal_J": float(inventory.ion_thermal.isel(t=-1)),
+        "ion_thermal_gain_J": float(
+            inventory.ion_thermal.isel(t=-1) - inventory.ion_thermal.isel(t=0)
+        ),
         "max_relative_drift": float(abs(drift).max() / abs(native[0])),
         "common_final_drift_J": float(common_drift[-1]),
         "max_native_common_difference_J": float(abs(native - common).max()),
@@ -930,6 +955,7 @@ def write_tables(study, energies, convergence, config, *, latex=False):
                 "boundary",
                 "formulation",
                 "grid",
+                "ion_thermal_gain_J",
                 "final_drift_J",
                 "max_relative_drift",
                 "final_corrected_residual_J",
@@ -975,6 +1001,7 @@ def write_tables(study, energies, convergence, config, *, latex=False):
                 "max_relative_drift": r"$\max|\Delta E|/E_0$",
                 "final_corrected_residual_J": "$R$ [J]",
                 "Q_J": r"$K_\perp$ [J]",
+                "ion_thermal_gain_J": r"$\Delta U_i$ [J]",
                 "observed_order": "$p$",
                 "L2": "$L_2$ [" + rows[0].get("field_units", "") + "]",
                 "Linf": r"$L_\infty$ [" + rows[0].get("field_units", "") + "]",
@@ -989,6 +1016,182 @@ def write_tables(study, energies, convergence, config, *, latex=False):
                 text += " & ".join(escape(row[k]) for k in fields) + " \\\\\n"
             text += "\\end{tabular}\n"
             (study / (name + "-table.tex")).write_text(text)
+
+
+def grid_differences(rows, refinement):
+    """Adjacent scalar differences, with orders only for equally refined triples."""
+    if len(rows) == 1:
+        return [
+            {
+                "Q_J": float(rows[0][1]["Q"]),
+                "adjacent_signed_J": None,
+                "finest_difference_J": None,
+                "observed_order": None,
+                "order_status": "one grid available",
+            }
+        ]
+    values = [res["Q"] for _, res in rows]
+    sequence = global_differences(values, refinement)
+    for i in range(len(rows) - 2):
+        sizes = np.asarray([key[2:] for key, _ in rows[i : i + 3]])
+        ratios = sizes[1:] / sizes[:-1]
+        if not np.allclose(ratios, ratios[0, 0], rtol=1e-12) or ratios[0, 0] < 2:
+            sequence[i]["observed_order"] = None
+            sequence[i]["order_status"] = "unequal refinement ratios"
+        else:
+            sequence[i] = global_differences(values[i : i + 3], ratios[0, 0])[0]
+            sequence[i]["finest_difference_J"] = float(abs(values[i] - values[-1]))
+    return sequence
+
+
+def fit_thermal_gain(spacing, gain, *, energy_scale=0.0):
+    """Fit signed gains as U0 + A (h/h_ref)^p without assuming U0 is zero."""
+    from scipy.optimize import minimize_scalar
+
+    h, u = np.asarray(spacing, dtype=float), np.asarray(gain, dtype=float)
+    if (
+        h.ndim != 1
+        or u.shape != h.shape
+        or not np.isfinite(h).all()
+        or not np.isfinite(u).all()
+        or np.any(h <= 0)
+        or len(np.unique(h)) != len(h)
+    ):
+        raise AuditError(
+            "Thermal-gain fit requires distinct positive finite spacings and finite gains"
+        )
+    result = {
+        "model": "gain_J = limit_J + amplitude_J * (spacing_m / reference_spacing_m)**order",
+        "samples": len(h),
+    }
+    if len(h) < 3:
+        return {**result, "status": "at least three grids required"}
+    order = np.argsort(h)[::-1]
+    h, u = h[order], u[order]
+    floor = (
+        128
+        * np.finfo(float).eps
+        * max(float(abs(u).max()), abs(energy_scale), np.finfo(float).tiny)
+    )
+    differences = np.diff(u)
+    if np.ptp(u) <= floor or np.any(abs(differences) <= floor):
+        return {**result, "status": "roundoff dominated"}
+    if not (np.all(differences > 0) or np.all(differences < 0)):
+        return {**result, "status": "oscillatory gains"}
+    reference = float(h[0])
+    centre, scale = float(u.mean()), float(np.ptp(u))
+    scaled = (u - centre) / scale
+
+    def solve(p):
+        basis = np.column_stack((np.ones_like(h), (h / reference) ** p))
+        coefficients = np.linalg.lstsq(basis, scaled, rcond=None)[0]
+        residual = basis @ coefficients - scaled
+        return float(residual @ residual), coefficients
+
+    # Profile out the offset and amplitude so the positive-order search is
+    # independent of the magnitude and sign of the energy change.
+    bounds = (1e-4, 16.0)
+    optimum = minimize_scalar(
+        lambda p: solve(p)[0], bounds=bounds, method="bounded", options={"xatol": 1e-10}
+    )
+    p = float(optimum.x)
+    if not optimum.success or p < bounds[0] * 1.1 or p > bounds[1] - 1e-3:
+        return {
+            **result,
+            "status": "no finite positive-order power-law fit",
+            "order_search_bounds": list(bounds),
+        }
+    squared_error, coefficients = solve(p)
+    return {
+        **result,
+        "status": "fit",
+        "limit_J": float(centre + scale * coefficients[0]),
+        "amplitude_J": float(scale * coefficients[1]),
+        "reference_spacing_m": reference,
+        "order": p,
+        "residual_rms_J": float(scale * np.sqrt(squared_error / len(h))),
+        "R2": float(1 - squared_error / np.sum((scaled - scaled.mean()) ** 2)),
+        "order_search_bounds": list(bounds),
+    }
+
+
+def thermal_gain_figure(study, config, boundary, groups):
+    """Plot final-minus-initial ion thermal inventories against logarithmic h."""
+    import matplotlib.pyplot as plt
+
+    fig, axis = plt.subplots(figsize=(7, 4.5))
+    data, fit = [], {"status": "no total-ion-energy runs available"}
+    colours = {"pressure": "tab:blue", "total_energy": "tab:orange"}
+    labels = {"pressure": "Pressure evolution", "total_energy": "Total ion energy"}
+    for form, rows in groups.items():
+        if not rows:
+            continue
+        h, gain, scales = [], [], []
+        for key, res in rows:
+            inventory = res["inventory"].ion_thermal
+            initial, final = float(inventory.isel(t=0)), float(inventory.isel(t=-1))
+            spacing = res["lx"] / key[2]
+            h.append(spacing)
+            gain.append(final - initial)
+            scales.append(abs(initial))
+            data.append(
+                {
+                    "formulation": form,
+                    "nx": key[2],
+                    "nz": key[3],
+                    "spacing_x_m": spacing,
+                    "spacing_z_m": res["lz"] / key[3],
+                    "initial_ion_thermal_J": initial,
+                    "final_ion_thermal_J": final,
+                    "ion_thermal_gain_J": final - initial,
+                }
+            )
+        axis.semilogx(
+            np.asarray(h) * 1e3, gain, "o-", color=colours[form], label=labels[form]
+        )
+        if form == "total_energy":
+            fit = fit_thermal_gain(h, gain, energy_scale=max(scales))
+            if fit["status"] == "fit":
+                extrapolated = np.geomspace(min(h) / 128, max(h), 300)
+                prediction = (
+                    fit["limit_J"]
+                    + fit["amplitude_J"]
+                    * (extrapolated / fit["reference_spacing_m"]) ** fit["order"]
+                )
+                axis.plot(
+                    extrapolated * 1e3,
+                    prediction,
+                    "--",
+                    color=colours[form],
+                    label=rf"Ion-energy fit: $p={fit['order']:.3g}$",
+                )
+                axis.axhline(
+                    fit["limit_J"],
+                    color=colours[form],
+                    linestyle=":",
+                    label=rf"$h\to0$: $\Delta U_i={fit['limit_J']:.4g}$ J",
+                )
+    title = (
+        rf"{boundary} $\phi$; full duration $T={config['end_time']:g}/\omega_{{ci}}$"
+    )
+    if fit["status"] != "fit":
+        title += "\nIon-energy fit unavailable: " + fit["status"]
+    axis.set_xlabel(r"Physical mesh spacing $h=\Delta X$ [mm] (log scale)")
+    axis.set_ylabel(r"Ion thermal energy gain $U_i(T)-U_i(0)$ [J]")
+    axis.set_title(title, fontsize=10)
+    axis.legend(fontsize=8)
+    axis.grid(True, which="both", alpha=0.2)
+    fig.savefig(study / f"ion-thermal-gain-{boundary}.pdf")
+    plt.close(fig)
+    save_json(
+        study / f"ion-thermal-gain-{boundary}.json",
+        {
+            "end_time_normalised": config["end_time"],
+            "spacing_definition": "Lrad / physical nx; nz refines proportionally",
+            "data": data,
+            "ion_energy_fit": fit,
+        },
+    )
 
 
 def energy_figures(study, config, boundary, groups, *, energy_format="png"):
@@ -1126,32 +1329,51 @@ def figures(study, config, results, style=None, *, energy_format="png"):
             )
             for f in colours
         }
+        groups = {form: rows for form, rows in groups.items() if rows}
         finest = {f: rows[-1][1] for f, rows in groups.items()}
         internal_energy = config["field"] == "ion_pressure"
-        upper_arrays = finest["pressure"]["snapshots"]
-        if internal_energy:
-            # Pressure in Pa and energy density in J/m^3 have the same SI scale.
-            upper_arrays = [1.5 * a for a in upper_arrays]
-        state_rows = (
-            (
-                finest["pressure"],
-                upper_arrays,
-                "Internal energy" if internal_energy else "Pressure",
-                r"$3P_i/2$ [J m$^{-3}$]"
-                if internal_energy
-                else f"{config['field'].replace('_', ' ')} [{finest['pressure']['unit']}]",
-            ),
-            (
-                finest["total_energy"],
-                finest["total_energy"]["kinetic_snapshots"],
-                r"$K_\perp$",
-                r"$K_\perp$ [J m$^{-3}$]",
-            ),
+        state_rows = []
+        if "pressure" in finest:
+            upper_arrays = finest["pressure"]["snapshots"]
+            if internal_energy:
+                # Pressure and energy density share the SI scale.
+                upper_arrays = [1.5 * a for a in upper_arrays]
+            state_rows.append(
+                (
+                    finest["pressure"],
+                    upper_arrays,
+                    "Internal energy"
+                    if internal_energy
+                    else config["field"].replace("_", " "),
+                    r"$3P_i/2$ [J m$^{-3}$]"
+                    if internal_energy
+                    else f"{config['field'].replace('_', ' ')} [{finest['pressure']['unit']}]",
+                )
+            )
+        if "total_energy" in finest:
+            state_rows.append(
+                (
+                    finest["total_energy"],
+                    finest["total_energy"]["kinetic_snapshots"],
+                    r"$K_\perp$",
+                    r"$K_\perp$ [J m$^{-3}$]",
+                )
+            )
+        fig, ax = plt.subplots(
+            len(state_rows),
+            4,
+            figsize=(12, 2.5 * len(state_rows)),
+            sharex=True,
+            sharey=True,
+            squeeze=False,
         )
-        fig, ax = plt.subplots(2, 4, figsize=(12, 5), sharex=True, sharey=True)
         for row, (res, arrays, row_label, colour_label) in enumerate(state_rows):
             vmin, vmax = min(a.min() for a in arrays), max(a.max() for a in arrays)
-            signed = row == 0 and config["field"] == "vorticity"
+            signed = (
+                "pressure" in finest
+                and res is finest["pressure"]
+                and config["field"] == "vorticity"
+            )
             if signed:
                 vmax = max(abs(vmin), abs(vmax))
                 vmin = -vmax
@@ -1170,7 +1392,7 @@ def figures(study, config, results, style=None, *, energy_format="png"):
                     ax[row, col].set_title(
                         rf"$t = {config['snapshot_times'][col]:g}/\omega_{{ci}}$"
                     )
-                if row == 1:
+                if row == len(state_rows) - 1:
                     ax[row, col].set_xlabel("X [cm]")
             ax[row, 0].set_ylabel(f"{row_label}\nZ [cm]")
             fig.colorbar(im, ax=ax[row, :], label=colour_label)
@@ -1179,12 +1401,13 @@ def figures(study, config, results, style=None, *, energy_format="png"):
         plt.close(fig)
 
         energy_figures(study, config, boundary, groups, energy_format=energy_format)
+        thermal_gain_figure(study, config, boundary, groups)
 
         fig, axes = plt.subplots(1, 3, figsize=(12, 3.5))
         for form, rows in groups.items():
             h = np.asarray([res["lx"] / key[2] for key, res in rows])
             q = np.asarray([res["Q"] for key, res in rows])
-            seq = global_differences(q, config["refinement"])
+            seq = grid_differences(rows, config["refinement"])
             kw = {
                 "color": colours[form],
                 "marker": "o",
@@ -1226,7 +1449,8 @@ def figures(study, config, results, style=None, *, energy_format="png"):
                     )
                 axis.set_xlabel("Physical ΔX [mm]")
                 axis.set_ylabel(f"{name} [{rows[0][1]['unit']}]")
-        axes[0].legend(fontsize=8)
+        if axes[0].get_legend_handles_labels()[0]:
+            axes[0].legend(fontsize=8)
         fig.suptitle(
             f"{boundary} phi; {config['field'].replace('_', ' ')} at t={config['convergence_time']:g}\nEach formulation uses its own finest reference; all physical cells"
         )
@@ -1234,13 +1458,24 @@ def figures(study, config, results, style=None, *, energy_format="png"):
         plt.close(fig)
 
 
-def analyse(study, manifest, *, latex=False, style=None, energy_format="png"):
+def analyse(
+    study,
+    manifest,
+    *,
+    latex=False,
+    style=None,
+    energy_format="png",
+    allow_incomplete=False,
+):
     config = manifest["configuration"]
     results, energy_rows, conv_rows = {}, [], []
     for row in manifest["runs"]:
         directory = study / row["directory"]
         if digest(directory / "BOUT.inp") != row["input_sha256"]:
             raise AuditError(f"Input was modified: {directory}")
+        if allow_incomplete and not completed_run(directory, config):
+            print(f"Skipping incomplete {row['directory']}", flush=True)
+            continue
         print(f"Analysing {row['directory']}", flush=True)
         res = analyse_run(directory, config)
         results[(row["boundary"], row["formulation"], row["nx"], row["nz"])] = res
@@ -1255,6 +1490,8 @@ def analyse(study, manifest, *, latex=False, style=None, energy_format="png"):
                 **scalar,
             }
         )
+    if not results:
+        raise AuditError("No completed runs available for analysis")
     volumes = [res["report"]["volume_m3"] for res in results.values()]
     if not np.allclose(volumes, volumes[0], rtol=1e-10):
         raise AuditError("Represented physical volumes differ")
@@ -1264,7 +1501,7 @@ def analyse(study, manifest, *, latex=False, style=None, energy_format="png"):
             key=lambda item: item[0][2],
         )
         fine = rows[-1][1]
-        seq = global_differences([res["Q"] for _, res in rows], config["refinement"])
+        seq = grid_differences(rows, config["refinement"])
         for i, (key, res) in enumerate(rows):
             errors = {k: None for k in ("L2", "Linf", "relative_L2", "relative_Linf")}
             if i < len(rows) - 1:
@@ -1759,6 +1996,7 @@ def main(argv=None):
             latex=args.latex,
             style=args.style,
             energy_format=args.energy_format,
+            allow_incomplete=True,
         )
         print(f"Figures and tables: {study}")
         return 0

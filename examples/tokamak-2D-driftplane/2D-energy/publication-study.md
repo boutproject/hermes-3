@@ -49,6 +49,7 @@ the bounded, inviscid validation profile.
 | `--phi-boundary-timescale` | `1e-4` | Pressure-model wall relaxation time [s] |
 | `--phi-boundary-velocity` | `1000` | Total-energy wall relaxation velocity [m/s] |
 | `--viscosity` | `1` | Common physical kinematic viscosity [m²/s] |
+| `--custom-D` | `1.19` | Positive normalised constant particle and thermal-energy diffusivity, common to both formulations |
 | `--end-time` | `20000` | Duration in normalised time, `t*omega_ci` |
 | `--outputs` | `200` | Regular output intervals, plus the initial record; at least four |
 | `--snapshot-times` | `0, T/4, T/2, T` | Four normalised snapshot times, where `T` is the duration |
@@ -119,7 +120,12 @@ apply, and the original runner hash is retained in the manifest.
 Completed runs are reused; incomplete outputs are archived before a fresh attempt. Runtime limits and
 interrupts stop the local launch group and retain an explicit failure status.
 `--analyse-only` uses the retained configuration and rejects changed inputs,
-missing records and irregular output axes.
+missing records and irregular output axes in completed runs. It skips cases
+without completed outputs and analyses the available subset, including a
+single formulation or grid. Every retained input must still match its manifest
+hash. No completed runs is an error. Reanalysing an older study preserves its
+original physics; adding diffusion requires a new study because configuration
+and template hashes prevent resuming old inputs with changed physics.
 
 A nonzero process exit can occur after the final output, for example during
 MPI finalisation. The runner checks every rank's complete expected time axis
@@ -222,8 +228,8 @@ warning. It does not invent a successful exit code. Use the helper when
 collecting publication evidence.
 
 Import registers completion without running remaining simulations or doing
-analysis. Use `--resume` to complete the matrix, or `--analyse-only` when all
-cases have finished. Copied dumps alone are not treated as completed by a
+analysis. Use `--resume` to complete the matrix, or `--analyse-only` to analyse
+the completed subset. Copied dumps alone are not treated as completed by a
 resume; import them first.
 
 ## Physical setup and startup
@@ -231,8 +237,16 @@ resume; import them first.
 Both models evolve hydrogen density, impose quasineutral electrons, and evolve
 electron pressure. The pressure formulation also evolves ion pressure and uses
 full Reynolds stress and legacy polarisation advection. The total-energy model
-evolves `Eion` and recovers the common ion temperature. There is no parallel
-flow, conduction, source or hyperdiffusion. Both use reference atomic mass 1.
+evolves `Eion` and recovers the common ion temperature. Both include
+`classical_diffusion` in its positive `custom_D` mode, diffusing particle density
+and thermal energy with the same constant coefficient. For each species, the
+thermal-energy source is `1.5*D*laplacian(P)`. Physical diffusion faces are closed;
+Z is periodic. The coefficient stays fixed across grids. The normalisation is
+`D_SI = custom_D * rho_s0^2 * Omega_ci`; here `rho_s0^2 * Omega_ci = 14.2857 m²/s`,
+so the default `1.19` gives 17 m²/s. A positive override avoids requiring a
+collision-frequency component in this setup.
+There is no parallel flow, additional collisional conduction, prescribed source
+or hyperdiffusion. Both use reference atomic mass 1.
 The box is 5 cm × 5 cm, with R=1.5 m, B=0.35 T, Nnorm=2e18 m⁻³ and Tnorm=5 eV.
 The template supplies consistent SI metric pairs explicitly and uses
 `normalise_metric=true`; the legacy `recalculate_metric` path mixes B units
@@ -293,7 +307,12 @@ For production inventories, closed normal polarisation/ExB faces and periodic Z
 allow global outward power to be evaluated without an auxiliary solve. This
 shortcut has an explicit singleton-Y, zero-parallel-flow, closed-species-face
 contract; it does not replace locally nonzero transport divergences with zero.
-Diagnostic runs reconstruct the full operators to check the independent audit.
+Classical diffusion closes its physical faces and contributes no outward power.
+For diffusion runs, the full local RHS diagnostic reconstruction is unavailable
+because it does not yet include interior diffusion sources; `analysis.json`
+records this limitation when `--diagnose` is enabled. The global wall-power
+audit remains available. Older studies without diffusion retain the full
+operator cross-checks.
 Pressure runs retain raw native/common drift and the independently reconstructed
 viscous heating defect. Their corrected residual is **unavailable**: full legacy
 polarisation and time-dependent `Phi` boundary work are not covered. An absent
@@ -317,6 +336,8 @@ $$
 Two levels supply one difference; at least three are needed for an order.
 Four levels supply three differences and two possible order estimates.
 Orders are omitted when adjacent differences change sign or reach roundoff.
+Completed subsets with unequal refinement ratios also omit adjacent orders;
+equally spaced refinement triples use their actual ratio.
 Each formulation uses its own finest reference, which is a numerical approximation.
 Pressure/density use conservative volume-overlap restriction; periodic Z
 wrapping handles the shifted Fourier cell faces. Vorticity uses Fourier Z
@@ -359,6 +380,35 @@ Freeze the final settings after inspecting this evidence. Failure to
 self-converge or a remaining energy drift is a reported numerical result.
 A short smoke run does not validate temporal error for the full-duration study.
 
+The thermal-gain plot uses the full duration, independently of
+`--convergence-time`. Its signed observable is
+
+$$
+\Delta U_i(h)=U_i(T;h)-U_i(0;h),\qquad
+U_i=\sum_{\rm physical}\frac32 P_i\,\Delta V.
+$$
+
+Pressure and total-ion-energy gains are plotted together when available, in
+joules against `h=Delta X=Lrad/nx_physical` on a logarithmic axis; Z refines in
+the same proportion. The ordinate remains linear to retain negative gains.
+For at least three distinct ion-energy grids, the script fits
+
+$$
+\Delta U_i(h)=\Delta U_{i,0}+A(h/h_{\rm ref})^p,\qquad p>0,
+$$
+
+where `h_ref` is the coarsest available spacing. The fitted offset estimates the
+zero-spacing thermal gain; it is not assumed to vanish. The dashed curve extends
+below the smallest measured spacing and the dotted asymptote labels the limit,
+since zero itself cannot appear on a logarithmic axis. The legend gives the
+convergence order. The JSON records the offset, amplitude, order, reference
+spacing, RMS fit residual and R². Orders are searched over `[1e-4,16]`; boundary
+optima, oscillatory gains and roundoff-dominated sequences produce an explicit
+unavailable fit. Three points determine three parameters without testing the
+power-law model; more grids and the accuracy pilot are needed to assess the
+observed convergence regime. The two-grid smoke profile produces the PDF with
+an unavailable fit annotation.
+
 ## Products
 
 Each boundary policy produces state, energy-history and convergence figures:
@@ -369,13 +419,17 @@ Each boundary policy produces state, energy-history and convergence figures:
   formulation's finest grid at four common times labelled in units of
   `1/omega_ci`. Each row has a separate colour scale shared across times,
   linear for both rows, with physical coordinates and rasterised image artists.
-  Guard cells are excluded.
+  Guard cells are excluded. Only available formulation rows are drawn during
+  partial reanalysis.
 - `energy-*.png` (default): six panels showing thermal and perpendicular kinetic changes,
   common and native total drift, available corrected residuals and native/common discrepancy.
   Panel labels call these "shared FV energy" and "model energy"; the finest
   grid uses solid traces and coarser grids use distinct dash patterns.
 - `global-convergence-*.pdf`: common `Kperp`, adjacent differences and valid
   observed orders at the specified time.
+- `ion-thermal-gain-<boundary>.pdf` and matching `.json`: signed final-minus-initial
+  ion thermal energy for available formulations, plus the ion-energy continuum
+  fit and its status. Always exported, independently of `--energy-format`.
 - `local-error-*.pdf`: absolute RMS and maximum error against each formulation's
   own finest reference.
 
@@ -401,7 +455,8 @@ including diagnostic comparisons and boundary/viscous audit information.
 Inventory time is in seconds and energy-history axes use milliseconds.
 CLI times use normalised `t*omega_ci`; state-image labels display the
 corresponding physical time as `t=N/omega_ci`.
-The energy table records initial/final native energy, signed drift, maximum
+The energy table records initial/final ion thermal energy and its signed gain,
+initial/final native energy, signed drift, maximum
 relative drift, common-estimator drift, native/common discrepancy and available
 integrated outward energy and corrected-residual data. `analysis.json`
 additionally reports drift relative to the peak-to-peak common perpendicular

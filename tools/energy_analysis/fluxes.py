@@ -119,7 +119,7 @@ def reconstruct_sources(run, sources):
     return result
 
 
-def slab_contract(run):
+def slab_contract(run, *, closed_wall_diffusion=False):
     ds, options, meta = run.data, run.data.options, run.data.metadata
     for name in ("J", "dx", "dy", "dz", "Bxy", "g11", "g33", "g_22"):
         if name not in ds:
@@ -188,7 +188,18 @@ def slab_contract(run):
     components = {
         c.strip() for c in str(options["hermes:components"]).strip(" ()\t").split(",")
     }
-    if components != {run.model, *(s.name for s in run.species)}:
+    allowed_components = {run.model, *(s.name for s in run.species)}
+    if closed_wall_diffusion and "classical_diffusion" in components:
+        # This component closes complete physical boundary faces, including
+        # cross-metric fluxes. Its interior sources need separate reconstruction.
+        kind = (
+            str(options["classical_diffusion:type"])
+            if "classical_diffusion:type" in options
+            else "classical_diffusion"
+        )
+        if kind == "classical_diffusion":
+            allowed_components.add("classical_diffusion")
+    if components != allowed_components:
         raise AuditError("Additional components leave source/flux coverage incomplete")
     return transport_topology(run)
 
@@ -538,8 +549,9 @@ def boundary_relaxation(run):
     Uses ordinary saved phi guards, never the mixed-unit restart Vort field.
     The supported rectangular slab has either a closed Y connection everywhere
     or open Y everywhere; core averaging uses only physical Y/Z samples.
+    Closed-wall classical diffusion leaves this boundary-state law unchanged.
     """
-    periodic_x, periodic_y = slab_contract(run)
+    periodic_x, periodic_y = slab_contract(run, closed_wall_diffusion=True)
     if periodic_x or radial_boundary_mode(run) != "no_slip":
         raise AuditError(
             "Boundary relaxation requires nonperiodic X and radial_boundary=no_slip"
@@ -1098,6 +1110,8 @@ def closed_slab_outward_power(run, *, densities=None):
 
     Uses the complete wall budget, including full Reynolds/chi currents for new
     outputs. Missing chi yields incomplete coverage even with Neumann AC.
+    Classical diffusion has closed physical faces and adds no wall power;
+    its interior sources are outside local RHS reconstruction coverage.
     No interior auxiliary solve is used. The optional densities argument remains
     accepted for existing callers; wall_budget recovers the same reservoirs.
     """
@@ -1105,7 +1119,7 @@ def closed_slab_outward_power(run, *, densities=None):
 
     if run.formulation != "total_energy":
         raise AuditError("Closed slab boundary audit requires total ion energy")
-    slab_contract(run)
+    slab_contract(run, closed_wall_diffusion=True)
     if run.data.sizes["y"] != 1 or run.myg:
         raise AuditError("Fast boundary audit requires singleton Y without guards")
     if any(bool((species_velocity(run, s) != 0).any().compute()) for s in run.species):
