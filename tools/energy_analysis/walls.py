@@ -12,12 +12,11 @@ from .fluxes import (
 )
 from .inventory import energy_densities
 from .sources import components, coverage, option_bool
-from .transfers import polarisation_energy_coefficient
+from .transfers import polarisation_energy_coefficient, polarisation_wall_weights
 from .transport import (
     flux_dataset,
     fv_xz,
     neighbor,
-    solenoidal_reynolds_faces,
     weighted_faces,
 )
 
@@ -47,7 +46,8 @@ def wall_budget(run):
         "vorticity_rate": zero.copy(),
         "viscous_vorticity_absolute": zero.copy(),
         "polarisation_absolute": zero.copy(),
-        "solenoidal_absolute": zero.copy(),
+        "reynolds_absolute": zero.copy(),
+        "viscous_stress_work_outward": zero.copy(),
     }
     ions = [s for s in run.species if s.name != "e" and abs(s.charge) > 1e-5]
     fields.update({"particles_" + s.name: zero.copy() for s in ions})
@@ -109,7 +109,11 @@ def wall_budget(run):
                     },
                     ds,
                 )
-                fields["viscous_outward"] = run.integrate(energy.divergence) * scale
+                # Stress work is diagnostic; the polarisation transport carries
+                # the viscous drift work in the total-energy equation.
+                fields["viscous_stress_work_outward"] = (
+                    run.integrate(energy.divergence) * scale
+                )
                 fields["vorticity_rate"] = (
                     run.integrate(current.divergence) * run.frequency
                 )
@@ -118,10 +122,9 @@ def wall_budget(run):
                 )
             c = run.scalar_option("average_atomic_mass") / ds.Bxy**2
             advected = polarisation_energy_coefficient(run).total
-            curl = solenoidal_reynolds_faces(c, ds.phi, Phi, ds)
+            wall_weights = polarisation_wall_weights(run)
             ix = xr.DataArray(np.arange(ds.sizes["x"]), dims="x", coords={"x": ds.x})
             wall_mask = (ix == run.mxg - 1) | (ix == ds.sizes["x"] - run.mxg - 1)
-            wall_curl = curl["x"].where(wall_mask, 0)
             reynolds = reconstruct_reynolds_faces(
                 run, ds.phi, densities.pressure_potential
             )
@@ -138,10 +141,15 @@ def wall_budget(run):
                     c, chi, ds, mxg=run.mxg, boundary_flux=True
                 ).flux_x.where(wall_mask, 0)
 
-                def wall_transport(weight, *, solenoidal=False):
-                    current = -wall_curl if solenoidal else -wall_reynolds - chi_wall
+                def wall_transport(weight, wall_weight, *, reynolds_only=False):
+                    current = (
+                        -wall_reynolds if reynolds_only else -wall_reynolds - chi_wall
+                    )
                     return flux_dataset(
-                        weighted_faces({"x": current}, weight, mxg=run.mxg), ds
+                        weighted_faces(
+                            {"x": current}, weight, mxg=run.mxg, wall_weight=wall_weight
+                        ),
+                        ds,
                     )
 
                 def exchange(transport):
@@ -158,16 +166,20 @@ def wall_budget(run):
                         "boundary",
                     ).isel(y=slice(run.myg, ds.sizes["y"] - run.myg))
 
-                pol = wall_transport(advected)
+                pol = wall_transport(advected, wall_weights.total)
                 fields["polarisation_wall_exchange"] = exchange(pol) * scale
                 fields["polarisation_outward"] = fields[
                     "polarisation_wall_exchange"
                 ].sum(("boundary", "y"))
                 fields["polarisation_absolute"] = absolute_wall_flux(run, pol) * scale
-                solenoidal = wall_transport(advected, solenoidal=True)
-                fields["solenoidal_wall_exchange"] = exchange(solenoidal) * scale
-                fields["solenoidal_absolute"] = (
-                    absolute_wall_flux(run, solenoidal) * scale
+                work = wall_transport(Phi, wall_weights.work)
+                fields["polarisation_work_wall_exchange"] = exchange(work) * scale
+                reynolds_energy = wall_transport(
+                    advected, wall_weights.total, reynolds_only=True
+                )
+                fields["reynolds_wall_exchange"] = exchange(reynolds_energy) * scale
+                fields["reynolds_absolute"] = (
+                    absolute_wall_flux(run, reynolds_energy) * scale
                 )
                 rho = sum(s.mass * ds["N" + s.name] for s in ions).clip(
                     min=run.scalar_option("average_atomic_mass")
@@ -179,7 +191,9 @@ def wall_budget(run):
                     weight = (
                         species.mass * ds["N" + species.name] / (species.charge * rho)
                     )
-                    particle = wall_transport(weight)
+                    particle = wall_transport(
+                        weight, wall_weights["particle_" + species.name]
+                    )
                     fields["particles_wall_exchange_" + species.name] = (
                         exchange(particle) * pscale
                     )
@@ -190,7 +204,8 @@ def wall_budget(run):
                         absolute_wall_flux(run, particle) * pscale
                     )
                     momentum = wall_transport(
-                        weight * species.mass * species_velocity(run, species)
+                        weight * species.mass * species_velocity(run, species),
+                        wall_weights["momentum_" + species.name],
                     )
                     fields["momentum_wall_exchange_" + species.name] = (
                         exchange(momentum) * mscale

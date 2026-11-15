@@ -2,13 +2,14 @@
 
 Two-ion expression sources evolve density, momentum, electron pressure,
 vorticity and total ion energy through t=0.1. Default runs baseline/curvature
-at 8/16 X/Z cells; long runs all four variants at 8/16/32 on two MPI ranks.
+at 8/16 X/Z cells; long runs all four cases at 8/16/32 on two MPI ranks.
 Y resolution is twice X/Z. Baseline/curvature have nonzero potential and
 varying composition; skew/viscosity have zero potential and high psi harmonics.
-`PROFILES` and `--variants` select coverage. Viscous stress is excluded from
-chi and polarisation transport. The viscosity variant retains vorticity
-diffusion, viscous energy flux and electron heating, with zero analytic chi
-and polarisation transport. Its continuum sources use this closure. Order
+`PROFILES` and `--variants` select coverage. The chi solve excludes the viscous
+rate, and polarisation energy transport carries the viscous drift work. The
+zero-potential viscous case retains vorticity diffusion and electron heating;
+its analytic chi and polarisation current vanish. No separate viscous energy
+flux is subtracted. Its continuum sources use this closure. Order
 gates are 1.7 for 8-to-16 refinement and 1.8 for 16-to-32;
 recovery/diagnostics use `1e-10`.
 
@@ -34,15 +35,19 @@ python tests/integrated/ion-energy-mms/mms.py --all --check --check-files
 
 The standalone diagnostic needs SymPy, not Hermes. `--y`/`--time` select the
 analytic X-Z plane; `--run PATH` checks C++ Reynolds diagnostics. It reports
-16/32/64 term errors and maxima for the MC-omega/MC-Lambda reconstruction.
-Zero-phi variants have zero analytic Reynolds terms and undefined orders.
+16/32/64 errors and maxima for full-vorticity MC advection and the central
+Reynolds remainder. Zero-phi cases have zero analytic Reynolds terms and
+undefined orders.
 Runner results save errors, effective limits and per-variant times; all
 failing gates stay enabled.
 
 ## Convergence checks
 
-The production Reynolds current uses MC reconstruction for both vorticity
-and Lambda, with full wall currents and Neumann transport weights. `DivEExB`
+The production Reynolds current is `ω vE + R`: MC reconstruction for full
+vorticity and a central metric remainder, retaining physical wall currents.
+Polarisation work uses `φ + ψ`; wall transport uses the product of the mean
+particle partition and separate means of face temperature and velocity.
+The kinetic weight squares the mean velocity. `DivEExB`
 advects total `Eion`. The standalone diagnostic reconstructs its perpendicular
 contribution and reports the face-work diagnostic; these are separate from the
 final-time MMS order gates.
@@ -54,6 +59,7 @@ records its measured errors, orders and failing checks in `result.json`.
 
 The enabled Python `test_reynolds_wall_curvature_converges` regression checks
 boundary, outer-three-cell, all-cell and interior errors independently of these
-MMS runs. Its Reynolds boundary error does not converge with the current odd-Q
-and linear-Lambda wall guards. These MMS profiles do not establish radial wall
-accuracy.
+MMS runs. Its Reynolds boundary error remains non-convergent with the current
+potential wall conditions and central remainder. The nonzero wall curvature
+state and its failing accuracy gate remain enabled. These MMS profiles do not
+establish radial wall accuracy.

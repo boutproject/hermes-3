@@ -471,8 +471,30 @@ if(HERMES_TESTS)
                      "${CMAKE_CURRENT_SOURCE_DIR}/tests/python")
     set_tests_properties(
       energy-analysis-python
-      PROPERTIES LABELS "unit;energy" TIMEOUT 120 WORKING_DIRECTORY
-                 "${CMAKE_CURRENT_SOURCE_DIR}")
+      PROPERTIES LABELS
+                 "unit;energy"
+                 TIMEOUT
+                 120
+                 WORKING_DIRECTORY
+                 "${CMAKE_CURRENT_SOURCE_DIR}"
+                 ENVIRONMENT
+                 "HERMES_EXECUTABLE=$<TARGET_FILE:hermes-3>")
+    add_test(
+      NAME ion-energy-wall-amplitudes
+      COMMAND
+        "${HERMES_ENERGY_PYTHON}" -m pytest -q --run-slow
+        "${CMAKE_CURRENT_SOURCE_DIR}/tests/python/test_ion_energy_native.py" -k
+        drift_plane)
+    set_tests_properties(
+      ion-energy-wall-amplitudes
+      PROPERTIES LABELS
+                 "integration;energy;slow"
+                 TIMEOUT
+                 1800
+                 WORKING_DIRECTORY
+                 "${CMAKE_CURRENT_SOURCE_DIR}"
+                 ENVIRONMENT
+                 "HERMES_EXECUTABLE=$<TARGET_FILE:hermes-3>")
   elseif(BOUT_ENABLE_METRIC_3D)
     message(STATUS "Energy analysis tests require standard metrics")
   endif()

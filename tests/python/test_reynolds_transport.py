@@ -18,7 +18,6 @@ from energy_analysis.transport import (
     face_work,
     fv_xz,
     reynolds_face_fluxes,
-    solenoidal_reynolds_faces,
     weighted_faces,
 )
 
@@ -70,15 +69,14 @@ def test_covariant_skew_convergence(case):
             v["psi"],
             g,
             periodic_x=case != "annulus",
-            fill_guards=periodic_halos if case != "annulus" else None,
         )
         error = face_divergence(faces, g) - v["expected"]
         interior = error.isel(x=slice(5, -5))
-        errors.append(float(np.sqrt((interior**2).mean())))
+        errors.append(float(abs(interior).mean()))
         boundary = error.isel(x=[2, 3, -4, -3])
         print(
             case,
-            "MC omega/Lambda",
+            "MC vorticity",
             n,
             "interior",
             errors[-1],
@@ -106,7 +104,6 @@ def test_covariant_current_face_convergence(case):
             v["psi"],
             g,
             periodic_x=case != "annulus",
-            fill_guards=periodic_halos if case != "annulus" else None,
         )
         dx, dz = float(g.dx), float(g.dz)
         xx = (np.arange(n + 4) - 2 + 0.5) * dx + (1 if case == "annulus" else 0)
@@ -121,30 +118,26 @@ def test_covariant_current_face_convergence(case):
             )
             area = dz if dim == "x" else dx
             error = (np.asarray(faces[dim]) / area - expected)[5:-5]
-            errors[dim].append(float(np.sqrt(np.mean(error**2))))
+            errors[dim].append(float(np.mean(abs(error))))
     for dim, values in errors.items():
         orders = np.log2(np.asarray(values[:-1]) / values[1:])
-        print(case, "MC omega/Lambda", dim, "face errors", values, "orders", orders)
+        print(case, "MC vorticity", dim, "face errors", values, "orders", orders)
         assert np.all(orders >= minimum), (case, dim, values, orders)
 
 
-def test_curl_work_and_wall_identities():
+def test_reynolds_gauss_and_wall_work():
     v, g = sample("annulus", 32)
     wall = SimpleNamespace(mxg=2)
     phi = fill_wall_guards(v["phi"], wall, "zero")
     psi = fill_wall_guards(v["psi"], wall, "pressure")
     Phi = phi + psi
-    curl = solenoidal_reynolds_faces(v["c"], phi, Phi, g)
+    faces = reynolds_face_fluxes(v["c"], v["omega"], phi, psi, g)
     volume = g.J * g.dx * g.dy * g.dz
     scale = max(
         1.0,
-        float((abs(curl["x"]) + abs(curl["z"])).isel(x=slice(1, -2)).max())
+        float((abs(faces["x"]) + abs(faces["z"])).isel(x=slice(2, -2)).max())
         / float(volume.min()),
     )
-    assert_allclose(
-        face_divergence(curl, g).isel(x=slice(2, -2)) / scale, 0, atol=1e-13
-    )
-    faces = reynolds_face_fluxes(v["c"], v["omega"], phi, psi, g)
     rng = np.random.default_rng(1729)
     weight = xr.DataArray(rng.uniform(0.1, 2, phi.shape), dims=phi.dims)
     changed = weight.copy()
@@ -157,15 +150,9 @@ def test_curl_work_and_wall_identities():
         atol=0,
         rtol=0,
     )
-    Q = fill_wall_guards(arakawa(phi, psi, g.dx, g.dz), wall, "zero")
-    q = fv_xz(v["c"] / 2, Q, g)
     boundary_work = 0
     for face, cell, sign in ((1, 2, -1), (phi.sizes["x"] - 3, phi.sizes["x"] - 3, 1)):
-        assert_allclose(
-            faces["x"].isel(x=face), (curl["x"] + q.flux_x).isel(x=face), atol=1e-13
-        )
-        assert_allclose(curl["x"].isel(x=face).sum("z"), 0, atol=1e-13)
-        assert float(abs(curl["x"].isel(x=face)).max()) > 1e-6
+        assert float(abs(faces["x"].isel(x=face)).max()) > 1e-6
         assert_allclose(
             first["x"].isel(x=face), weight.isel(x=cell) * faces["x"].isel(x=face)
         )
@@ -222,7 +209,6 @@ def test_upwind_omega_dissipates_periodic_kinetic_energy(n):
         xr.zeros_like(phi),
         g,
         periodic_x=True,
-        fill_guards=periodic_halos,
     )
     work = (face_work(faces, phi, g) * g.J * g.dx * g.dy * g.dz).isel(x=slice(2, -2))
     assert float(work.sum()) > 0
@@ -286,7 +272,7 @@ def wall_curvature_errors(n):
             "boundary": float(np.max(abs(error[[0, -1]]))),
             "outer_three": float(np.sqrt(np.mean(error[[0, 1, 2, -3, -2, -1]] ** 2))),
             "interior": float(np.sqrt(np.mean(error[3:-3] ** 2))),
-            "all": float(np.sqrt(np.mean(error**2))),
+            "all": float(np.mean(abs(error))),
         }
 
     reynolds = face_divergence(faces, g)

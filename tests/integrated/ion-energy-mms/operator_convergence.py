@@ -28,13 +28,10 @@ from energy_analysis.fluxes import (
 from energy_analysis.inventory import energy_densities
 from energy_analysis.operators import perpendicular_operator
 from energy_analysis.transport import (
-    arakawa,
     face_divergence,
     face_work,
     fv_xz,
     reynolds_face_fluxes,
-    reynolds_lambda,
-    solenoidal_reynolds_faces,
     weighted_faces,
     xppm_faces,
 )
@@ -44,18 +41,13 @@ def expressions(variant):
     fields = exact.model(variant)[0]
     phi, psi = fields["phi"], fields["psi"]
     Phi, c, H = phi + psi, s.Integer(2), exact.metric(variant)
-    D = H.det()
-    lam = c * D * exact.div(H * exact.grad(phi) / D) / 2
-    Q = exact.advection(psi, phi)
     omega = fields["Vort"]
-    split = {
-        "omega_vE": omega * exact.drift(phi) / 2,
-        "Q": c * H * exact.grad(Q) / 2,
-        "Lambda_U": lam * exact.drift(Phi),
-    }
-    stream = -c * exact.grad(phi).dot(H * exact.grad(Phi)) / 2
-    curl = exact.drift(stream)
-    Gamma = sum(split.values(), s.zeros(2, 1)) + curl
+    gradient = H * exact.grad(Phi)
+    Gamma = c * s.Matrix(
+        [exact.grad(gradient[i]).dot(exact.drift(phi)) for i in range(2)]
+    )
+    parts = {"omega_vE": omega * exact.drift(phi)}
+    parts["R"] = Gamma - parts["omega_vE"]
     rho = 2 * fields["Ni"] + 3 * fields["Nj"]
     ki = fields["NVi"] ** 2 / (4 * fields["Ni"])
     kj = fields["NVj"] ** 2 / (6 * fields["Nj"])
@@ -64,12 +56,12 @@ def expressions(variant):
         "Nj": s.Rational(3, 2) * fields["Nj"] / rho,
         "NVi": 2 * fields["NVi"] / rho,
         "NVj": s.Rational(3, 2) * fields["NVj"] / rho,
-        "E_adv": phi
-        + 2 / rho * (s.Rational(5, 2) * fields["pi"] + ki)
-        + s.Rational(3, 2) / rho * (s.Rational(5, 2) * fields["pj"] + kj),
+        "E_adv": Phi
+        + 2 / rho * (s.Rational(3, 2) * fields["pi"] + ki)
+        + s.Rational(3, 2) / rho * (s.Rational(3, 2) * fields["pj"] + kj),
     }
     kinetic = c * exact.grad(Phi).dot(H * exact.grad(Phi)) / 2
-    continuum = {"Lambda": lam, **{k: exact.div(v) for k, v in split.items()}}
+    continuum = {k: exact.div(v) for k, v in parts.items()}
     continuum.update(
         DivJReynolds=-exact.div(Gamma),
         DivEExB_perpendicular=exact.div(kinetic * exact.drift(phi)),
@@ -77,7 +69,6 @@ def expressions(variant):
     )
     for name, weight in weights.items():
         continuum["transport_" + name] = -exact.div(weight * Gamma)
-        continuum["S_grad_" + name] = curl.dot(exact.grad(weight))
     return fields, weights, continuum
 
 
@@ -90,29 +81,17 @@ def sample(expression, x, z, y, time):
     )
 
 
-def discrete(fields, weights, geometry):
+def discrete(fields, weights, wall_weights, geometry):
     wall = SimpleNamespace(mxg=2)
     phi = fill_wall_guards(fields["phi"], wall, "zero")
     psi = fill_wall_guards(fields["psi"], wall, "pressure")
     omega = fill_wall_guards(fields["Vort"], wall, "neumann")
     c, Phi = 2.0, phi + psi
-    lam = reynolds_lambda(c, phi, geometry)
-    guarded_lam = fill_wall_guards(lam, wall, "free_o2")
-    Q = fill_wall_guards(arakawa(phi, psi, geometry.dx, geometry.dz), wall, "zero")
-    parts = {
-        "omega_vE": xppm_faces(omega / 2, phi, geometry),
-        "Q": {
-            d: fv_xz(c / 2, Q, geometry, boundary_flux=True)["flux_" + d]
-            for d in ("x", "z")
-        },
-        "Lambda_U": xppm_faces(guarded_lam, Phi, geometry),
-    }
     faces = reynolds_face_fluxes(c, omega, phi, psi, geometry)
-    curl = solenoidal_reynolds_faces(c, phi, Phi, geometry)
+    advective = xppm_faces(omega, phi, geometry)
+    parts = {"omega_vE": advective, "R": {d: faces[d] - advective[d] for d in faces}}
     kinetic = perpendicular_operator(c, Phi, geometry).kperp
     result = {
-        "Lambda": guarded_lam,
-        "Q_value": Q,
         **{k: face_divergence(v, geometry) for k, v in parts.items()},
     }
     result.update(
@@ -123,9 +102,8 @@ def discrete(fields, weights, geometry):
         work=face_work(faces, Phi, geometry),
     )
     for name, weight in weights.items():
-        weighted = lambda flux, weight=weight: weighted_faces(flux, weight)
-        result["transport_" + name] = -face_divergence(weighted(faces), geometry)
-        result["S_grad_" + name] = face_divergence(weighted(curl), geometry)
+        transported = weighted_faces(faces, weight, wall_weight=wall_weights[name])
+        result["transport_" + name] = -face_divergence(transported, geometry)
     return result
 
 
@@ -174,19 +152,48 @@ def convergence(args):
             rho = 2 * guarded["Ni"] + 3 * guarded["Nj"]
             w["E_adv"] = (
                 fill_wall_guards(fields["phi"], wall, "zero")
+                + fill_wall_guards(fields["psi"], wall, "pressure")
                 + 2
                 / rho
                 * (
-                    2.5 * guarded["Ni"] * temperature
+                    1.5 * guarded["Ni"] * temperature
                     + guarded["NVi"] ** 2 / (4 * guarded["Ni"])
                 )
                 + 1.5
                 / rho
                 * (
-                    2.5 * guarded["Nj"] * temperature
+                    1.5 * guarded["Nj"] * temperature
                     + guarded["NVj"] ** 2 / (6 * guarded["Nj"])
                 )
             )
+            wall_weights = {name: xr.zeros_like(temperature) for name in w}
+            Phi = fill_wall_guards(fields["phi"], wall, "zero") + fill_wall_guards(
+                fields["psi"], wall, "pressure"
+            )
+            for face, cell in ((1, 2), (n + 1, n + 1)):
+
+                def midpoint(value, face=face):
+                    return (
+                        value.isel(x=face, drop=True)
+                        + value.isel(x=face + 1, drop=True)
+                    ) / 2
+
+                thermal = midpoint(temperature).mean("z")
+                energy = midpoint(Phi).mean("z")
+                for species, mass, charge in (("i", 2, 1), ("j", 3, 2)):
+                    density = guarded["N" + species]
+                    partition = (mass * density / rho).isel(x=cell, drop=True).mean(
+                        "z"
+                    ) / charge
+                    velocity = midpoint(
+                        guarded["NV" + species] / (mass * density)
+                    ).mean("z")
+                    wall_weights["N" + species][{"x": face}] = partition
+                    wall_weights["NV" + species][{"x": face}] = (
+                        mass * partition * velocity
+                    )
+                    energy += partition * (1.5 * thermal + 0.5 * mass * velocity**2)
+                wall_weights["E_adv"][{"x": face}] = energy
             H = exact.metric(variant)
             g = xr.Dataset(
                 {
@@ -202,7 +209,7 @@ def convergence(args):
             )
             expected = {name: evaluate(expr) for name, expr in continuum.items()}
             for reconstruction in ("mixed",):
-                actual = discrete(fields, w, g)
+                actual = discrete(fields, w, wall_weights, g)
                 terms = reference.setdefault(reconstruction, {})
                 for name in continuum:
                     terms.setdefault(name, {})[str(n)] = errors(

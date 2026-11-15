@@ -3,14 +3,14 @@
 Six nonlinear 8×8 budgets cover `fixed`, `free_slip` and `no_slip` with both
 Neumann and Dirichlet AC conditions through t=400. At every output, minimum
 ion density and local thermal energy (`Eion` minus both kinetic reservoirs)
-must exceed `1e-3` of their initial means. The vorticity Reynolds term is
-MC-upwinded and Lambda uses MC reconstruction with the velocity from
-`Phi=phi+psi`. The unpinned corner curl carries species,
-momentum and energy through physical walls with zero net charge. The signed
-budgets include this exchange, with Neumann face weights, and chi and viscous
-wall exchanges. All particle, energy and vorticity budgets use the open-wall
-solver-relative limits. Minimum checks exercise the solenoidal wall exchange,
-open chi exchange, viscous current and wall motion.
+must exceed `1e-3` of their initial means. The Reynolds current advects full vorticity with MC and uses a central
+metric remainder. Wall particle, momentum and energy weights are uniform in Z,
+using products of mean species mass partitions and mean wall-face quantities.
+Signed budgets retain Reynolds and chi exchange. Viscous stress work remains
+a diagnostic; the polarisation energy flux carries viscous drift work. All
+particle, energy and vorticity budgets use open-wall solver-relative limits.
+Minimum checks exercise Reynolds wall exchange, chi exchange, viscous current
+and wall motion.
 
 Dirichlet runs save diagnostics, including the common polarisation faces and
 the no-slip chi DC midpoint check. A stripped run retaining standard `ion_chi`
@@ -29,12 +29,9 @@ Each invocation records wall exchanges and check results in `result.json`.
 
 The complete Reynolds and solved chi wall currents are retained for both AC
 conditions. The AC choice controls chi potential guards; DC and cross-metric
-currents are included. Viscous stress is excluded from the chi solve and
-polarisation transport.
-Q retains odd wall guards and Lambda linear extrapolation. Vorticity balances
-include signed Reynolds wall exchange, so all modes use the open-vorticity
-sampling limit. The curl-only zero-charge and weighted exchange checks remain
-separate.
+currents are included. The chi solve excludes the viscous rate. Polarisation transport consequently
+carries the viscous drift work; it retains the physical current faces. Vorticity
+balances include signed Reynolds wall exchange in every wall mode.
 
 Perturbed histories save 1600 intervals of 0.25 through t=400, because the
 retained Reynolds wall current introduces a measurable trapezoidal cadence

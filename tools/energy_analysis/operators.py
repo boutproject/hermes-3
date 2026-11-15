@@ -93,10 +93,16 @@ def neumann_weights(weight, *, mxg=2, periodic_x=False):
     return w
 
 
-def weighted_faces(faces, weight, *, mxg=2, periodic_x=False):
-    """Face-average a Neumann wall weight on the common polarisation current."""
+def weighted_faces(faces, weight, *, mxg=2, periodic_x=False, wall_weight=None):
+    """Average interior weights and apply a prescribed uniform wall weight."""
     w = neumann_weights(weight, mxg=mxg, periodic_x=periodic_x)
-    return {d: f * (w + neighbor(w, d)) / 2 for d, f in faces.items()}
+    result = {d: f * (w + neighbor(w, d)) / 2 for d, f in faces.items()}
+    if not periodic_x and "x" in result and wall_weight is not None:
+        for face in (mxg - 1, w.sizes["x"] - mxg - 1):
+            result["x"][{"x": face}] = faces["x"].isel(x=face) * wall_weight.isel(
+                x=face
+            )
+    return result
 
 
 def perpendicular_faces(

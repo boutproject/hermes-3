@@ -60,10 +60,14 @@ Complete from ordinary state, geometry and resolved options:
   histories and viscous wall fluxes.
 - Electron curvature work for explicit constant Z curvature and FFT derivatives.
 
-`ion_chi` is saved even with `diagnose=false`. The unpinned Reynolds curl
-crosses both radial walls with zero net charge. `wall_budget` applies Neumann
-weights and reports signed exchange by wall and physical Y row for energy,
-particles and momentum, plus their totals and absolute face-flux sums. Full-current wall budgets require `ion_chi` with both AC conditions;
+`ion_chi` is saved even with `diagnose=false`. `wall_budget` reconstructs
+full-vorticity MC transport plus the central Reynolds remainder. It applies
+Z-uniform wall weights: adjacent-cell mean mass partitions, separate means of
+wall-face temperature and parallel velocity, and the square of mean velocity
+for parallel kinetic energy. It reports signed exchanges by wall and physical
+Y row, their totals and absolute face-flux sums. The net work is the wall
+midpoint of `phi+psi` times wall current. Full-current budgets require `ion_chi`
+with both AC conditions;
 snapshots without it report incomplete coverage for that contribution. Sheaths,
 unrecognised source components, unsaved mesh sources, time-dependent source
 prefactors, core-only source masks, and unimplemented geometry also report
@@ -82,10 +86,11 @@ Run Python checks with `python -m pytest tests/python`, or use CTest's
 [publication example](../../examples/tokamak-2D-driftplane/2D-energy/README.md)
 uses `matplotlib`.
 
-`reconstruct_fluxes` rebuilds the MC vorticity and Lambda, Q and unpinned
-curl contributions, then adds the chi faces to form the common polarisation
-current. `DivJpol`, species particle and momentum transport, and `DivEpol` use
-face averages of each weight, with the interior value on physical wall faces.
+`reconstruct_fluxes` rebuilds full-vorticity MC advection and the central
+metric remainder, then combines Reynolds and chi faces into the polarisation
+current. Particle, momentum and energy use arithmetic interior face averages
+and the uniform wall products described above. The energy coefficient is
+`phi+psi+sum_s[(A_s/Z_s)/rho*(1.5*P_s+Kparallel_s)]`.
 The optional `polarisation_flux_x/z` diagnostics include area integration and
 use the lower-cell face index; their comparisons include the lower X wall and
 exclude undefined outer guards. Saved chi is used directly; an auxiliary solve
@@ -104,29 +109,27 @@ grids with varying metrics without requiring complete RHS coverage.
 
 ## Component version and radial currents
 
-The output tag `evolve_vorticity_ion_energy_version=2` identifies the component's
-equation and discretisation contract. Untagged development snapshots use
-version 2; other versions are rejected. Version 2 uses MC-upwinded Lambda
-with the velocity from `Phi=phi+psi`.
-Analysis always retains full
-Reynolds/chi wall faces. Neumann AC constrains a chi potential derivative;
-its DC and cross-metric wall currents
-remain in transport. Vorticity budgets include the signed full Reynolds wall
-current; only the curl has zero Z-summed wall charge.
+The output tag `evolve_vorticity_ion_energy_version=4` identifies the equation
+and discretisation contract. Untagged snapshots use version 4; other versions
+are rejected. Reynolds and chi wall faces are retained for both AC conditions.
 
-Viscous stress has no associated particle flux, so chi reconstruction always
-excludes its current. Saved chi takes precedence over reconstruction.
-Viscous vorticity diffusion, the paired energy flux and electron heating remain
-active whenever viscosity is enabled. Reports record the component version.
-The odd-Q/linear-Lambda guard reconstruction remains in production.
+The auxiliary solve excludes the viscous rate, so polarisation transport
+carries ion viscous drift work. `DivEviscous` remains diagnostic stress work;
+it is excluded from the energy RHS and outward energy budget to avoid double
+counting. Electron heating remains an internal transfer. Saved chi takes
+precedence over reconstruction. The default is ten defect corrections.
 
-For unit single-ion density weight, the full-current pointwise identity is
-`-DivJpol = DivJdia - Rchi`, including wall cells.
-Saved-history
-budgets integrate the same weighted currents and remain sensitive to output
-cadence. Chi's DC wall-rate approximation still neglects the DC pressure-potential
-rate; this is separate from face reconstruction.
+Current continuity is `DivJpol+DivJdia=Rchi`, including wall cells. The residual
+controls the gauge dependence of local energy partition. Global budgets alone
+do not establish radial boundary truncation accuracy. Chi's DC wall-rate
+approximation still neglects the mean pressure-potential rate.
 
-The active boundary-convergence regression currently fails: the Reynolds
-boundary truncation error does not converge with the odd-Q/linear-Lambda
-guards. Passing integral wall budgets does not establish boundary accuracy.
+Use `PYTHONPATH=tools python -m energy_analysis.spectra RUN_DIR --output bands.json`
+for fixed-mode wall/interior RMS, radial profiles and e-folding widths. This
+streaming monitor supports singleton-Y, X-decomposed native version-4 dumps;
+supply physical domain lengths if they differ from 50 mm. Bands 16–31 and
+32–63 are fixed physical modes, independent of resolution. Wall amplitudes use
+first physical cell centres. Widths include their half-cell offset from the
+wall; crossings without wall dominance are flagged. A missing crossing has
+no width. Native pytest regressions run with `HERMES_EXECUTABLE=build/hermes-3`;
+add `--run-slow` for the drift-plane envelope test.

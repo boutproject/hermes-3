@@ -13,8 +13,8 @@
 
 #include <algorithm> // std::any_of
 
-struct ComponentTest : public FakeMeshFixture {
-  ComponentTest() : FakeMeshFixture() {
+struct ComponentTest : public FakeMeshFixture_tmpl<6, 5, 7, false, 2> {
+  ComponentTest() : FakeMeshFixture_tmpl<6, 5, 7, false, 2>() {
     static_cast<FakeMesh*>(bout::globals::mesh)
         ->setGridDataSource(new FakeGridDataSource{
             {{"Rxy", FieldFactory::get()->create2D("1 + x", Options::getRoot(),

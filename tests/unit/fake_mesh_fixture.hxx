@@ -45,11 +45,14 @@ public:
     bout::globals::mesh = &mesh_m;
     bout::globals::mesh->createDefaultRegions();
     mesh_m.setCoordinates(nullptr);
-    test_coords = std::make_shared<Coordinates>(
-        bout::globals::mesh, Field2D{1.0}, Field2D{1.0}, Field2D{1.0}, Field2D{1.0},
-        Field2D{1.0}, Field2D{1.0}, Field2D{1.0}, Field2D{1.0}, Field2D{0.0},
-        Field2D{0.0}, Field2D{0.0}, Field2D{1.0}, Field2D{1.0}, Field2D{1.0},
-        Field2D{0.0}, Field2D{0.0}, Field2D{0.0}, Field2D{0.0}, Field2D{0.0});
+    // The parallel boundary accessor needs the coordinate options as well as
+    // geometry. The field-only constructor leaves that options pointer unset.
+    mesh_m.setGridDataSource(new FakeGridDataSource());
+    coordinate_options["extrapolate_x"] = false;
+    coordinate_options["extrapolate_y"] = false;
+    coordinate_options["paralleltransform"]["type"] = "identity";
+    test_coords = std::make_shared<Coordinates>(bout::globals::mesh, &coordinate_options);
+    test_coords->setDz(1.0);
     mesh_m.setCoordinates(test_coords);
 
     // Set nonuniform corrections
@@ -143,6 +146,7 @@ public:
   static constexpr int nz = NZ;
 
 private:
+  Options coordinate_options;
   std::shared_ptr<Coordinates> test_coords{nullptr};
   std::shared_ptr<Coordinates> test_coords_staggered{nullptr};
 

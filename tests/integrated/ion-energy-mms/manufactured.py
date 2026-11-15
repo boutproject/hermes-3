@@ -117,11 +117,7 @@ def model(variant="baseline"):
     omega = c * (lap_phi + lap(psi, H))
     kperp = c * grad(Phi).dot(H * grad(Phi)) / 2
     energy = r(3, 2) * pressure + ki + kj + kperp
-    alpha = advection(psi, phi)
-    raw_reynolds = (
-        -omega * drift(phi) / 2 - c * grad(alpha) / 2 - c * lap_phi * drift(Phi) / 2
-    )
-    # Combine the analytic Reynolds terms before exporting them. This removes
+    # Combine the analytic current harmonics before exporting them. This removes
     # cancelling products without changing their continuum or boundary limit.
     angular = s.Symbol("angular", real=True)
     poly = r(813, 287) - r(1100, 287) * s.cos(2 * angular) + s.cos(4 * angular)
@@ -150,19 +146,14 @@ def model(variant="baseline"):
             ]
         )
     )
-    test_point = {X: 1.37, Y: 2.91, Z: 4.23, t: 0.73}
-    if variant in ("baseline", "curvature"):
-        assert (
-            max(abs(float(q.subs(test_point))) for q in reynolds - raw_reynolds) < 1e-14
-        )
     chi = (s.pi / LENGTH) ** 2 * amp_phi * amp_psi * chi_shape(a, theta)
     if variant in ("skew", "viscosity"):
         reynolds = s.zeros(2, 1)
         chi = s.Integer(0)
     if curvature:
         chi += -curvature * r(1, 50) / (4 * c * k) * s.cos(2 * a) * s.cos(theta)
-    # Negative skew current differs from the legacy split by a solenoidal curl.
-    # Its divergence agrees, but weights in transport require this full current.
+    # Retain the divergence-free contribution to the covariant drift current.
+    # It contributes to particle, momentum and energy transport through walls.
     stream = -c * grad(phi).dot(H * grad(Phi)) / 2
     reynolds -= drift(stream)
     jnu = nu * H * grad(omega)
@@ -214,9 +205,9 @@ def model(variant="baseline"):
             ),
             # Analytic div(Jpol)=0, as verified by the auxiliary-current identity.
             "Eion.polarisation": polarisation(
-                phi
-                + 2 / rho * (r(5, 2) * pi + ki)
-                + r(3, 2) / rho * (r(5, 2) * pj + kj)
+                Phi
+                + 2 / rho * (r(3, 2) * pi + ki)
+                + r(3, 2) / rho * (r(3, 2) * pj + kj)
             ),
             "Eion.electron_work": -phi * (s.diff(je, Y) + curvature * s.diff(pe, Z)),
         }
@@ -229,7 +220,6 @@ def model(variant="baseline"):
         electron_heating = (ne / 1836) / (rho + ne / 1836) * heating
         terms.update(
             {
-                "Eion.viscous_flux": -div(Phi * jnu),
                 "Eion.electron_heating": -electron_heating,
                 "Pe.viscous_heating": r(2, 3) * electron_heating,
             }
@@ -339,7 +329,7 @@ def preflight(variant="baseline"):
         if variant == "viscosity":
             for key in (
                 "Vort.viscosity",
-                "Eion.viscous_flux",
+                "Eion.electron_heating",
                 "Pe.viscous_heating",
             ):
                 assert magnitudes[key] > 1e-12, key

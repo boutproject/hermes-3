@@ -1693,7 +1693,7 @@ The time evolution is
    \frac{\partial E_i}{\partial t}
       &= -\nabla\cdot(\mathbf{Q}_{E\times B}
                      +\mathbf{Q}_{\mathrm{electric}}+\mathbf{Q}_\parallel
-                     +\mathbf{Q}_{\mathrm{pol}}+\mathbf{Q}_\nu)
+                     +\mathbf{Q}_{\mathrm{pol}})
          -\phi\nabla\cdot\mathbf{J}_e - H_{\nu,e} + S_i.
    \end{aligned}
 
@@ -1715,42 +1715,32 @@ Metric compatibility gives its kinetic-energy identity:
          +\frac{1}{2}|\nabla_\perp\Phi|^2\nabla\cdot(c\mathbf{v}_E), \\
       &= \nabla\cdot(K_\perp\mathbf{v}_E).
 
-For flute fields in Clebsch coordinates, :math:`\mathbf{B}=\nabla z\times\nabla x`,
-this current has the following form without Christoffel symbols:
+The implemented X--Z current is written as
 
 .. math::
 
-   \boldsymbol{\Gamma}
-      &= \frac{1}{2}\Omega\mathbf{v}_E
-         +\frac{c}{2}\nabla_\perp Q+\Lambda\mathbf{U}+\mathbf{S}, \\
-   Q &= \mathbf{v}_E\cdot\nabla\psi,\qquad
-   (v_E^x,v_E^z)=(\partial_z\phi,-\partial_x\phi),\qquad
-   (U^x,U^z)=(\partial_z\Phi,-\partial_x\Phi), \\
-   D &= g^{11}g^{33}-(g^{13})^2,\qquad
-   \Lambda=\frac{cDJ}{2}\nabla\cdot\left(\frac{\nabla_\perp\phi}{JD}\right), \\
-   (JS^x,JS^z)&=(\partial_z\Psi,-\partial_x\Psi), \\
-   \Psi &= -\frac{cJ}{2}\left[
-      g^{11}\partial_x\phi\partial_x\Phi
-      +g^{13}(\partial_x\phi\partial_z\Phi+\partial_z\phi\partial_x\Phi)
-      +g^{33}\partial_z\phi\partial_z\Phi\right].
+   \boldsymbol{\Gamma}=\Omega\mathbf{v}_E+\mathbf{R}.
 
-The Clebsch identity requires the metric determinant :math:`D`, which equals
-:math:`B^2` for a consistent metric. The implementation therefore computes
-:math:`D` from the metric in :math:`\Lambda`; the independently normalised
-``Bxy`` supplies :math:`c`. The corner curl :math:`\mathbf{S}` changes the
-face fluxes while its discrete divergence vanishes to roundoff. Face values
-of both :math:`\Omega/2` and :math:`\Lambda` use MC-limited donor reconstruction,
-with velocities from :math:`\phi` and :math:`\Phi`, respectively. Corners and
-faces are evaluated once. Polarisation weights
-multiply the common Reynolds plus chi current using arithmetic face averages,
-with zero-gradient weights at physical X walls. E×B energy advection uses
-XPPM on the total ion energy :math:`E_i`, including :math:`K_\perp`.
-The discrete curl identity requires ``dy`` to be uniform within each X--Z plane.
+The full vorticity uses MC-limited donor reconstruction with the face velocity
+from :math:`\phi`. The remainder :math:`\mathbf{R}` is central and uses the
+original potential samples and static metric coefficients. Tangential second
+derivatives are diagonal finite-volume divergences evaluated directly from
+:math:`\Phi`; their physical wall jumps are retained. No reconstructed auxiliary
+scalar or extrapolated derivative guard enters the remainder. The determinant
+:math:`D=g^{11}g^{33}-(g^{13})^2` comes from the metric, while the independently
+normalised ``Bxy`` supplies :math:`c`.
 
-This construction covers X--Z flow. With ``poloidal_flows = true``, the
-X--Y contributions of the two XPPM terms are added to
-the current divergence and weighted polarisation transport. The Reynolds
-work diagnostic below describes the X--Z construction.
+Each area-integrated face is evaluated once. Polarisation transport combines
+the Reynolds and chi faces before applying weights; interior weights use
+arithmetic averages. Normal wall advection vanishes when the potential wall
+midpoint is uniform in Z, while the central remainder retains its physical
+wall current. Periodic X retains normal flow across the seam. E×B energy
+advection uses XPPM on the total ion energy :math:`E_i`, including
+:math:`K_\perp`.
+
+With ``poloidal_flows = true``, the shared XPPM operator adds full-vorticity
+X--Y advection to the current divergence and weighted polarisation transport.
+The Reynolds work and face-current diagnostics describe the X--Z construction.
 
 The energy fluxes are
 
@@ -1765,8 +1755,8 @@ The energy fluxes are
       &= \mathbf{b}\sum_s\left(\frac{5}{2}p_s+K_{\parallel s}\right)V_{\parallel s}, \\
    \mathbf{Q}_{\mathrm{pol}} &= E_{\mathrm{adv}}\mathbf{J}_{\mathrm{pol}}, \\
    E_{\mathrm{adv}}
-      &= \phi+\sum_s\frac{A_s}{Z_s\rho}
-                     \left(\frac{5}{2}p_s+K_{\parallel s}\right),
+      &= \phi+\psi+\sum_s\frac{A_s}{Z_s\rho}
+                     \left(\frac{3}{2}p_s+K_{\parallel s}\right),
       & \rho &= \sum_s A_s n_s.
    \end{aligned}
 
@@ -1801,8 +1791,9 @@ from an approximate solution of :math:`\mathcal{L}(\chi)=S_\chi`, where
    S_\chi=-\nabla\cdot\boldsymbol{\Gamma}
           +\nabla\cdot(\mathbf{J}_{\mathrm{dia},i}+\mathbf{J}_{\mathrm{dia},e}).
 
-Viscous stress has no associated particle flux and is excluded from
-:math:`S_\chi`. Vorticity retains its viscous term when viscosity is enabled.
+The auxiliary solve excludes the viscous rate. Because vorticity retains that
+rate, the polarisation transport current contains the ion viscous drift current.
+Its work and enthalpy are carried by the common polarisation energy flux.
 The transport current is
 :math:`\mathbf{J}_{\mathrm{pol}}=-c\nabla_\perp\chi-\boldsymbol{\Gamma}`.
 Each ion species receives polarisation particle and momentum fluxes
@@ -1829,10 +1820,42 @@ faces of both currents. For each particle, momentum or energy weight :math:`w`, 
    \operatorname{div}F_w
       =\frac{F_{w,x+}-F_{w,x-}+F_{w,z+}-F_{w,z-}}{J\,\Delta x\,\Delta y\,\Delta z}.
 
-At physical X walls, the weight guard equals the adjacent interior weight,
-independently of the species or recovery guard conditions. Both contributions
-to the polarisation current therefore receive the same face weight; the chi
-coefficient is not weighted inside the perpendicular-gradient operator.
+At each physical radial wall and Y row, define
+
+.. math::
+
+   \alpha_s=\left\langle\frac{A_s n_s}{\rho}\right\rangle_z,\qquad
+   \overline{T}_s=\langle T_{s,\mathrm{face}}\rangle_z,\qquad
+   \overline{V}_s=\langle V_{\parallel s,\mathrm{face}}\rangle_z.
+
+The mass fraction uses the adjacent physical cell. Face temperature and
+parallel velocity are guard/cell midpoints after applying boundary conditions.
+The Z-uniform wall particle, momentum and energy weights are
+
+.. math::
+
+   w_{n,s}=\frac{\alpha_s}{Z_s},\qquad
+   w_{M,s}=\frac{A_s\alpha_s\overline{V}_s}{Z_s},\qquad
+   w_E=\Phi_{\mathrm{wall}}+
+       \sum_s\frac{\alpha_s}{Z_s}
+       \left(\frac{3}{2}\overline{T}_s+
+             \frac{1}{2}A_s\overline{V}_s^2\right).
+
+These are products of separate means. Energy and momentum transported through
+a wall equal the particle flux times the mean energy or momentum per particle;
+a mean of the products would include correlations with the particle partition.
+Uniform weights remove wall-current/weight correlations. Net wall work remains
+:math:`\Phi_{\mathrm{wall}}` times the net wall current, and particle, momentum
+and energy exchange is retained. Every rank owns complete periodic Z lines;
+radial walls reject Z decomposition. Interior weights are unchanged, and the
+chi coefficient is not weighted inside the perpendicular-gradient operator.
+
+The work part uses the pressure potential :math:`\psi` that defines
+:math:`\Phi`, with the fixed reference mass normalisation. Thermal and parallel
+kinetic weights retain the actual mixture density. This makes transported work
+:math:`\Phi\mathbf{J}_{\mathrm{pol}}` consistent with the perpendicular
+kinetic-energy flux and makes local thermal/kinetic recovery independent of a
+constant potential gauge, to the accuracy of the auxiliary-current residual.
 
 All species ``energy_source`` fields supply thermal energy. Ion particle
 and momentum sources also change parallel kinetic energy, giving
@@ -1857,16 +1880,16 @@ Kinematic viscosity is enabled by setting ``viscosity`` in
    \qquad \mathbf{Q}_\nu = \Phi\mathbf{J}_\nu,
    \qquad H_\nu = -\mathbf{J}_\nu\cdot\nabla_\perp\Phi.
 
-The viscous term is included in the vorticity RHS when viscosity is enabled.
-It dissipates perpendicular kinetic energy without a polarisation particle,
-parallel-momentum or enthalpy flux, so it is excluded from the auxiliary current
-solve. The viscous energy pairing is retained. Current, energy flux and heating
-use the same X--Z faces,
-including :math:`g^{13}`, and satisfy a discrete product rule. This heating
-differs from the cell-centred gradient product in ``vorticity`` at finite
-resolution. The radial viscosity coefficient is continued from the interior;
-the physical vorticity guards and normal face closure follow ``radial_boundary``
-as described below.
+The viscous current is included in the vorticity RHS. The auxiliary chi solve
+excludes this rate, so the polarisation transport carries the viscous drift
+work and enthalpy. Subtracting :math:`\nabla\cdot(\Phi\mathbf{J}_\nu)` as a
+separate ion-energy flux would count that work twice. ``DivEviscous`` therefore
+remains a diagnostic rather than an ion-energy RHS term. Current, diagnostic
+stress work and heating use the same X--Z faces, including :math:`g^{13}`, and
+satisfy a discrete product rule. The radial stress faces close for ``fixed``
+and ``no_slip`` and remain open for ``free_slip``; polarisation transport
+retains its own wall faces in each case. The radial viscosity coefficient
+continues from the interior.
 
 Loss of perpendicular kinetic energy heats the ions through the recovered
 total-energy partition; :math:`H_\nu` is not added again as an ion energy
@@ -2022,30 +2045,12 @@ fluxes share the same faces: closed in ``fixed`` and ``no_slip``, open in
 ``free_slip``. The viscosity coefficient retains its interior value at each
 radial face so that the free-slip condition permits diffusion. Normal E×B
 energy advection is closed in every mode. The complete X--Z Reynolds
-current retains its geometric wall faces, including Q gradients. Its
-solenoidal part remains permeable: the unpinned corner stream function gives
-:math:`F_x=\Delta y\,\Delta_z\Psi`, where :math:`\Delta_z\Psi` is the
-difference of adjacent corner values. Uniform :math:`\Delta y` in each X--Z
-plane gives :math:`\sum_z F_x=0` at each wall and Y row.
-It therefore carries zero net charge while exchanging species, momentum and
-energy. Every transported weight uses the adjacent interior value at a wall
-face (zero gradient), independently of species and recovery guard conditions.
-:math:`Q` retains zero wall midpoint guards and :math:`\Lambda` uses linear
-radial extrapolation for reconstruction. The corner curl leaves the discrete
-vorticity divergence unchanged to roundoff.
-Diamagnetic current and its electrical energy flux use the geometry-dependent
-``Div`` operator; this component does not explicitly close their radial faces.
-
-Both vorticity and :math:`\Lambda` are upwinded with the MC limiter, using
-the face velocities from :math:`\phi` and :math:`\Phi=\phi+\psi`, respectively.
-Vorticity upwinding dissipates :math:`K_\perp` in the uniform, periodic,
-pressure-free limit. Upwinding :math:`\Lambda` pairs its reconstruction error with
-:math:`\nabla_\perp^2\Phi=\nabla_\perp^2\phi+\nabla_\perp^2\psi`, whose pressure
-part can reverse the sign of the work. Lambda upwinding therefore does not
-guarantee perpendicular kinetic-energy dissipation in the coupled system.
-Periodic Reynolds faces retain
-normal flow across the X seam. The additional poloidal X-Y transport, when
-enabled, continues to use the shared XPPM operator.
+current retains the wall gradients in the central remainder. Particle,
+momentum and energy use the Z-uniform wall weights above. Diamagnetic current
+and its electrical energy flux use the geometry-dependent ``Div`` operator;
+this component does not explicitly close their radial faces. MC limits only
+full vorticity; the remainder is central. Periodic Reynolds faces retain
+normal flow across the X seam.
 
 The auxiliary solve and polarisation transport use the same full finite-volume
 chi faces, including wall currents. ``polarisation_ac_boundary`` selects the
@@ -2124,10 +2129,12 @@ Other options in ``[evolve_vorticity_ion_energy]`` are:
 - ``vort_atol``: Absolute tolerance for the normalised forward vorticity
   residual (default ``1e-10``); ``phi_rtol`` supplies its relative tolerance.
 - ``polarisation_corrections``: Nonnegative number of FV defect corrections
-  after the initial approximate auxiliary solve (default ``2``). Chi does not
+  after the initial approximate auxiliary solve (default ``10``). Chi does not
   use the recovery tolerances or raise an error for a nonzero residual.
   More corrections reduce the FV/spectral discrepancy when the iteration
-  contracts; the default leaves appreciable error in grid-scale Z modes.
+  contracts. The remaining residual controls current continuity and the local
+  thermal/kinetic partition; ten corrections do not guarantee roundoff accuracy
+  in grid-scale modes.
 - ``laplacian``: Subsection containing options for the approximate
   Laplacian solver.
 - ``polarisation_laplacian``: Independent auxiliary solver options, with
@@ -2148,11 +2155,22 @@ The ion-energy radial wall model is selected by ``radial_boundary``.
 guard fills and wall-state evolution; selecting ``no_slip`` still reads and
 validates ``phi_boundary_velocity``.
 
-Output metadata ``evolve_vorticity_ion_energy_version = 2`` identifies the
-component equations and discretisation, including MC-upwinded vorticity and
-Lambda, full Reynolds/chi wall faces, and exclusion of viscous stress from
-polarisation transport, independently of restart wall storage. Analysis uses
-the current model when the tag is absent and rejects unsupported versions.
+Output metadata ``evolve_vorticity_ion_energy_version = 4`` identifies
+full-vorticity MC transport plus the central Reynolds remainder, pressure-potential
+polarisation work, Z-uniform wall transport weights and viscous work carried
+by polarisation transport. Analysis assumes version 4 when the tag is absent
+and rejects unsupported versions; restart wall-storage versioning is separate.
+
+The generated-restart pytest regression in
+``tests/python/test_ion_energy_native.py`` checks potential shifts
+:math:`C=-1,0,+1` on an 8×8 radial-wall grid with viscosity off and on.
+It compares evolved-field RHS values, recovered ion temperature, perpendicular
+kinetic energy and polarisation currents. Its tolerance is a numerical floor
+plus :math:`1.1|C|\|R_\chi\|_\infty` for one RHS evaluation, with an independent
+upper bound on the residual. The generator writes smooth identical physical
+evolved cells directly; no preparation simulation or binary fixture is needed.
+The slow drift-plane regression checks absolute vorticity RMS in fixed poloidal
+mode bands 16–31 and 32–63. It does not use a wall/interior ratio.
 
 The default outputs are ``Eion``, ``Tion``, ``Vort``, ``phi`` and ``ion_chi``.
 Pressure/potential recovery starts from the phi and perpendicular kinetic
@@ -2212,7 +2230,13 @@ normalised FV residual over physical cells. This residual measures approximation
 accuracy independently of the global energy balance.
 When viscosity is specified, diagnostics also include ``kinematic_viscosity``,
 ``kinematic_viscous_heating``, ``electron_viscous_heating``, ``DivJviscous`` and
-``DivEviscous``. These additional outputs require ``diagnose = true``.
+``DivEviscous``. The latter is diagnostic stress work and is not subtracted
+from the ion-energy RHS. Wall diagnostics ``polarisation_wall_energy_weight``,
+``polarisation_wall_work_weight``, ``polarisation_wall_thermal_weight`` and
+``polarisation_wall_pressure_mismatch`` record the uniform energy, work and
+thermal-plus-parallel weights and the difference between transported pressure
+weight and the wall pressure potential. These additional outputs require
+``diagnose = true``.
 
 The implementation is in ``src/evolve_vorticity_ion_energy.cxx``.
 

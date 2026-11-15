@@ -152,12 +152,12 @@
     "minimum_density/h+/fixed-checkpoint": 0.9928201066786133,
     "minimum_thermal/no_slip-checkpoint": 0.8132496306614698,
     "minimum_density/h+/no_slip-checkpoint": 0.9290729621529759,
-    "solenoidal_energy/fixed-neumann": 0.08289463745976139,
-    "solenoidal_energy/fixed-dirichlet": 0.08280534017535912,
-    "solenoidal_energy/free_slip-neumann": 0.018838647065635403,
-    "solenoidal_energy/free_slip-dirichlet": 0.012670796851337927,
-    "solenoidal_energy/no_slip-neumann": 0.014155831009204317,
-    "solenoidal_energy/no_slip-dirichlet": 0.015952451355149576
+    "reynolds_energy/fixed-neumann": 0.08289463745976139,
+    "reynolds_energy/fixed-dirichlet": 0.08280534017535912,
+    "reynolds_energy/free_slip-neumann": 0.018838647065635403,
+    "reynolds_energy/free_slip-dirichlet": 0.012670796851337927,
+    "reynolds_energy/no_slip-neumann": 0.014155831009204317,
+    "reynolds_energy/no_slip-dirichlet": 0.015952451355149576
   },
   "diagnostics": 1e-10,
   "open_energy": {
@@ -337,7 +337,7 @@
       "neumann_sampled_energy_residual": 2.3974319744884022e-08
     }
   },
-  "solenoidal_energy": {
+  "reynolds_energy": {
     "fixed-neumann": 0.008289463745976139,
     "fixed-dirichlet": 0.008280534017535913,
     "free_slip-neumann": 0.0018838647065635404,

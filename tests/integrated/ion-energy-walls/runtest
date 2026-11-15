@@ -157,9 +157,9 @@ def audit(study, run, label, *, nonlinear=False):
             cumulative_trapezoid(rate, x=budget.t, initial=0)[-1]
         )
         study.check(
-            "solenoidal_energy/" + label,
-            cumulative(budget.solenoidal_absolute) / initial_energy,
-            limit=study.criteria["solenoidal_energy"][label],
+            "reynolds_energy/" + label,
+            cumulative(budget.reynolds_absolute) / initial_energy,
+            limit=study.criteria["reynolds_energy"][label],
             minimum=True,
         )
         if "dirichlet" in label:

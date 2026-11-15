@@ -473,12 +473,14 @@ def test_multispecies_polarisation_energy_coefficient(dataset):
     rho = 2 * 0.5 + 3 * 0.25
     kinetic = (2 * 0.1**2 / (2 * 2 * 0.5) + (3 / 2) * 0.05**2 / (2 * 3 * 0.25)) / rho
     assert_allclose(result.parallel_kinetic, kinetic)
-    assert_allclose(result.enthalpy, 2.5 * (2 * 0.5 + 3 / 2 * 0.25) / rho)
-    assert_allclose(result.total, result.enthalpy + result.parallel_kinetic)
+    assert_allclose(result.thermal, 1.5 * (2 * 0.5 + 3 / 2 * 0.25) / rho)
+    assert_allclose(
+        result.total, result.work + result.thermal + result.parallel_kinetic
+    )
     # Actual mass density, rather than the Boussinesq reference, controls weights.
     dataset["Nimpurity"] *= 1.5
     changed = polarisation_energy_coefficient(open_run(dataset))
-    assert float(changed.enthalpy.max()) != float(result.enthalpy.max())
+    assert float(changed.thermal.max()) != float(result.thermal.max())
 
 
 def test_cadence_refinement_distinguishes_quadrature_error():
@@ -1158,7 +1160,7 @@ def shared_current_case(dataset):
     return run
 
 
-@pytest.mark.parametrize("version", (None, 2))
+@pytest.mark.parametrize("version", (None, 4))
 def test_component_version(dataset, version):
     from energy_analysis.fluxes import component_version
 
@@ -1167,7 +1169,7 @@ def test_component_version(dataset, version):
             **dataset.metadata,
             "evolve_vorticity_ion_energy_version": version,
         }
-    assert component_version(open_run(dataset)) == 2
+    assert component_version(open_run(dataset)) == 4
 
 
 def test_full_neumann_wall_coverage_requires_chi(dataset):
@@ -1179,7 +1181,7 @@ def test_full_neumann_wall_coverage_requires_chi(dataset):
     run.data.options["evolve_vorticity_ion_energy:polarisation_ac_boundary"] = "neumann"
     run.data.attrs["metadata"] = {
         **run.data.metadata,
-        "evolve_vorticity_ion_energy_version": 2,
+        "evolve_vorticity_ion_energy_version": 4,
     }
     assert wall_budget(run).attrs["coverage"] == "complete"
     missing = wall_budget(replace(run, data=run.data.drop_vars("ion_chi")))
@@ -1187,7 +1189,7 @@ def test_full_neumann_wall_coverage_requires_chi(dataset):
     assert any("chi" in term for term in missing.attrs["missing_terms"])
 
 
-@pytest.mark.parametrize("version", (1, 99))
+@pytest.mark.parametrize("version", (1, 2, 3, 99))
 def test_unknown_component_version_is_rejected(dataset, version):
     from energy_analysis.fluxes import component_version
 
@@ -1210,7 +1212,7 @@ def test_full_wall_budget_with_parallel_compression(dataset, g13):
     run = shared_current_case(dataset)
     run.data.attrs["metadata"] = {
         **run.data.metadata,
-        "evolve_vorticity_ion_energy_version": 2,
+        "evolve_vorticity_ion_energy_version": 4,
     }
     run.data.options["e:p_div_v"] = "true"
     # Parallel compression prevents a complete RHS reconstruction, but does
@@ -1256,7 +1258,8 @@ def test_chi_fallback_excludes_viscous_current(dataset):
     viscous = fluxes.DivJviscous
     assert float(abs(run.interior(viscous)).max()) > 1e-8
     xr.testing.assert_allclose(
-        fluxes["ddt(Vort)"], viscous.transpose(*fluxes["ddt(Vort)"].dims)
+        run.interior(fluxes["ddt(Vort)"]),
+        run.interior(viscous).transpose(*fluxes["ddt(Vort)"].dims),
     )
     # Phi's nonviscous current is zero, so viscosity alone cannot drive chi
     # or polarisation transport, despite its finite vorticity diffusion.
@@ -1317,30 +1320,95 @@ def test_common_polarisation_faces_and_diagnostic_comparison(dataset):
     )
 
 
+@pytest.mark.parametrize("saved_momentum", (False, True))
+def test_wall_transport_uses_mean_energy_and_momentum_per_particle(
+    dataset, saved_momentum
+):
+    from energy_analysis.transfers import polarisation_wall_weights
+
+    phase = np.cos(2 * np.pi * dataset.z / dataset.sizes["z"])
+    dataset["Nd+"] = dataset["Nd+"] * (1 + 0.4 * phase)
+    dataset["Nimpurity"] = dataset["Nimpurity"] * (1 - 0.3 * phase)
+    dataset["Tion"] = dataset.Tion * (1.3 + 0.4 * phase + 0.02 * dataset.x)
+    velocities = {}
+    for name, mass, mean, modulation in (
+        ("d+", 2, 0.2, 0.3),
+        ("impurity", 3, 0.4, -0.2),
+    ):
+        velocity = xr.ones_like(dataset["N" + name]) * (
+            mean + modulation * phase + 0.01 * dataset.x
+        )
+        velocity.attrs["units_type"] = "hermes"
+        velocities[name] = velocity
+        if saved_momentum:
+            dataset["NV" + name] = mass * dataset["N" + name] * velocity
+            dataset["NV" + name].attrs["units_type"] = "hermes"
+        else:
+            del dataset["NV" + name]
+            dataset["V" + name] = velocity
+    run = open_run(dataset)
+    weights = polarisation_wall_weights(run)
+    rho = 2 * dataset["Nd+"] + 3 * dataset["Nimpurity"]
+    for face, cell in ((1, 2), (-3, -3)):
+
+        def midpoint(value, face=face):
+            return (
+                value.isel(x=face, drop=True) + value.isel(x=face + 1, drop=True)
+            ) / 2
+
+        temperature = midpoint(dataset.Tion).mean("z")
+        energy = 0 * temperature
+        for name, mass, charge in (("d+", 2, 1), ("impurity", 3, 2)):
+            partition = (mass * dataset["N" + name] / rho).isel(x=cell, drop=True).mean(
+                "z"
+            ) / charge
+            velocity = midpoint(velocities[name]).mean("z")
+            particle = weights["particle_" + name].isel(x=face, drop=True)
+            assert_allclose(particle, xr.ones_like(particle) * partition, atol=2e-15)
+            assert_allclose(
+                weights["momentum_" + name].isel(x=face, drop=True) / particle,
+                xr.ones_like(particle) * mass * velocity,
+                atol=2e-15,
+            )
+            energy += partition * (1.5 * temperature + 0.5 * mass * velocity**2)
+            # This state distinguishes the energy of the mean flow from the
+            # mean kinetic energy of the nonuniform wall-face flow.
+            assert (
+                float(
+                    (midpoint(velocities[name]) ** 2).mean("z").min()
+                    - (velocity**2).max()
+                )
+                > 0.01
+            )
+        thermal_kinetic = (weights.total - weights.work).isel(x=face, drop=True)
+        assert_allclose(
+            thermal_kinetic, xr.ones_like(thermal_kinetic) * energy, atol=2e-15
+        )
+
+
 def test_wall_exchange_for_density_momentum_and_energy_without_diagnostics(dataset):
     from energy_analysis import wall_budget
-    from energy_analysis.fluxes import species_velocity
-    from energy_analysis.transport import fv_xz, solenoidal_reynolds_faces
+    from energy_analysis.fluxes import reconstruct_reynolds_faces
+    from energy_analysis.transfers import polarisation_wall_weights
+    from energy_analysis.transport import fv_xz
 
     run = shared_current_case(dataset)
     ds = run.data
     budget = wall_budget(run)
     assert budget.attrs["coverage"] == "complete"
-    assert float(budget.solenoidal_absolute.max()) > 0
+    assert float(budget.reynolds_absolute.max()) > 0
     c = run.scalar_option("average_atomic_mass") / ds.Bxy**2
-    Phi = ds.phi + energy_densities(run).pressure_potential
-    curl = solenoidal_reynolds_faces(c, ds.phi, Phi, ds)
+    current = reconstruct_reynolds_faces(
+        run, ds.phi, energy_densities(run).pressure_potential
+    )
+    walls = polarisation_wall_weights(run)
     chi = fv_xz(c, ds.ion_chi, ds)
-    rho = sum(s.mass * ds["N" + s.name] for s in run.species if s.name != "e")
-    weights = {"polarisation": polarisation_energy_coefficient(run).total}
+    weights = {"polarisation": walls.total}
     for species in run.species:
         if species.name == "e":
             continue
-        w = species.mass * ds["N" + species.name] / (species.charge * rho)
-        weights["particles_" + species.name] = w
-        weights["momentum_" + species.name] = (
-            w * species.mass * species_velocity(run, species)
-        )
+        weights["particles_" + species.name] = walls["particle_" + species.name]
+        weights["momentum_" + species.name] = walls["momentum_" + species.name]
     for key, weight in weights.items():
         scale = (
             ds.metadata["Nnorm"] * run.length_scale**3 * run.frequency
@@ -1357,8 +1425,8 @@ def test_wall_exchange_for_density_momentum_and_energy_without_diagnostics(datas
         for side, face, cell, sign in (("inner", 1, 2, -1), ("outer", -3, -3, 1)):
             expected = (
                 sign
-                * weight.isel(x=cell, drop=True)
-                * (-curl["x"] - chi.flux_x).isel(x=face, drop=True)
+                * weight.isel(x=face, drop=True)
+                * (-current["x"] - chi.flux_x).isel(x=face, drop=True)
             ).sum("z") * scale
             xr.testing.assert_allclose(
                 budget[output].sel(boundary=side, drop=True) / scale,

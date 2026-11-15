@@ -4,7 +4,7 @@ import numpy as np
 import xarray as xr
 
 from .dataset import AuditError
-from .inventory import _kinetic
+from .inventory import _kinetic, energy_densities
 from .operators import spectral_ddz
 
 
@@ -171,20 +171,77 @@ def polarisation_energy_coefficient(run):
         "average_atomic_mass"
     )
     rho = rho.clip(min=floor)
-    enthalpy = sum(
-        s.mass / s.charge * 2.5 * run.data["N" + s.name] * run.data.Tion / rho
+    thermal = sum(
+        s.mass / s.charge * 1.5 * run.data["N" + s.name] * run.data.Tion / rho
         for s in ions
     )
     kinetic = sum(s.mass / s.charge * _kinetic(run, s) / rho for s in ions)
     result = xr.Dataset(
         {
-            "enthalpy": enthalpy,
+            "thermal": thermal,
             "parallel_kinetic": kinetic,
-            "total": run.data.phi + enthalpy + kinetic,
+            "work": run.data.phi + energy_densities(run).pressure_potential,
+            "total": run.data.phi
+            + energy_densities(run).pressure_potential
+            + thermal
+            + kinetic,
         }
     )
     result.attrs = {
         "units_type": "hermes",
         "provenance": "reconstructed multispecies energy coefficient",
     }
+    return result
+
+
+def polarisation_wall_weights(run):
+    """Products of mean particle partitions and mean wall-face quantities.
+
+    Fractions use the adjacent physical cell. Temperature and parallel
+    velocity use guard/cell midpoints after boundary conditions. Each wall
+    line is complete in Z; the kinetic weight squares the mean velocity.
+    """
+    from .fluxes import species_velocity
+
+    ds = run.data
+    ions = [s for s in run.species if s.name != "e" and abs(s.charge) > 1e-5]
+    rho = sum(s.mass * ds["N" + s.name] for s in ions).clip(
+        min=run.scalar_option("density_floor", 1e-7)
+        * run.scalar_option("average_atomic_mass")
+    )
+    Phi = ds.phi + energy_densities(run).pressure_potential
+    names = (
+        "work",
+        "thermal",
+        "parallel_kinetic",
+        "total",
+        *(key + s.name for s in ions for key in ("particle_", "momentum_")),
+    )
+    result = xr.Dataset({key: xr.zeros_like(Phi) for key in names})
+    for face, cell in (
+        (run.mxg - 1, run.mxg),
+        (ds.sizes["x"] - run.mxg - 1, ds.sizes["x"] - run.mxg - 1),
+    ):
+        midpoint = lambda f, face=face: (
+            (f.isel(x=face, drop=True) + f.isel(x=face + 1, drop=True)) / 2
+        )
+        work = midpoint(Phi).mean("z")
+        thermal, kinetic = 0 * work, 0 * work
+        for s in ions:
+            partition = (s.mass * ds["N" + s.name] / rho).isel(x=cell, drop=True).mean(
+                "z"
+            ) / s.charge
+            velocity = species_velocity(run, s)
+            vmean = midpoint(velocity).mean("z")
+            thermal += 1.5 * partition * midpoint(ds.Tion).mean("z")
+            kinetic += 0.5 * s.mass * partition * vmean**2
+            result["particle_" + s.name][{"x": face}] = partition
+            result["momentum_" + s.name][{"x": face}] = s.mass * partition * vmean
+        for key, value in (
+            ("work", work),
+            ("thermal", thermal),
+            ("parallel_kinetic", kinetic),
+            ("total", work + thermal + kinetic),
+        ):
+            result[key][{"x": face}] = value
     return result

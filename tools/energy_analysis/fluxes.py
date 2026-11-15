@@ -18,9 +18,9 @@ from .operators import calculate_kperp, spectral_ddz
 from .transfers import (
     electron_curvature_work,
     polarisation_energy_coefficient,
+    polarisation_wall_weights,
 )
 from .transport import (
-    arakawa,
     central_parallel,
     face_work,
     flux_dataset,
@@ -250,7 +250,7 @@ def radial_boundary_mode(run):
 
 
 def component_version(run):
-    """Validate the ion-energy equation/discretisation version, defaulting to 2.
+    """Validate the ion-energy equation/discretisation version, defaulting to 4.
 
     Unversioned development snapshots use the current model. Other formulations
     do not use this component's version. Unknown versions require a new analysis
@@ -258,8 +258,8 @@ def component_version(run):
     """
     if run.formulation != "total_energy":
         return None
-    version = run.data.metadata.get("evolve_vorticity_ion_energy_version", 2)
-    if version != 2:
+    version = run.data.metadata.get("evolve_vorticity_ion_energy_version", 4)
+    if version != 4:
         raise AuditError(f"Unsupported evolve_vorticity_ion_energy version: {version}")
     return int(version)
 
@@ -285,7 +285,6 @@ def reconstruct_reynolds_faces(run, phi, psi):
         run.data,
         mxg=run.mxg,
         periodic_x=periodic_x,
-        fill_guards=lambda f: fill_transport_guards(f, run, periodic_x, periodic_y),
     )
 
 
@@ -362,7 +361,7 @@ def _polarisation_factors(nx, nz, ax, az, periodic_x, spectral=False, ac="neuman
 
 def polarisation_corrections(run):
     """Read the nonnegative integer correction count through bd.options."""
-    count = run.scalar_option("polarisation_corrections", 2)
+    count = run.scalar_option("polarisation_corrections", 10)
     if not np.isfinite(count) or count < 0 or count != int(count):
         raise AuditError("polarisation_corrections must be a nonnegative integer")
     return int(count)
@@ -651,12 +650,8 @@ def reconstruct_fluxes(run, *, sources=None):
     Phi = phi + psi
     c = run.scalar_option("average_atomic_mass") / ds.Bxy**2
     pi = sum(ds["N" + s.name] * ds.Tion for s in run.species if s.name != "e")
-    bracket = fill_transport_guards(
-        arakawa(phi, psi, ds.dx, ds.dz), run, periodic_x, periodic_y
-    )
     if not periodic_x:
         pi = fill_wall_guards(pi, run, "pressure")
-        bracket = fill_wall_guards(bracket, run, "zero")
     families = {}
 
     def combine(*terms):
@@ -717,10 +712,16 @@ def reconstruct_fluxes(run, *, sources=None):
         d: -reynolds_faces[d] - chi_faces["flux_" + d] for d in ("x", "z")
     }
 
-    def pol(weight):
+    wall_weights = polarisation_wall_weights(run)
+
+    def pol(weight, wall_weight=None):
         return flux_dataset(
             weighted_faces(
-                polarisation_faces, weight, mxg=run.mxg, periodic_x=periodic_x
+                polarisation_faces,
+                weight,
+                mxg=run.mxg,
+                periodic_x=periodic_x,
+                wall_weight=wall_weight,
             ),
             ds,
         )
@@ -735,10 +736,12 @@ def reconstruct_fluxes(run, *, sources=None):
         (1, families["DivEExB"]), (-1, families["DivEExB_perpendicular"])
     )
     advected = polarisation_energy_coefficient(run)
-    families["DivEpol"] = pol(advected.total)
-    families["DivEpol_enthalpy"] = pol(advected.enthalpy)
-    families["DivEpol_parallel_kinetic"] = pol(advected.parallel_kinetic)
-    families["DivEpol_electric"] = pol(phi)
+    families["DivEpol"] = pol(advected.total, wall_weights.total)
+    families["DivEpol_thermal"] = pol(advected.thermal, wall_weights.thermal)
+    families["DivEpol_parallel_kinetic"] = pol(
+        advected.parallel_kinetic, wall_weights.parallel_kinetic
+    )
+    families["DivEpol_work"] = pol(advected.work, wall_weights.work)
     families["DivJpol"] = pol(xr.ones_like(phi))
     families["DivJReynolds"] = reynolds
     result = {
@@ -750,7 +753,6 @@ def reconstruct_fluxes(run, *, sources=None):
         "reynolds_work": face_work(reynolds_faces, Phi, ds),
         "reynolds_heating": face_work(reynolds_faces, Phi, ds)
         - families["DivEExB_perpendicular"].divergence,
-        "arakawa": bracket,
         **{"polarisation_flux_" + d: f for d, f in polarisation_faces.items()},
     }
     jion = xr.zeros_like(phi)
@@ -783,9 +785,12 @@ def reconstruct_fluxes(run, *, sources=None):
                     ),
                 )
             )
-            families["particle_pol_" + name] = pol(s.mass * n / (s.charge * rho))
+            families["particle_pol_" + name] = pol(
+                s.mass * n / (s.charge * rho), wall_weights["particle_" + name]
+            )
             families["momentum_pol_" + name] = pol(
-                s.mass * s.mass * n * v / (s.charge * rho)
+                s.mass * s.mass * n * v / (s.charge * rho),
+                wall_weights["momentum_" + name],
             )
         if source_fields is not None:
             density_rhs = (
@@ -858,7 +863,6 @@ def reconstruct_fluxes(run, *, sources=None):
                     "DivEpol",
                     "DivEparallel",
                     "DivEelectric",
-                    "DivEviscous",
                 )
             )
             - result["phi_Div_Je"]

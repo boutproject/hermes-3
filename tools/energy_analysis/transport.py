@@ -109,50 +109,6 @@ def xppm(field, stream, geometry, *, mxg=2, boundary_flux=False, weight=1):
     )
 
 
-def solenoidal_reynolds_faces(c, phi, Phi, geometry):
-    """Unpinned corner curl; each physical wall has zero net charge flux."""
-    xp, zp = lambda f: neighbor(f, "x"), lambda f: neighbor(f, "z")
-    avg = lambda f: (f + xp(f) + zp(f) + xp(zp(f))) / 4
-    gradient = lambda f: (
-        (xp(f) - f + xp(zp(f)) - zp(f)) / (2 * avg(geometry.dx)),
-        (zp(f) - f + xp(zp(f)) - xp(f)) / (2 * avg(geometry.dz)),
-    )
-    px, pz = gradient(phi)
-    hx, hz = gradient(Phi)
-    stream = (
-        -avg(c * geometry.J)
-        / 2
-        * (
-            avg(geometry.g11) * px * hx
-            + avg(geometry.g13) * (px * hz + pz * hx)
-            + avg(geometry.g33) * pz * hz
-        )
-    )
-    return {
-        "x": (stream - neighbor(stream, "z", -1)) * geometry.dy,
-        "z": -(stream - neighbor(stream, "x", -1)) * geometry.dy,
-    }
-
-
-def reynolds_lambda(c, phi, geometry, *, mxg=2, periodic_x=False):
-    """Metric rotation scalar, before communication and physical guard filling."""
-    D = geometry.g11 * geometry.g33 - geometry.g13**2
-    return (
-        c
-        * D
-        * geometry.J
-        / 2
-        * fv_xz(
-            1 / (geometry.J * D),
-            phi,
-            geometry,
-            mxg=mxg,
-            boundary_flux=True,
-            periodic_x=periodic_x,
-        ).divergence
-    )
-
-
 def reynolds_face_fluxes(
     c,
     vorticity,
@@ -162,32 +118,91 @@ def reynolds_face_fluxes(
     *,
     mxg=2,
     periodic_x=False,
-    fill_guards=None,
 ):
-    """MC omega and Lambda, geometric Q and unpinned curl on shared faces.
+    """Full-vorticity MC advection plus the central metric remainder R.
 
-    Physical Q guards have zero midpoint; Lambda guards extrapolate linearly.
-    Communication/Y guards are supplied by the orchestration layer.
+    Potential and metric guards must already be valid. Tangential diagonal
+    divergences use the original potential samples, including wall jumps.
+    No derived guards or artificial wall-current closure are imposed.
     """
+    xp, xm = lambda f: neighbor(f, "x"), lambda f: neighbor(f, "x", -1)
+    zp, zm = lambda f: neighbor(f, "z"), lambda f: neighbor(f, "z", -1)
+    avg = lambda f: (f + xp(f) + zp(f) + xp(zp(f))) / 4
+    derivative_x = lambda f: (xp(f) - xm(f)) / (2 * geometry.dx)
+    derivative_z = lambda f: (zp(f) - zm(f)) / (2 * geometry.dz)
     Phi = phi + psi
-    lam = reynolds_lambda(c, phi, geometry, mxg=mxg, periodic_x=periodic_x)
-    Q = arakawa(phi, psi, geometry.dx, geometry.dz)
-    if fill_guards is not None:
-        Q, lam = fill_guards(Q), fill_guards(lam)
-    if not periodic_x:
-        Q, lam = Q.copy(), lam.copy()
-        for cell, step in ((mxg, -1), (phi.sizes["x"] - mxg - 1, 1)):
-            for layer in range(1, mxg + 1):
-                Q[{"x": cell + step * layer}] = -Q.isel(x=cell)
-                lam[{"x": cell + step * layer}] = lam.isel(x=cell) + layer * (
-                    lam.isel(x=cell) - lam.isel(x=cell - step)
-                )
-    omega = xppm_faces(vorticity / 2, phi, geometry, mxg=mxg, periodic_x=True)
-    rotation = xppm_faces(lam, Phi, geometry, mxg=mxg, periodic_x=True)
-    q = perpendicular_faces(c / 2, Q, geometry, mxg=mxg)
-    split = {d: omega[d] + rotation[d] + q[d] for d in ("x", "z")}
-    curl = solenoidal_reynolds_faces(c, phi, Phi, geometry)
-    return {d: split[d] + curl[d] for d in ("x", "z")}
+    c = xr.ones_like(Phi) * c
+    A = c * geometry.J
+    g11, g13, g33 = geometry.g11, geometry.g13, geometry.g33
+    D = g11 * g33 - g13**2
+    Ax, Az, Dx, Dz = derivative_x(A), derivative_z(A), derivative_x(D), derivative_z(D)
+    a, b = derivative_x(g11), derivative_z(g11)
+    d, e = derivative_x(g13), derivative_z(g13)
+    f, g = derivative_x(g33), derivative_z(g33)
+    coefficients = (
+        -(A * b + Az * g11) / 2,
+        -A * a / 2 - A * e - Ax * g11 / 2 - Az * g13,
+        (
+            A * D * a * g33
+            + 2 * A * D * g13 * g
+            - A * Dx * g11 * g33
+            - A * Dz * g13 * g33
+            + Az * D * g13 * g33
+        )
+        / (2 * D * g33),
+        (A * D * g - A * Dx * g13 - A * Dz * g33 - Ax * D * g13) / (2 * D),
+        -(A * D * a - A * Dx * g11 - A * Dz * g13 - Az * D * g13) / (2 * D),
+        -(
+            A * D * g11 * g
+            + 2 * A * D * a * g13
+            - A * Dx * g11 * g13
+            - A * Dz * g11 * g33
+            + Ax * D * g11 * g13
+        )
+        / (2 * D * g11),
+        A * d + A * g / 2 + Ax * g13 + Az * g33 / 2,
+        (A * f + Ax * g33) / 2,
+    )
+    corner_phi, corner_Phi = avg(phi), avg(Phi)
+    hx_corner = (xp(Phi) - Phi + xp(zp(Phi)) - zp(Phi)) / (2 * avg(geometry.dx))
+    hz_corner = (zp(Phi) - Phi + xp(zp(Phi)) - xp(Phi)) / (2 * avg(geometry.dz))
+    # Diagonal fluxes exclude cross-metric terms by construction.
+    gx = xr.Dataset({**{k: geometry[k] for k in geometry}, "g13": xr.zeros_like(g13)})
+    diagonal = perpendicular_faces(c, Phi, gx, mxg=mxg)
+    volume = geometry.J * geometry.dx * geometry.dy * geometry.dz
+    Lx = (diagonal["x"] - xm(diagonal["x"])) / volume
+    Lz = (diagonal["z"] - zm(diagonal["z"])) / volume
+    fluxes = {}
+    for dim, shift, tangential, offset in (("x", xp, Lz, 0), ("z", zp, Lx, 4)):
+        face = lambda f, shift=shift: (f + shift(f)) / 2
+        dx, dz = face(geometry.dx) if dim == "x" else geometry.dx, face(geometry.dz)
+        J = face(geometry.J) if dim == "x" else geometry.J
+        if dim == "x":
+            velocity = J * (corner_phi - zm(corner_phi))
+            px, pz = (xp(phi) - phi) / dx, velocity / (J * dz)
+            hx, hz = (xp(Phi) - Phi) / dx, (corner_Phi - zm(corner_Phi)) / dz
+            mixed = (hx_corner - zm(hx_corner)) / dz
+            remainder = -J * face(c) * (face(g11) * px + face(g13) * pz) * mixed
+            remainder -= J * face(g13) / face(g33) * px * face(tangential)
+            area = dz
+        else:
+            velocity = J * (xm(corner_phi) - corner_phi)
+            px, pz = -velocity / (J * dx), (zp(phi) - phi) / dz
+            hx, hz = (corner_Phi - xm(corner_Phi)) / dx, (zp(Phi) - Phi) / dz
+            mixed = (hz_corner - xm(hz_corner)) / dx
+            remainder = J * face(c) * (face(g13) * px + face(g33) * pz) * mixed
+            remainder += J * face(g13) / face(g11) * pz * face(tangential)
+            area = dx
+        remainder += sum(
+            face(coefficients[offset + i]) * p
+            for i, p in enumerate((hx * px, hx * pz, hz * px, hz * pz))
+        )
+        left, right = mc_edges(vorticity, dim)
+        donor = xr.where(velocity > 0, right, shift(left))
+        fluxes[dim] = (
+            velocity * (donor - face(tangential)) + area * remainder
+        ) * geometry.dy
+    return fluxes
 
 
 def fv_xz(
