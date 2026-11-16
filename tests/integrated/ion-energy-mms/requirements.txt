@@ -1,3 +1,5 @@
 sympy
 numpy
 boutdata
+# Optional publication plotting (--plot)
+matplotlib

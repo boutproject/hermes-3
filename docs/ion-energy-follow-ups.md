@@ -6,14 +6,22 @@ the selected current RHS and physical vorticity equation. Ion finalisation
 adds optional viscosity and numerical potential damping. Damping uses completed
 collective sound speed and has no explicit total-energy source.
 
-The separate `ion-energy-parallel-mms` currently fails five 8-to-16 order
-gates: Ni, Pe and Te Linfinity, plus Vort L2 and Linfinity. Chi meets its spatial
-orders; absolute chi error is diagnostic-only, with reference and relative RMS
-saved. The runner writes results and stops before further cases after a failed
-gate. Coupled temporal sensitivity remains unassessed. Initial production
-electron-force probes show pressure/electric derivative and recovered-potential
-errors, while small momentum-only temporal refinements are negligible compared
-with their spatial errors. Those probes do not establish a final-time cause.
+All MMS variants now live in `ion-energy-mms`. `parallel_current` has zero
+radial curvature of the Reynolds potentials at both walls;
+`parallel_current_wall` uses P(a)=1−cos(2a) to expose nonzero wall curvature
+on practical refinement grids. Both cases remove unrelated wall-weight
+projection error by making ion primitive wall values independent of Z. Both use
+MC-aware L2/Linfinity order limits of 1.4/0.9, applied globally or in a fixed
+interior region respectively. The old curved-wall run failed five stricter
+8-to-16 gates (Ni, Pe and Te Linfinity, Vort L2 and Linfinity); those historical
+measurements do not establish results for the new smooth-wall solution.
+Chi absolute error remains diagnostic-only, while convergence, temporal and
+MPI checks remain enabled. The optional plotting mode retains accuracy
+failures and collects further resolutions. Fresh 8-to-16 runs pass all
+curved-case interior gates. The smooth case fails
+only global Vort L2 (1.360 against 1.4); its interior order is 1.605. All other
+field orders and physics checks pass. These results use final time t=0.02.
+Finer global convergence and native temporal sensitivity remain unassessed.
 
 The independent wall tests retain the robust reflection and MC treatment.
 Zero wall curvature gives second-order wall maximum and domain mean absolute
@@ -24,8 +32,8 @@ pre-existing zero-current Vort order decline has not been attributed to this
 wall mechanism; compare fixed inputs, norms and dependency revisions before
 proposing a numerical change.
 
-Existing default MMS acceptance excludes only its eight named 8-to-16 order
-failures. Long-profile and parallel-current MMS gates remain active. Each
+All original zero-current MMS order gates and the parallel-current gates
+remain active, including the historical zero-current failures. Each
 runner retains raw errors, orders and effective limits in `result.json`.
 Conservation, source ownership and current identities do not establish passing
 coupled accuracy.

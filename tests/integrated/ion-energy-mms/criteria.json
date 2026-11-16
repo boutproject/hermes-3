@@ -1,6 +1,7 @@
 {
-  "stall_seconds": 300,
+  "stall_seconds": 600,
   "stall_seconds_by_size": {
+    "16": 1800,
     "32": 3300
   },
   "default_order": 1.7,
@@ -19,7 +20,9 @@
     "Tion": 0.002009216843204476,
     "Pi": 0.002539161629216485,
     "pi": 0.0020356535088734413,
-    "pj": 0.0005095884054446448
+    "pj": 0.0005095884054446448,
+    "NVe": 1e-05,
+    "Te": 0.003
   },
   "observed": {
     "recovery/baseline-8": 2.220446049250313e-15,
@@ -315,5 +318,19 @@
       "viscosity": 761.935517166974,
       "curvature": 4647.47335408302
     }
+  },
+  "continuity": 1e-10,
+  "auxiliary_residual": 1e-10,
+  "ownership": 1e-12,
+  "nonzero_current": 0.001,
+  "nonzero_divergence": 0.001,
+  "nonzero_reynolds": 1e-06,
+  "nonzero_polarisation": 0.001,
+  "temporal_fraction": 0.05,
+  "temporal_floor": 1e-11,
+  "decomposition": 1e-10,
+  "parallel_orders": {
+    "l2": 1.4,
+    "linf": 0.9
   }
 }

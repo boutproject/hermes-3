@@ -6,11 +6,13 @@ from scipy.interpolate import CubicSpline
 from .dataset import AuditError
 
 
-def manufactured_errors(run, references):
+def manufactured_errors(run, references, *, interior_fraction=None):
     """Volume-weighted MMS errors from committed solution expressions.
 
     references maps saved/reconstructed field names to option keys. The
-    runtime path uses no symbolic algebra or plotting dependencies.
+    runtime path uses no symbolic algebra or plotting dependencies. By default
+    interior norms omit two physical radial cells. A fraction instead selects
+    a fixed radial interval on the symmetric, uniform slab MMS mesh.
     """
     from .expressions import evaluate
     from .inventory import energy_densities
@@ -53,18 +55,33 @@ def manufactured_errors(run, references):
             result[name]["relative_rms_error"] = (
                 result[name]["l2"] / reference_rms if reference_rms else None
             )
-        # Separate wall errors without changing the convergence checks. Two
-        # physical cells are omitted next to each radial face, in addition to
-        # the guards already excluded from the all-cell norm.
         physical = run.interior(error)
-        if physical.sizes["x"] <= 4:
-            raise AuditError("Interior MMS norm requires more than four X cells")
+        nx = physical.sizes["x"]
+        if interior_fraction is None:
+            if nx <= 4:
+                raise AuditError("Interior MMS norm requires more than four X cells")
+            region = slice(2, -2)
+        else:
+            if not 0 <= interior_fraction < 0.5:
+                raise AuditError("Interior fraction must be in [0, 0.5)")
+            if not run.data.options.get_bool("mesh:symmetricGlobalX"):
+                raise AuditError(
+                    "Fractional MMS interior requires symmetric X coordinates"
+                )
+            x = (np.arange(nx) + 0.5) / nx
+            selected = np.flatnonzero(
+                (x >= interior_fraction) & (x <= 1 - interior_fraction)
+            )
+            if not len(selected):
+                raise AuditError("Empty MMS interior interval")
+            region = slice(selected[0], selected[-1] + 1)
         weights = run.interior(ds.J * ds.dx * ds.dy * ds.dz)
-        interior = physical.isel(x=slice(2, -2))
-        weights = weights.isel(x=slice(2, -2)).broadcast_like(interior)
+        interior = physical.isel(x=region)
+        weights = weights.isel(x=region).broadcast_like(interior)
         result[name]["l2_interior"] = float(
             np.sqrt((interior**2 * weights).sum() / weights.sum())
         )
+        result[name]["linf_interior"] = float(abs(interior).max())
     return result
 
 

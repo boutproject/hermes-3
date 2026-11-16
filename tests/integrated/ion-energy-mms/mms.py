@@ -12,6 +12,7 @@ from boutdata.mms import exprToStr
 from manufactured import (
     COORDINATES,
     LENGTH,
+    PARALLEL_VARIANTS,
     RECOVERED,
     VARIANTS,
     evolved,
@@ -56,7 +57,7 @@ def generate(destination, variant="baseline"):
     expressions = [fields[name] for name in names]
     expressions += [sources[name] for name in names]
     expressions += [fields[name] for name in RECOVERED]
-    if variant == "parallel_current":
+    if variant in PARALLEL_VARIANTS:
         keys += [
             ("mms", key)
             for key in (
@@ -83,7 +84,7 @@ def generate(destination, variant="baseline"):
     reduced = [expression.xreplace(inline) for expression in reduced]
     options = BoutOptionsFile(str(HERE / "base.inp"))
     options.getSection("mms")["variant"] = variant
-    if variant == "parallel_current":
+    if variant in PARALLEL_VARIANTS:
         options["e"]["type"] = "quasineutral, evolve_pressure, evolve_momentum"
         options["e"]["use_div_par_fvv"] = "true"
         options["e"]["diagnose"] = "true"

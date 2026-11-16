@@ -1726,29 +1726,50 @@ The integrated tests exercise ``evolve_vorticity_ion_energy``:
   minimum checks, nonzero solenoidal wall exchange, density and local thermal-energy
   minima above ``1e-3`` of their initial means at every output, rigid-rotation
   decay, uniform-vorticity drift and perturbed restarts.
-- ``ion-energy-mms`` checks continuum expression sources on two resolutions for
-  baseline and curvature slabs. ``ion-energy-mms-long`` runs baseline,
-  skew-metric, viscous and curvature variants at 8, 16 and 32; ``--variants``
-  selects any subset. The baseline includes nonzero
-  potential, E×B transport and Reynolds stress; all variants have varying
-  composition and finite parallel flows. The focused skew and viscosity
-  variants retain wall-compatible zero potential. Periodic Y uses twice the
-  X/Z resolution. Viscous stress is excluded from chi;
-  the viscosity variant has zero analytic chi/polarisation transport while
-  retaining viscous vorticity diffusion, energy flux and electron heating.
-  Convergence gates remain enabled. The MMS README describes their coverage
-  and limits. The curvature variant uses a finite cosine total-pressure
-  mode and its analytic chi inverse while retaining nonzero potential. The
-  ``long`` profile uses two MPI ranks.
-- ``ion-energy-parallel-mms`` uses the generated ``parallel_current`` variant
-  with independent electron momentum, inertia, nonzero current divergence and
-  explicit potential damping. It checks spatial orders, physical identities,
-  tighter temporal integration and MPI agreement, saving results and stopping
-  after a failed gate. ``--two-level`` bounds spatial validation to 8/16 and
-  retains the same subsequent temporal/MPI checks. Chi absolute error is
-  diagnostic-only; its finite errors, L2/Linfinity orders, temporal and MPI
-  agreement remain required. Reference RMS and relative RMS error are saved.
-  Continuum forcing is undamped and does not cancel numerical damping.
+- ``ion-energy-mms`` contains all continuum ion-energy MMS variants. Select
+  one with ``--variant`` (default ``parallel_current``) and choose geometric
+  refinements with ``--levels`` (at least two; default two without plotting).
+  Physical cells start at 8 x 16 x 8, and each refinement doubles X, Y and Z.
+  All variants have two ion species, finite parallel flows and periodic Y/Z.
+  The original ``baseline``, ``skew``, ``viscosity`` and ``curvature`` variants
+  retain zero-current closures and global L2 order limits of 1.7 on the first
+  refinement and 1.8 thereafter. They end at normalised time 0.1.
+  ``--verify`` checks diagnostics-on/off agreement for these variants.
+  Their three-level CTests are registered separately with the ``long`` label.
+- ``parallel_current`` and ``parallel_current_wall`` in that directory evolve
+  independent electron momentum with inertia, nonzero current divergence and
+  numerical potential damping, ending at normalised time 0.02. Both use a
+  Cartesian slab with zero magnetic curvature. The radial pressure-potential
+  shape is :math:`P(a)=[1-\cos(2a)]^2` for ``parallel_current`` and
+  :math:`P(a)=1-\cos(2a)` for ``parallel_current_wall``, where
+  :math:`a=\pi X/L` and :math:`L=10`. The first has
+  :math:`\phi_{XX}=\psi_{XX}=0` at both walls and checks global L2/Linfinity
+  orders. The second retains nonzero psi wall curvature, checks the fixed
+  region :math:`X/L\in[0.25,0.75]` and reports global errors and orders without
+  gating them. Both use MC-aware order limits of 1.4 for L2 and 0.9 for
+  Linfinity. L2 is volume-weighted RMS and Linfinity is maximum absolute
+  error; both exclude mesh guards and are measured at the final saved time.
+  Other fields retain L2 error caps in the selected region; chi absolute
+  error is diagnostic-only, while finiteness and convergence remain required.
+  Chi reference RMS and relative RMS error are saved. Analytic chi includes
+  parallel-current divergence. Z-dependent ion primitive harmonics have a
+  :math:`\sin^2(a)` envelope so their radial wall values are independent of Z,
+  avoiding a separate error from averaging wall transport weights.
+  Continuum forcing does not cancel numerical potential damping.
+  ``--verify`` adds tighter temporal integration at the second resolution and
+  serial/MPI agreement at the coarsest resolution, including chi. These
+  checks run only after spatial acceptance passes. Both variants have
+  two-level CTests with ``--verify --nproc 2`` and three-level ``long`` tests.
+  For any MMS variant, ``--plot`` writes CSV and vector PDF/SVG convergence
+  figures, defaults to four levels unless ``--levels`` overrides it, and
+  collects all requested resolutions despite spatial accuracy failures.
+  Execution and physics
+  failures still stop immediately. Without plotting, any failed gate stops
+  before the next launch. Completed-level errors, orders, failed gates and
+  partial figures are retained in ``result.json`` and the output directory;
+  failed checks give a nonzero exit status. Committed inputs run without
+  SymPy; matplotlib is required only for plotting. See
+  ``tests/integrated/ion-energy-mms/README.md`` for commands and runtime limits.
 - ``ion-energy-parallel-damping`` compares a short periodic case with damping
   off/on, including the alternating-Y mode, recovered thermal/perpendicular
   partition and serial/two-rank Y ownership. It checks that evolved total energy
@@ -1758,15 +1779,18 @@ The integrated tests exercise ``evolve_vorticity_ion_energy``:
   serial/two-rank comparison. Component-reordering trajectory comparisons are
   omitted after their observed differences were accepted as roundoff.
 
-The original four MMS variants and closed/source/wall tests use zero parallel
-current and omit sheaths. The separate parallel tests cover those terms;
-conservation checks do not establish accuracy of the coupled MMS order gates.
+All ion-energy MMS variants use periodic Y and omit sheaths. Parallel currents
+are covered by the two parallel-current MMS variants; open-Y sheath boundary
+conditions are covered separately by ``ion-energy-sheath``. The original four
+MMS variants and closed/source/wall tests use zero parallel current.
+Conservation checks do not establish accuracy of the coupled MMS order gates.
 
 The runners use ``tools/energy_analysis`` for inventories, physical sources,
-wall powers and recovery checks. Analysis runs with diagnostics disabled;
-polarisation wall budgets report incomplete coverage when chi is absent,
+wall powers and recovery checks. Budget analysis supports runs with diagnostics
+disabled; parallel-current MMS physics checks require diagnostics.
+Polarisation wall budgets report incomplete coverage when chi is absent,
 including Neumann AC runs.
-All upper limits have a floor of ``1e-10``. Solver-sensitive limits resolve
+Budget upper limits have a floor of ``1e-10``. Solver-sensitive limits resolve
 as ``max(floor, rtol_factor * solver:rtol)`` from each run's options; linear
 invariants, recovery and diagnostic comparisons use fixed roundoff floors.
 Vorticity budgets use ``open_vorticity`` because time integration of sampled
@@ -1796,6 +1820,8 @@ not require an environment in the source tree.
 
    ctest --test-dir build -L energy -LE long --output-on-failure -j 2
    python tests/integrated/ion-energy-closed/runtest --exe build/hermes-3
+   python tests/integrated/ion-energy-mms/runtest --exe build/hermes-3 --variant parallel_current
+   python tests/integrated/ion-energy-mms/runtest --exe build/hermes-3 --variant parallel_current_wall --plot --levels 4
    python tests/integrated/ion-energy-mms/mms.py --all --check --check-files
    python tests/integrated/ion-energy-mms/operator_convergence.py --output /tmp/operator-orders.json
 
@@ -1805,9 +1831,13 @@ L2 orders, first/last-cell and outer-three-cell errors, and error maxima
 for each Reynolds term and each species/energy
 weight. It uses the production full-vorticity MC advection and central remainder
 and needs SymPy, but no Hermes run.
-``--y`` and ``--time`` select the analytic plane; ``--run`` checks the mirror
-against saved C++ diagnostics with a ``1e-10`` limit. The diagnostic is not a
-CTest convergence gate and does not change the manufactured physics.
+``--variants`` selects cases (default ``baseline curvature``), including the
+two parallel-current variants; ``--sizes`` overrides the doubled resolutions.
+Its interior norm omits two physical radial rows, unlike the fixed central
+half used by the coupled MMS runner. ``--y`` and ``--time`` select the analytic
+plane; ``--run`` checks the mirror against saved C++ diagnostics with a
+``1e-10`` limit. The diagnostic is not a CTest convergence gate and does not
+change the manufactured physics.
 
 ``energy-analysis-python`` covers synthetic inventories, discrete operators,
 coverage flags and generator identities. The uniform equilibrium and analytic

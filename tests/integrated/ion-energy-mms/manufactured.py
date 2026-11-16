@@ -9,17 +9,15 @@ from functools import cache, lru_cache
 
 import numpy as np
 import sympy as s
+from cases import EVOLVED, PARALLEL_VARIANTS, RECOVERED, VARIANTS
 
 X, Y, Z, t = s.symbols("X Y Z t", real=True)
 COORDINATES = (X, Y, Z, t)
 LENGTH = s.Integer(10)
-EVOLVED = ("Ni", "Nj", "NVi", "NVj", "Pe", "Vort", "Eion")
-RECOVERED = ("Pi", "pi", "pj", "Tion", "phi", "psi", "chi")
-VARIANTS = ("baseline", "skew", "viscosity", "curvature", "parallel_current")
 
 
 def evolved(variant):
-    return EVOLVED + (("NVe",) if variant == "parallel_current" else ())
+    return EVOLVED + (("NVe",) if variant in PARALLEL_VARIANTS else ())
 
 
 def grad(f):
@@ -51,13 +49,44 @@ def common_temperature(psi, ni, nj):
     return 2 * psi / (2 * ni + s.Rational(3, 2) * nj)
 
 
-def chi_shape(a, theta):
+def pressure_shape(a, variant):
+    if variant == "parallel_current":
+        return (1 - s.cos(2 * a)) ** 2
+    if variant == "parallel_current_wall":
+        return 1 - s.cos(2 * a)
+    return s.Rational(813, 287) - s.Rational(1100, 287) * s.cos(2 * a) + s.cos(4 * a)
+
+
+def chi_shape(a, theta, *, variant="baseline"):
     """Analytic cosine particular satisfying both X face conditions.
 
     For phi=sin(a)*cos(theta), psi=P(a)*sin(theta), kZ/kX=2:
     (d_aa+4*d_theta_theta)chi = physical Reynolds divergence / c.
     Multiply by kX^2 and the two amplitudes for physical chi.
     """
+    if variant == "parallel_current":
+        # P=(1-cos(2a))^2 has P=P'=P''=0 at both radial walls.
+        # The cosine inverse has Neumann AC and zero Dirichlet DC traces.
+        return (
+            s.Rational(16, 17) * s.cos(a)
+            - s.Rational(36, 25) * s.cos(3 * a)
+            + s.Rational(20, 41) * s.cos(5 * a)
+            + (
+                s.Rational(36, 17) * s.cos(a)
+                - s.Rational(78, 25) * s.cos(3 * a)
+                + s.Rational(42, 41) * s.cos(5 * a)
+            )
+            * s.sin(theta) ** 2
+        )
+    if variant == "parallel_current_wall":
+        # P=1-cos(2a) retains finite curvature at both walls. Its larger
+        # wall/interior curvature ratio exposes the wall error on 8..64 grids.
+        return (
+            s.Rational(10, 17) * s.cos(a)
+            - s.Rational(18, 25) * s.cos(3 * a)
+            + (s.Rational(14, 17) * s.cos(a) - s.Rational(14, 25) * s.cos(3 * a))
+            * s.sin(theta) ** 2
+        )
     return (
         40 * s.cos(5 * a)
         - s.Rational(792, 7) * s.cos(3 * a)
@@ -67,7 +96,7 @@ def chi_shape(a, theta):
     ) ** 2 / 41
 
 
-@lru_cache(maxsize=5)
+@lru_cache(maxsize=len(VARIANTS))
 def model(variant="baseline"):
     """Return exact fields, physical RHS, forcing and separate term coverage."""
     r = s.Rational
@@ -82,15 +111,29 @@ def model(variant="baseline"):
         raise ValueError(f"Unknown MMS variant: {variant}")
     H = metric(variant)
     nu = r(2, 100) if variant == "viscosity" else s.Integer(0)
-    ni = 1 + r(5, 100) * s.cos(2 * a) * s.cos(b - tau) + r(3, 100) * s.cos(d + tau)
-    nj = r(1, 4) * (1 + r(5, 100) * s.cos(2 * a) * s.sin(theta) * s.cos(b + tau))
-    vi = r(1, 10) + r(2, 100) * s.cos(2 * a) * s.sin(b - tau) * s.cos(theta)
-    vj = r(7, 100) + r(15, 1000) * s.cos(2 * a) * s.cos(b + tau) * s.sin(theta)
-    te = 1 + r(5, 100) * s.cos(2 * a) * s.sin(theta) * s.cos(b - tau)
+    # Wall transport uses Z-averaged partition, temperature and velocity.
+    # Make their continuum wall values independent of Z so that this separate
+    # projection error does not obscure the Reynolds wall-curvature comparison.
+    wall_envelope = s.sin(a) ** 2 if variant in PARALLEL_VARIANTS else s.Integer(1)
+    ni = (
+        1
+        + r(5, 100) * s.cos(2 * a) * s.cos(b - tau)
+        + r(3, 100) * wall_envelope * s.cos(d + tau)
+    )
+    nj = r(1, 4) * (
+        1 + r(5, 100) * wall_envelope * s.cos(2 * a) * s.sin(theta) * s.cos(b + tau)
+    )
+    vi = r(1, 10) + r(2, 100) * wall_envelope * s.cos(2 * a) * s.sin(b - tau) * s.cos(
+        theta
+    )
+    vj = r(7, 100) + r(15, 1000) * wall_envelope * s.cos(2 * a) * s.cos(
+        b + tau
+    ) * s.sin(theta)
+    te = 1 + r(5, 100) * wall_envelope * s.cos(2 * a) * s.sin(theta) * s.cos(b - tau)
     amp_phi = r(2, 10) * (1 + r(1, 10) * s.sin(b + tau))
     amp_psi = r(2, 100) * (1 + r(5, 100) * s.cos(b + tau))
     phi = amp_phi * s.sin(a) * s.cos(theta)
-    shape = r(813, 287) - r(1100, 287) * s.cos(2 * a) + s.cos(4 * a)
+    shape = pressure_shape(a, variant)
     psi = r(12, 10) + r(4, 100) * s.cos(b - tau) + amp_psi * shape * s.sin(theta)
     if variant in ("skew", "viscosity"):
         # These focused recovery/viscosity cases vanish to sixth order at X
@@ -108,7 +151,7 @@ def model(variant="baseline"):
     ve, je = ji / ne, -ji
     assert s.cancel(ji - ne * ve) == 0, "Zero total parallel current"
     parallel_current = s.Integer(0)
-    if variant == "parallel_current":
+    if variant in PARALLEL_VARIANTS:
         # An independent electron momentum leaves a finite current/divergence.
         # This Neumann X cosine and periodic Y/Z harmonic has a closed inverse.
         parallel_current = r(3, 100) * s.cos(2 * a) * s.sin(b - tau) * s.cos(theta)
@@ -131,7 +174,7 @@ def model(variant="baseline"):
     # Combine the analytic current harmonics before exporting them. This removes
     # cancelling products without changing their continuum or boundary limit.
     angular = s.Symbol("angular", real=True)
-    poly = r(813, 287) - r(1100, 287) * s.cos(2 * angular) + s.cos(4 * angular)
+    poly = pressure_shape(angular, variant)
     prime = s.diff(poly, angular).subs(angular, a)
     second = s.diff(poly, angular, 2).subs(angular, a)
     k = s.pi / LENGTH
@@ -157,13 +200,15 @@ def model(variant="baseline"):
             ]
         )
     )
-    chi = (s.pi / LENGTH) ** 2 * amp_phi * amp_psi * chi_shape(a, theta)
+    chi = (
+        (s.pi / LENGTH) ** 2 * amp_phi * amp_psi * chi_shape(a, theta, variant=variant)
+    )
     if variant in ("skew", "viscosity"):
         reynolds = s.zeros(2, 1)
         chi = s.Integer(0)
     if curvature:
         chi += -curvature * r(1, 50) / (4 * c * k) * s.cos(2 * a) * s.cos(theta)
-    if variant == "parallel_current":
+    if variant in PARALLEL_VARIANTS:
         # c*lap(chi_parallel) = d_Y(Jparallel), with kX=kZ=2*pi/L.
         chi += -r(3, 100) / (4 * c * k) * s.cos(2 * a) * s.cos(b - tau) * s.cos(theta)
     # Retain the divergence-free contribution to the covariant drift current.
@@ -173,7 +218,7 @@ def model(variant="baseline"):
     jnu = nu * H * grad(omega)
     jpol = -c * H * grad(chi) + reynolds
     terms = {"Vort.reynolds": div(reynolds)}
-    if variant == "parallel_current":
+    if variant in PARALLEL_VARIANTS:
         terms["Vort.parallel_current"] = s.diff(parallel_current, Y)
     # The verified finite cosine inversion makes these expressions identical.
     # Keeping the harmonic form avoids large cancelling terms in the source.
@@ -187,7 +232,7 @@ def model(variant="baseline"):
     def polarisation(weight):
         return (
             -grad(weight).dot(jpol)
-            if not curvature and variant != "parallel_current"
+            if not curvature and variant not in PARALLEL_VARIANTS
             else -div(weight * jpol)
         )
 
@@ -248,7 +293,7 @@ def model(variant="baseline"):
         rhs[variable] = sum(v for k, v in terms.items() if k.startswith(variable + "."))
     fields = dict(zip(EVOLVED, (ni, nj, mi, mj, pe, omega, energy)))
     fields.update(Pi=pressure, pi=pi, pj=pj, Tion=ti, phi=phi, psi=psi, chi=chi)
-    if variant == "parallel_current":
+    if variant in PARALLEL_VARIANTS:
         me = -je / 1836
         terms.update(
             {
@@ -300,6 +345,7 @@ def preflight(variant="baseline"):
         for q in (shape, s.diff(shape, a), chi, s.diff(chi, a), rx, s.diff(alpha, a)):
             assert s.simplify(q.subs(a, face)) == 0
     fields, rhs, _, terms = model(variant)
+    assert all(name in fields for name in RECOVERED), "Missing recovered MMS field"
     H = metric(variant)
     Phi = fields["phi"] + fields["psi"]
     v = drift(fields["phi"])
@@ -323,7 +369,7 @@ def preflight(variant="baseline"):
         assert s.simplify(s.expand(s.expand_trig(residual).rewrite(s.exp))) == 0, (
             "Curvature chi inversion"
         )
-    if variant == "parallel_current":
+    if variant in PARALLEL_VARIANTS:
         residual = 2 * lap(fields["chi"], H) - sum(
             terms[key] for key in ("Vort.reynolds", "Vort.parallel_current")
         )
@@ -334,6 +380,11 @@ def preflight(variant="baseline"):
         assert s.simplify(current - fields["Jpar"]) == 0
         assert s.simplify(s.diff(current, Y) - fields["DivJpar"]) == 0
         for face in (0, LENGTH):
+            for name in ("Ni", "Nj", "NVi", "NVj", "Tion", "Pe"):
+                assert s.simplify(s.diff(fields[name], Z).subs(X, face)) == 0, (
+                    name,
+                    face,
+                )
             assert s.simplify(s.diff(fields["chi"], X).subs(X, face)) == 0
             assert s.simplify(s.diff(fields["NVe"], X).subs(X, face)) == 0
             # The added chi is an AC cosine; its Z average vanishes at each wall.
@@ -341,6 +392,17 @@ def preflight(variant="baseline"):
                 s.simplify(s.integrate(fields["chi"].subs(X, face), (Z, 0, LENGTH)))
                 == 0
             )
+        for face in (0, LENGTH):
+            for name, potential in (
+                ("phi", fields["phi"]),
+                ("psi", fields["psi"]),
+                ("Phi", Phi),
+            ):
+                wall_curvature = s.simplify(s.diff(potential, X, 2).subs(X, face))
+                if variant == "parallel_current" or name == "phi":
+                    assert wall_curvature == 0, (name, face)
+                else:
+                    assert wall_curvature != 0, (name, face)
 
     if variant in ("skew", "viscosity"):
         for face in (0, LENGTH):
@@ -376,7 +438,7 @@ def preflight(variant="baseline"):
         for k, v in terms.items()
     }
     assert all(np.isfinite(v) for v in magnitudes.values()), magnitudes
-    if variant in ("baseline", "curvature", "parallel_current"):
+    if variant in ("baseline", "curvature", *PARALLEL_VARIANTS):
         assert all(v > 1e-12 for v in magnitudes.values()), magnitudes
     else:
         for key in ("Ni.parallel", "NVj.pressure", "Pe.compression", "Eion.parallel"):

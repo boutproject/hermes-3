@@ -1640,6 +1640,66 @@ def test_chi_absolute_and_relative_rms_remain_reported(dataset, monkeypatch):
     assert errors["relative_rms_error"] == pytest.approx(0.8)
 
 
+def test_mms_fixed_interior_norms_exclude_wall_error(dataset, monkeypatch):
+    from energy_analysis import expressions
+    from energy_analysis.convergence import manufactured_errors
+
+    dataset.options["mesh:symmetricGlobalX"] = "true"
+    # Eight physical X cells: the central half is rows 2..5, independent of
+    # guard cells. Nonuniform volumes check that L2 is weighted in both regions.
+    values = xr.DataArray(
+        [99, 99, 10, 10, 1, 2, 3, 4, 10, 10, 99, 99], dims="x", coords={"x": dataset.x}
+    )
+    dataset["ion_chi"] = xr.ones_like(dataset.phi) * values
+    dataset["J"] = dataset.J * xr.DataArray(
+        np.arange(1, 13), dims="x", coords={"x": dataset.x}
+    )
+    run = open_run(dataset)
+    monkeypatch.setattr(
+        expressions, "evaluate", lambda *args: xr.zeros_like(dataset.phi.isel(t=-1))
+    )
+    errors = manufactured_errors(
+        run, {"ion_chi": "mms:current_potential"}, interior_fraction=0.25
+    )["ion_chi"]
+    assert errors["linf"] == 10
+    assert errors["linf_interior"] == 4
+    expected = np.sqrt(np.average(np.arange(1, 5) ** 2, weights=np.arange(5, 9)))
+    assert errors["l2_interior"] == pytest.approx(expected)
+    expected_global = np.sqrt(
+        np.average(
+            np.array([10, 10, 1, 2, 3, 4, 10, 10]) ** 2, weights=np.arange(3, 11)
+        )
+    )
+    assert errors["l2"] == pytest.approx(expected_global)
+
+
+@pytest.mark.parametrize(
+    "fraction, symmetric, message",
+    [
+        (0.5, True, "Interior fraction"),
+        (-0.1, True, "Interior fraction"),
+        (0.25, False, "symmetric X"),
+    ],
+)
+def test_mms_interior_interval_validation(
+    dataset, monkeypatch, fraction, symmetric, message
+):
+    from energy_analysis import expressions
+    from energy_analysis.convergence import manufactured_errors
+
+    dataset.options["mesh:symmetricGlobalX"] = str(symmetric).lower()
+    dataset["ion_chi"] = xr.zeros_like(dataset.phi)
+    monkeypatch.setattr(
+        expressions, "evaluate", lambda *args: xr.zeros_like(dataset.phi.isel(t=-1))
+    )
+    with pytest.raises(AuditError, match=message):
+        manufactured_errors(
+            open_run(dataset),
+            {"ion_chi": "mms:current_potential"},
+            interior_fraction=fraction,
+        )
+
+
 def test_enabled_uniform_y_potential_damping_reconstructs_zero(dataset):
     from energy_analysis.fluxes import reconstruct_fluxes
 
