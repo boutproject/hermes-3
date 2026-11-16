@@ -152,10 +152,16 @@ approximation still neglects the mean pressure-potential rate.
 
 Use `PYTHONPATH=tools python -m energy_analysis.spectra RUN_DIR --output bands.json`
 for fixed-mode wall/interior RMS, radial profiles and e-folding widths. This
-streaming monitor supports singleton-Y, X-decomposed native version-4/5/6 dumps;
+streaming monitor supports singleton-Y, X-decomposed native version-4/5/6/7 dumps;
 supply physical domain lengths if they differ from 50 mm. Bands 16–31 and
 32–63 are fixed physical modes, independent of resolution. Wall amplitudes use
 first physical cell centres. Widths include their half-cell offset from the
 wall; crossings without wall dominance are flagged. A missing crossing has
 no width. Native pytest regressions run with `HERMES_EXECUTABLE=build/hermes-3`;
 add `--run-slow` for the drift-plane envelope test.
+
+Version 7 adds optional numerical parallel phi damping using collective sound
+speed. The completed vorticity rate includes `ion_phi_dissipation`; auxiliary
+chi continuity excludes both damping and viscosity. The diagnostic is a
+vorticity rate with the `ddt(Vort)` conversion, not an external power sink.
+The resolved option is saved as `ion_phi_dissipation_enabled`.

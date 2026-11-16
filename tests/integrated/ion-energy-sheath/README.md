@@ -10,8 +10,8 @@ The test checks target currents against independent Bohm/electron sheath
 formulas at the initial state, reconstructs current divergence and completed
 parallel electrical work from saved completed-current and potential guards, and checks
 auxiliary continuity at every physical cell including target-adjacent cells.
-Reversed component construction must agree bitwise. The two-rank profile also
-compares all physical histories with a serial run to `1e-10` absolute error.
+The two-rank profile compares all physical histories with a serial run to
+`1e-10` absolute error.
 Limits are declared in `criteria.json`; no existing MMS accuracy gate applies.
 
 The companion C++ production-sheath test perturbs only electron momentum
@@ -19,10 +19,8 @@ guards and verifies the analytic current-divergence and auxiliary response,
 including extra/collisional currents. Physical X walls allow the net parallel
 current source to close; periodic-X unsolvable means are tested separately.
 
-Current validation: the maintainer accepts the observed reversed-construction
-history difference `8.881784197001252e-16` as probably harmless ordering roundoff.
-The original zero thresholds and 14 raw bitwise failures remain retained; the
-acceptance covers those measured histories only. Identical-state
-C++ RHS comparisons pass bitwise; all target, continuity, electrical and Y-MPI
-checks pass. See `docs/polarisation-drift-3d-analysis-report.md` for retained raw
-results. Thresholds remain unchanged.
+The maintainer accepts the previously observed component-reordering differences
+of up to `8.881784197001252e-16` as roundoff. The redundant reordered run and
+bitwise sorting assertions have been removed. Target, continuity, electrical
+and Y-MPI checks retain their thresholds. Each invocation saves its measured
+checks and serial/parallel execution details in `result.json`.

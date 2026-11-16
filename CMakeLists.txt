@@ -473,6 +473,10 @@ if(HERMES_TESTS)
       --nproc
       2)
     set_tests_properties(ion-energy-sheath PROPERTIES PROCESSORS 2)
+    hermes_add_ion_energy_test(
+      ion-energy-parallel-damping ion-energy-parallel-damping "energy" 600
+      --timeout 180)
+    set_tests_properties(ion-energy-parallel-damping PROPERTIES PROCESSORS 2)
     hermes_add_ion_energy_test(ion-energy-parallel-mms ion-energy-parallel-mms
                                "energy;mms" 18000 --timeout 3600)
     set_tests_properties(ion-energy-parallel-mms PROPERTIES PROCESSORS 8)

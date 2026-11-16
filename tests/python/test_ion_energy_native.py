@@ -136,7 +136,7 @@ def test_potential_gauge_invariance(hermes_executable, tmp_path, viscosity):
 def test_total_energy_closes_against_wall_power(hermes_executable, tmp_path):
     path = run(hermes_executable, tmp_path / "wall-energy")
     with Dataset(path) as dump:
-        assert int(dump["evolve_vorticity_ion_energy_version"][...]) == 6
+        assert int(dump["evolve_vorticity_ion_energy_version"][...]) == 7
         assert int(dump["polarisation_drift_version"][...]) == 2
         physical = lambda name: np.asarray(dump[name][:, 2:-2, 0, :])
         volume = (

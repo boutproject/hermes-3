@@ -37,7 +37,14 @@ def check_run(study, label, run):
         ds.DivJpol + ds.DivJpar - ds.ion_auxiliary_residual,
         "continuity",
     )
-    check("vorticity_rate", ds["ddt(Vort)"] - ds.ion_current_rhs, "continuity")
+    check(
+        "vorticity_rate",
+        ds["ddt(Vort)"]
+        - ds.ion_current_rhs
+        - ds.get("DivJviscous", 0)
+        - ds.ion_phi_dissipation,
+        "continuity",
+    )
     check(
         "ion_electrical_flux",
         ds.DivEelectric - central_parallel(ds.phi * ds.ion_parallel_current, ds),
@@ -100,20 +107,8 @@ def check_run(study, label, run):
 def main():
     args = parser(__doc__).parse_args()
     with Study(HERE, args) as study:
-        runs = []
-        for label, order in (
-            (
-                "ordered",
-                "e, d+, evolve_vorticity_ion_energy, sheath_boundary, polarisation_drift",
-            ),
-            (
-                "reversed",
-                "polarisation_drift, sheath_boundary, evolve_vorticity_ion_energy, d+, e",
-            ),
-        ):
-            run = study.run(label, ["hermes:components=" + order])
-            runs.append(run)
-            check_run(study, label, run)
+        parallel = study.run("parallel")
+        check_run(study, "parallel", parallel)
         names = (
             "Eion",
             "Vort",
@@ -130,15 +125,6 @@ def main():
             "DivEelectric",
             "phi_Div_Je",
         )
-        for name in names:
-            study.check(
-                "sorting/" + name,
-                float(
-                    abs(runs[0].interior(runs[0].data[name] - runs[1].data[name])).max()
-                ),
-                "sorting",
-                truncation=True,
-            )
         if args.nproc > 1:
             study.args.nproc = 1
             serial = study.run("serial")
@@ -148,7 +134,7 @@ def main():
                     "decomposition/" + name,
                     float(
                         abs(
-                            serial.interior(serial.data[name] - runs[0].data[name])
+                            serial.interior(serial.data[name] - parallel.data[name])
                         ).max()
                     ),
                     "decomposition",

@@ -1,12 +1,10 @@
 # Polarisation drift and 3D energy: field contract
 
-This is the stage-0 audit for
-[the implementation plan](polarisation-drift-3d-analysis-plan.md), against Hermes
-`779c4ff94f68e07fcfb725cc2fd576d9c1d76424`, BOUT++
-`97411814b32b23b2e8dbd1465e4160c072f9c5b3` and xhermes
-`0a2f0325295a94f5a7567894917cb2bc9cef4c31`. It records the stage-1 ownership migration, stage-2 current diagnostics and additional output still
-needed for the proposed 3D model. Checkpoint evidence is recorded in
-[the review report](polarisation-drift-3d-analysis-report.md).
+This contract describes field units, dimensions, numerical-face conventions
+and ownership for the ion-energy and conservative polarisation components.
+The equation and developer guides document the model and its regression
+coverage. Geometry/analysis support limits below must be checked before
+interpreting three-dimensional energy budgets.
 
 ## Units, dimensions and ownership
 
@@ -54,6 +52,7 @@ face powers must first be checked against that domain convention.
 | `Vort` | Ion energy | Physical vorticity in output | C m^-3; `qe Nnorm` | C | Solver radial guards instead encode wall potential; do not integrate solver guard storage as vorticity |
 | `ion_pressure_potential` | Ion energy, diagnose-only | `psi = sum A_s P_s/(Abar Z_s)` | V; `Tnorm` | C | Recovery and conservative transport input; pressure guards follow the wall model |
 | `ion_chi`, `ddt(Phi)` | Conservative drift | Auxiliary current potential, approximate time derivative | V s^-1; `Tnorm w0` | C | `ion_chi` saved independently of diagnose; `ddt(Phi)` alias diagnose-only; selected radial AC / prescribed DC guards |
+| `ion_phi_dissipation` | Ion finalisation, diagnose-only | Numerical parallel potential vorticity rate, excluded from chi and physical currents | A m^-3; `qe Nnorm w0` | C | Zero when disabled; physical cells only, preserving encoded radial rates; no explicit energy source |
 | `ion_phi_iterations`, `ion_chi_iterations`, `ion_chi_residual` | Recovery for phi; conservative drift for chi | Recovery iteration count, fixed auxiliary solve count, max normalised FV residual | Dimensionless/count; residual conversion `qe Nnorm w0` if reported in A m^-3 | `(t)` | Implementation diagnostics; auxiliary residual must remain separate from missing power and time quadrature error |
 
 Parallel kinetic density is `1/2 Mp A_s N_s V_s^2`, with the solver's
@@ -69,12 +68,12 @@ Adding ion reservoirs to `Eion` would double count them.
 | `parallel_current` | Conservative drift | Completed `sum (Z/A) momentum`, including sheath guards | A m^-2; `qe Nnorm v0` | C; current used by auxiliary RHS |
 | `ion_parallel_current`, `electron_parallel_current` | Ion finalisation | Completed currents used by parallel electrical work | A m^-2; `qe Nnorm v0` | C; use with completed phi, including physical target guards |
 | `DivJpar`, `ion_current_rhs`, `ion_auxiliary_residual` | Conservative drift | Parallel divergence, selected auxiliary RHS, RHS minus forward chi operator | A m^-3; `qe Nnorm w0` | C; physical cells including target-adjacent cells |
-| `ddt(Vort)` | Ion finalisation | Completed vorticity rate including viscous current | A m^-3; `qe Nnorm w0` | C; physical cells only, exclude encoded radial solver guards |
+| `ddt(Vort)` | Ion finalisation | Completed vorticity rate including viscosity and optional numerical damping | A m^-3; `qe Nnorm w0` | C; physical cells only, exclude encoded radial solver guards |
 
 These outputs require `diagnose=true`. The three divergence/RHS/residual fields
 are also published in `fields:` independently of diagnose. The selected RHS is
 `DivJReynolds+DivJdia+DivJpar+DivJextra+DivJcol`, omitting absent optional terms
-and retaining the existing exclusion of viscous current. `DivJpol+DivJdia+
+and excluding viscosity and numerical damping. `DivJpol+DivJdia+
 DivJpar+DivJextra+DivJcol` equals the selected RHS minus its forward chi operator.
 
 Conservative drift reads completed charged momentum and phi with `Regions::All`,
@@ -119,8 +118,9 @@ options `polarisation_ac_boundary`, `polarisation_corrections` and `laplacian`
 are owned by the drift section. Version-4 dumps retain their original
 ion-energy option ownership. Version 6 pairs with conservative drift version 2,
 adds completed parallel/optional currents to the auxiliary and vorticity RHS,
-and evaluates parallel electrical work after sheath conditioning. Analysis
-supports versions 4/5/6. Standalone
+and evaluates parallel electrical work after sheath conditioning. Version 7
+adds optional collective-sound-speed potential damping during ion finalisation;
+the auxiliary equation is unchanged. Analysis supports versions 4/5/6/7. Standalone
 `polarisation_drift` defaults to `legacy`.
 
 The following state fields are published on every RHS independently of
@@ -155,7 +155,7 @@ numerical advective power and the additional correction.
 | --- | --- | --- |
 | Boussinesq coefficient, psi, Reynolds X-Z faces/divergence, diamagnetic divergence and DC wall rates | Ion energy -> state, independent of `diagnose` | Component inputs; keep Reynolds method and evaluation in its existing owner |
 | Auxiliary solution, current residual including all enabled physical currents, `DivEpol`, polarisation species source contributions | Conservative drift -> state; retained outputs | Current identity checked in physical boundary cells and interior; energy source cache replaced by state fields |
-| `sum (Z_s/A_s) momentum_s`, `DivJpar`, enabled `DivJextra`, `DivJcol` | Completed-state current reads after sheath boundary | Include identical physical terms in auxiliary RHS and vorticity RHS; exclude kinematic viscous rate only under the existing convention |
+| `sum (Z_s/A_s) momentum_s`, `DivJpar`, enabled `DivJextra`, `DivJcol` | Completed-state current reads after sheath boundary | Include identical physical terms in auxiliary RHS and vorticity RHS; auxiliary excludes viscosity and numerical damping |
 | Applied ion heating independent of ion pressure evolution | Explicit heating component -> applied SI source and integrated power | External input; core mask and time prefactor recorded; MMS forcing excluded |
 | Numerical ion energy X/Y faces, separated by ExB, polarisation, enthalpy/kinetic and electrical transport | Respective flux owner -> retained area-integrated face powers or owner-tagged boundary histories | Signed power for each physical X wall and each Y target; electrical terms use completed sheath potential |
 | Electron kinetic transport and pressure work, electrical exchange and frictional mechanical work | Electron momentum/pressure and exchange owners | Require evolved receiving reservoir; check internal sum, retain explicit model/numerical defects |
@@ -185,17 +185,14 @@ energy-analysis loader currently rejects non-identity transforms and tokamak
 topology. None of these gaps justifies copying a second topology reader or
 editing `external/xhermes`.
 
-## Baseline acceptance limits
+## Validation limits
 
-Before refactoring, retain unchanged current inputs, resolved settings,
-diagnosed fields, library/executable hashes and original criteria. Existing
-integrated and MMS criteria remain authoritative, including the optional
-long-profile failure documented in `test-consolidation-validation.md`.
-
-For an unchanged arithmetic path, require bitwise equality of recovered fields,
-derivatives, particle/momentum sources, currents, wall exchanges and energy
-transport. A necessary reordered sum must first document its operation and
-floating-point scale, with an a priori roundoff bound; no tolerance may be fit
-to the after-refactor difference. No such exception has been selected at this
-baseline stage. Existing independent reconstruction tolerances are retained
-unchanged and are not substitutes for the before/after comparison.
+Integrated/MMS criteria declare the effective acceptance limits. Keep
+recovery/auxiliary residuals, physical identities, spatial error, temporal
+comparison and MPI comparison separate. Chi magnitude is diagnostic-only in
+the parallel-current MMS, while its spatial orders and temporal/MPI checks
+remain required. Numerical damping is excluded from auxiliary continuity;
+full vorticity-rate checks subtract damping, viscosity and any injected MMS
+forcing. Component-reordering trajectory comparisons are omitted after their
+near-roundoff differences were accepted. The equation/developer guides explain
+the distinct zero-curvature and curved-wall Reynolds convergence expectations.

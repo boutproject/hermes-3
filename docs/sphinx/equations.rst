@@ -1418,7 +1418,7 @@ with velocity :math:`v_D = -D \nabla_\perp N / N`.
 .. _sec-classical_diffusion:
 
 Cross-field transport: classical_diffusion
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Adds perpendicular particle, momentum and thermal-energy sources to species.
 Classical mode acts on charged species and calculates transport coefficients
@@ -1517,7 +1517,7 @@ length and ion cyclotron frequency. For example, ``custom_D = 0.01`` sets
 :math:`D_{\mathrm{physical}}=0.01\rho_{s0}^2\Omega_{ci}`.
 
 Boundaries and diagnostics
-^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Both modes close the physical X wall and Y target face fluxes of particles,
 momentum and energy, including nonorthogonal cross-metric contributions.
@@ -1835,7 +1835,7 @@ The time evolution is
          + \nabla\cdot(\mathbf{J}_{\mathrm{dia},i}
                        +\mathbf{J}_{\mathrm{dia},e}+\mathbf{J}_\nu
                        +\mathbf{J}_{\parallel,i}+\mathbf{J}_{\parallel,e})
-         +D_{\mathrm{extra}}+D_{\mathrm{col}}, \\
+         +D_{\mathrm{extra}}+D_{\mathrm{col}}+S_\phi, \\
    \frac{\partial E_i}{\partial t}
       &= -\nabla\cdot(\mathbf{Q}_{E\times B}
                      +\mathbf{Q}_{\mathrm{electric}}+\mathbf{Q}_\parallel
@@ -1887,6 +1887,39 @@ advection uses XPPM on the total ion energy :math:`E_i`, including
 With ``poloidal_flows = true``, the shared XPPM operator adds full-vorticity
 X--Y advection to the current divergence and weighted polarisation transport.
 The Reynolds work and face-current diagnostics describe the X--Z construction.
+
+The reflected radial wall guards retain a bounded first-cell Reynolds
+divergence error when the potential has nonzero normal curvature at the wall.
+An O(h) wall-face discrepancy gives an O(1) first-cell error over an O(h)
+volume, limiting whole-domain mean absolute convergence to first order while
+the smooth interior converges near second order. For the zero-wall-curvature
+reference, wall maximum and whole-domain mean absolute errors converge at
+second order. MC limiting at interior extrema can still reduce whole-domain
+RMS and maximum orders to about 1.5 and 1, respectively. These are properties
+of the retained wall representation and limiter, not an imposed zero Reynolds
+wall current. See :ref:`subsec-reynolds-wall-convergence` for the independent
+reference tests and centred-donor diagnostic control.
+
+Numerical parallel potential damping is enabled with ``phi_dissipation = true``
+(default ``false``). After recovery and boundary completion, finalisation adds
+
+.. code-block:: cpp
+
+   S_phi = -FV::Div_par(-phi, 0.0, sound_speed);
+
+using the communicated collective ``sound_speed`` field. Include the
+``sound_speed`` component when enabling this option; missing completed sound
+speed raises a configuration error. Its construction depends on recovered ion
+pressure, so damping reads it during finalisation. The operator retains its
+default physical-Y flux treatment and damps alternating-Y modes that the
+collocated C2 derivative cannot resolve. Only physical vorticity cells receive
+this rate; encoded radial wall rates are preserved.
+
+This is a numerical vorticity rate, with no explicit ion/electron heating or
+total-energy source. At an identical state it changes neither the selected
+current RHS nor the species sources or ion total-energy RHS. Recovery accounts
+for perpendicular kinetic-energy changes through the thermal/kinetic partition.
+The auxiliary chi solve excludes numerical damping as well as viscosity.
 
 The energy fluxes are
 
@@ -2271,6 +2304,8 @@ Other options in ``[evolve_vorticity_ion_energy]`` are:
   (default ``2.0``). Species transport weights still use the local mixture.
 - ``poloidal_flows``: Include X--Y :math:`E\times B` flows
   (default ``false``).
+- ``phi_dissipation``: Numerically damp parallel potential variations using
+  completed collective ``sound_speed`` (default ``false``).
 - ``density_floor``: Normalised total ion density floor (default ``1e-7``).
 - ``viscosity``: Kinematic viscosity in m^2/s (default ``0.0``).
 - ``phi_max_iterations``: Maximum number of pressure/potential recovery
@@ -2319,12 +2354,13 @@ The ion-energy radial wall model is selected by ``radial_boundary``.
 guard fills and wall-state evolution; selecting ``no_slip`` still reads and
 validates ``phi_boundary_velocity``.
 
-Output metadata ``evolve_vorticity_ion_energy_version = 6`` and
+Output metadata ``evolve_vorticity_ion_energy_version = 7`` and
 ``polarisation_drift_version = 2`` identify the split ownership and completed
 parallel-current/electrical-work equations, preserving
 full-vorticity MC transport plus the central Reynolds remainder, pressure-potential
 polarisation work, Z-uniform wall transport weights and viscous work carried
-by polarisation transport. Analysis supports versions 4, 5 and 6, assumes version 4
+by polarisation transport, with optional numerical parallel potential damping.
+Analysis supports versions 4, 5, 6 and 7, assumes version 4
 when the tag is absent, and reads auxiliary settings from the appropriate
 owner. Restart wall-storage versioning is separate.
 
@@ -2335,6 +2371,15 @@ current equation and its forward-operator residual; ``ddt(Vort)`` is the
 completed rate in physical cells. In this BOUT revision restored solver
 momentum output need not retain non-FCI physical Y guards, so target checks
 use the dedicated completed-current fields.
+
+``ion_phi_dissipation_enabled`` records the resolved damping option. With
+diagnostics enabled, ``ion_phi_dissipation`` records :math:`S_\phi` in
+A m\ :sup:`-3`, with conversion :math:`q_eN_{\mathrm{norm}}\Omega_{ci}`.
+It resets on every RHS evaluation, including when disabled. The completed
+physical rate is ``ion_current_rhs + DivJviscous + ion_phi_dissipation``;
+absent viscosity contributes zero. Rate audits of MMS solver derivatives must
+also subtract the injected continuum vorticity source. This diagnostic is
+separate from physical parallel current and from auxiliary continuity.
 
 The generated-restart pytest regression in
 ``tests/python/test_ion_energy_native.py`` checks potential shifts
@@ -2385,7 +2430,8 @@ are also stored in output attributes.
 ``ion_chi`` and ``ddt(Phi)`` record the same auxiliary potential in V/s, with
 conversion factor :math:`T_{\mathrm{norm}}\Omega_{ci}`. It approximates the
 polarisation current rather than the exact time derivative of
-:math:`\phi+\psi`.
+:math:`\phi+\psi`; viscosity and numerical potential damping are excluded
+from its RHS.
 
 For nonperiodic X in every wall mode, ``phi_wall_rate`` records the midpoint
 rates in V/s in physical radial guard cells, with zero interior and Y boundary

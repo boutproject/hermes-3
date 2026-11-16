@@ -892,6 +892,10 @@ EvolveVorticityIonEnergy::EvolveVorticityIonEnergy(std::string name, Options& al
 
   poloidal_flows =
       options["poloidal_flows"].doc("Include poloidal ExB flow").withDefault<bool>(false);
+  phi_dissipation = options["phi_dissipation"]
+                        .doc("Numerically damp parallel potential variations using "
+                             "the completed collective sound_speed")
+                        .withDefault<bool>(false);
 
   density_floor = options["density_floor"].doc("Minimum density floor").withDefault(1e-7);
 
@@ -1239,6 +1243,17 @@ void EvolveVorticityIonEnergy::finally(const Options& state) {
   // The completed potential includes the sheath's guards. Keep it for output
   // too, so saved target work can be checked against the numerical expression.
   phi = get<Field3D>(state["fields"]["phi"]);
+  ion_phi_dissipation = zeroFrom(phi);
+  if (phi_dissipation) {
+    if (!state.isSet("sound_speed")) {
+      throw BoutException("evolve_vorticity_ion_energy:phi_dissipation requires "
+                          "completed sound_speed; enable the sound_speed component");
+    }
+    // Same MC face flux and default physical-Y flux treatment as Vorticity.
+    // Sound speed is constructed after recovery publishes ion pressure.
+    const Field3D damping = -FV::Div_par(-phi, 0.0, get<Field3D>(state["sound_speed"]));
+    BOUT_FOR(i, Vort.getRegion("RGN_NOBNDRY")) { ion_phi_dissipation[i] = damping[i]; }
+  }
   Jpar_e = zeroFrom(phi);
   Jpar_i = zeroFrom(phi);
   const auto& electrons = state["species"]["e"];
@@ -1262,11 +1277,12 @@ void EvolveVorticityIonEnergy::finally(const Options& state) {
   if (radial_model.walls) {
     ddt(Vort) = 0.0;
     BOUT_FOR(i, Vort.getRegion("RGN_NOBNDRY")) {
-      ddt(Vort)[i] = current_rhs[i] + DivJviscous[i];
+      ddt(Vort)[i] = current_rhs[i] + DivJviscous[i] + ion_phi_dissipation[i];
     }
     writeWallRates();
   } else {
     ddt(Vort) = current_rhs + DivJviscous;
+    BOUT_FOR(i, Vort.getRegion("RGN_NOBNDRY")) { ddt(Vort)[i] += ion_phi_dissipation[i]; }
   }
 
   //////////////////////////////////////////////////////////
@@ -1327,7 +1343,7 @@ void EvolveVorticityIonEnergy::outputVars(Options& state) {
   acceptWarmStart();
 
   set_with_attrs(
-      state["evolve_vorticity_ion_energy_version"], 6,
+      state["evolve_vorticity_ion_energy_version"], 7,
       {{"description", "Component equation and discretisation version: "
                        "MC full-vorticity advection plus compact central R; "
                        "Phi-weighted polarisation work with wall-uniform transport; "
@@ -1335,7 +1351,11 @@ void EvolveVorticityIonEnergy::outputVars(Options& state) {
                        "conservative polarisation owned by polarisation_drift; "
                        "boundary-conditioned parallel/extra/collisional currents; "
                        "completed-state parallel electrical work; "
+                       "optional collective-sound-speed potential damping; "
                        "independent of restart layout"}});
+  set_with_attrs(
+      state["ion_phi_dissipation_enabled"], phi_dissipation,
+      {{"description", "Resolved numerical parallel potential damping option"}});
 
   // Normalisations
   auto Nnorm = get<BoutReal>(state["Nnorm"]);
@@ -1380,6 +1400,14 @@ void EvolveVorticityIonEnergy::outputVars(Options& state) {
                   {"source", "evolve_vorticity_ion_energy"}});
 
   if (diagnose) {
+    set_with_attrs(state["ion_phi_dissipation"], ion_phi_dissipation,
+                   {{"time_dimension", "t"},
+                    {"units", "A m^-3"},
+                    {"conversion", SI::qe * Nnorm * Omega_ci},
+                    {"long_name", "Numerical parallel potential vorticity rate"},
+                    {"description", "Minus FV::Div_par(-phi,0,sound_speed); excluded "
+                                    "from chi and physical currents; no explicit "
+                                    "heating or external power sink"}});
     set_with_attrs(state["DivJReynolds"], DivJReynolds,
                    {{"time_dimension", "t"},
                     {"units", "A m^-3"},

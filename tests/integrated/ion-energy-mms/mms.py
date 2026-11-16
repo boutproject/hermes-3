@@ -92,6 +92,7 @@ def generate(destination, variant="baseline"):
         options["sound_speed"]["electron_dynamics"] = "true"
         options["sound_speed"].comments.pop("electron_dynamics", None)
         options["evolve_vorticity_ion_energy"]["diagnose"] = "true"
+        options["evolve_vorticity_ion_energy"]["phi_dissipation"] = "true"
         options["polarisation_drift"]["diagnose"] = "true"
     if variant == "skew":
         # The analytic chi and its normal derivative both vanish at the wall.

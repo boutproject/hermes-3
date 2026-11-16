@@ -79,8 +79,9 @@ Ion-energy radial boundaries and solver state
 
 ``evolve_vorticity_ion_energy`` derives its radial guards, wall evolution,
 finite-volume face closures and inverse flags from one ``RadialBoundaryModel``.
-The constructor reads ``radial_boundary`` and ``polarisation_ac_boundary``
-as enums and prints the resulting settings. Changes to wall behaviour should
+Ion recovery reads ``radial_boundary``; conservative ``polarisation_drift``
+reads its own ``polarisation_ac_boundary``. Both use the shared boundary enums
+and print the resulting settings. Changes to wall behaviour should
 use this model consistently in recovery, current, transport and energy
 operators. The options and wall equations are described in
 :ref:`sec-evolve_vorticity_ion_energy`.
@@ -112,47 +113,75 @@ odd AC reflection for ``dirichlet``. Chi guards are filled at all local Y
 rows, including Y guards; the other three wall helpers use physical Y only.
 
 The complete X--Z Reynolds and chi faces are retained at physical walls,
-including Q gradients, DC chi current and cross-metric terms. The unpinned
-corner curl has zero discrete divergence and zero Z-summed charge flux at
-each wall and Y row when ``dy`` is uniform in each X--Z plane. The complete
-Reynolds current can have nonzero net wall charge; weighted species, momentum
+including the central Reynolds remainder, DC chi current and cross-metric
+terms. Reynolds current can have nonzero net wall charge; weighted species, momentum
 and energy exchanges are signed and can enter or leave the domain. Viscous
 current and energy faces remain closed for ``fixed`` and ``no_slip`` and open
 for ``free_slip``, using the same current and an interior viscosity coefficient.
 ``polarisation_ac_boundary`` controls chi potential guards and inverse flags;
 it does not mask transport faces after the solve.
 
-Viscous stress dissipates perpendicular kinetic energy without a particle
-flux, so it is excluded from the chi RHS and polarisation transport.
-Vorticity diffusion, the paired viscous energy flux and the electron heating
-share remain active. ``ion_chi_residual`` is measured against
-``DivJReynolds + DivJdia`` rather than the full vorticity derivative.
-Analysis uses the same nonviscous RHS when chi must be reconstructed.
-``evolve_vorticity_ion_energy_version = 2`` identifies the equation and
-discretisation contract; missing tags use the current model and unknown
-versions are rejected.
+Conservative drift constructs the selected current RHS from ``DivJReynolds``,
+``DivJdia``, ``DivJpar`` and enabled ``DivJextra``/``DivJcol``. It reads completed
+charged-species momentum, communicates the summed current and solves chi.
+Ion finalisation adds viscosity and optional numerical potential damping to
+this selected RHS. Both rates are excluded from chi. Viscous drift work and
+enthalpy are carried by the common polarisation energy flux, so ``DivEviscous``
+is diagnostic and is not subtracted again from the energy RHS. The electron
+heating share is an internal ion/electron transfer.
+``ion_chi_residual`` measures the selected RHS minus the full FV operator on
+chi; it is not a residual against the completed vorticity derivative. Analysis
+uses the same selected RHS when reconstructing chi. Output versions are
+``evolve_vorticity_ion_energy_version = 7`` and ``polarisation_drift_version = 2``;
+analysis accepts ion-energy versions 4 through 7, defaults missing tags to
+version 4 and rejects unknown versions.
 
-``reynoldsFaceFluxes()`` reconstructs both :math:`\Omega/2` and :math:`\Lambda`
-with the MC limiter. The donor is selected using the face velocity from
-:math:`\phi` for vorticity and :math:`\Phi=\phi+\psi` for Lambda. Q retains odd radial guards;
-Lambda uses linear radial extrapolation. ``perpendicularFaces()`` supplies
+``reynoldsFaceFluxes()`` evaluates :math:`\Omega\mathbf{v}_E+\mathbf{R}`.
+Only full vorticity uses MC donor reconstruction with the face velocity from
+:math:`\phi`. The central remainder uses the original potential samples and
+static metric coefficients, with tangential diagonal FV second derivatives
+of :math:`\Phi=\phi+\psi` and retained physical wall jumps. No reconstructed
+auxiliary scalar or extrapolated derivative guard enters this operator.
+``perpendicularFaces()`` supplies
 the same diagonal and cross-metric faces to the forward operator, kinetic
 energy, viscosity and chi current. These face fields include the transverse
 ``dy`` factor and use the index convention in ``XZFaceFluxes``. Mesh-owned
 regions cache the X-face and physical-wall indices.
 
-Polarisation transport combines minus the full Reynolds and chi faces
-once, then ``divergence()`` applies arithmetic face averages of each species
-or energy weight to that common current. It fills physical radial guards of
-a weight copy with Neumann values, preserving the supplied weight and ignoring
-its recovery or species boundary conditions there. ``DivEExB`` advects total
+Recovery, Reynolds evaluation and ion finalisation belong to
+``evolve_vorticity_ion_energy``. Conservative ``polarisation_drift`` owns chi,
+the combined current and species transport; ``implementation = conservative``
+must be selected explicitly, with exactly one ion-energy component. The default
+``legacy`` implementation retains the potential-flow closure for ``vorticity``.
+Recovery publishes its transport inputs independently of ``diagnose``.
+
+Polarisation transport combines minus the full Reynolds and chi faces once,
+then applies arithmetic face averages of species/energy weights in the interior.
+At each radial wall and Y row, it uses Z-uniform weights: the mean physical-cell
+mass fraction times separate means of face temperature and parallel velocity.
+The kinetic weight squares the mean velocity. Work uses the wall midpoint of
+:math:`\Phi`. These products of means preserve signed wall exchange while
+removing correlations between transport weights and wall current. Wall runs
+require complete periodic Z lines on each rank. ``DivEExB`` advects total
 ``Eion`` with the shared XPPM operator and closes normal radial energy flux;
 the perpendicular kinetic-energy work flux is included in this advection.
 ``reynolds_work`` is an X--Z diagnostic, rather than a separate energy RHS term.
 With ``poloidal_flows = true``, the differences between poloidal and
 nonpoloidal XPPM calls add the existing X--Y current and weighted transport
 contributions. They are not included in the saved X--Z polarisation faces or
-Reynolds work diagnostic.
+Reynolds work diagnostic. The separately published polarisation density and
+momentum sources are excluded from ion finalisation's kinetic-source conversion,
+because their energy transport is already carried by ``DivEpol``.
+
+With ``phi_dissipation = true``, ion finalisation reads completed phi and
+communicated collective ``sound_speed``, then evaluates
+``-FV::Div_par(-phi, 0.0, sound_speed)`` with default physical-Y flux treatment.
+Read sound speed only here: its construction depends on ion pressure published
+during recovery. Missing sound speed is a configuration error. Damping is
+added only to physical Vort cells, leaves encoded wall rates intact and has
+no explicit species or total-energy source. ``ion_phi_dissipation`` resets
+each RHS evaluation. Its units/conversion match ``ddt(Vort)``; chi and the
+diagnostic alias ``ddt(Phi)`` exclude viscosity and damping.
 
 After the final pressure/potential recovery and boundary application,
 ``computeWallRates()`` resets all rates to zero, then computes the centred
@@ -185,6 +214,9 @@ physical X cells so that they cannot overwrite the prescribed wall rates.
 The committed ``ion-energy-mms`` inputs apply this mask to BOUT++ expression
 sources. Density and pressure components leave MMS source options unread so
 BOUT++ adds each forcing exactly once.
+When checking the full saved vorticity derivative, subtract viscosity,
+numerical damping and this injected continuum source. Auxiliary continuity
+continues to use the selected current RHS without damping or viscosity.
 
 Debugging: running for one iteration
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -802,6 +834,7 @@ together: The scheduler may run `component1` then `component3` then
 The user can optionally turn off automatic sorting of components:
 
 .. code-block:: ini
+
    [hermes]
    components = group1, component3
    autosort = false
@@ -1681,7 +1714,7 @@ See :ref:`subsec-2d-energy-comparison` for the publication resolution scan, and 
 Total ion energy tests
 ~~~~~~~~~~~~~~~~~~~~~~
 
-Four integrated tests exercise ``evolve_vorticity_ion_energy``:
+The integrated tests exercise ``evolve_vorticity_ion_energy``:
 
 - ``ion-energy-closed`` checks energy, particles and charge in a periodic
   two-ion curvature slab, including changing perpendicular and parallel
@@ -1700,18 +1733,34 @@ Four integrated tests exercise ``evolve_vorticity_ion_energy``:
   potential, E×B transport and Reynolds stress; all variants have varying
   composition and finite parallel flows. The focused skew and viscosity
   variants retain wall-compatible zero potential. Periodic Y uses twice the
-  X/Z resolution. Viscous stress is excluded from chi and polarisation transport;
+  X/Z resolution. Viscous stress is excluded from chi;
   the viscosity variant has zero analytic chi/polarisation transport while
   retaining viscous vorticity diffusion, energy flux and electron heating.
   Convergence gates remain enabled. The MMS README describes their coverage
   and limits. The curvature variant uses a finite cosine total-pressure
   mode and its analytic chi inverse while retaining nonzero potential. The
   ``long`` profile uses two MPI ranks.
+- ``ion-energy-parallel-mms`` uses the generated ``parallel_current`` variant
+  with independent electron momentum, inertia, nonzero current divergence and
+  explicit potential damping. It checks spatial orders, physical identities,
+  tighter temporal integration and MPI agreement, saving results and stopping
+  after a failed gate. ``--two-level`` bounds spatial validation to 8/16 and
+  retains the same subsequent temporal/MPI checks. Chi absolute error is
+  diagnostic-only; its finite errors, L2/Linfinity orders, temporal and MPI
+  agreement remain required. Reference RMS and relative RMS error are saved.
+  Continuum forcing is undamped and does not cancel numerical damping.
+- ``ion-energy-parallel-damping`` compares a short periodic case with damping
+  off/on, including the alternating-Y mode, recovered thermal/perpendicular
+  partition and serial/two-rank Y ownership. It checks that evolved total energy
+  has no numerical heating source.
+- ``ion-energy-sheath`` checks analytic target currents, completed parallel
+  current, electrical work and auxiliary continuity on an open-Y slab, with
+  serial/two-rank comparison. Component-reordering trajectory comparisons are
+  omitted after their observed differences were accepted as roundoff.
 
-All cases use zero parallel current and omit sheaths. The component's vorticity
-RHS contains no parallel-current divergence, so these cases do not validate
-parallel-current or sheath control of the potential. Conservation gates do not
-assume a particular Reynolds stress discretisation.
+The original four MMS variants and closed/source/wall tests use zero parallel
+current and omit sheaths. The separate parallel tests cover those terms;
+conservation checks do not establish accuracy of the coupled MMS order gates.
 
 The runners use ``tools/energy_analysis`` for inventories, physical sources,
 wall powers and recovery checks. Analysis runs with diagnostics disabled;
@@ -1723,14 +1772,14 @@ invariants, recovery and diagnostic comparisons use fixed roundoff floors.
 Vorticity budgets use ``open_vorticity`` because time integration of sampled
 Reynolds and viscous wall fluxes introduces a cadence error. The perturbed walls
 use ``rtol = 1e-7`` and ``atol = 1e-10``; analytic cases retain tighter tolerances.
-The unpinned Reynolds curl carries weighted wall fluxes with both AC conditions,
+The complete Reynolds current carries weighted wall fluxes with both AC conditions,
 so particle, energy and vorticity budgets use the open-wall limits even for
 Neumann AC. Full Reynolds wall current is included in the vorticity balance.
 The runner integrates signed wall exchanges in those balances and separately
-checks a minimum cumulative absolute solenoidal energy exchange in each
+checks a minimum cumulative absolute wall energy exchange in each
 nonlinear case. Free-slip viscous wall power still introduces output-sampling
 error in energy balances. The production Reynolds reconstruction uses
-MC for both vorticity and Lambda.
+MC for full vorticity and a central metric remainder.
 MMS truncation errors, convergence orders and magnitude minima retain their
 separate criteria. Every effective limit is saved with its check.
 
@@ -1754,8 +1803,8 @@ not require an environment in the source tree.
 16/32/64, applies the component wall guards, and reports all-cell and interior
 L2 orders, first/last-cell and outer-three-cell errors, and error maxima
 for each Reynolds term and each species/energy
-weight, including the weighted solenoidal contribution. It uses the production
-MC-vorticity/MC-Lambda reconstruction and needs SymPy, but no Hermes run.
+weight. It uses the production full-vorticity MC advection and central remainder
+and needs SymPy, but no Hermes run.
 ``--y`` and ``--time`` select the analytic plane; ``--run`` checks the mirror
 against saved C++ diagnostics with a ``1e-10`` limit. The diagnostic is not a
 CTest convergence gate and does not change the manufactured physics.
@@ -1766,9 +1815,10 @@ AC wall assertions have C++ unit coverage in
 ``EvolveVorticityIonEnergyTest.UniformStateHasZeroRHS``,
 ``PolarisationPotentialHasFixedCorrectionResponse``, ``FixedAuxiliaryInverse*``
 and ``MixedPolarisationGuards*``. ``XPPMFacesMatchSharedDivergenceAndWeights``
-checks the shared XPPM reconstruction and ``UnpinnedCurlAndNeumannWallWeights``
-checks zero curl divergence and wall charge, weighted wall exchange, independence
-from weight guards, and integration by parts with boundary work.
+checks the shared XPPM reconstruction. ``ReynoldsObeysGaussAndBoundaryWork``
+and ``AdvectiveCurrentObeysGaussAndChargePartition`` check face divergence,
+weighted wall exchange, charge partition and integration by parts with boundary
+work.
 ``TotalEnergyAndPolarisationOutputsUseSharedFaces`` checks total-energy advection
 and the common saved polarisation faces. ``ViscousHeatingPairsIonAndElectronEnergy``
 checks the instantaneous viscous heating partition with ``evolve_pressure`` and
@@ -1779,21 +1829,54 @@ at the same state. ``test_reynolds_transport.py`` compares
 the production transport with an independent covariant SymPy reference on
 wavy metrics, a sheared annulus and a uniform Cartesian slab, including varying
 c, J and D. It also checks both current face components against that reference,
-fixing the curl's sign
-independently of its divergence.
+fixing current signs independently of their divergence.
 ``tests/unit/generate_reynolds_reference.py`` generates
 that continuum reference without using the implemented split/curl identity.
+``IonEnergyParallelDampingTest`` checks identical-state damping off/on,
+independent numerical faces, uniform/alternating Y, completed guards, scheduler
+construction and thermal/kinetic recovery. ``IonEnergyParallelDiagnostics``
+provides optional solver-free electron-momentum and current/chi probes.
 ``IonEnergyReynoldsConvergence.LimitedCurrentConvergesInShearedAnnulus`` uses
 the generated expressions on three FakeMesh resolutions with varying c, J and D
 and nonzero g13. Its interior convergence gate remains 1.5; it also reports
 boundary-cell maxima, whose errors do not converge with the present wall stencil.
 
-The active Python ``test_reynolds_wall_curvature_converges`` regression also
-checks boundary cells, the outer three cells and the interior, using a potential
-recovered from the same finite-volume Dirichlet problem. It currently fails:
-the Reynolds boundary truncation error does not converge with the odd Q and
-linear Lambda wall guards. Passing integral budget checks therefore does not
-establish radial wall accuracy.
+.. _subsec-reynolds-wall-convergence:
+
+Reynolds stress wall convergence
+````````````````````````````````
+
+``tests/python/test_reynolds_transport.py`` uses an independently differentiated
+covariant current and recovers Phi from the same FV Dirichlet problem as the
+model before subtracting sampled psi. It retains nonzero normal Reynolds
+current and the vorticity boundary condition. The zero-wall-curvature reference
+uses :math:`r=x(1-x)` and :math:`f=r+r^2+(13/6)r^3`, with
+:math:`\phi=f\cos z` and :math:`\psi=1+f\sin z`.
+It satisfies :math:`f''=0` and :math:`\Omega_x=0` at both walls. With production
+reflection and MC donors, wall maximum orders are 1.97/1.98 and domain mean
+absolute orders are 1.98/2.00 on 32/64/128 cells. MC extrema give domain RMS
+orders about 1.5 and maximum orders about 1; a centred-donor diagnostic control
+restores approximately second-order RMS/maximum convergence.
+
+The original curved-wall reference uses :math:`f=r-r^2/12`. Its first-cell
+error remains O(1): separate reflected potential/pressure guards and FV
+recovery give an O(h) face discrepancy that is divided by cell width. The
+error occupies O(h) domain volume, so all-cell mean absolute orders are
+1.22/1.13, while interior RMS orders are 1.80/1.90. The regression therefore
+requires first-order domain mean error, near-second-order interior RMS and
+a bounded nonvanishing wall error; the independent Taylor-limit checks remain.
+Viscosity and density-source coverage are retained. Mean absolute error, RMS
+and maximum norms have different convergence rates and must be named explicitly.
+
+``tests/unit/diagnose_reynolds_wall.py`` provides independent X/Z refinements,
+analytic-sample/guard-continuation/face-current probes and a centred-donor
+control without evolving Hermes. Its midpoint face currents times area are
+distinguished from exact face integrals and cell-average divergence by
+``--face-quadrature-only``. The C++
+``IonEnergyReynoldsConvergence.WallMatrixMatchesProductionEvaluator`` check uses
+its exported samples to compare production faces/divergence, including wall
+cells. These checks retain the robust production wall method; an integral
+energy budget alone does not establish local wall accuracy.
 
 The legacy ``2D-energy`` regression retains its existing registration. The
 publication refinement scan is an example in
@@ -1816,7 +1899,7 @@ This test plots results and can be used to help with developing the recycling co
 is a `plot` flag near the beginning of the file.
 
 1D-density (conservation)
-~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ``tests/integrated/1D-density``
 
@@ -1832,7 +1915,7 @@ The script checks three things:
 3. the final density field matches between the 1-rank and 2-rank runs.
 
 The Heaviside temperature jump is included to stress fluxes that use numerical Lax dissipation
-(see section `Numerics`_), because the wave speed entering that term must be communicated
+(see :ref:`sec-solver_numerics`), because the wave speed entering that term must be communicated
 consistently across processor boundaries. The constant-temperature cases provide a baseline that
 still checks conservation and MPI decomposition independence. In this testcase the geometry factors
 are constant, so the script checks ``sum(N)`` rather than explicitly evaluating

@@ -30,14 +30,13 @@ and orders use only the final saved output for evolved and recovered fields.
 The current pre-extraction baseline fails the default order gates for Ni, Pe,
 Vort and Eion in both baseline and curvature variants, with measured orders
 between 1.375 and 1.694 against 1.7. Recovery and absolute-error gates pass.
-The [polarisation-drift review](../../../docs/polarisation-drift-3d-analysis-report.md)
-compares them with `criteria.json["observed"]`: all eight historical orders
+Comparison with `criteria.json["observed"]` shows all eight historical orders
 were already below 1.7. Six fresh values reproduce them within 0.001; baseline
 and curvature vorticity decline from about 1.69 to 1.38 before extraction and
 need a separate investigation. The older passing-suite narrative conflicts
 with these recorded criteria. The task's named deferral covers only these
-eight default 8-to-16 order gates and the separate Reynolds wall test, retaining
-raw failures and all thresholds. Long-profile and new parallel-current MMS
+eight default 8-to-16 order gates, retaining raw failures and all thresholds.
+Long-profile and new parallel-current MMS
 accuracy requirements remain in force.
 The default 300 s stall window measures lack of saved-time progress; it can therefore
 detect a stopped run without waiting for its complete MMS integration. Case
@@ -81,9 +80,12 @@ observed orders on these grids. Passing an integral energy budget does not imply
 that the spatial or evolved-field order gates pass. Each runner invocation
 records its measured errors, orders and failing checks in `result.json`.
 
-The enabled Python `test_reynolds_wall_curvature_converges` regression checks
-boundary, outer-three-cell, all-cell and interior errors independently of these
-MMS runs. Its Reynolds boundary error remains non-convergent with the current
-potential wall conditions and central remainder. The nonzero wall curvature
-state and its failing accuracy gate remain enabled. These MMS profiles do not
-establish radial wall accuracy.
+The Python `test_reynolds_curved_wall_limits_global_convergence` regression
+retains the nonzero wall-curvature state and current, checking first-order
+domain mean absolute error, near-second-order interior RMS and a bounded
+nonvanishing wall error. `test_reynolds_zero_wall_curvature_converges` checks
+second-order wall maximum and domain mean absolute accuracy with production
+reflection and MC donors. Its centred-donor control also checks second-order
+domain RMS/maximum accuracy. These operator checks are independent of the
+coupled MMS gates; passing an integral budget alone does not establish wall
+accuracy.

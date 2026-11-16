@@ -1,79 +1,61 @@
-# Ion energy test follow-ups
+# Ion energy validation follow-ups
 
-Parallel-current divergence, `DivJextra` and `DivJcol` are now included in
-the auxiliary and vorticity equations, with completed sheath current and
-electrical-work diagnostics. The maintainer accepts the observed
-`8.881784197001252e-16` trajectory-sorting difference as probably harmless
-ordering roundoff; raw bitwise failures remain retained. Identical-state C++
-RHS, target formulas, continuity, electrical work and serial/Y-MPI checks pass.
-Stage-2 X-Z preservation also passes: 207 common numerical histories are
-bitwise identical. Checkpoint 2 passes under this narrow acceptance. The new
-independent-electron-momentum MMS is implemented but checkpoint 3 remains
-failed on six new 8-to-16 accuracy gates. Its runner now checks each completed
-refinement pair and writes failure results before launching more validation.
-No existing accuracy deferral applies to it. The electron RHS audit identifies
-parallel pressure/electric forces, including recovered-potential error, as the
-dominant initial discrepancy. Tighter serial 16-cell diagnostics hit both the
-600-second and extended 1800-second output watchdogs before saving a nonzero
-time. Temporal sensitivity remains unassessed. Inspect internal CVODE step
-counts and RHS timings before completing that comparison and prioritising
-the costly 32-cell diagnostic; stages 4–5 remain pending.
-The Y-varying `ion-energy-closed` input also exposed a `zero_current` closure
-limitation: electron pressure work has no parallel force-balance/kinetic
-counterpart. The revised strict X-Z benchmark uses Y-invariant fields, and
-analysis reports unpaired work separately from heating. Its energy-conservation
-check passes; the maintainer accepted checkpoint 0 with the parallel kinetic
-exchange minimum revised to `5e-5` of initial energy. See
-[the polarisation-drift review](polarisation-drift-3d-analysis-report.md).
-Conservative drift has been extracted with bitwise-preserved completed X-Z
-outputs, and the constructor-order defect is fixed. The maintainer deferred
-the known Reynolds wall-accuracy failure while retaining its test and `1.5`
-threshold. Checkpoint 1 subsequently found eight original default MMS order
-failures against `1.7`. The maintainer now defers only those eight named
-default 8-to-16 accuracy gates, retaining tests and thresholds; checkpoint 1 preservation is complete. All five MMS and 13 wall cases
-agree bitwise with the originals; both wall profiles pass all 204 assertions. All eight historical orders were already
-below 1.7; six fresh values reproduce them closely. Baseline/curvature vorticity
-fall from about 1.69 to 1.38 before extraction and require a separate accuracy
-investigation. The old passing-suite narrative conflicts with the recorded
-criteria. Long-profile and new parallel-current MMS gates remain outside this
-deferral. The parallel-current/sheath implementation, initial failed checkpoint
-and subsequent maintainer acceptance are documented in the review report. For the separate vorticity decline, compare frozen MMS inputs and
-error norms with historical ion-energy builds at a fixed BOUT++ revision;
-locate the change before proposing a numerical fix. Fresh error maxima lie
-inside the radial domain, and excluding two wall cells still gives orders
-about 1.638/1.639. This evidence does not attribute the decline to the known
-Reynolds wall failure. Reynolds extraction and `vorticity` changes remain separate.
-The removed cases are preserved at commit `3831b4d`:
+Conservative polarisation drift owns the auxiliary current solve and species
+transport. Parallel-current divergence, `DivJextra` and `DivJcol` enter both
+the selected current RHS and physical vorticity equation. Ion finalisation
+adds optional viscosity and numerical potential damping. Damping uses completed
+collective sound speed and has no explicit total-energy source.
+
+The separate `ion-energy-parallel-mms` currently fails five 8-to-16 order
+gates: Ni, Pe and Te Linfinity, plus Vort L2 and Linfinity. Chi meets its spatial
+orders; absolute chi error is diagnostic-only, with reference and relative RMS
+saved. The runner writes results and stops before further cases after a failed
+gate. Coupled temporal sensitivity remains unassessed. Initial production
+electron-force probes show pressure/electric derivative and recovered-potential
+errors, while small momentum-only temporal refinements are negligible compared
+with their spatial errors. Those probes do not establish a final-time cause.
+
+The independent wall tests retain the robust reflection and MC treatment.
+Zero wall curvature gives second-order wall maximum and domain mean absolute
+error. Nonzero wall curvature leaves a bounded first-cell error, giving
+first-order domain mean error and near-second-order smooth interior RMS.
+The developer guide explains how MC extrema affect other norms. The separate
+pre-existing zero-current Vort order decline has not been attributed to this
+wall mechanism; compare fixed inputs, norms and dependency revisions before
+proposing a numerical change.
+
+Existing default MMS acceptance excludes only its eight named 8-to-16 order
+failures. Long-profile and parallel-current MMS gates remain active. Each
+runner retains raw errors, orders and effective limits in `result.json`.
+Conservation, source ownership and current identities do not establish passing
+coupled accuracy.
+
+The Y-varying `zero_current` closure has no independent electron kinetic
+reservoir or parallel force balance. A strict closed-energy case must eliminate
+unpaired electron pressure/electric work; the closed X–Z benchmark uses
+Y-invariant fields. Analysis exposes this work separately from numerical
+heating. Target formulas, continuity, electrical work and serial/Y-MPI
+comparisons remain tested. Near-roundoff component-reordering trajectory
+comparisons were removed.
+
+The removed cases are available at commit `3831b4d`:
 
 - [Open parallel transport](https://github.com/boutproject/hermes-3/tree/3831b4d/tests/integrated/2D-ion-energy-boundary):
   prescribed ion flow through open Y boundaries.
 - [Electron parallel energy and pressure work](https://github.com/boutproject/hermes-3/tree/3831b4d/tests/integrated/2D-ion-energy-parallel):
-  restore with current closure. Its numerical heating audit found
-  `FV::Div_par_fvv_heating` using `n_edge*(a +/- v_edge/2)` where the split
-  kinetic balance needs `n_edge*(a +/- v_edge)/2`. Check this against the
-  `operator-fixes` BOUT++ branch before restoring the gate. The current
-  checkout (`97411814`) already uses the corrected split particle flux; the
-  analysis library and its kinetic split identity now use that form.
+  restore with current closure. Verify the corrected split particle flux in
+  `FV::Div_par_fvv_heating` against the kinetic balance before restoring a gate.
 - [Sheath and tokamak relaxation](https://github.com/boutproject/hermes-3/tree/3831b4d/tests/integrated/tokamak-ion-energy-relax-boundary):
-  COMPASS geometry, closed-core surface averaging, two targets and six ranks.
-  Restore with the `long` label.
-- Add a nonzero-parallel-current variant to `ion-energy-mms`. Varying magnetic
-  field and the alternative Reynolds stress split remain separate work.
+  COMPASS geometry, closed-core averaging, two targets and six ranks.
 
-Reusable functions in the removed
+The removed
 [ion_energy_tokamak_test.py](https://github.com/boutproject/hermes-3/blob/3831b4d/tests/integrated/ion_energy_tokamak_test.py)
-are `read_ranks` (topology-aware rank data), `boundary_rates` (wall histories),
-`ode_error` (boundary ODE integration), and `sheath_state` (target reconstruction).
-Port these into `energy_analysis` when the corresponding physics is supported.
+has topology-aware loading, boundary histories, wall-ODE and sheath helpers.
+Use the existing energy-analysis adapters when extending geometry support.
 
-MMS source ownership guards in `evolve_energy`, `neutral_mixed` and
-`neutral_full_velocity` are deferred. Density and pressure guards are retained
-and tested; other MMS variable sources need the same ownership rule before
-those components are used in expression-source MMS cases.
-
-The consolidated source test retains collisional heat exchange but omits
-`braginskii_friction`: with `zero_current`, electrons have no evolved kinetic
-reservoir to receive their frictional mechanical work. Heat exchange cancels
-between species; friction does not conserve the chosen plasma reservoir under
-that closure. `ParticleInjectionConservesTransferredEnergy` and
-`ParticleRemovalCarriesItsKineticEnergy` cover momentum-source conversion.
+MMS source ownership in `evolve_energy`, `neutral_mixed` and
+`neutral_full_velocity` still needs the same injection checks used for
+density/pressure before expression-source MMS can cover those components.
+The consolidated source test omits friction under `zero_current`, because
+there is no electron kinetic counterpart to its mechanical work. Collisional
+heat exchange and moving-ion source conversion remain tested.

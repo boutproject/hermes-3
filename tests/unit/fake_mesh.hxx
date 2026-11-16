@@ -41,14 +41,14 @@ class Options;
 ///   else will likely **not** work!
 class FakeMesh : public Mesh {
 public:
-  FakeMesh(int nx, int ny, int nz, MpiWrapper& mpi_in, int mxg = 1) {
+  FakeMesh(int nx, int ny, int nz, MpiWrapper& mpi_in, int mxg = 1, int myg = 1) {
     // Mesh only on one process, so global and local indices are the
     // same
     GlobalNx = nx;
     GlobalNy = ny;
     GlobalNz = nz;
     GlobalNxNoBoundaries = nx - 2 * mxg;
-    GlobalNyNoBoundaries = ny == 1 ? 1 : ny - 2;
+    GlobalNyNoBoundaries = ny == 1 ? 1 : ny - 2 * myg;
     GlobalNzNoBoundaries = nz;
     LocalNx = nx;
     LocalNy = ny;
@@ -71,8 +71,8 @@ public:
     // Small "inner" region
     xstart = mxg;
     xend = nx - mxg - 1;
-    ystart = ny == 1 ? 0 : 1;
-    yend = ny == 1 ? 0 : ny - 2;
+    ystart = ny == 1 ? 0 : myg;
+    yend = ny == 1 ? 0 : ny - myg - 1;
     zstart = 0; // no guards
     zend = nz - 1;
 
@@ -105,14 +105,40 @@ public:
         bout::boundary::NewBoundaryRegionYDown("lower_target", xstart, xend, this));
   }
 
-  comm_handle send(FieldGroup& UNUSED(g)) override { return nullptr; }
-  comm_handle sendX(FieldGroup& UNUSED(g), comm_handle UNUSED(handle) = nullptr,
-                    bool UNUSED(disable_corners) = false) override {
+  // Opt in only for probes that require periodic guard communication.
+  // Historical fixtures deliberately leave communication as a no-op.
+  bool copy_periodic_halos{false};
+  comm_handle send(FieldGroup& group) override {
+    if (copy_periodic_halos) {
+      for (auto* field : group.get()) {
+        if (auto* value = dynamic_cast<Field3D*>(field)) {
+          for (int x = 0; periodicX && x < xstart; ++x) {
+            for (int y = 0; y < LocalNy; ++y) {
+              for (int z = 0; z < LocalNz; ++z) {
+                (*value)(x, y, z) = (*value)(xend - xstart + 1 + x, y, z);
+                (*value)(xend + 1 + x, y, z) = (*value)(xstart + x, y, z);
+              }
+            }
+          }
+          for (int x = 0; x < LocalNx; ++x) {
+            for (int y = 0; periodicY(x) && y < ystart; ++y) {
+              for (int z = 0; z < LocalNz; ++z) {
+                (*value)(x, y, z) = (*value)(x, yend - ystart + 1 + y, z);
+                (*value)(x, yend + 1 + y, z) = (*value)(x, ystart + y, z);
+              }
+            }
+          }
+        }
+      }
+    }
     return nullptr;
   }
-  comm_handle sendY(FieldGroup& UNUSED(g),
-                    comm_handle UNUSED(handle) = nullptr) override {
-    return nullptr;
+  comm_handle sendX(FieldGroup& g, comm_handle UNUSED(handle) = nullptr,
+                    bool UNUSED(disable_corners) = false) override {
+    return send(g);
+  }
+  comm_handle sendY(FieldGroup& g, comm_handle UNUSED(handle) = nullptr) override {
+    return send(g);
   }
   int wait(comm_handle UNUSED(handle)) override { return 0; }
   int getNXPE() const override { return 1; }

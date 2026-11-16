@@ -188,6 +188,7 @@ struct EvolveVorticityIonEnergy : public NamedComponent<EvolveVorticityIonEnergy
   ///     - energy_source. Thermal energy, excluding parallel kinetic energy
   ///     - density_source and momentum_source. Optional external source conversion
   /// - fastest_wave. Optional parallel numerical wave speed; otherwise sqrt(T/AA)
+  /// - sound_speed. Completed collective sound speed; required by phi_dissipation
   ///
   void finally(const Options& state) override;
 
@@ -207,9 +208,11 @@ private:
   Field3D ion_KE_parallel; ///< Parallel ion kinetic energy K_||i
   Field3D ion_KE_perp;     ///< Perpendicular ion kinetic energy K⊥
 
-  BoutReal average_atomic_mass; ///< Fixed Boussinesq reference atomic mass
-  bool poloidal_flows;          ///< Include poloidal (Y) flows?
-  BoutReal density_floor;       ///< Used to calculate Ti
+  BoutReal average_atomic_mass;     ///< Fixed Boussinesq reference atomic mass
+  bool poloidal_flows;              ///< Include poloidal (Y) flows?
+  bool phi_dissipation;             ///< Numerical parallel potential damping
+  Field3D ion_phi_dissipation{0.0}; ///< Numerical physical-cell vorticity rate
+  BoutReal density_floor;           ///< Used to calculate Ti
 
   bool include_viscosity;                ///< Was kinematic viscosity specified?
   Coordinates::FieldMetric viscosity;    ///< Normalised kinematic viscosity

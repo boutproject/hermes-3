@@ -18,7 +18,17 @@ x, z = s.symbols("x z", real=True)
 @cache
 def reference(case="periodic"):
     r = s.Rational
-    if case in ("annulus", "cpp"):
+    if case in ("wall", "wall_zero_curvature"):
+        g11 = g33 = J = c = s.Integer(1)
+        g13 = s.Integer(0)
+        radial = x * (1 - x)
+        f = (
+            radial - radial**2 / 12
+            if case == "wall"
+            else radial + radial**2 + r(13, 6) * radial**3
+        )
+        phi, psi = f * s.cos(z), 1 + f * s.sin(z)
+    elif case in ("annulus", "cpp"):
         g11, g13, g33 = s.Integer(1), -r(1, 4) / x, r(17, 16) / x**2
         J, c = x, x**2
         phi = s.sin(s.pi * (x - 1)) * s.cos(z)

@@ -1237,7 +1237,7 @@ def shared_current_case(dataset):
     return run
 
 
-@pytest.mark.parametrize("version", (None, 4, 5, 6))
+@pytest.mark.parametrize("version", (None, 4, 5, 6, 7))
 def test_component_version(dataset, version):
     from energy_analysis.fluxes import component_version
 
@@ -1607,3 +1607,43 @@ def test_wall_exchange_for_density_momentum_and_energy_without_diagnostics(datas
         [n for n in ds if n.startswith(("Div", "polarisation_flux_"))]
     )
     assert wall_budget(run).attrs["coverage"] == "complete"
+
+
+def test_chi_nonfinite_errors_are_rejected_before_saving(dataset, monkeypatch):
+    from energy_analysis import expressions
+    from energy_analysis.convergence import manufactured_errors
+
+    dataset["ion_chi"] = xr.full_like(dataset.phi, np.nan)
+    run = open_run(dataset)
+    monkeypatch.setattr(
+        expressions, "evaluate", lambda *args: xr.zeros_like(dataset.phi.isel(t=-1))
+    )
+    with pytest.raises(AuditError, match="Nonfinite MMS error for ion_chi"):
+        manufactured_errors(run, {"ion_chi": "mms:current_potential"})
+
+
+def test_chi_absolute_and_relative_rms_remain_reported(dataset, monkeypatch):
+    from energy_analysis import expressions
+    from energy_analysis.convergence import manufactured_errors
+
+    dataset["ion_chi"] = xr.full_like(dataset.phi, 0.009)
+    run = open_run(dataset)
+    monkeypatch.setattr(
+        expressions,
+        "evaluate",
+        lambda *args: xr.full_like(dataset.phi.isel(t=-1), 0.005),
+    )
+    errors = manufactured_errors(run, {"ion_chi": "mms:current_potential"})["ion_chi"]
+    assert errors["l2"] == pytest.approx(0.004)
+    assert errors["linf"] == pytest.approx(0.004)
+    assert errors["reference_rms"] == pytest.approx(0.005)
+    assert errors["relative_rms_error"] == pytest.approx(0.8)
+
+
+def test_enabled_uniform_y_potential_damping_reconstructs_zero(dataset):
+    from energy_analysis.fluxes import reconstruct_fluxes
+
+    run = shared_current_case(dataset)
+    run.data.options["evolve_vorticity_ion_energy"]["phi_dissipation"] = "true"
+    result = reconstruct_fluxes(run)
+    assert_allclose(result.ion_phi_dissipation, 0, atol=0, rtol=0)

@@ -24,10 +24,21 @@ RUNNER = (
         ("physics", ["parallel-8"]),
         ("coarse_order", ["parallel-8", "parallel-16"]),
         ("field_error", ["parallel-8", "parallel-16"]),
+        ("chi_nonconverging", ["parallel-8", "parallel-16"]),
+        ("chi_nonfinite", ["parallel-8", "parallel-16"]),
+        (
+            "bounded_chi",
+            [
+                "parallel-8",
+                "parallel-16",
+                "parallel-16-tight",
+                "parallel-8-decomposition",
+            ],
+        ),
         ("fine_order", ["parallel-8", "parallel-16", "parallel-32"]),
         ("temporal", ["parallel-8", "parallel-16", "parallel-32", "parallel-16-tight"]),
         (
-            None,
+            "chi_magnitude",
             [
                 "parallel-8",
                 "parallel-16",
@@ -76,16 +87,37 @@ def test_validation_stops_before_next_launch(tmp_path, monkeypatch, failure, exp
             error = 8e-5  # Passing order isolates the fine-grid field-error cap.
         if failure == "fine_order" and size == 32:
             error = 4e-6
-        errors = {"NVe": {"l2": error, "linf": error}}
+        chi = 0.016 * (8 / size) ** 2
+        if failure == "chi_nonconverging" and size == 16:
+            chi = 0.016
+        if failure == "chi_nonfinite" and size == 16:
+            # Production manufactured_errors rejects NaN before storing errors.
+            raise AuditError("Nonfinite chi before further validation")
+        errors = {
+            "NVe": {"l2": error, "linf": error},
+            "ion_chi": {"l2": chi, "linf": chi},
+        }
         study.result["cases"][label]["errors"] = errors
         return errors
 
     monkeypatch.setattr(runner, "Study", SolverFreeStudy)
     monkeypatch.setattr(runner, "check_physics", physics)
-    monkeypatch.setattr(runner, "REFERENCES", {"NVe": "NVe:solution"})
-    monkeypatch.setattr(runner, "comparison_fields", lambda run: {"NVe": run.field})
-    monkeypatch.setattr(sys, "argv", [str(RUNNER), "--output-root", str(tmp_path)])
-    if failure:
+    monkeypatch.setattr(
+        runner,
+        "REFERENCES",
+        {"NVe": "NVe:solution", "ion_chi": "mms:current_potential"},
+    )
+    monkeypatch.setattr(
+        runner,
+        "comparison_fields",
+        lambda run: {"NVe": run.field, "ion_chi": run.field},
+    )
+    argv = [str(RUNNER), "--output-root", str(tmp_path)]
+    if failure == "bounded_chi":
+        argv.append("--two-level")
+    monkeypatch.setattr(sys, "argv", argv)
+    fails = failure not in (None, "chi_magnitude", "bounded_chi")
+    if fails:
         with pytest.raises(AuditError, match="before further validation"):
             runner.main()
     else:
@@ -93,10 +125,40 @@ def test_validation_stops_before_next_launch(tmp_path, monkeypatch, failure, exp
     assert launched == expected
     [result_path] = tmp_path.glob("*/result.json")
     result = json.loads(result_path.read_text())
-    assert result["passed"] is (failure is None)
+    assert result["passed"] is (not fails)
     assert set(result["cases"]) == set(expected)
-    assert any(not c["passed"] for c in result["checks"]) is (failure is not None)
+    assert any(not c["passed"] for c in result["checks"]) is (
+        fails and failure != "chi_nonfinite"
+    )
     if failure == "field_error":
         assert [c["name"] for c in result["checks"] if not c["passed"]] == [
             "error/16/NVe"
         ]
+
+    assert all(c["name"] != "error/16/ion_chi" for c in result["checks"])
+
+
+def test_completed_rate_subtracts_one_continuum_mms_source(monkeypatch):
+    loader = SourceFileLoader("parallel_rate_workflow", str(RUNNER))
+    runner = module_from_spec(spec_from_loader(loader.name, loader))
+    loader.exec_module(runner)
+    field = xr.DataArray(np.ones((2, 3)), dims=("t", "x"), coords={"t": [0.0, 0.02]})
+    ds = xr.Dataset(
+        {
+            "ddt(Vort)": 10 * field,
+            "ion_current_rhs": 2 * field,
+            "DivJviscous": 3 * field,
+            "ion_phi_dissipation": 4 * field,
+        }
+    )
+    calls = []
+
+    def forcing(run, key, time):
+        calls.append((key, time))
+        return field.isel(t=0, drop=True)
+
+    monkeypatch.setattr(runner, "evaluate", forcing)
+    np.testing.assert_array_equal(
+        runner.vorticity_rate_residual(SimpleNamespace(data=ds)), 0
+    )
+    assert calls == [("Vort:source", 0.0), ("Vort:source", 0.02)]

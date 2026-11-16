@@ -47,6 +47,12 @@ def manufactured_errors(run, references):
             "l2": float(np.sqrt(run.integrate(error**2) / volume)),
             "linf": float(abs(run.interior(error)).max()),
         }
+        if name == "ion_chi":
+            reference_rms = float(np.sqrt(run.integrate(reference**2) / volume))
+            result[name]["reference_rms"] = reference_rms
+            result[name]["relative_rms_error"] = (
+                result[name]["l2"] / reference_rms if reference_rms else None
+            )
         # Separate wall errors without changing the convergence checks. Two
         # physical cells are omitted next to each radial face, in addition to
         # the guards already excluded from the all-cell norm.

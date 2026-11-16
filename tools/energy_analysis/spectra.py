@@ -72,9 +72,14 @@ def analyse_native_bands(
         dumps = [stack.enter_context(Dataset(path)) for path in paths]
         times = np.asarray(dumps[0]["t_array"][:])
         for dump in dumps:
-            if int(dump["evolve_vorticity_ion_energy_version"][...]) not in (4, 5, 6):
+            if int(dump["evolve_vorticity_ion_energy_version"][...]) not in (
+                4,
+                5,
+                6,
+                7,
+            ):
                 raise AuditError(
-                    "Fixed-band monitor requires ion-energy version 4, 5 or 6"
+                    "Fixed-band monitor requires ion-energy version 4, 5, 6 or 7"
                 )
             if dump["Vort"].shape[2] != 1 or int(dump["NYPE"][...]) != 1:
                 raise AuditError("Band monitor requires a singleton-Y drift plane")

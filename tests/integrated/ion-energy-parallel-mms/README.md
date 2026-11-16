@@ -22,14 +22,16 @@ The runner checks each completed refinement pair before launching the next
 grid. A failed physics, accuracy or temporal block exits through the result
 writer and stops subsequent validation. Reusing completed 8/16-cell outputs
 with `--reuse-root` therefore reports their accuracy failures before any new
-solver run. Explicitly authorised diagnostic continuations use separate
-scripts recorded in the review report; the default runner has no bypass.
+solver run. The runner has no accuracy bypass.
 
 `criteria.json` requires L2 orders at least 1.7 for 8-to-16 and 1.8 for
 16-to-32, and Linfinity orders at least 1.5. It measures all evolved fields,
 recovered ion/electron temperatures and pressures, phi, psi and chi. Original
-field-error caps are retained; electron momentum, temperature and chi have
-separate declared caps. Temporal differences must be below 5% of the measured
+field-error caps are retained; electron momentum and temperature retain their
+separate caps. Chi absolute error is diagnostic-only: the legacy 0.001 cap has
+been removed. Chi still requires the same orders, finite errors, temporal and
+MPI agreement. Its absolute errors, reference RMS and relative RMS error are
+saved. Temporal differences must be below 5% of the measured
 spatial error (with an absolute floor of `1e-11`); auxiliary residual,
 continuity, recovery and MPI differences must be below `1e-10`.
 
@@ -37,3 +39,11 @@ The forcing is injected by BOUT's MMS mechanism once; electron pressure and
 total-ion-energy physical source diagnostics must remain zero to `1e-12`.
 Nonzero Reynolds, parallel-current and polarisation terms are checked
 independently. No existing MMS accuracy deferral applies to this test.
+
+The generated parallel-current input enables numerical `phi_dissipation` with
+the collective `sound_speed` component. Forcing remains the undamped continuum
+forcing. `--two-level` bounds the spatial comparison to 8/16 and then runs the
+same tighter 16-cell temporal and decomposition checks; it has no accuracy
+bypass. `--internal-progress` enables existing CVODE timestep hooks for an
+isolated, recorded diagnostic build. The initial watchdog is 600 seconds
+without a new output and the case bound is 3600 seconds.

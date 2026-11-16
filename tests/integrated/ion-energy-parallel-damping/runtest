@@ -1,0 +1,146 @@
+#!/usr/bin/env python3
+"""Short unforced Nyquist-Y damping, thermal recovery and Y-MPI ownership probe."""
+
+import sys
+from pathlib import Path
+
+import numpy as np
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "tools"))
+from energy_analysis.inventory import energy_densities
+from energy_analysis.testing import Study, parser
+
+HERE = Path(__file__).resolve().parent
+
+
+def mode_amplitude(run):
+    field = run.interior(run.data.phi)
+    sign = np.where(np.arange(field.sizes["y"]) % 2, -1, 1)
+    # phi dimensions are t,x,y,z in native labelled output; transpose explicitly.
+    values = field.transpose("t", "x", "y", "z").values
+    return (
+        np.mean(
+            values
+            * sign[None, None, :, None]
+            * np.cos(2 * np.pi * np.arange(field.sizes["z"]) / field.sizes["z"])[
+                None, None, None, :
+            ],
+            axis=(1, 2, 3),
+        )
+        * 2
+    )
+
+
+def checks(study, label, run):
+    ds = run.data
+    densities = energy_densities(run)
+    for name, difference, criterion in (
+        (
+            "rate",
+            ds["ddt(Vort)"]
+            - ds.ion_current_rhs
+            - ds.get("DivJviscous", 0)
+            - ds.ion_phi_dissipation,
+            "rate",
+        ),
+        (
+            "continuity",
+            ds.DivJpol + ds.DivJpar - ds.ion_auxiliary_residual,
+            "continuity",
+        ),
+        ("recovery", densities.ion_reconstructed - ds.Eion, "recovery"),
+    ):
+        study.check(
+            label + "/" + name,
+            float(abs(run.interior(difference)).max()),
+            criterion,
+            truncation=True,
+        )
+    modes = mode_amplitude(run)
+    study.result["cases"][label]["alternating_y_amplitude"] = modes.tolist()
+    thermal = run.integrate(densities.ion_thermal)
+    kinetic = run.integrate(densities.ion_perpendicular)
+    evolved = run.integrate(ds.Eion)
+    volume = float(run.integrate(ds.Eion.isel(t=0) * 0 + 1))
+    thermal_change = thermal - thermal.isel(t=0)
+    kinetic_change = kinetic - kinetic.isel(t=0)
+    evolved_change = evolved - evolved.isel(t=0)
+    study.check(
+        label + "/energy_partition",
+        float(abs(thermal_change + kinetic_change - evolved_change).max()) / volume,
+        "energy_partition",
+        truncation=True,
+    )
+    study.check(
+        label + "/evolved_energy_change",
+        float(abs(evolved_change).max()) / volume,
+        "energy_partition",
+        truncation=True,
+    )
+    study.result["cases"][label]["partition"] = {
+        name: np.asarray(value).tolist()
+        for name, value in (
+            ("thermal", thermal),
+            ("perpendicular", kinetic),
+            ("evolved", evolved),
+        )
+    }
+    return modes
+
+
+def main():
+    args = parser(__doc__).parse_args()
+    with Study(HERE, args) as study:
+        off = study.run("off", ["evolve_vorticity_ion_energy:phi_dissipation=false"])
+        off_modes = checks(study, "off", off)
+        on = study.run("on", ["evolve_vorticity_ion_energy:phi_dissipation=true"])
+        on_modes = checks(study, "on", on)
+        study.check(
+            "damps_nyquist",
+            abs(on_modes[-1] / off_modes[-1]),
+            limit=1 - 1e-4,
+            truncation=True,
+        )
+        study.check(
+            "off_zero",
+            float(abs(off.interior(off.data.ion_phi_dissipation)).max()),
+            limit=0,
+            truncation=True,
+        )
+        for field in ("Eion", "ion_chi", "ion_current_rhs", "ddt(Eion)"):
+            study.check(
+                "initial/" + field,
+                float(
+                    abs(
+                        on.interior(
+                            on.data[field].isel(t=0) - off.data[field].isel(t=0)
+                        )
+                    ).max()
+                ),
+                "rate",
+                truncation=True,
+            )
+        study.args.nproc = 2 if args.nproc == 1 else 1
+        mpi = study.run(
+            "on-decomposition", ["evolve_vorticity_ion_energy:phi_dissipation=true"]
+        )
+        checks(study, "on-decomposition", mpi)
+        for field in (
+            "phi",
+            "Vort",
+            "Eion",
+            "Tion",
+            "ion_chi",
+            "ion_phi_dissipation",
+            "ddt(Vort)",
+        ):
+            study.check(
+                "decomposition/" + field,
+                float(abs(on.interior(on.data[field] - mpi.data[field])).max()),
+                "decomposition",
+                truncation=True,
+            )
+
+
+if __name__ == "__main__":
+    main()

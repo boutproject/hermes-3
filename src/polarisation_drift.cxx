@@ -983,16 +983,17 @@ void PolarisationDrift::outputConservative(Options& state) {
                     {"units", "A m^-3"},
                     {"long_name", "Polarisation transport current divergence"},
                     {"conversion", SI::qe * Nnorm * Omega_ci}});
-    set_with_attrs(state["ddt(Phi)"], chi,
-                   {{"time_dimension", "t"},
-                    {"units", "V s^-1"},
-                    {"conversion", Tnorm * Omega_ci},
-                    {"long_name", "Auxiliary polarisation current potential"},
-                    {"description", "Fixed-correction auxiliary solve; viscous stress is "
-                                    "excluded from its RHS; "
-                                    "nonperiodic X: midpoint Dirichlet DC, "
-                                    "radial AC selected by polarisation_ac_boundary; "
-                                    "approximate, not exact ddt(phi+psi)"}});
+    set_with_attrs(
+        state["ddt(Phi)"], chi,
+        {{"time_dimension", "t"},
+         {"units", "V s^-1"},
+         {"conversion", Tnorm * Omega_ci},
+         {"long_name", "Auxiliary polarisation current potential"},
+         {"description", "Fixed-correction auxiliary solve; viscous stress "
+                         "and numerical phi damping are excluded from its RHS; "
+                         "nonperiodic X: midpoint Dirichlet DC, "
+                         "radial AC selected by polarisation_ac_boundary; "
+                         "approximate, not exact ddt(phi+psi)"}});
     set_with_attrs(state["ion_chi_iterations"], chi_iterations,
                    {{"time_dimension", "t"},
                     {"description", "Auxiliary chi solver calls: one initial solve plus "

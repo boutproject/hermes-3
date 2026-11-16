@@ -118,6 +118,7 @@ def reynolds_face_fluxes(
     *,
     mxg=2,
     periodic_x=False,
+    limiter="mc",
 ):
     """Full-vorticity MC advection plus the central metric remainder R.
 
@@ -197,8 +198,14 @@ def reynolds_face_fluxes(
             face(coefficients[offset + i]) * p
             for i, p in enumerate((hx * px, hx * pz, hz * px, hz * pz))
         )
-        left, right = mc_edges(vorticity, dim)
-        donor = xr.where(velocity > 0, right, shift(left))
+        if limiter == "mc":
+            left, right = mc_edges(vorticity, dim)
+            donor = xr.where(velocity > 0, right, shift(left))
+        elif limiter == "central":
+            # Operator-only convergence probe; production retains MC donors.
+            donor = face(vorticity)
+        else:
+            raise ValueError(f"Unknown Reynolds limiter: {limiter}")
         fluxes[dim] = (
             velocity * (donor - face(tangential)) + area * remainder
         ) * geometry.dy

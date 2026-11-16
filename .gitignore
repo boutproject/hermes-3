@@ -17,6 +17,12 @@ __pycache__
 /docs/hermes3.pdf
 /docs/sphinx/_breathe*
 
+# Local working notes
+/*plan*.md
+/docs/*-plan.md
+/docs/*-report.md
+/docs/test-consolidation-validation.md
+
 # IDE config files
 .vscode
 compile_commands.json

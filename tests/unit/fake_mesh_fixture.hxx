@@ -34,11 +34,11 @@
 /// Use this template class directly to use different sized grid:
 ///
 ///     using MyTest = FakeMeshFixture_tmpl<7, 9, 11>;
-template <int NX, int NY, int NZ, bool FCI = false, int MXG = 1>
+template <int NX, int NY, int NZ, bool FCI = false, int MXG = 1, int MYG = 1>
 class FakeMeshFixture_tmpl : public ::testing::Test {
 public:
   FakeMeshFixture_tmpl()
-      : mesh_m(NX, NY, NZ, mpi, MXG), mesh_staggered_m(NX, NY, NZ, mpi, MXG),
+      : mesh_m(NX, NY, NZ, mpi, MXG, MYG), mesh_staggered_m(NX, NY, NZ, mpi, MXG, MYG),
         mesh_staggered(&mesh_staggered_m) {
 
     bout::globals::mpi = &mpi;

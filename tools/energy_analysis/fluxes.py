@@ -2,7 +2,7 @@
 
 The supported snapshot contract is deliberately narrower than the inventory
 contract: uniform orthogonal metrics, identity transform, unfiltered FFT Z,
-C2 parallel derivatives, MC parallel limiter, and no auxiliary dissipation.
+C2 parallel derivatives and MC parallel limiter, including potential damping.
 No diagnostic is used to reconstruct an RHS or solve for the polarisation flow.
 """
 
@@ -189,7 +189,11 @@ def slab_contract(run, *, closed_wall_diffusion=False):
         c.strip() for c in str(options["hermes:components"]).strip(" ()\t").split(",")
     }
     allowed_components = {run.model, *(s.name for s in run.species)}
-    if component_version(run) in (5, 6):
+    if "sound_speed" in components:
+        allowed_components.add("sound_speed")
+        if options["sound_speed"].get_bool("alfven_wave", False):
+            raise AuditError("Alfven wave-speed reconstruction is unavailable")
+    if component_version(run) in (5, 6, 7):
         allowed_components.add(polarisation_owner(run))
     if closed_wall_diffusion and "classical_diffusion" in components:
         # This component closes complete physical boundary faces, including
@@ -272,14 +276,14 @@ def component_version(run):
     if run.formulation != "total_energy":
         return None
     version = run.data.metadata.get("evolve_vorticity_ion_energy_version", 4)
-    if version not in (4, 5, 6):
+    if version not in (4, 5, 6, 7):
         raise AuditError(f"Unsupported evolve_vorticity_ion_energy version: {version}")
     return int(version)
 
 
 def polarisation_owner(run):
-    """Resolve the enabled conservative drift owner for version-5/6 snapshots."""
-    if component_version(run) not in (5, 6):
+    """Resolve the enabled conservative drift owner for version-5/6/7 snapshots."""
+    if component_version(run) not in (5, 6, 7):
         return run.model
     options = run.data.options
     names = str(options["hermes:components"]).strip(" ()\t\r\n").split(",")
@@ -422,7 +426,7 @@ def _validate_polarisation_solver(run, periodic_x):
         raise AuditError("Unknown polarisation_ac_boundary")
     key = (
         "laplacian"
-        if periodic_x or component_version(run) in (5, 6)
+        if periodic_x or component_version(run) in (5, 6, 7)
         else "polarisation_laplacian"
     )
     opts = section[key] if key in section else None  # noqa: SIM401 -- BoutOptions has no get()
@@ -751,9 +755,13 @@ def reconstruct_fluxes(run, *, sources=None):
     e = next(s for s in run.species if s.name == "e")
     mass_density = sum(s.mass * ds["N" + s.name] for s in run.species)
     electron_heat = viscous_heat * e.mass * ds.Ne / mass_density
+    parallel_current = sum(
+        s.charge * ds["N" + s.name] * species_velocity(run, s) for s in run.species
+    )
+    div_parallel = central_parallel(parallel_current, ds)
     dphi = ds.get("ion_chi")
     if dphi is None:
-        chi_rhs = reynolds.divergence + dia
+        chi_rhs = reynolds.divergence + dia + div_parallel
         dphi = solve_polarisation(run, chi_rhs, periodic_x, periodic_y)
     chi_faces = fv_xz(
         c,
@@ -801,7 +809,7 @@ def reconstruct_fluxes(run, *, sources=None):
     families["DivJReynolds"] = reynolds
     result = {
         "ddt(Phi)": dphi,
-        "ddt(Vort)": reynolds.divergence + dia + viscous.divergence,
+        "ddt(Vort)": reynolds.divergence + dia + div_parallel + viscous.divergence,
         "kinematic_viscous_heating": viscous_heat,
         "electron_viscous_heating": electron_heat,
         "electron_exb_work": work,
@@ -810,6 +818,58 @@ def reconstruct_fluxes(run, *, sources=None):
         - families["DivEExB_perpendicular"].divergence,
         **{"polarisation_flux_" + d: f for d, f in polarisation_faces.items()},
     }
+    damping = xr.zeros_like(phi)
+    fastest = None
+    sound_active = "sound_speed" in {
+        name.strip() for name in str(ds.options["hermes:components"]).split(",")
+    }
+    if sound_active or ds.options[run.model].get_bool("phi_dissipation", False):
+        # BoutOptions implements indexing but not mapping.get.
+        if "sound_speed" in ds.options:
+            sound_options = ds.options["sound_speed"]
+        else:
+            sound_options = {}
+        electron_dynamics = (
+            sound_options.get_bool("electron_dynamics", True)
+            if hasattr(sound_options, "get_bool")
+            else True
+        )
+        sound_density = sum(
+            s.mass * ds["N" + s.name]
+            for s in run.species
+            if s.name != "e" or electron_dynamics
+        )
+        sound_density = soft_floor(sound_density, 1e-10)
+        sound = np.sqrt((ds.Pe + pi) / sound_density)
+        sound = fill_transport_guards(sound, run, periodic_x, periodic_y)
+        if sound_active:
+            floor = (
+                sound_options.evaluate_scalar("temperature_floor")
+                if "temperature_floor" in sound_options
+                else 0
+            )
+            floor /= float(ds.metadata["Tnorm"])
+            fastest = sound
+            for s in run.species:
+                if s.name != "e" or electron_dynamics:
+                    temperature = ds.Pe / ds.Ne if s.name == "e" else ds.Tion
+                    fastest = np.maximum(
+                        fastest, np.sqrt(soft_floor(temperature, floor) / s.mass)
+                    )
+            factor = (
+                sound_options.evaluate_scalar("fastest_wave_factor")
+                if "fastest_wave_factor" in sound_options
+                else 1
+            )
+            fastest = fill_transport_guards(
+                fastest * factor, run, periodic_x, periodic_y
+            )
+        if ds.options[run.model].get_bool("phi_dissipation", False):
+            damping = -parallel_flux(
+                -phi, xr.zeros_like(phi), sound, ds, myg=run.myg, periodic_y=periodic_y
+            ).divergence
+    result["ion_phi_dissipation"] = damping
+    result["ddt(Vort)"] += damping
     jion = xr.zeros_like(phi)
     je = xr.zeros_like(phi)
     parallel = []
@@ -822,7 +882,7 @@ def reconstruct_fluxes(run, *, sources=None):
         name, n = s.name, ds["N" + s.name]
         v = species_velocity(run, s)
         p = ds.Pe if name == "e" else n * ds.Tion
-        wave = np.sqrt(p / (n * s.mass))
+        wave = fastest if fastest is not None else np.sqrt(p / (n * s.mass))
         if name == "e":
             je = s.charge * n * v
         else:
@@ -926,7 +986,7 @@ def reconstruct_fluxes(run, *, sources=None):
         )
         e = next(s for s in run.species if s.name == "e")
         ve = species_velocity(run, e)
-        we = np.sqrt(ds.Pe / (ds.Ne * e.mass))
+        we = fastest if fastest is not None else np.sqrt(ds.Pe / (ds.Ne * e.mass))
         families["electron_ExB"] = xppm(
             1.5 * ds.Pe, phi, ds, boundary_flux=ds.options["e"].get_bool("bndry_flux")
         )
