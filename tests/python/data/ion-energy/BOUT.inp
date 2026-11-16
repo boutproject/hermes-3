@@ -54,7 +54,7 @@ max_timestep = 50
 mxstep = 1e6
 
 [hermes]
-components = e, h+, evolve_vorticity_ion_energy
+components = e, h+, evolve_vorticity_ion_energy, polarisation_drift
 recalculate_metric = false
 normalise_metric = true
 Nnorm = 2e18
@@ -122,3 +122,6 @@ phi_max_iterations = 400
 
 [evolve_vorticity_ion_energy:laplacian]
 type = cyclic
+
+[polarisation_drift]
+implementation = conservative

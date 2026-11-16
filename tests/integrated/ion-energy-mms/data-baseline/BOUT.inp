@@ -69,7 +69,7 @@ max_timestep = 0.05
 mxstep = 10000
 
 [hermes]
-components = i, j, e, evolve_vorticity_ion_energy, sound_speed
+components = i, j, e, evolve_vorticity_ion_energy, polarisation_drift, sound_speed
 recalculate_metric = false
 normalise_metric = false
 Nnorm = 1e+18
@@ -136,6 +136,9 @@ type = cyclic
 # Use the collective acoustic speed for numerical Lax fluxes.
 electron_dynamics = false
 alfven_wave = false
+
+[polarisation_drift]
+implementation = conservative
 
 [mms]
 variant = baseline

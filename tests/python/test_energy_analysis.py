@@ -980,6 +980,83 @@ def test_closed_balance_without_diagnostics(dataset):
     assert float(abs(changed.energy_relative_drift).max()) > 0.01
 
 
+def test_zero_current_has_unpaired_parallel_work(dataset):
+    from energy_analysis import closed_balance, source_balance
+    from energy_analysis.transfers import zero_current_defect
+
+    count = 16
+    ds = dataset.isel(y=0, drop=True).expand_dims(y=np.arange(count)).copy()
+    ds.attrs["metadata"] = {**ds.metadata, "ny": count, "periodic_y": True}
+    phase = ds.y * (2 * np.pi / count)
+    ds["dy"] = xr.ones_like(ds.dy) * (2 * np.pi / count)
+    ds["g_22"] = xr.ones_like(ds.J)
+    for name, value in (
+        ("Pe", 1 + 0.2 * np.sin(phase)),
+        ("phi", 0.3 * np.sin(phase)),
+        ("NVe", np.cos(phase) / 1836),
+        ("NVd+", 2 * np.cos(phase)),
+        ("NVimpurity", phase * 0),
+    ):
+        ds[name] = (xr.ones_like(ds.Pe) * value).assign_attrs(
+            units_type="hermes", conversion=7.0
+        )
+    run = diagnostic_free_case(ds)
+    # Quasineutral, exactly zero total current, but finite unpaired force work.
+    assert_allclose(
+        ds["NVd+"] / 2 + 2 * ds.NVimpurity / 3 - 1836 * ds.NVe,
+        0,
+        atol=2 * np.finfo(float).eps,
+    )
+    discrete_wave = np.sin(2 * np.pi / count) / (2 * np.pi / count)
+    expected_density = -0.1 * discrete_wave * np.cos(phase) ** 2
+    expected = run.integrate(expected_density) * (
+        run.energy_scale * run.length_scale**3 * run.frequency
+    )
+    power = zero_current_defect(run)
+    assert_allclose(power, expected)
+    assert power.attrs["units"] == "W"
+    assert float(abs(power).max()) > 0
+    physical = ds.copy(deep=True)
+    for name in physical.data_vars:
+        attrs = dict(physical[name].attrs)
+        # The added g_22 has the same normalisation contract as the metrics.
+        attrs.setdefault("conversion", 7.0)
+        physical[name] = (physical[name] * attrs["conversion"]).assign_attrs(
+            **{**attrs, "units_type": "SI"}
+        )
+    time_attrs = dict(physical.t.attrs)
+    physical = physical.assign_coords(t=physical.t * time_attrs["conversion"])
+    physical.t.attrs = {**time_attrs, "units_type": "SI"}
+    before = {name: physical[name].copy(deep=True) for name in physical.variables}
+    assert_allclose(zero_current_defect(open_run(physical)), power)
+    for name, value in before.items():
+        xr.testing.assert_identical(physical[name], value)
+    closed = closed_balance(run)
+    assert closed.attrs["coverage"] == "incomplete"
+    assert (
+        "zero_current unpaired electron parallel force work"
+        in closed.attrs["missing_terms"]
+    )
+    balance = source_balance(run)
+    assert "residual" not in balance
+    assert_allclose(balance.known_model_defect_power, power)
+    assert_allclose(balance.known_external_power, 0)
+    ds["Pe"] = xr.ones_like(ds.Pe).assign_attrs(**ds.Pe.attrs)
+    ds["phi"] = xr.zeros_like(ds.phi).assign_attrs(**ds.phi.attrs)
+    assert_allclose(zero_current_defect(diagnostic_free_case(ds)), 0)
+
+
+def test_zero_current_missing_gradient_geometry_is_incomplete(dataset):
+    from energy_analysis import source_balance
+
+    ds = dataset.isel(y=0, drop=True).expand_dims(y=[0, 1]).copy()
+    ds["Pe"] = (ds.Pe + ds.y).assign_attrs(**dataset.Pe.attrs)
+    result = source_balance(diagnostic_free_case(ds))
+    assert result.attrs["coverage"] == "incomplete"
+    assert any("requires g_22" in name for name in result.attrs["missing_terms"])
+    assert "residual" not in result
+
+
 def test_physical_sources_without_diagnostics_and_si_conversion(dataset):
     from energy_analysis import external_power, source_balance
 
@@ -1160,7 +1237,7 @@ def shared_current_case(dataset):
     return run
 
 
-@pytest.mark.parametrize("version", (None, 4))
+@pytest.mark.parametrize("version", (None, 4, 5, 6))
 def test_component_version(dataset, version):
     from energy_analysis.fluxes import component_version
 
@@ -1169,7 +1246,56 @@ def test_component_version(dataset, version):
             **dataset.metadata,
             "evolve_vorticity_ion_energy_version": version,
         }
-    assert component_version(open_run(dataset)) == 4
+    assert component_version(open_run(dataset)) == (4 if version is None else version)
+
+
+def test_conservative_owner_preserves_version_four_analysis(dataset):
+    from energy_analysis import summary
+    from energy_analysis.fluxes import (
+        polarisation_ac_boundary,
+        polarisation_corrections,
+    )
+
+    run = shared_current_case(dataset)
+    options = run.data.options
+    options[run.model]["polarisation_ac_boundary"] = "dirichlet"
+    options[run.model]["polarisation_corrections"] = 7
+    before = summary(run)
+    run.data.attrs["metadata"] = {
+        **run.data.metadata,
+        "evolve_vorticity_ion_energy_version": 5,
+    }
+    options["hermes:components"] = str(options["hermes:components"]) + ", ion_drift"
+    options["ion_drift:type"] = "polarisation_drift"
+    options["ion_drift:implementation"] = "conservative"
+    options["ion_drift:polarisation_ac_boundary"] = "dirichlet"
+    options["ion_drift:polarisation_corrections"] = 7
+    # Deliberately conflicting old-owner values must no longer affect drift.
+    options[run.model]["polarisation_ac_boundary"] = "neumann"
+    options[run.model]["polarisation_corrections"] = 0
+    assert polarisation_ac_boundary(run) == "dirichlet"
+    assert polarisation_corrections(run) == 7
+    after = summary(run)
+    assert after["diagnostics"] == before["diagnostics"]
+    assert after["evolve_vorticity_ion_energy_version"] == 5
+
+
+def test_version_five_missing_or_legacy_drift_is_rejected(dataset):
+    from energy_analysis.fluxes import polarisation_owner
+
+    run = open_run(dataset)
+    run.data.attrs["metadata"] = {
+        **run.data.metadata,
+        "evolve_vorticity_ion_energy_version": 5,
+    }
+    with pytest.raises(AuditError, match="exactly one enabled"):
+        polarisation_owner(run)
+    run.data.options["hermes:components"] = (
+        str(run.data.options["hermes:components"]) + ", polarisation_drift"
+    )
+    run.data.options["polarisation_drift:implementation"] = "legacy"
+    with pytest.raises(AuditError, match="implementation=conservative"):
+        polarisation_owner(run)
 
 
 def test_full_neumann_wall_coverage_requires_chi(dataset):

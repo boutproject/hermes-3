@@ -64,6 +64,73 @@ def integrated_power(run, density):
     return result
 
 
+def zero_current_defect(run):
+    """Unpaired electron parallel force work [W], separate from heating.
+
+    zero_current supplies velocity without an electron momentum equation.
+    With the v*Grad(p) pressure form, the missing mechanical counterpart is
+    v_e*Grad_par(p_e) + J_e*Grad_par(phi). Zero total current does not set this
+    work to zero. Reconstruction uses saved momentum for J_e and the solver's
+    recovered velocity, in the uniform-Y-metric identity slab supported here.
+    """
+    from .fluxes import species_velocity
+    from .sources import option_bool
+    from .transport import central_parallel
+
+    electron = next(s for s in run.species if s.name == "e")
+    ds = run.data
+    zero = integrated_power(
+        run,
+        xr.zeros_like(ds.Pe).assign_attrs(
+            units_type="hermes", provenance="no zero_current parallel force work"
+        ),
+    )
+    if "zero_current" not in electron.components:
+        return zero
+    # A zero parallel gradient is exact, including retained boundary values.
+    invariant = lambda field: (
+        "y" not in field.dims or bool((field == field.isel(y=0)).all().compute())
+    )
+    if invariant(ds.Pe) and invariant(ds.phi):
+        return zero
+    if option_bool(ds.options["e"], "p_div_v"):
+        raise AuditError(
+            "zero_current force-work reconstruction requires p_div_v=false"
+        )
+    derivative = "mesh:ddy:first"
+    if derivative in ds.options and str(ds.options[derivative]).upper() != "C2":
+        raise AuditError("zero_current force-work reconstruction requires C2 DDY")
+    if "g_22" not in ds:
+        raise AuditError("zero_current force-work reconstruction requires g_22")
+    for name in ("Bxy", "J", "dx", "dy", "dz", "g_22"):
+        if "y" in ds[name].dims and not invariant(ds[name]):
+            raise AuditError(
+                "zero_current force-work reconstruction requires uniform Y metrics"
+            )
+    velocity = species_velocity(run, electron)
+    if "NVe" not in ds:
+        raise AuditError("zero_current force-work reconstruction requires saved NVe")
+    current = (electron.charge / electron.mass) * ds.NVe
+
+    def gradient(field):
+        if run.myg:
+            return central_parallel(field, ds)
+        if not ds.metadata.get("periodic_y", False):
+            raise AuditError(
+                "zero_current force-work reconstruction requires Y guards or periodic_y metadata"
+            )
+        return (field.roll(y=-1) - field.roll(y=1)) / (2 * ds.dy * np.sqrt(ds.g_22))
+
+    density = (velocity * gradient(ds.Pe) + current * gradient(ds.phi)).assign_attrs(
+        units_type="hermes",
+        provenance="zero_current unpaired parallel force work from saved state and C2 gradients",
+    )
+    power = integrated_power(run, density)
+    if not bool(np.isfinite(power).all().compute()):
+        raise AuditError("zero_current force-work reconstruction is nonfinite")
+    return power
+
+
 def collisional_heat_exchange(run):
     """Reconstruct Braginskii electron-ion heat transfer in a common-T slab.
 

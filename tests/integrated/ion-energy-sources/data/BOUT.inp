@@ -36,7 +36,7 @@ rtol = 1e-10
 mxstep = 10000
 
 [hermes]
-components = e, d+, impurity, evolve_vorticity_ion_energy, braginskii_collisions, braginskii_heat_exchange
+components = e, d+, impurity, evolve_vorticity_ion_energy, polarisation_drift, braginskii_collisions, braginskii_heat_exchange
 recalculate_metric = true
 Nnorm = 2e18
 Bnorm = mesh:Bxy
@@ -105,3 +105,6 @@ diagnose = false
 
 [Eion]
 function = 1.2 * Pe:function
+
+[polarisation_drift]
+implementation = conservative

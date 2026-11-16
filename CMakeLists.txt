@@ -463,6 +463,19 @@ if(HERMES_TESTS)
                                --timeout 300)
     hermes_add_ion_energy_test(ion-energy-sources ion-energy-sources "energy"
                                300)
+    hermes_add_ion_energy_test(
+      ion-energy-sheath
+      ion-energy-sheath
+      "energy;sheath"
+      600
+      --timeout
+      180
+      --nproc
+      2)
+    set_tests_properties(ion-energy-sheath PROPERTIES PROCESSORS 2)
+    hermes_add_ion_energy_test(ion-energy-parallel-mms ion-energy-parallel-mms
+                               "energy;mms" 18000 --timeout 3600)
+    set_tests_properties(ion-energy-parallel-mms PROPERTIES PROCESSORS 8)
     # Eight times the wall-history outputs for signed-current quadrature.
     hermes_add_ion_energy_test(ion-energy-walls ion-energy-walls "energy" 14400
                                --timeout 4800)

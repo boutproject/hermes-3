@@ -14,6 +14,13 @@
 #include <bout/invert_laplace.hxx>
 #include <bout/mesh.hxx>
 #include <bout/output_bout_types.hxx>
+#include <bout/utils.hxx>
+
+#include "../include/div_ops.hxx"
+#include <bout/vecops.hxx>
+#include <algorithm>
+#include <limits>
+#include <tuple>
 
 #include <string>
 #include <vector>
@@ -22,17 +29,137 @@ using bout::globals::mesh;
 
 PolarisationDrift::PolarisationDrift(std::string name, Options& alloptions,
                                      Solver* UNUSED(solver))
-    // FIXME: There is a lot of complicated conditional logic which is not being captured
-    // here. E.g., species without AA or momentum will be skipped.
-    : NamedComponent(name, {readIfSet("species:{all_species}:charge"),
-                            readOnly("species:{charged}:{inputs}"),
-                            readIfSet("species:{charged}:momentum"),
-                            readIfSet("fields:{fields}"),
-                            readWrite("species:{charged}:{outputs}")}) {
-
-  // Get options for this component
+    : NamedComponent(name, {}) {
   auto& options = alloptions[name];
-
+  implementation = options["implementation"]
+                       .doc("Polarisation implementation: legacy potential flow or "
+                            "conservative ion energy transport")
+                       .withDefault(bout::polarisation::Implementation::legacy);
+  std::vector<std::string> ion_models;
+  std::vector<std::string> enabled;
+  const Options& scheduler =
+      alloptions.isSet("components") ? alloptions : alloptions["hermes"];
+  if (scheduler.isSet("components")) {
+    for (const auto& item : strsplit(scheduler["components"].as<std::string>(), ',')) {
+      enabled.push_back(trim(item, " \t\r\n()"));
+    }
+  }
+  for (const auto& [component_name, section] : alloptions.getChildren()) {
+    if (!enabled.empty()
+        && std::find(enabled.begin(), enabled.end(), component_name) == enabled.end()) {
+      continue;
+    }
+    const std::string component_type =
+        section.isSet("type") ? section["type"].as<std::string>() : component_name;
+    if (component_type == "evolve_vorticity_ion_energy") {
+      ion_models.push_back(component_name);
+    }
+  }
+  if (implementation == bout::polarisation::Implementation::conservative) {
+    if (ion_models.size() != 1) {
+      throw BoutException("Conservative polarisation_drift requires exactly one "
+                          "evolve_vorticity_ion_energy component");
+    }
+    auto& ion = alloptions[ion_models.front()];
+    for (const auto* key : {"boussinesq", "average_atomic_mass", "density_floor",
+                            "advection", "diamagnetic_polarisation"}) {
+      if (options.isSet(key)) {
+        throw BoutException("polarisation_drift:{} is a legacy option; conservative "
+                            "transport uses ion-energy recovery settings",
+                            key);
+      }
+    }
+    average_atomic_mass = ion["average_atomic_mass"].withDefault<BoutReal>(2.0);
+    density_floor = ion["density_floor"].withDefault<BoutReal>(1e-7);
+    poloidal_flows = ion["poloidal_flows"].withDefault<bool>(false);
+    diagnose = options["diagnose"].withDefault(ion["diagnose"].withDefault<bool>(false));
+    radial_model.walls = !mesh->periodicX;
+    radial_model.chi_ac =
+        options["polarisation_ac_boundary"]
+            .doc("Auxiliary AC wall condition: neumann or dirichlet; DC uses ion wall "
+                 "rates")
+            .withDefault(bout::ion_energy::PolarisationACBoundary::neumann);
+    radial_model.chi_flags =
+        radial_model.chi_ac == bout::ion_energy::PolarisationACBoundary::neumann
+            ? INVERT_AC_GRAD
+            : 0;
+    polarisation_corrections =
+        options["polarisation_corrections"]
+            .doc("Fixed FV defect corrections after the initial spectral solve")
+            .withDefault(10);
+    if (polarisation_corrections < 0) {
+      throw BoutException("polarisation_corrections must be >= 0");
+    }
+    auto& laplacian = options["laplacian"];
+    if (!radial_model.walls && laplacian.getChildren().empty()) {
+      laplacian = ion["laplacian"].copy();
+    }
+    for (const auto* key : {"inner_boundary_flags", "outer_boundary_flags"}) {
+      if (laplacian.isSet(key)) {
+        throw BoutException("polarisation_drift:laplacian:{} is controlled by "
+                            "radial_boundary and polarisation_ac_boundary",
+                            key);
+      }
+    }
+    // Components are constructed in input order, before permission autosorting.
+    // Resolve the factory default here without requiring ion recovery to have
+    // constructed its inverse. An explicit drift type needs no ion-type read.
+    if (!laplacian.isSet("type")) {
+      laplacian["type"].withDefault(ion["laplacian"]["type"].withDefault(
+          std::string{LaplaceFactory::default_type}));
+    }
+    if (radial_model.walls
+        && (laplacian["global_flags"].withDefault(0)
+            & (INVERT_ZERO_DC | INVERT_KX_ZERO))) {
+      throw BoutException("polarisation_drift:laplacian must retain the DC solution");
+    }
+    phiSolver = Laplacian::create(&laplacian);
+    if (radial_model.walls) {
+      phiSolver->setInnerBoundaryFlags(radial_model.chi_flags);
+      phiSolver->setOuterBoundaryFlags(radial_model.chi_flags);
+    }
+    wall_rate_inner.resize(static_cast<size_t>(mesh->LocalNy), 0.0);
+    wall_rate_outer.resize(static_cast<size_t>(mesh->LocalNy), 0.0);
+    setPermissions(readOnly("species:{all_species}:charge"));
+    setPermissions(readOnly("species:{ions}:AA"));
+    for (const auto* field : {"density", "pressure", "temperature"}) {
+      setPermissions(readOnly(std::string{"species:{ions}:"} + field, Regions::Interior));
+    }
+    setPermissions(readIfSet("species:{ions}:velocity", Regions::Interior));
+    // Boundary-final momentum writers (including the production sheath) must
+    // run after recovery and before current continuity. Recovery reads interiors.
+    setPermissions(readIfSet("species:{charged}:momentum", Regions::All));
+    setPermissions(readIfSet("species:{charged}:AA"));
+    setPermissions(readOnly("fields:phi", Regions::All));
+    setPermissions(readIfSet("fields:DivJextra", Regions::Interior));
+    setPermissions(readIfSet("fields:DivJcol", Regions::Interior));
+    setPermissions(readOnly("fields:ion_boussinesq_coefficient"));
+    for (const auto* field :
+         {"vorticity", "ion_pressure_potential", "ion_mass_density", "ion_reynolds_x",
+          "ion_reynolds_z", "DivJReynolds", "DivJdia", "ion_wall_rate"}) {
+      setPermissions(readOnly(std::string{"fields:"} + field, Regions::Interior));
+    }
+    for (const auto* field :
+         {"density_source", "momentum_source", "polarisation_density_source",
+          "polarisation_momentum_source"}) {
+      setPermissions(readWrite(std::string{"species:{ions}:"} + field));
+    }
+    for (const auto* field : {"ion_polarisation_energy_divergence", "DivJpol", "ion_chi",
+                              "DivJpar", "ion_current_rhs", "ion_auxiliary_residual"}) {
+      setPermissions(readWrite(std::string{"fields:"} + field));
+    }
+    return;
+  }
+  if (!ion_models.empty()) {
+    throw BoutException(
+        "Legacy polarisation_drift cannot pair with evolve_vorticity_ion_energy; select "
+        "implementation=conservative");
+  }
+  setPermissions(readIfSet("species:{all_species}:charge"));
+  setPermissions(readOnly("species:{charged}:{inputs}"));
+  setPermissions(readIfSet("species:{charged}:momentum"));
+  setPermissions(readIfSet("fields:{fields}"));
+  setPermissions(readWrite("species:{charged}:{outputs}"));
   // Cache the B^2 value
   const auto* coord = mesh->getCoordinates();
   Bsq = SQ(coord->Bxy());
@@ -265,6 +392,10 @@ void PolarisationDrift::polarisationAdvection(GuardedOptions& state, Field3D phi
 }
 
 void PolarisationDrift::transform_impl(GuardedOptions& state) {
+  if (implementation == bout::polarisation::Implementation::conservative) {
+    transformConservative(state);
+    return;
+  }
 
   // Calculate divergence of all current except polarisation
   DivJ = calcDivJ(state);
@@ -289,6 +420,11 @@ void PolarisationDrift::transform_impl(GuardedOptions& state) {
 }
 
 void PolarisationDrift::outputVars(Options& state) {
+  set(state["polarisation_drift_implementation"], toString(implementation));
+  if (implementation == bout::polarisation::Implementation::conservative) {
+    outputConservative(state);
+    return;
+  }
   // Normalisations
   auto Nnorm = get<BoutReal>(state["Nnorm"]);
   auto Tnorm = get<BoutReal>(state["Tnorm"]);
@@ -315,6 +451,567 @@ void PolarisationDrift::outputVars(Options& state) {
     // Copy diagnostics into output
     for (auto& kv : diagnostics.getChildren()) {
       state[kv.first] = kv.second.copy();
+    }
+  }
+}
+
+namespace {
+template <typename Field, typename Value>
+void fillRadialGuards(Field& field, Value value) {
+  auto* localmesh = field.getMesh();
+  if (localmesh->periodicX) {
+    return;
+  }
+  const auto fill = [&](int interior, int step, int count) {
+    for (int y = localmesh->ystart; y <= localmesh->yend; ++y) {
+      for (int z = 0; z < localmesh->LocalNz; ++z) {
+        for (int layer = 1; layer <= count; ++layer) {
+          field(interior + step * layer, y, z) = value(interior, step, layer, y, z);
+        }
+      }
+    }
+  };
+  if (localmesh->firstX()) {
+    fill(localmesh->xstart, -1, localmesh->xstart);
+  }
+  if (localmesh->lastX()) {
+    fill(localmesh->xend, 1, localmesh->LocalNx - localmesh->xend - 1);
+  }
+}
+
+template <typename Function>
+void forAllIons(GuardedOptions allspecies, Function func) {
+  for (auto& kv : allspecies.getChildren()) {
+    if (kv.first == "e") {
+      continue; // Skip electrons
+    }
+    auto species = allspecies[kv.first];
+
+    if (!IS_SET(species["charge"])) {
+      continue;
+    }
+    if (fabs(get<BoutReal>(species["charge"])) < 1e-5) {
+      // No charge
+      continue;
+    }
+    func(species);
+  }
+}
+} // namespace
+
+namespace bout::ion_energy {
+/// Reflect auxiliary-potential guards about a prescribed DC wall midpoint.
+///
+/// @param[in,out] chi Auxiliary potential whose physical X-wall guards are updated.
+/// @param ac Neumann retains each mirrored interior layer's Z fluctuations;
+///           Dirichlet negates them to impose a zero AC midpoint.
+/// @param dc_inner Optional inner-wall DC midpoints in chi's units, indexed by local
+///                 Y with LocalNy entries; nullptr imposes a zero DC midpoint.
+/// @param dc_outer Optional outer-wall DC midpoints with the same convention.
+///
+/// Returns no value. Each radial guard reflects its corresponding interior layer's
+/// mean about the DC value. All local Y rows, including guards, are processed;
+/// interior cells and the supplied DC arrays are preserved. Periodic X is a no-op.
+/// No communication occurs.
+/// @throws BoutException If nonperiodic X does not have complete local periodic Z lines.
+void applyPolarisationBoundary(Field3D& chi, PolarisationACBoundary ac,
+                               const std::vector<BoutReal>* dc_inner,
+                               const std::vector<BoutReal>* dc_outer) {
+  auto* localmesh = chi.getMesh();
+  if (localmesh->periodicX) {
+    return;
+  }
+  if (localmesh->getNZPE() != 1 || localmesh->zstart != 0
+      || localmesh->zend + 1 != localmesh->LocalNz) {
+    throw BoutException(
+        "Mixed polarisation boundaries require complete periodic Z lines");
+  }
+  const auto reflect = [&](int guard, int interior, const std::vector<BoutReal>* dc) {
+    for (int y = 0; y < localmesh->LocalNy; ++y) {
+      BoutReal mean = 0.0;
+      for (int z = 0; z < localmesh->LocalNz; ++z) {
+        mean += chi(interior, y, z);
+      }
+      mean /= localmesh->LocalNz;
+      for (int z = 0; z < localmesh->LocalNz; ++z) {
+        const BoutReal fluctuation = chi(interior, y, z) - mean;
+        chi(guard, y, z) =
+            -mean + (ac == PolarisationACBoundary::neumann ? fluctuation : -fluctuation);
+        if (dc != nullptr) {
+          chi(guard, y, z) += 2.0 * (*dc)[static_cast<size_t>(y)];
+        }
+      }
+    }
+  };
+  if (localmesh->firstX()) {
+    for (int x = 0; x < localmesh->xstart; ++x) {
+      reflect(x, 2 * localmesh->xstart - 1 - x, dc_inner);
+    }
+  }
+  if (localmesh->lastX()) {
+    for (int x = localmesh->xend + 1; x < localmesh->LocalNx; ++x) {
+      reflect(x, 2 * localmesh->xend + 1 - x, dc_outer);
+    }
+  }
+}
+} // namespace bout::ion_energy
+
+/// Approximate the auxiliary potential using a fixed number of defect corrections.
+///
+/// @param coefficient Read-only Boussinesq coefficient c in div(c*grad_perp(chi)),
+///                    nonzero on physical cells, with valid geometry and guards.
+/// @param rhs Read-only selected current-continuity RHS; only interior values enter the
+///            residual, excluding encoded wall-potential rates in radial guards.
+/// @param[in,out] inverse Approximate spectral inverse configured for coefficient
+///                       and homogeneous correction boundaries. Its solve method
+///                       is invoked once initially and once per defect correction.
+/// @param corrections Nonnegative number of finite-volume defect corrections.
+/// @param ac Radial condition on the Z-dependent part of chi.
+/// @param dc_inner Optional inner-wall DC midpoints in chi's units, indexed by local
+///                 Y with LocalNy entries; nullptr imposes zero.
+/// @param dc_outer Optional outer-wall DC midpoints with the same convention.
+/// @returns A new chi field, starting from zero on every call, with imposed radial
+///          guards and communicated inter-rank guards. A fixed correction count
+///          can leave a finite forward-operator residual; no warm start is retained.
+///
+/// Uses the global mesh to communicate temporary chi and correction fields;
+/// mesh face-region caches and the inverse's internal solver state may change.
+/// Supplied fields and DC arrays are preserved. Wall values enter through each
+/// finite-volume residual while spectral corrections use homogeneous boundaries.
+/// @throws BoutException If corrections is negative or a nonperiodic X mesh lacks
+///                       complete local periodic Z lines.
+Field3D bout::ion_energy::fixedPolarisationPotential(
+    const Field3D& coefficient, const Field3D& rhs, Laplacian& inverse, int corrections,
+    PolarisationACBoundary ac, const std::vector<BoutReal>* dc_inner,
+    const std::vector<BoutReal>* dc_outer) {
+  if (corrections < 0) {
+    throw BoutException("polarisation_corrections must be >= 0");
+  }
+  Field3D chi = zeroFrom(rhs);
+  const auto apply_boundary = [&]() {
+    mesh->communicate(chi);
+    bout::ion_energy::applyPolarisationBoundary(chi, ac, dc_inner, dc_outer);
+    mesh->communicate(chi);
+  };
+
+  // Start from zero every call, and use a fixed number of solves rather than a
+  // tolerance, so chi is a smooth function of rhs (and so of the state) and
+  // never depends on previous RHS evaluations. The first solve is the spectral
+  // inverse; the rest are defect corrections to the finite-volume operator.
+  for (int solve = 0; solve <= corrections; ++solve) {
+    apply_boundary();
+    Field3D residual{zeroFrom(rhs)};
+    const Field3D forward = Div_a_Grad_perp_XZ(coefficient, chi, true);
+    BOUT_FOR(i, residual.getRegion("RGN_NOBNDRY")) {
+      residual[i] = (rhs[i] - forward[i]) / coefficient[i];
+    }
+    const Field3D approximate = inverse.solve(residual, zeroFrom(chi));
+    // Only copy solved X-Z planes; unused Y guards need deterministic values.
+    Field3D correction{zeroFrom(chi)};
+    BOUT_FOR(i, correction.getRegion("RGN_NOY")) { correction[i] = approximate[i]; }
+    mesh->communicate(correction);
+    chi += correction;
+  }
+  apply_boundary();
+  return chi;
+}
+
+void PolarisationDrift::solveConservativePotential(const Field3D& rhs) {
+  if (mesh->periodicX) {
+    // Each perpendicular plane has a constant null mode. A parallel-current
+    // source with a nonzero volume-weighted mean cannot be inverted here.
+    // Reduce X/Z over the corresponding X communicator, separately for each Y.
+    const auto* coord = rhs.getCoordinates();
+    std::vector<BoutReal> local(2 * mesh->LocalNy, 0.0), global(local.size(), 0.0);
+    BOUT_FOR(i, rhs.getRegion("RGN_NOBNDRY")) {
+      const BoutReal weighted =
+          rhs[i] * coord->J()[i] * coord->dx()[i] * coord->dy()[i] * coord->dz()[i];
+      local[2 * i.y()] += weighted;
+      local[2 * i.y() + 1] += std::abs(weighted);
+    }
+    MPI_Allreduce(local.data(), global.data(), static_cast<int>(local.size()), MPI_DOUBLE,
+                  MPI_SUM, mesh->getXcomm());
+    for (int y = mesh->ystart; y <= mesh->yend; ++y) {
+      const BoutReal tolerance =
+          128 * std::numeric_limits<BoutReal>::epsilon() * global[2 * y + 1];
+      if (std::abs(global[2 * y]) > tolerance) {
+        throw BoutException("Conservative polarisation has an unsolvable periodic "
+                            "X-Z mean current source at local Y={}: integral={}, "
+                            "roundoff bound={}",
+                            y, global[2 * y], tolerance);
+      }
+    }
+  }
+  // Preserve the existing periodic inverse/gauge; physical X uses the
+  // separate mixed-boundary inverse, matching applyPolarisationBoundary.
+  Laplacian& inverse = *phiSolver;
+  // The DC wall value approximates d(Phi)/dt by d(phi_b)/dt. The pressure
+  // potential's wall rate d(psi_bar_b)/dt is only known in finally(), so it is
+  // neglected here. Corrections retain homogeneous spectral boundaries; the
+  // inhomogeneous value enters through every FV residual, including the first.
+  chi = bout::ion_energy::fixedPolarisationPotential(
+      boussinesq_coeff, rhs, inverse, polarisation_corrections, radial_model.chi_ac,
+      radial_model.walls ? &wall_rate_inner : nullptr,
+      radial_model.walls ? &wall_rate_outer : nullptr);
+  chi_iterations = 1 + polarisation_corrections;
+
+  // Diagnostic only: residual against the finite-volume operator
+  auxiliary_residual = rhs - bout::ion_energy::Div_a_Grad_perp_XZ(boussinesq_coeff, chi);
+  chi_residual = max(abs(auxiliary_residual), true);
+}
+
+void PolarisationDrift::transformConservative(GuardedOptions& state) {
+  auto allspecies = state["species"];
+  auto fields = state["fields"];
+  const Field3D phi = GET_VALUE(Field3D, fields["phi"]);
+  const Field3D psi = GET_NOBOUNDARY(Field3D, fields["ion_pressure_potential"]);
+  const Field3D vorticity = GET_NOBOUNDARY(Field3D, fields["vorticity"]);
+  boussinesq_coeff = get<Coordinates::FieldMetric>(fields["ion_boussinesq_coefficient"]);
+  phiSolver->setCoefC(boussinesq_coeff);
+  Field3D mass_density = GET_NOBOUNDARY(Field3D, fields["ion_mass_density"]);
+  const Field3D DivJReynolds = GET_NOBOUNDARY(Field3D, fields["DivJReynolds"]);
+  const Field3D DivJdia = GET_NOBOUNDARY(Field3D, fields["DivJdia"]);
+  const bout::ion_energy::XZFaceFluxes reynolds{
+      GET_NOBOUNDARY(Field3D, fields["ion_reynolds_x"]),
+      GET_NOBOUNDARY(Field3D, fields["ion_reynolds_z"])};
+  const Field3D rates = GET_NOBOUNDARY(Field3D, fields["ion_wall_rate"]);
+  if (radial_model.walls) {
+    for (int y = 0; y < mesh->LocalNy; ++y) {
+      wall_rate_inner[static_cast<size_t>(y)] = rates(mesh->xstart - 1, y, 0);
+      wall_rate_outer[static_cast<size_t>(y)] = rates(mesh->xend + 1, y, 0);
+    }
+  }
+  //////////////////////////////////////////////////////////
+  // Polarisation drift
+
+  // Auxiliary current-continuity potential, independent of phi relaxation.
+  // DC Dirichlet fixes the constant mode; the AC enum controls the auxiliary
+  // potential guards. Transport retains the currents used by the forward solve.
+  // Excluding the viscous rate from chi means the transported polarisation
+  // current contains the ion viscous drift current. Its work and enthalpy are
+  // carried by DivEpol, so subtracting DivEviscous separately would duplicate
+  // that work. This relation uses the actual DivJviscous for either stress-wall
+  // setting: free_slip retains viscous X faces, fixed/no_slip close them, and
+  // polarisation transport retains its own physical X-wall faces in both cases.
+  Jpar = zeroFrom(phi);
+  for (auto& [name, species] : allspecies.getChildren()) {
+    if (!species.isSet("charge") || !species.isSet("momentum")) {
+      continue;
+    }
+    const BoutReal charge = get<BoutReal>(species["charge"]);
+    if (std::abs(charge) < 1e-5) {
+      continue;
+    }
+    const BoutReal mass = get<BoutReal>(species["AA"]);
+    Jpar += (charge / mass) * GET_VALUE(Field3D, species["momentum"]);
+  }
+  mesh->communicate(Jpar);
+  DivJpar = Div_par(Jpar);
+  current_rhs = DivJReynolds + DivJdia + DivJpar;
+  for (const auto* optional : {"DivJextra", "DivJcol"}) {
+    if (IS_SET_NOBOUNDARY(fields[optional])) {
+      current_rhs += GET_NOBOUNDARY(Field3D, fields[optional]);
+    }
+  }
+  solveConservativePotential(current_rhs);
+
+  // Use the same geometric chi currents as the residual, including wall faces.
+  const auto chi_faces = bout::ion_energy::perpendicularFaces(boussinesq_coeff, chi);
+  polarisation_flux = {-reynolds.x - chi_faces.x, -reynolds.z - chi_faces.z};
+  const auto divPol = [&](const Field3D& weight) -> Field3D {
+    Field3D result = bout::ion_energy::divergence(polarisation_flux, &weight);
+    if (poloidal_flows) {
+      Field3D w = copy(weight);
+      fillRadialGuards(w, [&](int x, int, int, int y, int z) { return w(x, y, z); });
+      result -= Div_n_bxGrad_f_B_XPPM(vorticity, phi, false, true, false, &w)
+                - Div_n_bxGrad_f_B_XPPM(vorticity, phi, false, false, false, &w);
+    }
+    return result;
+  };
+  // Each rank owns complete periodic Z lines, so wall-line means are local.
+  // Uniform weights remove current/weight correlations from wall transport;
+  // net work remains the wall Phi midpoint times the net wall current.
+  if (radial_model.walls
+      && (mesh->getNZPE() != 1 || mesh->zstart != 0 || mesh->zend + 1 != mesh->LocalNz)) {
+    throw BoutException("Polarisation wall transport requires complete periodic Z lines");
+  }
+  const auto* coord = phi.getCoordinates();
+  Field3D wall_energy_weight = zeroFrom(phi);
+  Field3D wall_work_weight = zeroFrom(phi);
+  Field3D wall_thermal_weight = zeroFrom(phi);
+  Field3D wall_pressure_mismatch = zeroFrom(phi);
+  const auto wallWeighted = [&](const Field3D& weight,
+                                const Field3D* prescribed = nullptr) -> Field3D {
+    Field3D result = divPol(weight);
+    for (int x : {mesh->xstart - 1, mesh->xend}) {
+      const bool inner = x == mesh->xstart - 1;
+      if (mesh->periodicX || (inner && !mesh->firstX()) || (!inner && !mesh->lastX())) {
+        continue;
+      }
+      const int cell = inner ? x + 1 : x;
+      for (int y = mesh->ystart; y <= mesh->yend; ++y) {
+        BoutReal mean = 0.0;
+        for (int z = 0; z < mesh->LocalNz; ++z) {
+          mean += weight(cell, y, z);
+        }
+        mean /= mesh->LocalNz;
+        for (int z = 0; z < mesh->LocalNz; ++z) {
+          const BoutReal revised = prescribed ? (*prescribed)(x, y, z) : mean;
+          const BoutReal volume = coord->J()(cell, y, z) * coord->dx()(cell, y, z)
+                                  * coord->dy()(cell, y, z) * coord->dz()(cell, y, z);
+          result(cell, y, z) += (inner ? -1.0 : 1.0) * polarisation_flux.x(x, y, z)
+                                * (revised - weight(cell, y, z)) / volume;
+        }
+      }
+    }
+    return result;
+  };
+  DivJpol = divPol(Field3D{1.0});
+  bout::ion_energy::XZFaceFluxes wall_flux;
+  if (diagnose) {
+    wall_flux = {zeroFrom(phi), zeroFrom(phi)};
+    for (int x : {mesh->xstart - 1, mesh->xend}) {
+      if (!mesh->periodicX
+          && ((x == mesh->xstart - 1 && mesh->firstX())
+              || (x == mesh->xend && mesh->lastX()))) {
+        for (int y = mesh->ystart; y <= mesh->yend; ++y) {
+          for (int z = 0; z < mesh->LocalNz; ++z) {
+            wall_flux.x(x, y, z) = polarisation_flux.x(x, y, z);
+          }
+        }
+      }
+    }
+  }
+
+  // Jps = (A_s n_s / rho) Jpol, Gamma_ps = Jps / Z_s. Use the actual
+  // mass density, so the species currents sum to Jpol above the floor.
+  mass_density = floor(mass_density, average_atomic_mass * density_floor);
+  // The pressure potential uses the same reference mass normalisation as Phi
+  // and K_perp. Transporting work as Phi Jpol keeps the local thermal/kinetic
+  // partition independent of a constant potential gauge up to the auxiliary
+  // current residual. Thermal and parallel kinetic weights below retain the
+  // actual species mass-density partition.
+  Field3D E_adv = phi + psi;
+  diagnostics = Options{};
+  forAllIons(allspecies, [&](GuardedOptions species) {
+    const BoutReal AA = get<BoutReal>(species["AA"]);
+    const BoutReal Z = get<BoutReal>(species["charge"]);
+    const Field3D N = GET_NOBOUNDARY(Field3D, species["density"]);
+    const Field3D P = GET_NOBOUNDARY(Field3D, species["pressure"]);
+    const Field3D coefficient = (AA / Z) / mass_density;
+    const Field3D density_source = -wallWeighted(coefficient * N);
+    add(species["density_source"], density_source);
+    set(species["polarisation_density_source"], density_source);
+    if (diagnose) {
+      const Field3D weight = coefficient * N;
+      diagnostics[species.name()]["wall_loss"] =
+          wallWeighted(weight) - divPol(weight)
+          + bout::ion_energy::divergence(wall_flux, &weight);
+    }
+    E_adv += coefficient * (3. / 2) * P;
+    if (species.isSet("velocity")) {
+      const Field3D V = GET_NOBOUNDARY(Field3D, species["velocity"]);
+      E_adv += coefficient * 0.5 * AA * N * SQ(V);
+    }
+    if (species.isSet("momentum")) {
+      const Field3D NV = GET_NOBOUNDARY(Field3D, species["momentum"]);
+      Field3D mean_momentum_weight = zeroFrom(phi);
+      const Field3D V = GET_NOBOUNDARY(Field3D, species["velocity"]);
+      for (int x : {mesh->xstart - 1, mesh->xend}) {
+        const bool inner = x == mesh->xstart - 1;
+        if (mesh->periodicX || (inner && !mesh->firstX()) || (!inner && !mesh->lastX())) {
+          continue;
+        }
+        const int cell = inner ? x + 1 : x;
+        for (int y = mesh->ystart; y <= mesh->yend; ++y) {
+          BoutReal fraction = 0.0, velocity = 0.0;
+          for (int z = 0; z < mesh->LocalNz; ++z) {
+            fraction += AA * N(cell, y, z) / mass_density(cell, y, z);
+            velocity += 0.5 * (V(x, y, z) + V(x + 1, y, z));
+          }
+          fraction /= mesh->LocalNz;
+          velocity /= mesh->LocalNz;
+          for (int z = 0; z < mesh->LocalNz; ++z) {
+            mean_momentum_weight(x, y, z) = AA * fraction * velocity / Z;
+          }
+        }
+      }
+      // Use the product of the mean particle partition and mean per-particle
+      // momentum, matching the particles transported through the wall.
+      const Field3D momentum_source =
+          -wallWeighted(coefficient * NV, &mean_momentum_weight);
+      add(species["momentum_source"], momentum_source);
+      set(species["polarisation_momentum_source"], momentum_source);
+    }
+  });
+  // Phi + sum_s[(3/2 p_s + K_parallel_s) A_s/(Z_s rho)].
+  DivEpol = divPol(E_adv);
+  for (int x : {mesh->xstart - 1, mesh->xend}) {
+    const bool inner = x == mesh->xstart - 1;
+    if (mesh->periodicX || (inner && !mesh->firstX()) || (!inner && !mesh->lastX())) {
+      continue;
+    }
+    const int cell = inner ? x + 1 : x;
+    for (int y = mesh->ystart; y <= mesh->yend; ++y) {
+      BoutReal work = 0.0, thermal = 0.0, kinetic_parallel = 0.0;
+      BoutReal original_pressure = 0.0;
+      for (int z = 0; z < mesh->LocalNz; ++z) {
+        work += 0.5 * (phi(x, y, z) + phi(x + 1, y, z) + psi(x, y, z) + psi(x + 1, y, z));
+      }
+      work /= mesh->LocalNz;
+      forAllIons(allspecies, [&](GuardedOptions species) {
+        const BoutReal AA = get<BoutReal>(species["AA"]);
+        const BoutReal Z = get<BoutReal>(species["charge"]);
+        const Field3D N = GET_NOBOUNDARY(Field3D, species["density"]);
+        const Field3D T = GET_NOBOUNDARY(Field3D, species["temperature"]);
+        BoutReal fraction = 0.0, temp = 0.0, velocity = 0.0;
+        for (int z = 0; z < mesh->LocalNz; ++z) {
+          fraction += AA * N(cell, y, z) / mass_density(cell, y, z);
+          temp += 0.5 * (T(x, y, z) + T(x + 1, y, z));
+        }
+        fraction /= mesh->LocalNz;
+        temp /= mesh->LocalNz;
+        if (species.isSet("velocity")) {
+          const Field3D V = GET_NOBOUNDARY(Field3D, species["velocity"]);
+          for (int z = 0; z < mesh->LocalNz; ++z) {
+            velocity += 0.5 * (V(x, y, z) + V(x + 1, y, z));
+          }
+          velocity /= mesh->LocalNz;
+        }
+        // Products of separate means give the transported particle flux times
+        // its mean energy per particle; a mean of products would not do so.
+        original_pressure += fraction * temp / Z;
+        thermal += 1.5 * fraction * temp / Z;
+        kinetic_parallel += 0.5 * AA * fraction * velocity * velocity / Z;
+      });
+      for (int z = 0; z < mesh->LocalNz; ++z) {
+        const BoutReal pressure_mid = 0.5 * (psi(x, y, z) + psi(x + 1, y, z));
+        const BoutReal revised = work + (thermal + kinetic_parallel);
+        const BoutReal volume = coord->J()(cell, y, z) * coord->dx()(cell, y, z)
+                                * coord->dy()(cell, y, z) * coord->dz()(cell, y, z);
+        DivEpol(cell, y, z) += (inner ? -1.0 : 1.0) * polarisation_flux.x(x, y, z)
+                               * (revised - E_adv(cell, y, z)) / volume;
+        wall_energy_weight(x, y, z) = revised;
+        wall_work_weight(x, y, z) = work;
+        wall_thermal_weight(x, y, z) = thermal + kinetic_parallel;
+        wall_pressure_mismatch(x, y, z) = original_pressure - pressure_mid;
+      }
+    }
+  }
+  forAllIons(allspecies, [&](GuardedOptions species) {
+    auto& sources = diagnostics[species.name()];
+    sources["wall_energy_weight"] = wall_energy_weight;
+    sources["wall_work_weight"] = wall_work_weight;
+    sources["wall_thermal_weight"] = wall_thermal_weight;
+    sources["wall_pressure_mismatch"] = wall_pressure_mismatch;
+  });
+  set(state["fields"]["ion_polarisation_energy_divergence"], DivEpol);
+  set(state["fields"]["DivJpol"], DivJpol);
+  set(state["fields"]["ion_chi"], chi);
+  set(fields["DivJpar"], DivJpar);
+  set(fields["ion_current_rhs"], current_rhs);
+  set(fields["ion_auxiliary_residual"], auxiliary_residual);
+}
+
+void PolarisationDrift::outputConservative(Options& state) {
+  const auto Nnorm = get<BoutReal>(state["Nnorm"]);
+  const auto Tnorm = get<BoutReal>(state["Tnorm"]);
+  const auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
+  const auto rho_s0 = get<BoutReal>(state["rho_s0"]);
+  const BoutReal Pnorm = SI::qe * Tnorm * Nnorm;
+  set(state["polarisation_drift_version"], 2);
+  set_with_attrs(
+      state["ion_chi"], chi,
+      {{"time_dimension", "t"},
+       {"units", "V s^-1"},
+       {"conversion", Tnorm * Omega_ci},
+       {"long_name", "Auxiliary polarisation current potential"},
+       {"description", "DC wall value is d(phi_b)/dt during relaxation; "
+                       "the wall rate of the pressure potential is neglected"}});
+  if (diagnose) {
+    set_with_attrs(state["parallel_current"], Jpar,
+                   {{"time_dimension", "t"},
+                    {"units", "A m^-2"},
+                    {"conversion", SI::qe * Nnorm * rho_s0 * Omega_ci},
+                    {"source", "polarisation_drift"},
+                    {"long_name", "Completed parallel current with sheath guards"}});
+    for (const auto& [name, field] :
+         {std::pair{"DivJpar", &DivJpar}, std::pair{"ion_current_rhs", &current_rhs},
+          std::pair{"ion_auxiliary_residual", &auxiliary_residual}}) {
+      set_with_attrs(state[name], *field,
+                     {{"time_dimension", "t"},
+                      {"units", "A m^-3"},
+                      {"conversion", SI::qe * Nnorm * Omega_ci},
+                      {"source", "polarisation_drift"}});
+    }
+    for (const auto& [species, sources] : diagnostics.getChildren()) {
+      for (const auto* name : {"wall_energy_weight", "wall_work_weight",
+                               "wall_thermal_weight", "wall_pressure_mismatch"}) {
+        set_with_attrs(state[std::string{"polarisation_"} + name],
+                       sources[name].as<Field3D>(),
+                       {{"time_dimension", "t"},
+                        {"units", "V"},
+                        {"conversion", Tnorm},
+                        {"description", "Physical X-wall face transport weight; "
+                                        "uniform along each periodic Z line"}});
+      }
+      set_with_attrs(state["particle_pol_wall_loss_" + species],
+                     sources["wall_loss"].as<Field3D>(),
+                     {{"time_dimension", "t"},
+                      {"units", "m^-3 s^-1"},
+                      {"conversion", Nnorm * Omega_ci},
+                      {"long_name", "Outward polarisation particle loss per volume"},
+                      {"species", species}});
+    }
+    for (const auto& [name, faces, indexing] :
+         {std::tuple{"polarisation_flux_x", &polarisation_flux.x,
+                     "x(i,j,k): face (i+1/2,j,k)"},
+          std::tuple{"polarisation_flux_z", &polarisation_flux.z,
+                     "z(i,j,k): face (i,j,k+1/2)"}}) {
+      set_with_attrs(
+          state[name], *faces,
+          {{"time_dimension", "t"},
+           {"units", "A"},
+           {"conversion", SI::qe * Nnorm * Omega_ci * pow(rho_s0, 3)},
+           {"long_name", "Area-integrated X-Z polarisation current"},
+           {"description", "Increasing-coordinate current: minus Reynolds and chi faces; "
+                           "X-Z contribution, excluding optional poloidal X-Y transport"},
+           {"face_index", indexing}});
+    }
+    set_with_attrs(state["DivJpol"], DivJpol,
+                   {{"time_dimension", "t"},
+                    {"units", "A m^-3"},
+                    {"long_name", "Polarisation transport current divergence"},
+                    {"conversion", SI::qe * Nnorm * Omega_ci}});
+    set_with_attrs(state["ddt(Phi)"], chi,
+                   {{"time_dimension", "t"},
+                    {"units", "V s^-1"},
+                    {"conversion", Tnorm * Omega_ci},
+                    {"long_name", "Auxiliary polarisation current potential"},
+                    {"description", "Fixed-correction auxiliary solve; viscous stress is "
+                                    "excluded from its RHS; "
+                                    "nonperiodic X: midpoint Dirichlet DC, "
+                                    "radial AC selected by polarisation_ac_boundary; "
+                                    "approximate, not exact ddt(phi+psi)"}});
+    set_with_attrs(state["ion_chi_iterations"], chi_iterations,
+                   {{"time_dimension", "t"},
+                    {"description", "Auxiliary chi solver calls: one initial solve plus "
+                                    "polarisation_corrections defect corrections"}});
+    set_with_attrs(state["ion_chi_residual"], chi_residual,
+                   {{"time_dimension", "t"},
+                    {"description", "Maximum absolute normalised finite-volume residual "
+                                    "of L(chi)=DivJReynolds+DivJdia+DivJpar"
+                                    "+DivJextra+DivJcol over physical cells; "
+                                    "viscous stress excluded"}});
+    set_with_attrs(
+        state["DivEpol"], DivEpol,
+        {{"time_dimension", "t"}, {"units", "W m^-3"}, {"conversion", Pnorm * Omega_ci}});
+  }
+  for (const auto* field :
+       {"ion_chi", "ddt(Phi)", "ion_chi_iterations", "ion_chi_residual", "DivJpol",
+        "DivEpol", "polarisation_flux_x", "polarisation_flux_z"}) {
+    if (state.isSet(field)) {
+      state[field].attributes["source"] = std::string{"polarisation_drift"};
     }
   }
 }

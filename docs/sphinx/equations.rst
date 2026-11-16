@@ -1294,6 +1294,11 @@ A table of the two forms used in Hermes-3, and the corresponding terms in `Simak
 polarisation_drift
 ~~~~~~~~~~~~~~~~~~
 
+``implementation = legacy`` is the default and retains the potential-flow
+closure described below. ``implementation = conservative`` instead pairs
+with :ref:`sec-evolve_vorticity_ion_energy` and transports its face-based
+polarisation current and total ion energy.
+
 This calculates the polarisation drift of all charged species,
 including ions and electrons. It works by approximating the drift
 as a potential flow:
@@ -1703,7 +1708,7 @@ be configured as:
 .. code-block:: ini
 
    [hermes]
-   components = e, d+, he++, evolve_vorticity_ion_energy
+   components = e, d+, he++, evolve_vorticity_ion_energy, polarisation_drift
 
    [e]
    type = quasineutral, evolve_pressure, zero_current
@@ -1722,6 +1727,24 @@ be configured as:
 
    [evolve_vorticity_ion_energy]
    average_atomic_mass = 2.0
+
+   [polarisation_drift]
+   implementation = conservative
+
+Conservative drift requires exactly one ion-energy component. The default
+``implementation = legacy`` retains the potential-flow closure used with
+``vorticity``. Recovery publishes its coefficient, pressure potential, Reynolds
+faces and current divergence, diamagnetic divergence and DC wall rates on every
+RHS evaluation, independently of ``diagnose``. Conservative drift owns the
+auxiliary inverse and species transport. Its separately identified density and
+momentum sources let ion finalisation exclude kinetic conversion already
+included in the total-energy transport.
+
+The ``zero_current`` electron closure does not evolve an electron kinetic
+reservoir or impose parallel force balance. With parallel pressure or potential
+gradients, its unpaired work is
+:math:`V_{\parallel e}\nabla_\parallel p_e + J_{\parallel e}\nabla_\parallel\phi`.
+A strict closed-energy benchmark using this closure must make that work vanish.
 
 The equations below use normalised quantities, with ion atomic mass
 :math:`A_s`, charge number :math:`Z_s`, and a fixed Boussinesq reference
@@ -1810,7 +1833,9 @@ The time evolution is
    \frac{\partial\Omega}{\partial t}
       &= -\nabla\cdot\boldsymbol{\Gamma}
          + \nabla\cdot(\mathbf{J}_{\mathrm{dia},i}
-                       +\mathbf{J}_{\mathrm{dia},e}+\mathbf{J}_\nu), \\
+                       +\mathbf{J}_{\mathrm{dia},e}+\mathbf{J}_\nu
+                       +\mathbf{J}_{\parallel,i}+\mathbf{J}_{\parallel,e})
+         +D_{\mathrm{extra}}+D_{\mathrm{col}}, \\
    \frac{\partial E_i}{\partial t}
       &= -\nabla\cdot(\mathbf{Q}_{E\times B}
                      +\mathbf{Q}_{\mathrm{electric}}+\mathbf{Q}_\parallel
@@ -1891,13 +1916,13 @@ momentum fields :math:`M_s=A_s n_s V_{\parallel s}`:
       = \mathbf{b}\sum_s\frac{Z_s}{A_s}M_s,
    \qquad \mathbf{J}_{\parallel,e}=-\mathbf{b}\frac{M_e}{A_e}.
 
-These parallel currents enter the electrical energy flux and electron
-exchange term. The vorticity RHS implemented here contains the Reynolds,
-diamagnetic and viscous current divergences shown above; it does not include
-parallel-current divergence or ``fields:DivJextra``. Parallel electrical
-work is therefore present in the energy equation without the corresponding
-parallel-current drive of vorticity. This limits the present formulation
-for simulations in which parallel or sheath currents control the potential.
+These completed parallel currents enter the electrical energy flux, electron
+exchange term, auxiliary current solve and vorticity RHS. Enabled
+``fields:DivJextra`` and ``fields:DivJcol`` enter both auxiliary and vorticity
+RHS consistently. Component permissions establish recovery, sheath boundary,
+conservative drift, then finalisation. Charged momentum and potential include
+their completed boundary regions; parallel electrical work is evaluated during
+finalisation after sheath conditioning.
 The electron current in the exchange term is
 :math:`\mathbf{J}_e=\mathbf{J}_{\mathrm{dia},e}+\mathbf{J}_{\parallel,e}`.
 Electron thermal energy receives
@@ -1910,7 +1935,12 @@ from an approximate solution of :math:`\mathcal{L}(\chi)=S_\chi`, where
 .. math::
 
    S_\chi=-\nabla\cdot\boldsymbol{\Gamma}
-          +\nabla\cdot(\mathbf{J}_{\mathrm{dia},i}+\mathbf{J}_{\mathrm{dia},e}).
+          +\nabla\cdot(\mathbf{J}_{\mathrm{dia},i}+\mathbf{J}_{\mathrm{dia},e})
+          +\nabla\cdot(\mathbf{J}_{\parallel,i}+\mathbf{J}_{\parallel,e})
+          +D_{\mathrm{extra}}+D_{\mathrm{col}}.
+
+Absent optional currents are omitted. Periodic perpendicular planes reject
+an unsolvable volume-weighted mean RHS rather than projecting it away.
 
 The auxiliary solve excludes the viscous rate. Because vorticity retains that
 rate, the polarisation transport current contains the ion viscous drift current.
@@ -2222,13 +2252,15 @@ For a single ion with unit density weight, define
 .. math::
 
    R_\chi=\mathrm{DivJReynolds}+\mathrm{DivJdia}
+             +\mathrm{DivJpar}+D_{\mathrm{extra}}+D_{\mathrm{col}}
              -\mathcal{L}(\chi).
 
 The discrete pointwise continuity identity, including boundary cells, is
 
 .. math::
 
-   -\mathrm{DivJpol}=\mathrm{DivJdia}-R_\chi.
+   -\mathrm{DivJpol}=\mathrm{DivJdia}+\mathrm{DivJpar}
+                      +D_{\mathrm{extra}}+D_{\mathrm{col}}-R_\chi.
 
 Discarding a solved wall face would add its flux divided by the boundary-cell
 volume to this balance, creating a source that grows as the mesh is refined.
@@ -2249,6 +2281,14 @@ Other options in ``[evolve_vorticity_ion_energy]`` are:
   (defaults ``1.0`` eV and ``1e-3``). The same scale is used for phi and psi.
 - ``vort_atol``: Absolute tolerance for the normalised forward vorticity
   residual (default ``1e-10``); ``phi_rtol`` supplies its relative tolerance.
+- ``laplacian``: Subsection containing options for the approximate
+  potential-recovery Laplacian solver.
+- ``diagnose``: Save additional energy and flux diagnostics (default ``false``).
+
+Auxiliary options belong to ``[polarisation_drift]``:
+
+- ``implementation``: ``legacy`` or ``conservative``; default ``legacy``.
+- ``polarisation_ac_boundary``: ``neumann`` (default) or ``dirichlet``.
 - ``polarisation_corrections``: Nonnegative number of FV defect corrections
   after the initial approximate auxiliary solve (default ``10``). Chi does not
   use the recovery tolerances or raise an error for a nonzero residual.
@@ -2256,15 +2296,18 @@ Other options in ``[evolve_vorticity_ion_energy]`` are:
   contracts. The remaining residual controls current continuity and the local
   thermal/kinetic partition; ten corrections do not guarantee roundoff accuracy
   in grid-scale modes.
-- ``laplacian``: Subsection containing options for the approximate
-  Laplacian solver.
-- ``polarisation_laplacian``: Independent auxiliary solver options, with
+- ``laplacian``: Independent auxiliary solver options, with
   ``type`` defaulting to the phi solver type. This separate solver is created
-  only for nonperiodic X. The enums determine both solvers' radial flags:
+  for conservative drift. The enums determine both solvers' radial flags:
   ``INVERT_SET`` for phi, ``INVERT_AC_GRAD`` for Neumann chi AC and zero for
   Dirichlet chi AC. DC-removal global flags are rejected for this auxiliary
-  inverse. Periodic X shares the potential inverse and its existing gauge.
-- ``diagnose``: Save additional energy and flux diagnostics (default ``false``).
+  inverse. For periodic X, unspecified auxiliary settings inherit the recovery
+  solver settings and preserve its existing gauge.
+- ``diagnose``: Save additional transport diagnostics; defaults to the
+  ion-energy component's diagnostic setting.
+
+The former ion-energy ``polarisation_laplacian``, ``polarisation_ac_boundary``
+and ``polarisation_corrections`` settings must be moved to the drift section.
 
 User-supplied ``inner_boundary_flags`` or ``outer_boundary_flags`` in either
 solver subsection, ``Vort:bndry_xin``, ``Vort:bndry_xout`` and explicit
@@ -2276,11 +2319,22 @@ The ion-energy radial wall model is selected by ``radial_boundary``.
 guard fills and wall-state evolution; selecting ``no_slip`` still reads and
 validates ``phi_boundary_velocity``.
 
-Output metadata ``evolve_vorticity_ion_energy_version = 4`` identifies
+Output metadata ``evolve_vorticity_ion_energy_version = 6`` and
+``polarisation_drift_version = 2`` identify the split ownership and completed
+parallel-current/electrical-work equations, preserving
 full-vorticity MC transport plus the central Reynolds remainder, pressure-potential
 polarisation work, Z-uniform wall transport weights and viscous work carried
-by polarisation transport. Analysis assumes version 4 when the tag is absent
-and rejects unsupported versions; restart wall-storage versioning is separate.
+by polarisation transport. Analysis supports versions 4, 5 and 6, assumes version 4
+when the tag is absent, and reads auxiliary settings from the appropriate
+owner. Restart wall-storage versioning is separate.
+
+Diagnosed ``parallel_current``, ``ion_parallel_current`` and
+``electron_parallel_current`` retain the completed target guards.
+``DivJpar``, ``ion_current_rhs`` and ``ion_auxiliary_residual`` record the selected
+current equation and its forward-operator residual; ``ddt(Vort)`` is the
+completed rate in physical cells. In this BOUT revision restored solver
+momentum output need not retain non-FCI physical Y guards, so target checks
+use the dedicated completed-current fields.
 
 The generated-restart pytest regression in
 ``tests/python/test_ion_energy_native.py`` checks potential shifts
@@ -2359,7 +2413,9 @@ thermal-plus-parallel weights and the difference between transported pressure
 weight and the wall pressure potential. These additional outputs require
 ``diagnose = true``.
 
-The implementation is in ``src/evolve_vorticity_ion_energy.cxx``.
+Recovery, Reynolds evaluation and ion finalisation are implemented in
+``src/evolve_vorticity_ion_energy.cxx``; conservative auxiliary recovery,
+current and species transport are in ``src/polarisation_drift.cxx``.
 
 relax_potential
 ~~~~~~~~~~~~~~~

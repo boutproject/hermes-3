@@ -11,10 +11,10 @@ from boutdata.data import BoutOptionsFile
 from boutdata.mms import exprToStr
 from manufactured import (
     COORDINATES,
-    EVOLVED,
     LENGTH,
     RECOVERED,
     VARIANTS,
+    evolved,
     model,
     preflight,
 )
@@ -42,6 +42,7 @@ def input_path(variant):
 
 def generate(destination, variant="baseline"):
     fields, _, sources, _ = model(variant)
+    names = evolved(variant)
     x, y, z, time = s.symbols("x y z t")
     replacement = dict(
         zip(
@@ -49,12 +50,22 @@ def generate(destination, variant="baseline"):
             (LENGTH * x, LENGTH * y / (2 * s.pi), LENGTH * z / (2 * s.pi), time),
         )
     )
-    keys = [(name, "solution") for name in EVOLVED]
-    keys += [(name, "source") for name in EVOLVED]
+    keys = [(name, "solution") for name in names]
+    keys += [(name, "source") for name in names]
     keys += [("mms", REFERENCE_KEYS[name]) for name in RECOVERED]
-    expressions = [fields[name] for name in EVOLVED]
-    expressions += [sources[name] for name in EVOLVED]
+    expressions = [fields[name] for name in names]
+    expressions += [sources[name] for name in names]
     expressions += [fields[name] for name in RECOVERED]
+    if variant == "parallel_current":
+        keys += [
+            ("mms", key)
+            for key in (
+                "electron_temperature",
+                "parallel_current",
+                "parallel_current_divergence",
+            )
+        ]
+        expressions += [fields[key] for key in ("Te", "Jpar", "DivJpar")]
     expressions = [e.subs(replacement, simultaneous=True) for e in expressions]
     factors, reduced = s.cse(
         expressions, symbols=s.numbered_symbols("mms:c"), order="canonical"
@@ -72,11 +83,21 @@ def generate(destination, variant="baseline"):
     reduced = [expression.xreplace(inline) for expression in reduced]
     options = BoutOptionsFile(str(HERE / "base.inp"))
     options.getSection("mms")["variant"] = variant
+    if variant == "parallel_current":
+        options["e"]["type"] = "quasineutral, evolve_pressure, evolve_momentum"
+        options["e"]["use_div_par_fvv"] = "true"
+        options["e"]["diagnose"] = "true"
+        options.getSection("Ve")["bndry_xin"] = "neumann"
+        options["Ve"]["bndry_xout"] = "neumann"
+        options["sound_speed"]["electron_dynamics"] = "true"
+        options["sound_speed"].comments.pop("electron_dynamics", None)
+        options["evolve_vorticity_ion_energy"]["diagnose"] = "true"
+        options["polarisation_drift"]["diagnose"] = "true"
     if variant == "skew":
         # The analytic chi and its normal derivative both vanish at the wall.
         # Dirichlet AC guards retain second-order mixed-metric wall transport;
         # plain X-Neumann guards leave a numerical g13*d_z(chi) wall current.
-        options["evolve_vorticity_ion_energy"]["polarisation_ac_boundary"] = "dirichlet"
+        options["polarisation_drift"]["polarisation_ac_boundary"] = "dirichlet"
         for key, value in {
             "g13": "1/4",
             "g33": "17/16",
@@ -113,7 +134,7 @@ def generate(destination, variant="baseline"):
             # Radial solver Vort guards carry fixed wall potentials. BOUT++
             # adds MMS forcing after the model RHS, including those guards.
             options[section][key] = f"where(x*(1-x),{exported(expression)},0)"
-    for name in EVOLVED:
+    for name in names:
         if name == "Vort":
             continue  # Physical radial vorticity guards belong to radial_boundary
         boundary = (

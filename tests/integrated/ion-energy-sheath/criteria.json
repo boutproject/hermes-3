@@ -1,0 +1,10 @@
+{
+  "target_current": 1e-12,
+  "current_divergence": 1e-12,
+  "continuity": 1e-10,
+  "electrical_work": 1e-11,
+  "decomposition": 1e-10,
+  "sorting": 0,
+  "nonzero_current": 1e-4,
+  "nonzero_divergence": 1e-6
+}

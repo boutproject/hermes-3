@@ -1,5 +1,8 @@
 # Physical sources and ion energy conversion
 
+The ion-energy component pairs explicitly with conservative `polarisation_drift`;
+its identified transport sources remain internal to the total-energy flux.
+
 A periodic two-ion slab combines electron heating, density injection/removal
 on moving ions and Braginskii heat exchange. Analysis reconstructs source
 powers from resolved options and saved state, and uses two output cadences to

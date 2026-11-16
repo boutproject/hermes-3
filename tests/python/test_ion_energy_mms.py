@@ -20,7 +20,7 @@ def test_identities_and_periodicity(variant):
     report = exact.preflight(variant)
     assert report["positive_primitives"]
     assert report["elliptic_and_X_boundaries"] == "verified symbolically"
-    for name in (*exact.EVOLVED, *exact.RECOVERED):
+    for name in (*exact.evolved(variant), *exact.RECOVERED):
         for axis in (1, 2):
             points = [1.37, 2.91, 4.23, 0.73]
             points[axis] = 0
@@ -38,9 +38,13 @@ def test_committed_inputs_are_current(tmp_path, variant):
     assert generated.read_bytes() == mms.input_path(variant).read_bytes()
     options = BoutOptionsFile(str(generated))
     assert options["solver"].get_bool("mms")
-    for field in exact.EVOLVED:
+    for field in exact.evolved(variant):
         assert "source" in options[field] and "solution" in options[field]
     assert set(mms.REFERENCE_KEYS.values()) <= set(options["mms"].keys())
+    if variant == "parallel_current":
+        assert "evolve_momentum" in str(options["e:type"])
+        assert "zero_current" not in str(options["e:type"])
+        assert options["sound_speed:electron_dynamics"] == "true"
 
 
 def test_common_temperature_single_ion_limits():

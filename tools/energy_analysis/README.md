@@ -41,6 +41,20 @@ measures stored midpoint-potential rates between output records. `summary`
 includes inventories, particle content, recovery consistency, internal
 curvature exchange, diagnostic comparisons and balance coverage.
 
+`zero_current_defect` reports the unpaired electron parallel force work
+`Ve Grad_par(Pe) + Je Grad_par(phi)` in watts. A `zero_current` electron closure
+sets velocity from ion current without electron momentum balance or an evolved
+kinetic reservoir; zero total current does not imply zero work. The supported
+reconstruction uses the default `v*Grad(p)` pressure form, C2 parallel gradients
+and uniform Y metrics. It requires retained Y guards, or explicit
+`metadata["periodic_y"] = True` for a guard-free periodic dataset. An exactly
+Y-invariant pressure and potential give zero work without reconstruction.
+`closed_balance` exposes `model_defect_power`; `source_balance` retains
+`known_model_defect_power` separately from external heating. Nonzero or
+unsupported closure work makes these balances incomplete and leaves a closed
+source residual unavailable. The strict X-Z closed test uses Y-invariant
+fields; its earlier Y-varying run is retained as evidence of this limitation.
+
 All dataset results have `coverage` (`complete` or `incomplete`) and
 `missing_terms`. Incomplete source balances retain known powers and inventory
 changes but omit a residual. Unknown terms are never assigned a zero power.
@@ -109,9 +123,18 @@ grids with varying metrics without requiring complete RHS coverage.
 
 ## Component version and radial currents
 
-The output tag `evolve_vorticity_ion_energy_version=4` identifies the equation
-and discretisation contract. Untagged snapshots use version 4; other versions
-are rejected. Reynolds and chi wall faces are retained for both AC conditions.
+The output tag `evolve_vorticity_ion_energy_version` identifies the equation
+and discretisation contract. Version 5 moves conservative transport to
+`polarisation_drift` version 1, selected explicitly with
+`implementation=conservative`. Its `polarisation_ac_boundary`,
+`polarisation_corrections` and `laplacian` settings belong to the drift section.
+Version 4 and untagged snapshots retain their original ion-energy ownership.
+Version 6 pairs with conservative drift version 2, includes completed parallel
+current in auxiliary/vorticity evolution and evaluates parallel electrical
+work after sheath conditioning. Versions 4/5/6 are supported. The existing
+slab budget coverage remains restricted; version support does not establish
+tokamak/sheath power-ledger coverage. Unknown versions are rejected. Reynolds and chi wall faces are retained for
+both AC conditions. Numerical diagnostic names and conversions are preserved.
 
 The auxiliary solve excludes the viscous rate, so polarisation transport
 carries ion viscous drift work. `DivEviscous` remains diagnostic stress work;
@@ -119,14 +142,17 @@ it is excluded from the energy RHS and outward energy budget to avoid double
 counting. Electron heating remains an internal transfer. Saved chi takes
 precedence over reconstruction. The default is ten defect corrections.
 
-Current continuity is `DivJpol+DivJdia=Rchi`, including wall cells. The residual
+For versions 4/5, current continuity is `DivJpol+DivJdia=Rchi`, including wall
+cells. Version 6 adds `DivJpar` and enabled `DivJextra`/`DivJcol` on the left.
+Its existing X-Z analysis paths are tested; general nonzero-parallel-current
+RHS/chi reconstruction remains unfinished and is not validated by tag support. The residual
 controls the gauge dependence of local energy partition. Global budgets alone
 do not establish radial boundary truncation accuracy. Chi's DC wall-rate
 approximation still neglects the mean pressure-potential rate.
 
 Use `PYTHONPATH=tools python -m energy_analysis.spectra RUN_DIR --output bands.json`
 for fixed-mode wall/interior RMS, radial profiles and e-folding widths. This
-streaming monitor supports singleton-Y, X-decomposed native version-4 dumps;
+streaming monitor supports singleton-Y, X-decomposed native version-4/5/6 dumps;
 supply physical domain lengths if they differ from 50 mm. Bands 16–31 and
 32–63 are fixed physical modes, independent of resolution. Wall amplitudes use
 first physical cell centres. Widths include their half-cell offset from the

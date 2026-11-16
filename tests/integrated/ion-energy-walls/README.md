@@ -1,5 +1,8 @@
 # Radial ion energy walls
 
+The ion-energy component pairs explicitly with conservative `polarisation_drift`.
+Auxiliary AC boundary settings belong to the drift section.
+
 Six nonlinear 8×8 budgets cover `fixed`, `free_slip` and `no_slip` with both
 Neumann and Dirichlet AC conditions through t=400. At every output, minimum
 ion density and local thermal energy (`Eion` minus both kinetic reservoirs)

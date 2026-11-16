@@ -340,7 +340,7 @@ def input_text(config, row):
         "model": "vorticity" if pressure else "evolve_vorticity_ion_energy",
         "components": "vorticity, polarisation_drift"
         if pressure
-        else "evolve_vorticity_ion_energy",
+        else "evolve_vorticity_ion_energy, polarisation_drift",
         "ion_components": "evolve_density, evolve_pressure"
         if pressure
         else "evolve_density",
@@ -357,7 +357,7 @@ def input_text(config, row):
             + str(c["diagnose"]).lower()
         )
         if pressure
-        else "",
+        else "[polarisation_drift]\nimplementation = conservative",
     }
     text = string.Template(
         (HERE / "publication-input.inp.template").read_text()

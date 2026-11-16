@@ -189,6 +189,8 @@ def slab_contract(run, *, closed_wall_diffusion=False):
         c.strip() for c in str(options["hermes:components"]).strip(" ()\t").split(",")
     }
     allowed_components = {run.model, *(s.name for s in run.species)}
+    if component_version(run) in (5, 6):
+        allowed_components.add(polarisation_owner(run))
     if closed_wall_diffusion and "classical_diffusion" in components:
         # This component closes complete physical boundary faces, including
         # cross-metric fluxes. Its interior sources need separate reconstruction.
@@ -270,9 +272,40 @@ def component_version(run):
     if run.formulation != "total_energy":
         return None
     version = run.data.metadata.get("evolve_vorticity_ion_energy_version", 4)
-    if version != 4:
+    if version not in (4, 5, 6):
         raise AuditError(f"Unsupported evolve_vorticity_ion_energy version: {version}")
     return int(version)
+
+
+def polarisation_owner(run):
+    """Resolve the enabled conservative drift owner for version-5/6 snapshots."""
+    if component_version(run) not in (5, 6):
+        return run.model
+    options = run.data.options
+    names = str(options["hermes:components"]).strip(" ()\t\r\n").split(",")
+    owners = []
+    for name in map(str.strip, names):
+        kinds = (
+            str(options[name]["type"])
+            if name in options and "type" in options[name]
+            else name
+        )
+        if "polarisation_drift" not in map(str.strip, kinds.split(",")):
+            continue
+        if (
+            name not in options
+            or "implementation" not in options[name]
+            or str(options[name]["implementation"]) != "conservative"
+        ):
+            raise AuditError(
+                "Version 5 requires implementation=conservative polarisation drift"
+            )
+        owners.append(name)
+    if len(owners) != 1:
+        raise AuditError(
+            "Version 5 requires exactly one enabled conservative polarisation drift"
+        )
+    return owners[0]
 
 
 def reconstruct_reynolds_faces(run, phi, psi):
@@ -300,7 +333,7 @@ def reconstruct_reynolds_faces(run, phi, psi):
 
 
 def polarisation_ac_boundary(run):
-    section = run.data.options[run.model]
+    section = run.data.options[polarisation_owner(run)]
     return (
         str(section["polarisation_ac_boundary"])
         if "polarisation_ac_boundary" in section
@@ -372,20 +405,30 @@ def _polarisation_factors(nx, nz, ax, az, periodic_x, spectral=False, ac="neuman
 
 def polarisation_corrections(run):
     """Read the nonnegative integer correction count through bd.options."""
-    count = run.scalar_option("polarisation_corrections", 10)
+    section = run.data.options[polarisation_owner(run)]
+    count = (
+        float(section.evaluate_scalar("polarisation_corrections"))
+        if "polarisation_corrections" in section
+        else 10
+    )
     if not np.isfinite(count) or count < 0 or count != int(count):
         raise AuditError("polarisation_corrections must be a nonnegative integer")
     return int(count)
 
 
 def _validate_polarisation_solver(run, periodic_x):
-    section = run.data.options[run.model]
+    section = run.data.options[polarisation_owner(run)]
     if polarisation_ac_boundary(run) not in ("neumann", "dirichlet"):
         raise AuditError("Unknown polarisation_ac_boundary")
-    key = "laplacian" if periodic_x else "polarisation_laplacian"
+    key = (
+        "laplacian"
+        if periodic_x or component_version(run) in (5, 6)
+        else "polarisation_laplacian"
+    )
     opts = section[key] if key in section else None  # noqa: SIM401 -- BoutOptions has no get()
     # The C++ component inherits only the solver type from the phi subsection.
-    fallback = section["laplacian"] if "laplacian" in section else None  # noqa: SIM401
+    recovery = run.data.options[run.model]
+    fallback = recovery["laplacian"] if "laplacian" in recovery else None  # noqa: SIM401
     solver_type = (
         str(opts["type"])
         if opts is not None and "type" in opts

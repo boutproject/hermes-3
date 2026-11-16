@@ -1,5 +1,15 @@
 # Continuum ion energy MMS
 
+The ion-energy component pairs explicitly with conservative `polarisation_drift`.
+Auxiliary AC boundary settings are owned by the drift section. These existing
+variants retain their zero-current electron closure.
+
+The additional generated `parallel_current` variant evolves independent
+electron momentum. Its three-level, temporal-refinement and MPI accuracy gates
+are registered separately as `ion-energy-parallel-mms`; see the
+[parallel MMS README](../ion-energy-parallel-mms/README.md). Existing default
+and long profile selections and their thresholds remain unchanged.
+
 Two-ion expression sources evolve density, momentum, electron pressure,
 vorticity and total ion energy through t=0.1. Default runs baseline/curvature
 at 8/16 X/Z cells; long runs all four cases at 8/16/32 on two MPI ranks.
@@ -11,10 +21,24 @@ zero-potential viscous case retains vorticity diffusion and electron heating;
 its analytic chi and polarisation current vanish. No separate viscous energy
 flux is subtracted. Its continuum sources use this closure. Order
 gates are 1.7 for 8-to-16 refinement and 1.8 for 16-to-32;
-recovery/diagnostics use `1e-10`.
+recovery/diagnostics use `1e-10`. Field-error limits are separate entries in
+`criteria.json["errors"]`, e.g. Vort `8.165673925347495e-4` and Eion
+`1.1908840233405635e-3`.
 
 Every case saves 20 intervals of 0.005, retaining the end time 0.1. Errors
 and orders use only the final saved output for evolved and recovered fields.
+The current pre-extraction baseline fails the default order gates for Ni, Pe,
+Vort and Eion in both baseline and curvature variants, with measured orders
+between 1.375 and 1.694 against 1.7. Recovery and absolute-error gates pass.
+The [polarisation-drift review](../../../docs/polarisation-drift-3d-analysis-report.md)
+compares them with `criteria.json["observed"]`: all eight historical orders
+were already below 1.7. Six fresh values reproduce them within 0.001; baseline
+and curvature vorticity decline from about 1.69 to 1.38 before extraction and
+need a separate investigation. The older passing-suite narrative conflicts
+with these recorded criteria. The task's named deferral covers only these
+eight default 8-to-16 order gates and the separate Reynolds wall test, retaining
+raw failures and all thresholds. Long-profile and new parallel-current MMS
+accuracy requirements remain in force.
 The default 300 s stall window measures lack of saved-time progress; it can therefore
 detect a stopped run without waiting for its complete MMS integration. Case
 provenance includes the observed output wall timestamps and their maximum

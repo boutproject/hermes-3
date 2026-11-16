@@ -1,0 +1,121 @@
+# Small all-open slab: physical targets at both Y ends, complete Z lines.
+NXPE = 1
+MYG = 2
+MXG = 2
+periodicX = false
+restart = false
+append = false
+
+[mesh]
+nx = 12
+ny = 8
+nz = 8
+ixseps1 = 0
+ixseps2 = 0
+symmetricGlobalX = true
+dx = 1
+dy = 1000
+dz = 1
+hthe = 1
+Bxy = 1
+J = 1
+g11 = 1
+g22 = 1
+g33 = 1
+g12 = 0
+g13 = 0
+g23 = 0
+g_11 = 1
+g_22 = 1
+g_33 = 1
+g_12 = 0
+g_13 = 0
+g_23 = 0
+bxcvx = 0
+bxcvy = 0
+bxcvz = 0
+
+[mesh:paralleltransform]
+type = identity
+
+[mesh:ddz]
+first = FFT
+fft_filter = 0
+
+[solver]
+type = cvode
+adams_moulton = true
+func_iter = true
+nout = 2
+output_step = 0.01
+atol = 1e-13
+rtol = 1e-10
+max_timestep = 0.001
+mxstep = 10000
+
+[hermes]
+components = e, d+, evolve_vorticity_ion_energy, sheath_boundary, polarisation_drift
+recalculate_metric = false
+normalise_metric = false
+Nnorm = 2e18
+Bnorm = 1
+Tnorm = 1
+
+[e]
+type = quasineutral, evolve_pressure, evolve_momentum
+charge = -1
+AA = 1/1836
+poloidal_flows = false
+thermal_conduction = false
+diagnose = true
+
+[d+]
+type = evolve_density, evolve_momentum
+charge = 1
+AA = 2
+poloidal_flows = false
+diagnose = true
+
+[Nd+]
+function = 1
+bndry_all = neumann
+
+[Pe]
+function = 1 + 0.05*cos(y)
+bndry_all = neumann
+
+[NVe]
+function = 0
+
+[NVd+]
+function = 0
+
+[Ve]
+bndry_all = neumann
+
+[Vd+]
+bndry_all = neumann
+
+[Vort]
+function = 0.002*sin(pi*x)^2*cos(z)
+bndry_all = neumann
+
+[Eion]
+function = 1.5*(1 + 0.02*cos(y))
+bndry_all = neumann
+
+[evolve_vorticity_ion_energy]
+average_atomic_mass = 2
+poloidal_flows = false
+radial_boundary = fixed
+phi_rtol = 1e-12
+vort_atol = 1e-14
+phi_max_iterations = 200
+diagnose = true
+
+[polarisation_drift]
+implementation = conservative
+diagnose = true
+
+[input]
+error_on_unused_options = false

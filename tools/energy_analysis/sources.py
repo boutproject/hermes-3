@@ -135,6 +135,17 @@ def external_power(run):
     }
     for name, kinds in components(run):
         for kind in map(str.strip, kinds.split(",")):
+            if kind == "polarisation_drift":
+                from .fluxes import component_version, polarisation_owner
+
+                try:
+                    if (
+                        component_version(run) in (5, 6)
+                        and polarisation_owner(run) == name
+                    ):
+                        continue
+                except AuditError as error:
+                    missing.append(str(error))
             if kind not in allowed:
                 missing.append(f"{name}: {kind} power")
         if name in options:

@@ -10,6 +10,23 @@ from .sources import coverage, external_power
 from .walls import wall_budget
 
 
+def closure_defects(run):
+    """Known closure work and gaps, never folded into external heating."""
+    from .dataset import AuditError
+    from .transfers import zero_current_defect
+
+    try:
+        power = zero_current_defect(run)
+    except AuditError as error:
+        return None, [str(error)]
+    missing = (
+        ["zero_current unpaired electron parallel force work"]
+        if bool((power != 0).any().compute())
+        else []
+    )
+    return power, missing
+
+
 def particle_inventory(run):
     values = {
         "particles_" + s.name: run.integrate(run.data["N" + s.name])
@@ -54,6 +71,10 @@ def closed_balance(run):
         result[name + "_relative_drift"] = drift / scale
     power, walls = external_power(run), wall_budget(run)
     missing = power.attrs["missing_terms"] + walls.attrs["missing_terms"]
+    defect, closure_missing = closure_defects(run)
+    missing += closure_missing
+    if defect is not None:
+        result["model_defect_power"] = defect
     if float(abs(power.power).max()) > 0 or any(
         float(abs(power[n]).max()) > 0 for n in power if n.startswith("particles_")
     ):
@@ -75,6 +96,8 @@ def source_balance(run, reservoir="plasma"):
         wall_budget(run),
     )
     missing = power.attrs["missing_terms"] + walls.attrs["missing_terms"]
+    defect, closure_missing = closure_defects(run)
+    missing += closure_missing
     if reservoir == "plasma":
         reservoir = "plasma_native"
     result = energy_balance(
@@ -85,6 +108,8 @@ def source_balance(run, reservoir="plasma"):
     )
     result["known_external_power"] = power.power
     result["known_outward_power"] = walls.outward
+    if defect is not None:
+        result["known_model_defect_power"] = defect
     if not missing:
         particles = particle_inventory(run)
         for s in run.species:

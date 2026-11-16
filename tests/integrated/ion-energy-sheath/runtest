@@ -1,0 +1,160 @@
+#!/usr/bin/env python3
+"""Production sheath current, completed electrical work and Y-MPI regression."""
+
+import sys
+from pathlib import Path
+
+import numpy as np
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "tools"))
+from energy_analysis.testing import Study, parser
+from energy_analysis.transport import central_parallel
+
+HERE = Path(__file__).resolve().parent
+
+
+def check_run(study, label, run):
+    ds = run.data
+    current = ds.parallel_current
+    divergence = central_parallel(current, ds)
+
+    def check(name, difference, criterion):
+        study.check(
+            label + "/" + name,
+            float(abs(run.interior(difference)).max()),
+            criterion,
+            truncation=True,
+        )
+
+    check("current_divergence", ds.DivJpar - divergence, "current_divergence")
+    check(
+        "completed_current_sum",
+        current - ds.ion_parallel_current - ds.electron_parallel_current,
+        "current_divergence",
+    )
+    check(
+        "continuity",
+        ds.DivJpol + ds.DivJpar - ds.ion_auxiliary_residual,
+        "continuity",
+    )
+    check("vorticity_rate", ds["ddt(Vort)"] - ds.ion_current_rhs, "continuity")
+    check(
+        "ion_electrical_flux",
+        ds.DivEelectric - central_parallel(ds.phi * ds.ion_parallel_current, ds),
+        "electrical_work",
+    )
+    check(
+        "electron_electrical_work",
+        ds.phi_Div_Je - ds.phi * central_parallel(ds.electron_parallel_current, ds),
+        "electrical_work",
+    )
+    study.check(
+        label + "/nonzero_divergence",
+        float(abs(run.interior(divergence)).max()),
+        "nonzero_divergence",
+        minimum=True,
+    )
+    # At t=0 the ion/electron interior momenta are zero and densities are one.
+    # Evaluate sheath states from adjacent physical cells independently of the
+    # dumped momentum guards. Sheath free-log profiles are limited not to rise.
+    initial = ds.isel(t=0, drop=True)
+    for target, cell, guard, neighbor, sign in (
+        ("lower", run.myg, run.myg - 1, run.myg + 1, -1),
+        ("upper", -run.myg - 1, -run.myg, -run.myg - 2, 1),
+    ):
+
+        def limited_face(field, cell=cell, neighbor=neighbor):
+            interior = field.isel(y=cell, drop=True)
+            next_cell = field.isel(y=neighbor, drop=True)
+            guard_value = np.minimum(interior * interior / next_cell, interior)
+            return (interior + guard_value) / 2
+
+        te = limited_face(initial.Pe)
+        ti = limited_face(initial.Tion)
+        phi_face = (
+            1.5 * initial.phi.isel(y=cell, drop=True)
+            - 0.5 * initial.phi.isel(y=neighbor, drop=True)
+        ).clip(min=0)
+        expected = sign * (
+            np.sqrt(((5 / 3) * ti + te) / 2)
+            - np.sqrt(te * 1836 / (2 * np.pi)) * np.exp(-phi_face / te)
+        )
+        actual = (
+            current.isel(t=0, y=cell, drop=True) + current.isel(t=0, y=guard, drop=True)
+        ) / 2
+        difference = (actual - expected).isel(x=slice(run.mxg, -run.mxg))
+        study.check(
+            label + "/" + target + "_target_current",
+            float(abs(difference).max()),
+            "target_current",
+            truncation=True,
+        )
+        study.check(
+            label + "/" + target + "_nonzero_current",
+            float(abs(actual.isel(x=slice(run.mxg, -run.mxg))).max()),
+            "nonzero_current",
+            minimum=True,
+        )
+
+
+def main():
+    args = parser(__doc__).parse_args()
+    with Study(HERE, args) as study:
+        runs = []
+        for label, order in (
+            (
+                "ordered",
+                "e, d+, evolve_vorticity_ion_energy, sheath_boundary, polarisation_drift",
+            ),
+            (
+                "reversed",
+                "polarisation_drift, sheath_boundary, evolve_vorticity_ion_energy, d+, e",
+            ),
+        ):
+            run = study.run(label, ["hermes:components=" + order])
+            runs.append(run)
+            check_run(study, label, run)
+        names = (
+            "Eion",
+            "Vort",
+            "Pe",
+            "Nd+",
+            "NVd+",
+            "NVe",
+            "phi",
+            "ion_chi",
+            "DivJpar",
+            "DivJpol",
+            "ion_current_rhs",
+            "ion_auxiliary_residual",
+            "DivEelectric",
+            "phi_Div_Je",
+        )
+        for name in names:
+            study.check(
+                "sorting/" + name,
+                float(
+                    abs(runs[0].interior(runs[0].data[name] - runs[1].data[name])).max()
+                ),
+                "sorting",
+                truncation=True,
+            )
+        if args.nproc > 1:
+            study.args.nproc = 1
+            serial = study.run("serial")
+            check_run(study, "serial", serial)
+            for name in names:
+                study.check(
+                    "decomposition/" + name,
+                    float(
+                        abs(
+                            serial.interior(serial.data[name] - runs[0].data[name])
+                        ).max()
+                    ),
+                    "decomposition",
+                    truncation=True,
+                )
+
+
+if __name__ == "__main__":
+    main()

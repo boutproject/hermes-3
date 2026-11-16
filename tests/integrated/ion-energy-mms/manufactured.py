@@ -15,7 +15,11 @@ COORDINATES = (X, Y, Z, t)
 LENGTH = s.Integer(10)
 EVOLVED = ("Ni", "Nj", "NVi", "NVj", "Pe", "Vort", "Eion")
 RECOVERED = ("Pi", "pi", "pj", "Tion", "phi", "psi", "chi")
-VARIANTS = ("baseline", "skew", "viscosity", "curvature")
+VARIANTS = ("baseline", "skew", "viscosity", "curvature", "parallel_current")
+
+
+def evolved(variant):
+    return EVOLVED + (("NVe",) if variant == "parallel_current" else ())
 
 
 def grad(f):
@@ -63,7 +67,7 @@ def chi_shape(a, theta):
     ) ** 2 / 41
 
 
-@lru_cache(maxsize=4)
+@lru_cache(maxsize=5)
 def model(variant="baseline"):
     """Return exact fields, physical RHS, forcing and separate term coverage."""
     r = s.Rational
@@ -103,6 +107,13 @@ def model(variant="baseline"):
     ji = ni * vi + 2 * nj * vj
     ve, je = ji / ne, -ji
     assert s.cancel(ji - ne * ve) == 0, "Zero total parallel current"
+    parallel_current = s.Integer(0)
+    if variant == "parallel_current":
+        # An independent electron momentum leaves a finite current/divergence.
+        # This Neumann X cosine and periodic Y/Z harmonic has a closed inverse.
+        parallel_current = r(3, 100) * s.cos(2 * a) * s.sin(b - tau) * s.cos(theta)
+        je = parallel_current - ji
+        ve = -je / ne
     pe = ne * te
     curvature = r(1, 10) if variant == "curvature" else s.Integer(0)
     if curvature:
@@ -152,6 +163,9 @@ def model(variant="baseline"):
         chi = s.Integer(0)
     if curvature:
         chi += -curvature * r(1, 50) / (4 * c * k) * s.cos(2 * a) * s.cos(theta)
+    if variant == "parallel_current":
+        # c*lap(chi_parallel) = d_Y(Jparallel), with kX=kZ=2*pi/L.
+        chi += -r(3, 100) / (4 * c * k) * s.cos(2 * a) * s.cos(b - tau) * s.cos(theta)
     # Retain the divergence-free contribution to the covariant drift current.
     # It contributes to particle, momentum and energy transport through walls.
     stream = -c * grad(phi).dot(H * grad(Phi)) / 2
@@ -159,6 +173,8 @@ def model(variant="baseline"):
     jnu = nu * H * grad(omega)
     jpol = -c * H * grad(chi) + reynolds
     terms = {"Vort.reynolds": div(reynolds)}
+    if variant == "parallel_current":
+        terms["Vort.parallel_current"] = s.diff(parallel_current, Y)
     # The verified finite cosine inversion makes these expressions identical.
     # Keeping the harmonic form avoids large cancelling terms in the source.
     rhs = {"Vort": c * lap(chi, H)}
@@ -169,7 +185,11 @@ def model(variant="baseline"):
         rhs["Vort"] += terms["Vort.viscosity"]
 
     def polarisation(weight):
-        return -grad(weight).dot(jpol) if not curvature else -div(weight * jpol)
+        return (
+            -grad(weight).dot(jpol)
+            if not curvature and variant != "parallel_current"
+            else -div(weight * jpol)
+        )
 
     for name, n, v, m, p, mass, charge in (
         ("i", ni, vi, mi, pi, 2, 1),
@@ -228,7 +248,24 @@ def model(variant="baseline"):
         rhs[variable] = sum(v for k, v in terms.items() if k.startswith(variable + "."))
     fields = dict(zip(EVOLVED, (ni, nj, mi, mj, pe, omega, energy)))
     fields.update(Pi=pressure, pi=pi, pj=pj, Tion=ti, phi=phi, psi=psi, chi=chi)
-    sources = {name: s.diff(fields[name], t) - rhs[name] for name in EVOLVED}
+    if variant == "parallel_current":
+        me = -je / 1836
+        terms.update(
+            {
+                "NVe.exb": -advection(me, phi),
+                "NVe.parallel": -s.diff(me * ve, Y),
+                "NVe.pressure": -s.diff(pe, Y),
+                "NVe.electric": ne * s.diff(phi, Y),
+            }
+        )
+        rhs["NVe"] = sum(v for key, v in terms.items() if key.startswith("NVe."))
+        fields.update(
+            NVe=me,
+            Te=pe / ne,
+            Jpar=parallel_current,
+            DivJpar=s.diff(parallel_current, Y),
+        )
+    sources = {name: s.diff(fields[name], t) - rhs[name] for name in evolved(variant)}
     return fields, rhs, sources, terms
 
 
@@ -286,6 +323,24 @@ def preflight(variant="baseline"):
         assert s.simplify(s.expand(s.expand_trig(residual).rewrite(s.exp))) == 0, (
             "Curvature chi inversion"
         )
+    if variant == "parallel_current":
+        residual = 2 * lap(fields["chi"], H) - sum(
+            terms[key] for key in ("Vort.reynolds", "Vort.parallel_current")
+        )
+        assert s.simplify(s.expand(s.expand_trig(residual).rewrite(s.exp))) == 0, (
+            "Parallel-current chi inversion"
+        )
+        current = fields["NVi"] / 2 + 2 * fields["NVj"] / 3 - 1836 * fields["NVe"]
+        assert s.simplify(current - fields["Jpar"]) == 0
+        assert s.simplify(s.diff(current, Y) - fields["DivJpar"]) == 0
+        for face in (0, LENGTH):
+            assert s.simplify(s.diff(fields["chi"], X).subs(X, face)) == 0
+            assert s.simplify(s.diff(fields["NVe"], X).subs(X, face)) == 0
+            # The added chi is an AC cosine; its Z average vanishes at each wall.
+            assert (
+                s.simplify(s.integrate(fields["chi"].subs(X, face), (Z, 0, LENGTH)))
+                == 0
+            )
 
     if variant in ("skew", "viscosity"):
         for face in (0, LENGTH):
@@ -321,7 +376,7 @@ def preflight(variant="baseline"):
         for k, v in terms.items()
     }
     assert all(np.isfinite(v) for v in magnitudes.values()), magnitudes
-    if variant in ("baseline", "curvature"):
+    if variant in ("baseline", "curvature", "parallel_current"):
         assert all(v > 1e-12 for v in magnitudes.values()), magnitudes
     else:
         for key in ("Ni.parallel", "NVj.pressure", "Pe.compression", "Eion.parallel"):

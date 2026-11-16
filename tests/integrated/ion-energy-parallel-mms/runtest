@@ -1,0 +1,222 @@
+#!/usr/bin/env python3
+"""Continuum 3D MMS with independent electron momentum and parallel current."""
+
+import hashlib
+import json
+import sys
+from pathlib import Path
+
+import numpy as np
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "tools"))
+from energy_analysis import open_run
+from energy_analysis.convergence import manufactured_errors
+from energy_analysis.dataset import AuditError
+from energy_analysis.inventory import energy_densities
+from energy_analysis.testing import Study, parser
+
+HERE = Path(__file__).resolve().parent
+TEMPLATE = HERE.parent / "ion-energy-mms/data-parallel_current/BOUT.inp"
+EVOLVED = ("Ni", "Nj", "NVi", "NVj", "Pe", "Vort", "Eion", "NVe")
+REFERENCES = {
+    **{name: name + ":solution" for name in EVOLVED},
+    "phi": "mms:potential",
+    "psi": "mms:pressure_potential",
+    "Tion": "mms:ion_temperature",
+    "Te": "mms:electron_temperature",
+    "Pi": "mms:total_pressure",
+    "pi": "mms:pressure_i",
+    "pj": "mms:pressure_j",
+    "ion_chi": "mms:current_potential",
+}
+
+
+def comparison_fields(run):
+    ds = run.data
+    fields = {name: ds[name] for name in REFERENCES if name in ds}
+    recovered = energy_densities(run)
+    fields.update(psi=recovered.pressure_potential, Pi=recovered.ion_thermal / 1.5)
+    for species in run.species:
+        name = "p" + species.name
+        if name in REFERENCES:
+            fields[name] = ds["N" + species.name] * ds.Tion
+    return fields
+
+
+def check_physics(study, label, run):
+    ds = run.data
+    study.result["cases"][label]["errors"] = manufactured_errors(run, REFERENCES)
+    recovery = energy_densities(run)
+    checks = {
+        "recovery": (recovery.ion_reconstructed - ds.Eion, "recovery"),
+        "continuity": (
+            ds.DivJpol + ds.DivJpar - ds.ion_auxiliary_residual,
+            "continuity",
+        ),
+        "auxiliary_residual": (ds.ion_auxiliary_residual, "auxiliary_residual"),
+        "pressure_source_ownership": (ds.Pe_src, "ownership"),
+        "ion_energy_source_ownership": (ds.Eion_src, "ownership"),
+    }
+    for name, (value, criterion) in checks.items():
+        study.check(
+            label + "/" + name,
+            float(abs(run.interior(value)).max()),
+            criterion,
+            truncation=True,
+        )
+    for field, criterion in (
+        ("parallel_current", "nonzero_current"),
+        ("DivJpar", "nonzero_divergence"),
+        ("DivJReynolds", "nonzero_reynolds"),
+        ("DivJpol", "nonzero_polarisation"),
+    ):
+        study.check(
+            label + "/" + criterion,
+            float(abs(run.interior(ds[field])).max()),
+            criterion,
+            minimum=True,
+        )
+    return study.result["cases"][label]["errors"]
+
+
+def stop_on_failed_checks(study):
+    """Leave Study's result-writing context before launching more validation."""
+    failed = [check["name"] for check in study.result["checks"] if not check["passed"]]
+    if failed:
+        raise AuditError(
+            "Criteria failed before further validation: " + ", ".join(failed)
+        )
+
+
+def check_refinement(study, coarse, fine, size, index):
+    for name in REFERENCES:
+        for norm in ("l2", "linf"):
+            order = np.log2(coarse[name][norm] / fine[name][norm])
+            criterion = (
+                "linf_order"
+                if norm == "linf"
+                else "default_order"
+                if index == 1
+                else "fine_order"
+            )
+            study.check(f"order/{size}/{name}/{norm}", order, criterion, minimum=True)
+        study.check(
+            f"error/{size}/{name}",
+            fine[name]["l2"],
+            limit=study.criteria["errors"][name],
+            truncation=True,
+        )
+
+
+def check_temporal(study, base, tight, errors):
+    base_fields, tight_fields = comparison_fields(base), comparison_fields(tight)
+    volume = float(base.integrate(base.data.Pe.isel(t=0) * 0 + 1))
+    for name in REFERENCES:
+        difference = base_fields[name].isel(t=-1, drop=True) - tight_fields[name].isel(
+            t=-1, drop=True
+        )
+        norms = {
+            "l2": float(np.sqrt(base.integrate(difference**2) / volume)),
+            "linf": float(abs(base.interior(difference)).max()),
+        }
+        for norm, value in norms.items():
+            limit = max(
+                study.criteria["temporal_floor"],
+                study.criteria["temporal_fraction"] * errors[name][norm],
+            )
+            study.check(f"temporal/{name}/{norm}", value, limit=limit, truncation=True)
+
+
+def main():
+    cli = parser(__doc__)
+    cli.set_defaults(timeout=3600, nproc=8)
+    cli.add_argument(
+        "--reuse-root",
+        type=Path,
+        help="Reuse verified completed reference levels from an earlier attempt",
+    )
+    args = cli.parse_args()
+    with Study(HERE, args) as study:
+        study.result["model"] = "symbolic continuum parallel_current variant"
+        runs, errors = [], []
+
+        def launch(label, size, *, tight=False):
+            overrides = [
+                "restart=false",
+                f"mesh:nx={size + 4}",
+                f"mesh:ny={2 * size}",
+                f"mesh:nz={size}",
+                "solver:nout=4",
+                "solver:output_step=0.005",
+                "polarisation_drift:polarisation_corrections=32",
+                "solver:atol=" + ("1e-14" if tight else "1e-12"),
+                "solver:rtol=" + ("1e-12" if tight else "1e-10"),
+                "solver:max_timestep=" + ("0.0005" if tight else "0.002"),
+            ]
+            if args.reuse_root and not tight and label in ("parallel-8", "parallel-16"):
+                folder = args.reuse_root / label
+                execution = json.loads((folder / "execution.json").read_text())
+                expected = {v.split("=", 1)[0]: v.split("=", 1)[1] for v in overrides}
+                actual = {
+                    v.split("=", 1)[0]: v.split("=", 1)[1]
+                    for v in execution["command"]
+                    if "=" in v
+                }
+                if (
+                    execution["outcome"] != "completed"
+                    or execution["executable_sha256"]
+                    != hashlib.sha256(args.exe.read_bytes()).hexdigest()
+                    or execution["input_sha256"]
+                    != hashlib.sha256(TEMPLATE.read_bytes()).hexdigest()
+                    or actual != expected
+                ):
+                    raise ValueError(
+                        "Reference reuse requires completed output with matching build, input and temporal/grid overrides"
+                    )
+                execution["reused_from"] = str(folder.resolve())
+                study.result["cases"][label] = execution
+                study.current_run = open_run(folder)
+                print("Reusing verified reference:", folder, flush=True)
+                return study.current_run
+            return study.run(
+                label,
+                overrides,
+                template=TEMPLATE,
+                stall_seconds=study.criteria.get("stall_seconds_by_size", {}).get(
+                    str(size)
+                ),
+            )
+
+        for index, size in enumerate(study.criteria["sizes"]):
+            label = f"parallel-{size}"
+            run = launch(label, size)
+            runs.append(run)
+            errors.append(check_physics(study, label, run))
+            if index:
+                check_refinement(study, errors[index - 1], errors[index], size, index)
+            stop_on_failed_checks(study)
+
+        tight = launch("parallel-16-tight", 16, tight=True)
+        check_physics(study, "parallel-16-tight", tight)
+        stop_on_failed_checks(study)
+        check_temporal(study, runs[1], tight, errors[1])
+        stop_on_failed_checks(study)
+
+        metadata = runs[0].data.metadata
+        reference_nproc = int(metadata["NXPE"]) * int(metadata["NYPE"])
+        study.args.nproc = max(2, args.nproc) if reference_nproc == 1 else 1
+        mpi = launch("parallel-8-decomposition", 8)
+        check_physics(study, "parallel-8-decomposition", mpi)
+        stop_on_failed_checks(study)
+        other = comparison_fields(mpi)
+        for name, field in comparison_fields(runs[0]).items():
+            study.check(
+                "decomposition/" + name,
+                float(abs(runs[0].interior(field - other[name])).max()),
+                "decomposition",
+                truncation=True,
+            )
+
+
+if __name__ == "__main__":
+    main()

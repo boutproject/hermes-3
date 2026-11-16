@@ -26,6 +26,7 @@ from .transfers import (
     electron_curvature_work,
     integrated_power,
     polarisation_energy_coefficient,
+    zero_current_defect,
 )
 from .walls import wall_budget
 
@@ -60,4 +61,5 @@ __all__ = [
     "spectral_ddz",
     "summary",
     "wall_budget",
+    "zero_current_defect",
 ]

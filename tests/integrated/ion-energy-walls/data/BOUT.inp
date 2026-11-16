@@ -57,7 +57,7 @@ max_timestep = 1
 mxstep = 1e6
 
 [hermes]
-components = e, h+, evolve_vorticity_ion_energy
+components = e, h+, evolve_vorticity_ion_energy, polarisation_drift
 recalculate_metric = false
 normalise_metric = false
 Nnorm = 2e18
@@ -146,3 +146,6 @@ uniform_vort = 1e-8
 uniform_energy = 1.5e-6 + 5e-17 * ((10*x-5)^2 + mesh:dx^2/4)
 # tau_normalised = L * Cs0 / (2*kappa); Cs0=sqrt(qe*Tnorm/mp).
 rotation_step = 10 * 9787.151425755137 / (2*1000) / 20
+
+[polarisation_drift]
+implementation = conservative

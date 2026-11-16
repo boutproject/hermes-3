@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Conservation and nontrivial energy exchange in a periodic two-ion slab."""
+"""Conservation and nontrivial X-Z energy exchange in a periodic two-ion slab."""
 
 import sys
 from pathlib import Path
@@ -31,6 +31,13 @@ def main():
             drift = report["closed_balance"]
             if drift["coverage"] != "complete":
                 raise ValueError(drift["missing_terms"])
+            # This closure is conservative only in the parallel-invariant case.
+            study.check(
+                f"closure_work/{diagnose}",
+                max(map(abs, report["model_defect_power_W"])),
+                limit=0,
+                truncation=True,
+            )
             study.check(
                 f"energy/{diagnose}", drift["maxima"]["energy_relative_drift"], "energy"
             )
@@ -44,7 +51,12 @@ def main():
                 "ion_parallel_change_relative",
             ):
                 study.check(
-                    f"{name}/{diagnose}", report[name], "nontrivial", minimum=True
+                    f"{name}/{diagnose}",
+                    report[name],
+                    "parallel_kinetic_exchange"
+                    if name == "ion_parallel_change_relative"
+                    else "nontrivial",
+                    minimum=True,
                 )
             for name, diagnostic in report["diagnostics"].items():
                 if diagnostic["available"]:

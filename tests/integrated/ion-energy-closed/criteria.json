@@ -3,9 +3,19 @@
   "particles": 1e-10,
   "recovery": 1e-10,
   "nontrivial": 0.0001,
+  "parallel_kinetic_exchange": 0.00005,
   "diagnostics": 1e-10,
   "diagnostic_error": 1e-10,
-  "observed": {
+  "reviewed_xz_observed": {
+    "energy/True": 1.375185459479156e-16,
+    "energy/False": 1.375185459479156e-16,
+    "closure_work/True": 0.0,
+    "closure_work/False": 0.0,
+    "ion_parallel_change_relative/True": 8.533155513030926e-05,
+    "ion_parallel_change_relative/False": 8.533155513030926e-05,
+    "elapsed_seconds": 89.77430074987933
+  },
+  "historical_y_varying_observed": {
     "energy/True": 1.4255284976809532e-06,
     "particles_e_relative_drift/True": 4e-16,
     "particles_d+_relative_drift/True": 4e-16,

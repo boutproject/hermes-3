@@ -11,8 +11,14 @@
 #include "../../include/div_ops.hxx"
 #include "../../include/evolve_pressure.hxx"
 #include "../../include/evolve_vorticity_ion_energy.hxx"
+#include "../../include/polarisation_drift.hxx"
+#include "../../include/sheath_boundary.hxx"
 
+#include <cstdlib>
+#include <filesystem>
+#include <fstream>
 #include <limits>
+#include <map>
 
 #include <bout/constants.hxx>
 #include <bout/derivs.hxx>
@@ -21,6 +27,41 @@
 
 using bout::globals::mesh;
 using bout::ion_energy::PolarisationACBoundary;
+
+// A test harness for the same two separately registered production components.
+class IonEnergyTestSystem : public EvolveVorticityIonEnergy {
+  static Options& prepare(const std::string& name, Options& options) {
+    options[name]["type"] = std::string{"evolve_vorticity_ion_energy"};
+    options["polarisation_drift"]["type"] = std::string{"polarisation_drift"};
+    options["polarisation_drift"]["implementation"] = std::string{"conservative"};
+    return options;
+  }
+  PolarisationDrift drift;
+  bool rhs_evaluated{false};
+
+public:
+  IonEnergyTestSystem(std::string name, Options& options, Solver* solver)
+      : EvolveVorticityIonEnergy(name, prepare(name, options), solver),
+        drift("polarisation_drift", options, solver) {}
+  void declareAllSpecies(const SpeciesInformation& species) {
+    EvolveVorticityIonEnergy::declareAllSpecies(species);
+    drift.declareAllSpecies(species);
+  }
+  void transform(Options& state) {
+    rhs_evaluated = false;
+    EvolveVorticityIonEnergy::transform(state);
+    drift.transform(state);
+  }
+  void finally(const Options& state) override {
+    EvolveVorticityIonEnergy::finally(state);
+    rhs_evaluated = true;
+  }
+  bool hasEvaluatedRHS() const { return rhs_evaluated; }
+  void outputVars(Options& state) override {
+    EvolveVorticityIonEnergy::outputVars(state);
+    drift.outputVars(state);
+  }
+};
 
 TEST(IonEnergyWallDerivative, MatchesFiniteVolumeWallFlux) {
   // Solve phi'' = 6*x - 12*x^2 - 0.6 on [0,1], with zero wall
@@ -80,6 +121,7 @@ protected:
               {"seconds", 1.0},
               {"Tesla", 1.0},
               {"meters", 1.0}}},
+            {"polarisation_drift", {{"implementation", "conservative"}}},
             {"test",
              {{"average_atomic_mass", 1.5},
               {"phi_boundary_velocity", 0.4},
@@ -95,13 +137,82 @@ protected:
               {"he++", {{"charge", 2.0}, {"AA", 4.0}, {"density", Field3D{0.25}}}}}}};
   }
 
-  void declareSpecies(EvolveVorticityIonEnergy& component) {
+  void declareSpecies(IonEnergyTestSystem& component) {
     component.declareAllSpecies(SpeciesInformation({"e"}, {}, {"d+", "he++"}, {}));
   }
 
-  Options diagnostics(EvolveVorticityIonEnergy& component) {
+  Options diagnostics(IonEnergyTestSystem& component) {
     Options output{{"Nnorm", 1.0}, {"Tnorm", 1.0}, {"Omega_ci", 1.0}, {"rho_s0", 1.0}};
     component.outputVars(output);
+    // Optional retained before/after evidence; ordinary test runs do no I/O.
+    if (const auto* directory = std::getenv("HERMES_ION_ENERGY_SNAPSHOT")) {
+      const auto* test = ::testing::UnitTest::GetInstance()->current_test_info();
+      const std::string name = std::string{test->test_suite_name()} + "." + test->name();
+      static std::map<std::string, int> evaluations;
+      std::filesystem::create_directories(directory);
+      std::ofstream snapshot(
+          std::filesystem::path{directory}
+          / (name + "." + std::to_string(evaluations[name]++) + ".csv"));
+      snapshot << std::hexfloat;
+      for (const auto* field : {"phi",
+                                "Vort",
+                                "Tion",
+                                "ion_pressure_potential",
+                                "ion_chi",
+                                "ddt(Phi)",
+                                "ion_KE_parallel",
+                                "ion_KE_perp",
+                                "DivJReynolds",
+                                "DivJpol",
+                                "DivJviscous",
+                                "DivEExB",
+                                "DivEelectric",
+                                "DivEparallel",
+                                "DivEpol",
+                                "DivEviscous",
+                                "ddt(Eion)",
+                                "Eion_src",
+                                "phi_Div_Je",
+                                "electron_exb_work",
+                                "kinematic_viscous_heating",
+                                "electron_viscous_heating",
+                                "polarisation_flux_x",
+                                "polarisation_flux_z",
+                                "polarisation_wall_energy_weight",
+                                "polarisation_wall_work_weight",
+                                "polarisation_wall_thermal_weight",
+                                "polarisation_wall_pressure_mismatch",
+                                "particle_pol_wall_loss_d+",
+                                "particle_pol_wall_loss_he++"}) {
+        if (std::string{field} == "ddt(Eion)" && !component.hasEvaluatedRHS()) {
+          continue; // Allocated derivative storage is undefined before finally().
+        }
+        if (!output.isSet(field)) {
+          continue;
+        }
+        const Field3D value = output[field].as<Field3D>();
+        if (!value.isAllocated()) {
+          continue; // Recovery-only tests have not evaluated finally() yet.
+        }
+        for (const auto& index : value.getRegion("RGN_NOBNDRY")) {
+          snapshot << field << ',' << index.x() << ',' << index.y() << ',' << index.z()
+                   << ',' << value[index] << '\n';
+        }
+        if (!mesh->periodicX && std::string{field}.find("polarisation_") == 0) {
+          for (int y = mesh->ystart; y <= mesh->yend; ++y) {
+            for (int z = 0; z < mesh->LocalNz; ++z) {
+              snapshot << field << ',' << mesh->xstart - 1 << ',' << y << ',' << z << ','
+                       << value(mesh->xstart - 1, y, z) << '\n';
+            }
+          }
+        }
+      }
+      for (const auto* field : {"ion_chi_iterations", "ion_chi_residual"}) {
+        if (output.isSet(field)) {
+          snapshot << field << ',' << output[field].as<BoutReal>() << '\n';
+        }
+      }
+    }
     return output;
   }
 
@@ -119,7 +230,7 @@ protected:
 TEST_F(EvolveVorticityIonEnergyTest, RecoveryCanBeScheduledBeforeSheath) {
   FakeSolver solver;
   auto options = makeOptions();
-  options["components"] = "e, d+, he++, test, sheath_boundary_simple";
+  options["components"] = "e, d+, he++, test, sheath_boundary_simple, polarisation_drift";
   options["test"]["type"] = "evolve_vorticity_ion_energy";
   options["test"]["radial_boundary"] = "no_slip";
   options["e"]["type"] = "quasineutral, evolve_pressure, zero_current";
@@ -139,7 +250,7 @@ TEST_F(EvolveVorticityIonEnergyTest, RecoveryCanBeScheduledBeforeSheath) {
 TEST_F(EvolveVorticityIonEnergyTest, UniformStateHasZeroRHS) {
   FakeSolver solver;
   auto options = makeOptions();
-  options["components"] = "e, d+, he++, test";
+  options["components"] = "e, d+, he++, test, polarisation_drift";
   options["test"]["type"] = "evolve_vorticity_ion_energy";
   options["test"]["radial_boundary"] = "fixed";
   options["e"]["type"] = "quasineutral, evolve_pressure, zero_current";
@@ -176,10 +287,295 @@ TEST_F(EvolveVorticityIonEnergyTest, UniformStateHasZeroRHS) {
   }
 }
 
+TEST_F(EvolveVorticityIonEnergyTest, DriftBeforeIonResolvesDefaultAndExplicitInverse) {
+  for (bool explicit_drift_type : {false, true}) {
+    auto options = makeOptions();
+    options["test"]["type"] = "evolve_vorticity_ion_energy";
+    options["components"] = "polarisation_drift, test";
+    if (explicit_drift_type) {
+      options["polarisation_drift"]["laplacian"]["type"] =
+          std::string{LaplaceFactory::default_type};
+    }
+    ASSERT_FALSE(options["test"]["laplacian"].isSet("type"));
+    EXPECT_NO_THROW(PolarisationDrift("polarisation_drift", options, nullptr));
+    EXPECT_EQ(options["polarisation_drift"]["laplacian"]["type"].as<std::string>(),
+              LaplaceFactory::default_type);
+    if (explicit_drift_type) {
+      EXPECT_FALSE(options["test"]["laplacian"].isSet("type"));
+    }
+  }
+}
+
+TEST_F(EvolveVorticityIonEnergyTest, ReversedComponentConstructionPreservesRHS) {
+  for (bool explicit_drift_type : {false, true}) {
+    Options reference;
+    for (bool reversed : {false, true}) {
+      FakeSolver solver;
+      auto options = makeOptions();
+      options["components"] = reversed ? "polarisation_drift, test, he++, d+, e"
+                                       : "e, d+, he++, test, polarisation_drift";
+      options["test"]["type"] = "evolve_vorticity_ion_energy";
+      if (explicit_drift_type) {
+        options["polarisation_drift"]["laplacian"]["type"] =
+            std::string{LaplaceFactory::default_type};
+      }
+      options["e"]["type"] = "quasineutral, evolve_pressure, zero_current";
+      options["e"]["charge"] = -1.0;
+      options["e"]["AA"] = 1. / 1836;
+      options["e"]["thermal_conduction"] = false;
+      options["e"]["poloidal_flows"] = false;
+      for (const auto* name : {"d+", "he++"}) {
+        options[name]["type"] = "evolve_density, evolve_momentum";
+        options[name]["charge"] = std::string{name} == "d+" ? 1.0 : 2.0;
+        options[name]["AA"] = std::string{name} == "d+" ? 2.0 : 4.0;
+        options[name]["poloidal_flows"] = false;
+      }
+      auto scheduler = ComponentScheduler::create(options, options, &solver);
+      const Field3D perturbation = makeField<Field3D>(
+          [&](const Ind3D& i) { return 0.02 * sin(2 * PI * i.z() / nz); });
+      solver.setState({{"Vort", perturbation},
+                       {"Eion", Field3D{3.0} + perturbation},
+                       {"Pe", Field3D{1.0}},
+                       {"Nd+", Field3D{0.5}},
+                       {"Nhe++", Field3D{0.25}},
+                       {"NVd+", Field3D{0.0}},
+                       {"NVhe++", Field3D{0.0}}});
+      Options state{{"time", 0.0}, {"fastest_wave", Field3D{1.0}}};
+      scheduler->transform(state);
+      Options actual = solver.getTimeDerivs().copy();
+      for (const auto* name :
+           {"phi", "ion_chi", "DivJpol", "ion_polarisation_energy_divergence"}) {
+        actual[name] = state["fields"][name].as<Field3D>();
+      }
+      if (!reversed) {
+        reference = actual.copy();
+      } else {
+        for (const auto& [name, value] : actual.getChildren()) {
+          EXPECT_TRUE(IsFieldEqual(value.as<Field3D>(), reference[name].as<Field3D>(),
+                                   "RGN_NOBNDRY", 0.0))
+              << name;
+        }
+      }
+    }
+  }
+}
+
+TEST_F(EvolveVorticityIonEnergyTest,
+       ProductionSheathCurrentGuardsDriveContinuityAndElectricalWork) {
+  static_cast<FakeMesh*>(mesh)->ix_separatrix = -1;
+  Field3D original_divergence, original_chi;
+  for (bool perturb_guards : {false, true}) {
+    FakeSolver solver;
+    auto options = makeOptions();
+    options["test"]["type"] = "evolve_vorticity_ion_energy";
+    EvolveVorticityIonEnergy recovery("test", options, &solver);
+    SheathBoundary sheath("sheath_boundary", options, nullptr);
+    PolarisationDrift drift("polarisation_drift", options, &solver);
+    const SpeciesInformation species({"e"}, {}, {"d+", "he++"}, {});
+    recovery.declareAllSpecies(species);
+    sheath.declareAllSpecies(species);
+    drift.declareAllSpecies(species);
+    solver.setState({{"Vort", Field3D{0.02}}, {"Eion", Field3D{1.5}}});
+    auto state = makeState();
+    state["species"]["e"]["density"] = Field3D{1.0};
+    state["species"]["e"]["temperature"] = Field3D{1.0};
+    for (const auto* name : {"e", "d+", "he++"}) {
+      state["species"][name]["velocity"] = Field3D{0.0};
+      state["species"][name]["momentum"] = Field3D{0.0};
+    }
+    recovery.transform(state);
+    sheath.transform(state);
+    const Field3D phi = state["fields"]["phi"].as<Field3D>();
+    const Field3D temperature = state["species"]["d+"]["temperature"].as<Field3D>();
+    const BoutReal electron_mass = 1. / 1836;
+    for (int x = mesh->xstart; x <= mesh->xend; ++x) {
+      for (int z = 0; z < nz; ++z) {
+        for (const auto& [cell, guard, sign] :
+             {std::tuple{mesh->ystart, mesh->ystart - 1, -1.0},
+              std::tuple{mesh->yend, mesh->yend + 1, 1.0}}) {
+          const BoutReal potential =
+              std::max(0.0, 0.5 * (phi(x, cell, z) + phi(x, guard, z)));
+          BoutReal expected =
+              -sign * sqrt(1. / (TWOPI * electron_mass)) * exp(-potential);
+          for (const auto& [name, mass, charge, density] :
+               {std::tuple{"d+", 2.0, 1.0, 0.5}, std::tuple{"he++", 4.0, 2.0, 0.25}}) {
+            const BoutReal speed =
+                sqrt(((5. / 3) * temperature(x, cell, z) + charge * density) / mass);
+            const Field3D momentum = state["species"][name]["momentum"].as<Field3D>();
+            EXPECT_NEAR((momentum(x, cell, z) + momentum(x, guard, z)) / (2 * mass),
+                        sign * density * speed, 1e-12);
+            expected += sign * charge * density * speed;
+          }
+          BoutReal actual = 0.0;
+          for (const auto* name : {"e", "d+", "he++"}) {
+            const auto& ion = state["species"][name];
+            const Field3D momentum = ion["momentum"].as<Field3D>();
+            actual += ion["charge"].as<BoutReal>() / ion["AA"].as<BoutReal>() * 0.5
+                      * (momentum(x, cell, z) + momentum(x, guard, z));
+          }
+          EXPECT_NEAR(actual, expected, 1e-12);
+          EXPECT_GT(std::abs(actual), 1e-4);
+        }
+      }
+    }
+    Field3D momentum_delta{0.0};
+    if (perturb_guards) {
+      Field3D momentum = copy(state["species"]["e"]["momentum"].as<Field3D>());
+      for (int x = 0; x < mesh->LocalNx; ++x) {
+        for (int z = 0; z < nz; ++z) {
+          const BoutReal delta = electron_mass * 0.05 * sin(TWOPI * z / nz);
+          momentum_delta(x, mesh->ystart - 1, z) = delta;
+          momentum_delta(x, mesh->yend + 1, z) = -delta;
+        }
+      }
+      momentum += momentum_delta;
+      state["species"]["e"]["momentum"].force(momentum);
+    }
+    state["fields"]["DivJextra"] = Field3D{0.007};
+    state["fields"]["DivJcol"] = Field3D{-0.003};
+    drift.transform(state);
+    recovery.finally(state);
+    const auto& fields = state["fields"];
+    const Field3D divpar = fields["DivJpar"].as<Field3D>();
+    EXPECT_GT(max(abs(divpar), true), 1e-4);
+    const Field3D continuity = fields["DivJpol"].as<Field3D>()
+                               + fields["DivJdia"].as<Field3D>() + divpar + 0.004;
+    EXPECT_TRUE(IsFieldEqual(continuity, fields["ion_auxiliary_residual"].as<Field3D>(),
+                             "RGN_NOBNDRY", 1e-10));
+    EXPECT_TRUE(IsFieldEqual(solver.getTimeDerivs()["Vort"].as<Field3D>(),
+                             fields["ion_current_rhs"].as<Field3D>(), "RGN_NOBNDRY",
+                             1e-12));
+    Options output{{"Nnorm", 1.0}, {"Tnorm", 1.0}, {"Omega_ci", 1.0}, {"rho_s0", 1.0}};
+    recovery.outputVars(output);
+    drift.outputVars(output);
+    Field3D ion_current{0.0};
+    for (const auto* name : {"d+", "he++"}) {
+      const auto& ion = state["species"][name];
+      ion_current += ion["charge"].as<BoutReal>() / ion["AA"].as<BoutReal>()
+                     * ion["momentum"].as<Field3D>();
+    }
+    const Field3D electron_current =
+        -state["species"]["e"]["momentum"].as<Field3D>() / electron_mass;
+    const Field3D electrical = Div_par(phi * ion_current);
+    EXPECT_GT(max(abs(electrical), true), 1e-4);
+    EXPECT_TRUE(IsFieldEqual(output["DivEelectric"].as<Field3D>(), electrical,
+                             "RGN_NOBNDRY", 1e-11));
+    EXPECT_TRUE(IsFieldEqual(output["phi_Div_Je"].as<Field3D>(),
+                             Field3D{phi * Div_par(electron_current)}, "RGN_NOBNDRY",
+                             1e-11));
+    EXPECT_TRUE(IsFieldEqual(output["phi"].as<Field3D>(), phi, "RGN_ALL", 0.0));
+    if (!perturb_guards) {
+      original_divergence = copy(divpar);
+      original_chi = copy(fields["ion_chi"].as<Field3D>());
+    } else {
+      const Field3D predicted = Div_par(-momentum_delta / electron_mass);
+      EXPECT_TRUE(IsFieldEqual(Field3D{divpar - original_divergence}, predicted,
+                               "RGN_NOBNDRY", 1e-12));
+      const auto* coord = mesh->getCoordinates();
+      const BoutReal eigenvalue = -4 * 1.5 * SQ(sin(PI / nz)) / SQ(coord->dz()(0, 0));
+      EXPECT_TRUE(IsFieldEqual(Field3D{fields["ion_chi"].as<Field3D>() - original_chi},
+                               Field3D{predicted / eigenvalue}, "RGN_NOBNDRY", 1e-10));
+    }
+  }
+}
+
+TEST_F(EvolveVorticityIonEnergyTest, ProductionSheathAutosortsBeforeConservativeDrift) {
+  static_cast<FakeMesh*>(mesh)->ix_separatrix = -1;
+  Options reference;
+  for (bool reversed : {false, true}) {
+    FakeSolver solver;
+    auto options = makeOptions();
+    options["components"] =
+        reversed ? "polarisation_drift, sheath_boundary, test, he++, d+, e"
+                 : "e, d+, he++, test, sheath_boundary, polarisation_drift";
+    options["test"]["type"] = "evolve_vorticity_ion_energy";
+    options["e"]["type"] = "quasineutral, evolve_pressure, evolve_momentum";
+    options["e"]["charge"] = -1.0;
+    options["e"]["AA"] = 1. / 1836;
+    options["e"]["thermal_conduction"] = false;
+    options["e"]["poloidal_flows"] = false;
+    for (const auto* name : {"d+", "he++"}) {
+      options[name]["type"] = "evolve_density, evolve_momentum";
+      options[name]["charge"] = std::string{name} == "d+" ? 1.0 : 2.0;
+      options[name]["AA"] = std::string{name} == "d+" ? 2.0 : 4.0;
+      options[name]["poloidal_flows"] = false;
+    }
+    auto scheduler = ComponentScheduler::create(options, options, &solver);
+    solver.setState({{"Vort", Field3D{0.02}},
+                     {"Eion", Field3D{1.5}},
+                     {"Pe", Field3D{1.0}},
+                     {"Nd+", Field3D{0.5}},
+                     {"Nhe++", Field3D{0.25}},
+                     {"NVd+", Field3D{0.0}},
+                     {"NVhe++", Field3D{0.0}},
+                     {"NVe", Field3D{0.0}}});
+    Options state{{"time", 0.0}, {"fastest_wave", Field3D{4.0}}};
+    scheduler->transform(state);
+    EXPECT_GT(max(abs(state["fields"]["DivJpar"].as<Field3D>()), true), 1e-4);
+    Options actual = solver.getTimeDerivs().copy();
+    for (const auto* name : {"phi", "ion_chi", "DivJpol", "DivJpar", "ion_current_rhs",
+                             "ion_auxiliary_residual"}) {
+      actual[name] = state["fields"][name].as<Field3D>();
+    }
+    if (!reversed) {
+      reference = actual.copy();
+    } else {
+      for (const auto& [name, value] : actual.getChildren()) {
+        EXPECT_TRUE(IsFieldEqual(value.as<Field3D>(), reference[name].as<Field3D>(),
+                                 "RGN_NOBNDRY", 0.0))
+            << name;
+      }
+    }
+  }
+}
+
+class IonEnergyPeriodicCurrentTest : public FakeMeshFixture_tmpl<10, 5, 8, false, 2> {
+protected:
+  void SetUp() override {
+    Laplacian::cleanup();
+    mesh->periodicX = true;
+  }
+  void TearDown() override { Laplacian::cleanup(); }
+};
+
+TEST_F(IonEnergyPeriodicCurrentTest, RejectsUnsolvableMeanWithoutDiscardingCurrent) {
+  for (bool zero_mean : {false, true}) {
+    FakeSolver solver;
+    Options options{{"units",
+                     {{"eV", 1.0},
+                      {"inv_meters_cubed", 1.0},
+                      {"seconds", 1.0},
+                      {"Tesla", 1.0},
+                      {"meters", 1.0}}},
+                    {"test", {{"phi_rtol", 1e-10}}}};
+    Options::root()["mesh"]["paralleltransform"]["type"] = "identity";
+    IonEnergyTestSystem component("test", options, &solver);
+    component.declareAllSpecies(SpeciesInformation({"e"}, {}, {"d+"}, {}));
+    solver.setState({{"Vort", Field3D{0.0}}, {"Eion", Field3D{1.5}}});
+    Options state{
+        {"species",
+         {{"e", {{"charge", -1.0}, {"AA", 1. / 1836}, {"pressure", Field3D{1.0}}}},
+          {"d+", {{"charge", 1.0}, {"AA", 2.0}, {"density", Field3D{1.0}}}}}}};
+    state["fields"]["DivJextra"] = makeField<Field3D>(
+        [&](const Ind3D& i) { return zero_mean ? 0.1 * sin(TWOPI * i.z() / nz) : 0.1; });
+    if (zero_mean) {
+      EXPECT_NO_THROW(component.transform(state));
+    } else {
+      try {
+        component.transform(state);
+        FAIL() << "A nonzero perpendicular-plane mean must be rejected";
+      } catch (const BoutException& error) {
+        EXPECT_NE(std::string{error.what()}.find("unsolvable periodic"),
+                  std::string::npos);
+      }
+    }
+  }
+}
+
 TEST_F(EvolveVorticityIonEnergyTest, FreshStartRestartHookPreservesRecoveredPotential) {
   FakeSolver solver;
   auto options = makeOptions();
-  EvolveVorticityIonEnergy component("test", options, &solver);
+  IonEnergyTestSystem component("test", options, &solver);
   declareSpecies(component);
   // postInit saves the unsolved potential before the initial RHS evaluation.
   Options restart;
@@ -203,7 +599,7 @@ TEST_F(EvolveVorticityIonEnergyTest, FreshStartRestartHookPreservesRecoveredPote
 TEST_F(EvolveVorticityIonEnergyTest, RestartRestorationIsIndependentForEachInstance) {
   auto options = makeOptions();
   FakeSolver first_solver;
-  EvolveVorticityIonEnergy first("test", options, &first_solver);
+  IonEnergyTestSystem first("test", options, &first_solver);
   Options first_restart{{"phi", Field3D{2.0}}};
   first.restartVars(first_restart);
   first_restart["phi"] = Field3D{7.0};
@@ -212,7 +608,7 @@ TEST_F(EvolveVorticityIonEnergyTest, RestartRestorationIsIndependentForEachInsta
       IsFieldEqual(first_restart["phi"].as<Field3D>(), 2.0, "RGN_NOBNDRY", 1e-12));
 
   FakeSolver second_solver;
-  EvolveVorticityIonEnergy second("test", options, &second_solver);
+  IonEnergyTestSystem second("test", options, &second_solver);
   Options second_restart{{"phi", Field3D{3.0}}};
   second.restartVars(second_restart);
   EXPECT_TRUE(
@@ -227,9 +623,9 @@ TEST_F(EvolveVorticityIonEnergyTest,
   options["test"]["radial_boundary"] = "no_slip";
   options["test"]["phi_boundary_velocity"] = 0.4;
   options["test"]["viscosity"] = 0.3;
-  options["test"]["polarisation_corrections"] = 6;
+  options["polarisation_drift"]["polarisation_corrections"] = 6;
   options["units"]["seconds"].force(0.2); // Normalised velocity is 0.08.
-  EvolveVorticityIonEnergy component("test", options, &solver);
+  IonEnergyTestSystem component("test", options, &solver);
   declareSpecies(component);
   ASSERT_TRUE(solver.evolvesBoundary("Vort"));
   Field3D encoded = makeField<Field3D>([&](const Ind3D& i) {
@@ -311,7 +707,7 @@ TEST_F(EvolveVorticityIonEnergyTest, RelaxingBoundaryRestartMigratesOnlyOnce) {
   FakeSolver solver;
   auto options = makeOptions();
   options["test"]["radial_boundary"] = "no_slip";
-  EvolveVorticityIonEnergy component("test", options, &solver);
+  IonEnergyTestSystem component("test", options, &solver);
   solver.setState({{"Vort", Field3D{0.001}}, {"Eion", Field3D{4.0}}});
   Options legacy{{"phi", Field3D{0.2}}};
   component.restartVars(legacy);
@@ -330,7 +726,7 @@ TEST_F(EvolveVorticityIonEnergyTest, CoreRelaxationAverageCountsOnlyPhysicalSamp
   auto options = makeOptions();
   options["test"]["radial_boundary"] = "no_slip";
   options["test"]["phi_boundary_velocity"].force(2.0);
-  EvolveVorticityIonEnergy component("test", options, &solver);
+  IonEnergyTestSystem component("test", options, &solver);
   declareSpecies(component);
   const BoutReal kx = PI / (mesh->xend - mesh->xstart + 1);
   const Field3D potential = makeField<Field3D>([&](const Ind3D& i) {
@@ -385,7 +781,7 @@ TEST_F(IonEnergySingletonYTest, RelaxationRecoveryWorksWithoutYGuards) {
                     {"phi_rtol", 1e-10},
                     {"phi_max_iterations", 200}}}};
   FakeSolver solver;
-  EvolveVorticityIonEnergy component("test", options, &solver);
+  IonEnergyTestSystem component("test", options, &solver);
   component.declareAllSpecies(SpeciesInformation({"e"}, {}, {"d+"}, {}));
   Options state{
       {"species",
@@ -422,7 +818,7 @@ TEST_F(EvolveVorticityIonEnergyTest,
   FakeSolver solver;
   auto options = makeOptions();
   options["test"]["radial_boundary"] = "no_slip";
-  EvolveVorticityIonEnergy component("test", options, &solver);
+  IonEnergyTestSystem component("test", options, &solver);
   solver.setState({{"Vort", Field3D{0.3}}, {"Eion", Field3D{4.0}}});
   Options restart{{"phi", Field3D{0.2}}, {"ion_energy_boundary_state_version", 1}};
   component.restartVars(restart);
@@ -436,12 +832,12 @@ TEST_F(EvolveVorticityIonEnergyTest,
   auto options = makeOptions();
   options["test"]["radial_boundary"] = "no_slip";
   Options::root()["Vort"]["evolve_bndry"] = false;
-  EXPECT_THROW(EvolveVorticityIonEnergy("test", options, &solver), BoutException);
+  EXPECT_THROW(IonEnergyTestSystem("test", options, &solver), BoutException);
   Options::root()["Vort"]["evolve_bndry"].force(true);
   for (BoutReal velocity : {0.0, -0.1, std::numeric_limits<BoutReal>::infinity(),
                             std::numeric_limits<BoutReal>::quiet_NaN()}) {
     options["test"]["phi_boundary_velocity"].force(velocity);
-    EXPECT_THROW(EvolveVorticityIonEnergy("test", options, &solver), BoutException);
+    EXPECT_THROW(IonEnergyTestSystem("test", options, &solver), BoutException);
   }
 }
 
@@ -449,12 +845,12 @@ TEST_F(EvolveVorticityIonEnergyTest, BoundaryVelocityIsRequiredOnlyForRelaxation
   FakeSolver solver;
   auto options = makeOptions();
   options["test"]["phi_boundary_velocity"].force(-1.0);
-  EXPECT_NO_THROW(EvolveVorticityIonEnergy("test", options, &solver));
+  EXPECT_NO_THROW(IonEnergyTestSystem("test", options, &solver));
   EXPECT_FALSE(options["test"]["phi_boundary_velocity"].valueUsed());
   Options missing;
   missing["units"] = options["units"].copy();
   missing["test"]["radial_boundary"] = "no_slip";
-  EXPECT_THROW(EvolveVorticityIonEnergy("test", missing, &solver), BoutException);
+  EXPECT_THROW(IonEnergyTestSystem("test", missing, &solver), BoutException);
 }
 
 TEST_F(EvolveVorticityIonEnergyTest, LinearPotentialHasOppositePhysicalWallRates) {
@@ -467,7 +863,7 @@ TEST_F(EvolveVorticityIonEnergyTest, LinearPotentialHasOppositePhysicalWallRates
   options["test"]["radial_boundary"] = "no_slip";
   options["units"]["seconds"].force(0.2);
   options["units"]["meters"].force(0.5);
-  EvolveVorticityIonEnergy component("test", options, &solver);
+  IonEnergyTestSystem component("test", options, &solver);
   declareSpecies(component);
   constexpr BoutReal slope = 0.003;
   const Field3D potential = makeField<Field3D>(
@@ -522,7 +918,7 @@ TEST_F(EvolveVorticityIonEnergyTest, CoreWallUsesWeightedStateAndRate) {
     FakeSolver solver;
     auto options = makeOptions();
     options["test"]["radial_boundary"] = mode;
-    EvolveVorticityIonEnergy component("test", options, &solver);
+    IonEnergyTestSystem component("test", options, &solver);
     declareSpecies(component);
     const Field3D restart_phi = makeField<Field3D>([&](const Ind3D& i) {
       return i.y() < mesh->ystart || i.y() > mesh->yend ? 999.0 : 0.01 * (1 + i.y());
@@ -620,7 +1016,7 @@ TEST_F(EvolveVorticityIonEnergyTest,
 TEST_F(EvolveVorticityIonEnergyTest, CommonTemperatureUsesMassToChargePressurePotential) {
   FakeSolver solver;
   auto options = makeOptions();
-  EvolveVorticityIonEnergy component("test", options, &solver);
+  IonEnergyTestSystem component("test", options, &solver);
   declareSpecies(component);
   solver.setState({{"Vort", Field3D{0.0}}, {"Eion", Field3D{3.0}}});
   auto state = makeState();
@@ -651,7 +1047,7 @@ TEST_F(EvolveVorticityIonEnergyTest, KinematicViscosityDampsZModeInPhysicalUnits
     if (viscous) {
       options["test"]["viscosity"] = 8.0; // 8 / (2^2 * 2) = 1 normalised.
     }
-    EvolveVorticityIonEnergy component("test", options, &solver);
+    IonEnergyTestSystem component("test", options, &solver);
     declareSpecies(component);
     solver.setState({{"Vort", vort}, {"Eion", Field3D{10.0}}});
     auto state = makeState();
@@ -686,7 +1082,7 @@ TEST_F(EvolveVorticityIonEnergyTest, ZeroViscosityMatchesDisabled) {
     if (specified) {
       options["test"]["viscosity"] = 0.0;
     }
-    EvolveVorticityIonEnergy component("test", options, &solver);
+    IonEnergyTestSystem component("test", options, &solver);
     declareSpecies(component);
     solver.setState({{"Vort", vort}, {"Eion", Field3D{10.0}}});
     auto state = makeState();
@@ -715,7 +1111,7 @@ TEST_F(EvolveVorticityIonEnergyTest, ViscousFluxObeysProductRuleWithCrossMetric)
   FakeSolver solver;
   auto options = makeOptions();
   options["test"]["viscosity"] = 0.1;
-  EvolveVorticityIonEnergy component("test", options, &solver);
+  IonEnergyTestSystem component("test", options, &solver);
   component.declareAllSpecies(SpeciesInformation({"e"}, {"d"}, {"d+", "he++"}, {}));
   const Field3D vort = makeField<Field3D>(
       [&](const Ind3D& i) { return 0.002 * sin(0.4 * i.x() + 2 * PI * i.z() / nz); });
@@ -765,7 +1161,7 @@ TEST_F(EvolveVorticityIonEnergyTest, ViscousHeatingPairsIonAndElectronEnergy) {
   options["e"]["poloidal_flows"] = false;
   options["e"]["bndry_flux"] = false;
   EvolvePressure electrons("e", options, &solver);
-  EvolveVorticityIonEnergy component("test", options, &solver);
+  IonEnergyTestSystem component("test", options, &solver);
   declareSpecies(component);
   electrons.declareAllSpecies(SpeciesInformation({"e"}, {}, {"d+", "he++"}, {}));
   const Field3D vort = makeField<Field3D>([&](const Ind3D& i) {
@@ -820,7 +1216,7 @@ TEST_F(EvolveVorticityIonEnergyTest, ViscousHeatingPairsIonAndElectronEnergy) {
 TEST_F(EvolveVorticityIonEnergyTest, IonCurrentUsesIonMomentumWithoutElectronMomentum) {
   FakeSolver solver;
   auto options = makeOptions();
-  EvolveVorticityIonEnergy component("test", options, &solver);
+  IonEnergyTestSystem component("test", options, &solver);
   declareSpecies(component);
   const Field3D vort = makeField<Field3D>([](const Ind3D& i) { return 0.02 * i.y(); });
   solver.setState({{"Vort", vort}, {"Eion", Field3D{10.0}}});
@@ -848,7 +1244,7 @@ TEST_F(EvolveVorticityIonEnergyTest, IonCurrentUsesIonMomentumWithoutElectronMom
 TEST_F(EvolveVorticityIonEnergyTest, ElectronCurrentCanReadElectronMass) {
   FakeSolver solver;
   auto options = makeOptions();
-  EvolveVorticityIonEnergy component("test", options, &solver);
+  IonEnergyTestSystem component("test", options, &solver);
   declareSpecies(component);
   solver.setState({{"Vort", Field3D{0.0}}, {"Eion", Field3D{3.0}}});
   auto state = makeState();
@@ -862,7 +1258,7 @@ TEST_F(EvolveVorticityIonEnergyTest, ParallelFluxCarriesEnthalpyAndKineticEnergy
   FakeSolver solver;
   auto options = makeOptions();
   options["test"]["average_atomic_mass"].force(2.0);
-  EvolveVorticityIonEnergy component("test", options, &solver);
+  IonEnergyTestSystem component("test", options, &solver);
   component.declareAllSpecies(SpeciesInformation({"e"}, {}, {"d+"}, {}));
   solver.setState({{"Vort", Field3D{0.0}}, {"Eion", Field3D{1.5}}});
   Options state{{"species",
@@ -894,7 +1290,7 @@ TEST_F(EvolveVorticityIonEnergyTest, ParallelFluxCarriesEnthalpyAndKineticEnergy
 TEST_F(EvolveVorticityIonEnergyTest, ParticleRemovalCarriesItsKineticEnergy) {
   FakeSolver solver;
   auto options = makeOptions();
-  EvolveVorticityIonEnergy component("test", options, &solver);
+  IonEnergyTestSystem component("test", options, &solver);
   declareSpecies(component);
   solver.setState({{"Vort", Field3D{0.0}}, {"Eion", Field3D{10.0}}});
   auto state = makeState();
@@ -917,7 +1313,7 @@ TEST_F(EvolveVorticityIonEnergyTest, ParticleRemovalCarriesItsKineticEnergy) {
 TEST_F(EvolveVorticityIonEnergyTest, ParticleInjectionConservesTransferredEnergy) {
   FakeSolver solver;
   auto options = makeOptions();
-  EvolveVorticityIonEnergy component("test", options, &solver);
+  IonEnergyTestSystem component("test", options, &solver);
   declareSpecies(component);
   solver.setState({{"Vort", Field3D{0.0}}, {"Eion", Field3D{10.0}}});
   auto state = makeState();
@@ -943,8 +1339,8 @@ TEST_F(EvolveVorticityIonEnergyTest, PolarisationPotentialHasFixedCorrectionResp
   for (int corrections : {0, 2, 6}) {
     FakeSolver solver;
     auto options = makeOptions();
-    options["test"]["polarisation_corrections"] = corrections;
-    EvolveVorticityIonEnergy component("test", options, &solver);
+    options["polarisation_drift"]["polarisation_corrections"] = corrections;
+    IonEnergyTestSystem component("test", options, &solver);
     declareSpecies(component);
     solver.setState({{"Vort", Field3D{0.0}}, {"Eion", Field3D{3.0}}});
     auto state = makeState();
@@ -1095,7 +1491,7 @@ TEST_F(EvolveVorticityIonEnergyTest, PolarisationDCSourceDoesNotRequireZeroMean)
       new FakeGridDataSource{{{"bxcvx", 0.5}, {"bxcvy", 0.0}, {"bxcvz", 0.0}}});
   FakeSolver solver;
   auto options = makeOptions();
-  EvolveVorticityIonEnergy component("test", options, &solver);
+  IonEnergyTestSystem component("test", options, &solver);
   declareSpecies(component);
   solver.setState({{"Vort", Field3D{0.0}}, {"Eion", Field3D{3.0}}});
   auto state = makeState();
@@ -1126,11 +1522,11 @@ TEST_F(EvolveVorticityIonEnergyTest, PolarisationDCSourceDoesNotRequireZeroMean)
 TEST_F(EvolveVorticityIonEnergyTest, MixedAuxiliaryRejectsInvalidSolverFlags) {
   FakeSolver solver;
   auto options = makeOptions();
-  options["test"]["polarisation_laplacian"]["inner_boundary_flags"] = 3;
-  EXPECT_THROW(EvolveVorticityIonEnergy("test", options, &solver), BoutException);
-  options["test"]["polarisation_laplacian"]["inner_boundary_flags"].force(2);
-  options["test"]["polarisation_laplacian"]["global_flags"] = INVERT_ZERO_DC;
-  EXPECT_THROW(EvolveVorticityIonEnergy("test", options, &solver), BoutException);
+  options["polarisation_drift"]["laplacian"]["inner_boundary_flags"] = 3;
+  EXPECT_THROW(IonEnergyTestSystem("test", options, &solver), BoutException);
+  options["polarisation_drift"]["laplacian"]["inner_boundary_flags"].force(2);
+  options["polarisation_drift"]["laplacian"]["global_flags"] = INVERT_ZERO_DC;
+  EXPECT_THROW(IonEnergyTestSystem("test", options, &solver), BoutException);
 }
 
 TEST_F(EvolveVorticityIonEnergyTest, PolarisationFluxConservesEnergyOnNonuniformMesh) {
@@ -1144,7 +1540,7 @@ TEST_F(EvolveVorticityIonEnergyTest, PolarisationFluxConservesEnergyOnNonuniform
   coord->setDz(dz);
   FakeSolver solver;
   auto options = makeOptions();
-  EvolveVorticityIonEnergy component("test", options, &solver);
+  IonEnergyTestSystem component("test", options, &solver);
   declareSpecies(component);
   const BoutReal k = 2 * PI / nz;
   const Field3D energy =
@@ -1268,7 +1664,7 @@ TEST_F(EvolveVorticityIonEnergyTest, PotentialRecoverySatisfiesFiniteVolumeVorti
   coord->setNon_uniform(false);
   FakeSolver solver;
   auto options = makeOptions();
-  EvolveVorticityIonEnergy component("test", options, &solver);
+  IonEnergyTestSystem component("test", options, &solver);
   declareSpecies(component);
   const BoutReal kz = 2 * PI / nz;
   const Field3D Phi = makeField<Field3D>([&](const Ind3D& i) {
@@ -1298,7 +1694,7 @@ TEST_F(EvolveVorticityIonEnergyTest, PotentialRecoveryReportsFailureToConverge) 
   FakeSolver solver;
   auto options = makeOptions();
   options["test"]["phi_max_iterations"].force(1);
-  EvolveVorticityIonEnergy component("test", options, &solver);
+  IonEnergyTestSystem component("test", options, &solver);
   declareSpecies(component);
   const Field3D vort =
       makeField<Field3D>([&](const Ind3D& i) { return 0.05 * cos(6 * PI * i.z() / nz); });
@@ -1315,7 +1711,7 @@ TEST_F(EvolveVorticityIonEnergyTest,
   options["e"]["poloidal_flows"] = false;
   options["e"]["bndry_flux"] = false;
   EvolvePressure electrons("e", options, &solver);
-  EvolveVorticityIonEnergy component("test", options, &solver);
+  IonEnergyTestSystem component("test", options, &solver);
   declareSpecies(component);
   electrons.declareAllSpecies(SpeciesInformation({"e"}, {}, {"d+", "he++"}, {}));
   const Field3D vort = makeField<Field3D>([](const Ind3D& i) { return 0.02 * i.y(); });
@@ -1346,7 +1742,7 @@ TEST_F(EvolveVorticityIonEnergyTest, ElectronPressureReceivesExBCompressionWork)
   options["e"]["poloidal_flows"] = false;
   options["e"]["bndry_flux"] = false;
   EvolvePressure electrons("e", options, &solver);
-  EvolveVorticityIonEnergy component("test", options, &solver);
+  IonEnergyTestSystem component("test", options, &solver);
   declareSpecies(component);
   electrons.declareAllSpecies(SpeciesInformation({"e"}, {}, {"d+", "he++"}, {}));
   const Field3D vort =
@@ -1375,7 +1771,7 @@ TEST_F(EvolveVorticityIonEnergyTest, PolarisationTransportUsesMassFractionAndTot
       new FakeGridDataSource{{{"bxcvx", 0.0}, {"bxcvy", 0.0}, {"bxcvz", 0.5}}});
   FakeSolver solver;
   auto options = makeOptions();
-  EvolveVorticityIonEnergy component("test", options, &solver);
+  IonEnergyTestSystem component("test", options, &solver);
   declareSpecies(component);
   // Use helium-3 so A/Z differs between species. rho=7/4 differs from
   // rho0=1.5. With v_d=2, v_he=-1, K_parallel=19/8 and total pressure=2.
@@ -1465,7 +1861,7 @@ TEST_F(EvolveVorticityIonEnergyTest, VaryingSpeciesFractionsPreservePolarisation
       new FakeGridDataSource{{{"bxcvx", 0.0}, {"bxcvy", 0.0}, {"bxcvz", 0.5}}});
   FakeSolver solver;
   auto options = makeOptions();
-  EvolveVorticityIonEnergy component("test", options, &solver);
+  IonEnergyTestSystem component("test", options, &solver);
   declareSpecies(component);
   const BoutReal kx = PI / (mesh->xend - mesh->xstart + 1);
   const BoutReal kz = 2 * PI / nz;
@@ -1499,7 +1895,7 @@ TEST_F(EvolveVorticityIonEnergyTest, PoloidalPolarisationPreservesChargeCurrent)
   FakeSolver solver;
   auto options = makeOptions();
   options["test"]["poloidal_flows"] = true;
-  EvolveVorticityIonEnergy component("test", options, &solver);
+  IonEnergyTestSystem component("test", options, &solver);
   declareSpecies(component);
   Field3D vort = makeField<Field3D>([](const Ind3D& i) {
     return 0.02 * sin(0.8 * i.x() + 1.7 * i.y() + 2 * PI * i.z() / nz);
@@ -1542,7 +1938,7 @@ TEST_F(EvolveVorticityIonEnergyTest, MixedAuxiliaryBoundaryIsIndependentOfRHSHis
     options["test"]["phi_atol"] = 1e-3;
     options["test"]["vort_atol"] = 1e-13;
     options["test"]["phi_max_iterations"].force(200);
-    EvolveVorticityIonEnergy component("test", options, &solver);
+    IonEnergyTestSystem component("test", options, &solver);
     declareSpecies(component);
     Field3D vort = makeField<Field3D>(
         [&](const Ind3D& i) { return 0.002 * sin(2 * PI * i.z() / nz); });
@@ -1582,7 +1978,7 @@ TEST_F(EvolveVorticityIonEnergyTest, RecoveryIsBitwiseRepeatableBetweenOutputs) 
     FakeSolver solver;
     auto options = makeOptions();
     options["test"]["radial_boundary"] = relax ? "no_slip" : "fixed";
-    EvolveVorticityIonEnergy component("test", options, &solver);
+    IonEnergyTestSystem component("test", options, &solver);
     declareSpecies(component);
     const auto evaluate = [&](int phase) {
       solver.setState({{"Vort", makeField<Field3D>([&](const Ind3D& i) {
@@ -1624,9 +2020,9 @@ TEST_F(EvolveVorticityIonEnergyTest, MixedAuxiliaryConvergesWithNonuniformCrossM
     for (int corrections : {0, 2, 6}) {
       FakeSolver solver;
       auto options = makeOptions();
-      options["test"]["polarisation_corrections"] = corrections;
+      options["polarisation_drift"]["polarisation_corrections"] = corrections;
       options["test"]["radial_boundary"] = relax ? "no_slip" : "fixed";
-      EvolveVorticityIonEnergy component("test", options, &solver);
+      IonEnergyTestSystem component("test", options, &solver);
       declareSpecies(component);
       solver.setState({{"Vort", Field3D{0.0}}, {"Eion", Field3D{3.0}}});
       auto state = makeState();
@@ -1716,8 +2112,73 @@ TEST_F(EvolveVorticityIonEnergyTest, RadialEnumsParseAndRejectUnknownValues) {
   for (const auto* key : {"radial_boundary", "polarisation_ac_boundary"}) {
     FakeSolver solver;
     auto options = makeOptions();
-    options["test"][key] = "unknown";
-    EXPECT_THROW(EvolveVorticityIonEnergy("test", options, &solver), BoutException);
+    options[key == std::string{"polarisation_ac_boundary"} ? "polarisation_drift"
+                                                           : "test"][key] = "unknown";
+    EXPECT_THROW(IonEnergyTestSystem("test", options, &solver), BoutException);
+  }
+}
+
+TEST_F(EvolveVorticityIonEnergyTest, ConservativePairingRequiresEnabledCompanion) {
+  FakeSolver solver;
+  auto options = makeOptions();
+  options["test"]["type"] = "evolve_vorticity_ion_energy";
+  options["hermes"]["components"] = "test";
+  EXPECT_THROW(EvolveVorticityIonEnergy("test", options, &solver), BoutException);
+  options["hermes"]["components"].force("polarisation_drift");
+  EXPECT_THROW(PolarisationDrift("polarisation_drift", options, &solver), BoutException);
+  options["hermes"]["components"].force("test, polarisation_drift");
+  options["polarisation_drift"]["implementation"].force("legacy");
+  EXPECT_THROW(EvolveVorticityIonEnergy("test", options, &solver), BoutException);
+  EXPECT_THROW(PolarisationDrift("polarisation_drift", options, &solver), BoutException);
+  options["polarisation_drift"]["implementation"].force("conservative");
+  options["polarisation_drift"]["advection"] = true;
+  EXPECT_THROW(PolarisationDrift("polarisation_drift", options, &solver), BoutException);
+  EXPECT_THROW(Options{"unknown"}.as<bout::polarisation::Implementation>(),
+               BoutException);
+  EXPECT_EQ(Options{"legacy"}.as<bout::polarisation::Implementation>(),
+            bout::polarisation::Implementation::legacy);
+  EXPECT_EQ(Options{"conservative"}.as<bout::polarisation::Implementation>(),
+            bout::polarisation::Implementation::conservative);
+}
+
+TEST_F(EvolveVorticityIonEnergyTest, ConservativeStateAndSourcesDoNotDependOnDiagnose) {
+  Options reference;
+  for (bool diagnose : {true, false}) {
+    FakeSolver solver;
+    auto options = makeOptions();
+    options["test"]["diagnose"].force(diagnose);
+    IonEnergyTestSystem component("test", options, &solver);
+    declareSpecies(component);
+    solver.setState(
+        {{"Vort", Field3D{0.0}}, {"Eion", makeField<Field3D>([&](const Ind3D& i) {
+                                    return 3.0 + 0.2 * sin(2 * PI * i.z() / nz);
+                                  })}});
+    auto state = makeState();
+    component.transform(state);
+    component.finally(state);
+    Options actual;
+    for (const auto* field :
+         {"ion_pressure_potential", "ion_mass_density", "ion_reynolds_x",
+          "ion_reynolds_z", "DivJReynolds", "DivJdia", "ion_wall_rate", "DivJpol",
+          "ion_chi", "ion_polarisation_energy_divergence"}) {
+      ASSERT_TRUE(state["fields"].isSet(field)) << field;
+      actual[field] = state["fields"][field].as<Field3D>();
+    }
+    for (const auto* name : {"d+", "he++"}) {
+      ASSERT_TRUE(state["species"][name].isSet("polarisation_density_source"));
+      actual[name] = state["species"][name]["polarisation_density_source"].as<Field3D>();
+    }
+    actual["ddt_Eion"] = solver.getTimeDerivs()["Eion"].as<Field3D>();
+    actual["ddt_Vort"] = solver.getTimeDerivs()["Vort"].as<Field3D>();
+    if (diagnose) {
+      reference = actual.copy();
+    } else {
+      for (const auto& [name, value] : actual.getChildren()) {
+        EXPECT_TRUE(IsFieldEqual(value.as<Field3D>(), reference[name].as<Field3D>(),
+                                 "RGN_NOBNDRY", 0.0))
+            << name;
+      }
+    }
   }
 }
 
@@ -1726,9 +2187,11 @@ TEST_F(EvolveVorticityIonEnergyTest, RadialModelRejectsAllOwnedOptions) {
     for (const auto* key : {"inner_boundary_flags", "outer_boundary_flags"}) {
       FakeSolver solver;
       auto options = makeOptions();
-      options["test"][section][key] = 0;
+      options[section == std::string{"polarisation_laplacian"}
+                  ? "polarisation_drift"
+                  : "test"]["laplacian"][key] = 0;
       try {
-        EvolveVorticityIonEnergy component("test", options, &solver);
+        IonEnergyTestSystem component("test", options, &solver);
         FAIL() << section << ":" << key << " accepted";
       } catch (const BoutException& error) {
         EXPECT_NE(std::string(error.what()).find("radial_boundary"), std::string::npos);
@@ -1745,7 +2208,7 @@ TEST_F(EvolveVorticityIonEnergyTest, RadialModelRejectsAllOwnedOptions) {
       Options::root()["Vort"][key] = "neumann";
     }
     try {
-      EvolveVorticityIonEnergy component("test", options, &solver);
+      IonEnergyTestSystem component("test", options, &solver);
       FAIL() << "Vort:" << key << " accepted";
     } catch (const BoutException& error) {
       EXPECT_NE(std::string(error.what()).find("radial_boundary"), std::string::npos);
@@ -1758,7 +2221,7 @@ TEST_F(EvolveVorticityIonEnergyTest, FixedModesLeaveVelocityUnused) {
     FakeSolver solver;
     auto options = makeOptions();
     options["test"]["radial_boundary"] = mode;
-    EvolveVorticityIonEnergy component("test", options, &solver);
+    IonEnergyTestSystem component("test", options, &solver);
     EXPECT_FALSE(options["test"]["phi_boundary_velocity"].valueUsed());
     Options unused;
     unused["phi_boundary_velocity"] = options["test"]["phi_boundary_velocity"].copy();
@@ -1834,9 +2297,9 @@ TEST_F(EvolveVorticityIonEnergyTest, WallModelsPairParticleChargeAndEnergyBudget
       FakeSolver solver;
       auto options = makeOptions();
       options["test"]["radial_boundary"] = mode;
-      options["test"]["polarisation_ac_boundary"] = ac;
+      options["polarisation_drift"]["polarisation_ac_boundary"] = ac;
       options["test"]["viscosity"] = 0.1;
-      EvolveVorticityIonEnergy component("test", options, &solver);
+      IonEnergyTestSystem component("test", options, &solver);
       declareSpecies(component);
       ASSERT_TRUE(solver.evolvesBoundary("Vort"));
       Field3D vort = makeField<Field3D>([&](const Ind3D& i) {
@@ -2164,7 +2627,7 @@ TEST_F(EvolveVorticityIonEnergyTest,
     FakeSolver solver;
     auto options = makeOptions();
     options["test"]["diagnose"].force(diagnose);
-    EvolveVorticityIonEnergy component("test", options, &solver);
+    IonEnergyTestSystem component("test", options, &solver);
     declareSpecies(component);
     const auto energy = makeField<Field3D>(
         [](const Ind3D& i) { return 6.0 + 0.1 * cos(2 * PI * i.z() / nz); });
@@ -2206,7 +2669,7 @@ TEST_F(EvolveVorticityIonEnergyTest, FullChiWallCurrentMatchesPolarisationContin
     auto options = makeOptions();
     options["test"]["average_atomic_mass"].force(1.0);
     options["test"]["viscosity"] = 0.07;
-    EvolveVorticityIonEnergy component("test", options, &solver);
+    IonEnergyTestSystem component("test", options, &solver);
     component.declareAllSpecies(SpeciesInformation({"e"}, {}, {"d+"}, {}));
     const Field3D vort = makeField<Field3D>([](const Ind3D& i) {
       return 0.001 * (1 + 0.1 * i.x()) * (1 + 0.2 * cos(2 * PI * i.z() / nz));
@@ -2219,7 +2682,7 @@ TEST_F(EvolveVorticityIonEnergyTest, FullChiWallCurrentMatchesPolarisationContin
     component.transform(state);
     component.finally(state);
     const auto output = diagnostics(component);
-    EXPECT_EQ(output["evolve_vorticity_ion_energy_version"].as<int>(), 4);
+    EXPECT_EQ(output["evolve_vorticity_ion_energy_version"].as<int>(), 6);
     const Field3D chi = output["ion_chi"].as<Field3D>();
     const Field3D c{1.0 / SQ(coord->Bxy())};
     const Field3D forward = bout::ion_energy::Div_a_Grad_perp_XZ(c, chi);
@@ -2255,7 +2718,7 @@ TEST_F(EvolveVorticityIonEnergyTest, ViscosityDoesNotDrivePolarisationCurrent) {
       if (with_viscosity) {
         options["test"]["viscosity"] = 0.07;
       }
-      EvolveVorticityIonEnergy component("test", options, &solver);
+      IonEnergyTestSystem component("test", options, &solver);
       component.declareAllSpecies(SpeciesInformation({"e"}, {}, {"d+"}, {}));
       const Field3D vort = makeField<Field3D>([](const Ind3D& i) {
         return 0.001 * (1 + 0.1 * i.x()) * (1 + 0.2 * cos(2 * PI * i.z() / nz));

@@ -25,7 +25,7 @@ def overrides(mode, ac, *, nx=8, profile="perturbed", outputs=None):
         "restart=false",
         f"mesh:nx={nx + 4}",
         f"evolve_vorticity_ion_energy:radial_boundary={mode}",
-        f"evolve_vorticity_ion_energy:polarisation_ac_boundary={ac}",
+        f"polarisation_drift:polarisation_ac_boundary={ac}",
         f"evolve_vorticity_ion_energy:viscosity={0.02 if mode == 'free_slip' else 0}",
         f"evolve_vorticity_ion_energy:diagnose={str(ac == 'dirichlet').lower()}",
     ]

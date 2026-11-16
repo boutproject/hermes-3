@@ -8,6 +8,7 @@
 #include <bout/options.hxx>
 
 #include "component.hxx"
+#include "evolve_vorticity_ion_energy.hxx"
 #include "guarded_options.hxx"
 
 #include <memory>
@@ -15,6 +16,12 @@
 
 class Laplacian;
 
+BOUT_ENUM_CLASS_NS(bout::polarisation, Implementation, legacy, conservative);
+
+/// Selects legacy potential-flow or conservative total-ion-energy transport.
+/// Conservative mode requires evolve_vorticity_ion_energy and consumes its
+/// recovery, Reynolds and wall-state fields independently of diagnostics.
+///
 /// Calculates polarisation drift terms for all charged species, both
 /// ions and electrons.
 ///
@@ -77,6 +84,19 @@ struct PolarisationDrift : public NamedComponent<PolarisationDrift> {
   static constexpr auto type = "polarisation_drift";
 
 private:
+  bout::polarisation::Implementation implementation;
+  bout::ion_energy::RadialBoundaryModel radial_model;
+  Coordinates::FieldMetric boussinesq_coeff;
+  bool poloidal_flows{false};
+  int polarisation_corrections{10}, chi_iterations{0};
+  BoutReal chi_residual{0.0};
+  Field3D chi{0.0}, DivJpol, DivEpol;
+  Field3D Jpar{0.0}, DivJpar{0.0}, current_rhs{0.0}, auxiliary_residual{0.0};
+  bout::ion_energy::XZFaceFluxes polarisation_flux;
+  std::vector<BoutReal> wall_rate_inner, wall_rate_outer;
+  void transformConservative(GuardedOptions& state);
+  void solveConservativePotential(const Field3D& rhs);
+  void outputConservative(Options& state);
   std::unique_ptr<Laplacian> phiSolver; // Laplacian solver in X-Z
 
   Coordinates::FieldMetric Bsq; // Cached SQ(coord->Bxy())

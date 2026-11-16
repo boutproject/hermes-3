@@ -69,6 +69,8 @@ def summary(run):
         },
         "diagnostics": compare_diagnostics(run, densities=densities),
     }
+    if "model_defect_power" in drift:
+        report["model_defect_power_W"] = drift.model_defect_power.values.tolist()
     if run.formulation == "total_energy":
         report["recovery_error"] = float(
             abs(run.interior(densities.ion_reconstructed - run.data.Eion)).max()

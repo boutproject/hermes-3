@@ -161,7 +161,9 @@ struct EvolveVorticityIonEnergy : public NamedComponent<EvolveVorticityIonEnergy
   /// - <name>
   ///   - radial_boundary      fixed (default), free_slip or no_slip
   ///   - phi_boundary_velocity  Required positive velocity [m/s] for no_slip
-  ///   - polarisation_ac_boundary  neumann (default) or dirichlet
+  ///
+  /// Requires an explicit conservative polarisation_drift companion.
+  ///
   ///   - average_atomic_mass  Boussinesq reference atomic mass, default 2.0
   ///   - density_floor        Minimum normalised total ion density, default 1e-7
   ///   - diagnose             Output additional diagnostic fields? Default false
@@ -171,10 +173,8 @@ struct EvolveVorticityIonEnergy : public NamedComponent<EvolveVorticityIonEnergy
   ///   - phi_atol             Potential convergence scale [eV], default 1.0
   ///   - phi_rtol             Recovery relative tolerance, default 1e-3
   ///   - vort_atol            Normalised vorticity residual tolerance, default 1e-10
-  ///   - polarisation_corrections  FV auxiliary defect corrections, default 10;
-  ///                               residual limits current and energy partition accuracy
   ///   - laplacian            Approximate potential inverse options
-  ///   - polarisation_laplacian  Auxiliary inverse options; type defaults to laplacian
+  /// Auxiliary boundary, correction count and inverse options belong to drift.
   ///
   EvolveVorticityIonEnergy(std::string name, Options& options, Solver* solver);
 
@@ -217,7 +217,6 @@ private:
   Field3D electron_viscous_heating{0.0}; ///< Electron mass fraction of viscous heating
 
   Field3D phi{0.0}; ///< Electrostatic potential ϕ
-  Field3D chi{0.0}; ///< Auxiliary current potential with selected AC boundaries
   Field3D Pi_sum;   ///< Total ion pressure
 
   // Starting guess for potential recovery, updated only at outputs
@@ -232,10 +231,6 @@ private:
   /// Phi_x*phi_x, Phi_x*phi_z, Phi_z*phi_x, Phi_z*phi_z.
   std::array<Coordinates::FieldMetric, 8> reynolds_coefficients;
   std::unique_ptr<Laplacian> phiSolver; ///< Laplacian solver in X-Z
-  std::unique_ptr<Laplacian> chiSolver; ///< Mixed-boundary auxiliary inverse
-  int chi_iterations{0};                ///< Spectral solves in the last chi calculation
-  BoutReal chi_residual{0.0};           ///< Max FV residual of the last chi calculation
-  int polarisation_corrections{10}; ///< FV defect corrections after the spectral solve
 
   bout::ion_energy::RadialBoundaryModel radial_model;
   std::vector<BoutReal> wall_rate_inner; ///< Current inner wall dphi/dt, by local y
@@ -246,25 +241,20 @@ private:
   BoutReal phi_rtol;      ///< Relative tolerance on phi
   BoutReal vort_atol;     ///< Absolute tolerance on forward vorticity residual
 
-  // Internal transport sources are excluded from conversion of external
-  // sources to total energy: their energy flux is already in DivEpol.
-  Options polarisation_sources;
-
   VectorMetric Curlb_B; // Curvature vector Curl(b/B)
 
   // Divergence of currents
-  Field3D DivJdia;       ///< Divergence of diamagnetic current
-  Field3D reynolds_work; ///< Face work of the X-Z Reynolds current
-  Field3D DivJReynolds;  ///< Divergence of Reynolds stress current
-  bout::ion_energy::XZFaceFluxes polarisation_flux; ///< Minus Reynolds and chi X-Z faces
-  Field3D DivJpol; ///< Full polarisation transport divergence, including wall currents
+  Field3D DivJdia;          ///< Divergence of diamagnetic current
+  Field3D reynolds_work;    ///< Face work of the X-Z Reynolds current
+  Field3D DivJReynolds;     ///< Divergence of Reynolds stress current
   Field3D DivJviscous{0.0}; ///< Divergence of nu grad_perp(Vort)
 
-  // Divergence of energy fluxes
+  // Divergence of energy fluxes (polarisation is read from completed state)
   Field3D DivEExB;      ///< E×B advection of total ion energy, including Kperp
   Field3D DivEelectric; ///< Divergence of ion electrical work Div(phi (Jpar + Jdia))
+  Field3D Jpar_i{0.0}, Jpar_e{0.0};        ///< Completed currents including target guards
+  Field3D DivEdiamagnetic, phi_Div_Jdia_e; ///< Recovery-stage diamagnetic work
   Field3D DivEparallel; ///< Divergence of parallel ion enthalpy and kinetic energy flux
-  Field3D DivEpol;      ///< Divergence of polarisation drift energy flux
   Field3D DivEviscous{0.0}; ///< Diagnostic Phi stress flux; work is carried by DivEpol
 
   Field3D phi_Div_Je;        ///< Energy transferred to/from electrons
@@ -351,19 +341,6 @@ private:
   Field3D correctPotential(const Field3D& rhs, const Field3D& potential) const;
   Field3D correctPotential(const Field3D& rhs, const Field3D& potential,
                            Laplacian& approximate_inverse) const;
-
-  /// Recover the auxiliary current potential and update its solver diagnostics.
-  ///
-  /// @param rhs DivJReynolds + DivJdia on physical cells in normalised units,
-  ///            excluding viscous stress and encoded radial wall-state rates.
-  ///
-  /// Reads boussinesq_coeff, polarisation_corrections and the configured inverse.
-  /// In relaxing mode it also reads the current wall_rate_inner/outer as chi's
-  /// DC midpoint values, approximating d(Phi)/dt by d(phi_b)/dt at the wall and
-  /// neglecting d(psi_bar_b)/dt. Fixed boundaries use zero DC values.
-  /// Overwrites chi, chi_iterations and chi_residual using a fixed solve sequence
-  /// from zero, so the result depends on current inputs rather than RHS history.
-  void solvePolarisationPotential(const Field3D& rhs);
 
   /// Calculate ion perpendicular kinetic energy, K⊥ = 1/2 c |∇⊥Φ|^2
   ///
