@@ -317,8 +317,8 @@ void Recycling::transform_impl(GuardedOptions& state) {
 
             // Divide flows by volume to get sources
             // Save to pump diagnostic
-            channel.pump_density_source[i] = -pump_neutral_particle_sink;
-            channel.pump_energy_source[i] = -pump_neutral_energy_sink;
+            channel.pump_density_source[i] -= pump_neutral_particle_sink;
+            channel.pump_energy_source[i] -= pump_neutral_energy_sink;
           }
 
           // Put recycling sources into diagnostic
@@ -411,8 +411,8 @@ void Recycling::transform_impl(GuardedOptions& state) {
 
             // Divide flows by volume to get sources
             // Save to pump diagnostic
-            channel.pump_density_source[i] = -pump_neutral_particle_sink;
-            channel.pump_energy_source[i] = -pump_neutral_energy_sink;
+            channel.pump_density_source[i] -= pump_neutral_particle_sink;
+            channel.pump_energy_source[i] -= pump_neutral_energy_sink;
           }
 
           // Put recycling sources into diagnostic
@@ -553,9 +553,9 @@ void Recycling::transform_impl(GuardedOptions& state) {
 
               // Divide flows by volume to get sources
               // Save to pump diagnostic
-              channel.pump_density_source(mesh->xend, iy, iz) =
-                  -pump_neutral_particle_sink;
-              channel.pump_energy_source(mesh->xend, iy, iz) = -pump_neutral_energy_sink;
+              channel.pump_density_source(mesh->xend, iy, iz) -=
+                  pump_neutral_particle_sink;
+              channel.pump_energy_source(mesh->xend, iy, iz) -= pump_neutral_energy_sink;
 
             } else {
               // Save to wall diagnostic (pump sinks are 0 if not on pump)
@@ -680,10 +680,10 @@ void Recycling::transform_impl(GuardedOptions& state) {
 
                 // Divide flows by volume to get sources
                 // Save to pump diagnostic
-                channel.pump_density_source(mesh->xstart, iy, iz) =
-                    -pump_neutral_particle_sink;
-                channel.pump_energy_source(mesh->xstart, iy, iz) =
-                    -pump_neutral_energy_sink;
+                channel.pump_density_source(mesh->xstart, iy, iz) -=
+                    pump_neutral_particle_sink;
+                channel.pump_energy_source(mesh->xstart, iy, iz) -=
+                    pump_neutral_energy_sink;
 
               } else {
                 // Save to wall diagnostic (pump sinks are 0 if not on pump)
