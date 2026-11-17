@@ -258,8 +258,13 @@ X has physical walls, Z is periodic, and the constant curvature is
 perturbation wavelengths remain fixed.
 
 Initial density is uniform and both species have
-`P=1+0.1*sin(2*pi*x)*sin(2*pi*x-z)`, with `x` between 0 and 1. The perturbation
-vanishes at both X faces, making the initial pressure constant in Z there.
+`P=1+0.1*S(x)*sin(2*pi*x)*sin(2*pi*x-z)`, with `x` between 0 and 1. The
+envelope `S` is zero within 0.1 of either radial wall, one at distances of
+0.2 or greater, and uses the quintic `s^3*(10-15*s+6*s^2)` between them,
+where `s=(distance-0.1)/0.1`. Its first and second derivatives vanish at
+both taper endpoints. The buffer and taper widths are fractions of the box,
+fixed across resolutions; the central perturbation is unchanged. The
+template and restart builder use the same profile.
 The shared physical potential is sampled from the analytic continuum ion-only
 zero-vorticity solution: the harmonic extension is `Phi=1`, so `phi=1-P`.
 Both models have zero phi midpoints. The pressure formulation uses homogeneous Neumann
@@ -281,11 +286,34 @@ pressure in its mass/charge-weighted generalised potential. The total-energy
 model uses an ion-current partition and ion-only pressure potential. Their
 native inversion and viscous heating discretisations also differ. Total energy
 uses conservative face-based viscous work and heating; the pressure model's
-cell-centred heating defect is reconstructed and reported. The tapered
-pressure perturbation has constant X-face values, but its radial derivative
-need not satisfy the pressure formulation's homogeneous Neumann condition.
+cell-centred heating defect is reconstructed and reported. The constant
+wall buffers satisfy both initial pressure boundary conditions and give
+zero initial wall gradients of phi and the pressure potential. The legacy
+electron mass contribution leaves a small, smooth bulk vorticity; total ion
+energy has zero initial vorticity and perpendicular kinetic energy to roundoff.
+The previous profile vanished at the walls but had a nonzero radial pressure
+derivative. Combining Neumann pressure guards with zero-midpoint phi guards
+gave the legacy generalised potential a grid-scale kink, producing a
+first-cell vorticity proportional to inverse radial spacing. Increasing
+diffusion suppressed this sheet but also damped the bulk dynamics.
 Boundary-adjacent physical cells are retained in all primary error norms.
 These differences are recorded in every manifest.
+
+Use `--custom-D 0.001` (0.0143 m²/s) to study weakly diffusive dynamics;
+the historical default `1.19` is strongly diffusive. A fresh study is required
+for the buffered initial profile because the template and restart fields have
+changed. Existing data can still be inspected with `--analyse-only`.
+
+The local runner limits each launch to `--timeout` seconds and records
+`termination_reason=timeout` in `status.json` when this limit is reached.
+A timeout does not by itself indicate a numerical exception; inspect
+`run.log` and the last saved time before choosing a longer limit.
+
+Weak-diffusion validation covered both fixed-boundary formulations to
+`t=10000` on 32²/64² and to `t=100` on 128²/256², with viscosity 1 m²/s.
+Full-duration 256² convergence remains unverified. Later wall vorticity
+can develop in both models; removing the initial sheet does not ensure
+that evolving wall layers converge.
 
 ## Energy and convergence analysis
 

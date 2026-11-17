@@ -48,12 +48,14 @@ from energy_analysis.pressure import legacy_operator, legacy_viscous_work
 from energy_analysis.report import revision
 
 SCHEMA = 1
+INITIAL_WALL_BUFFER = 0.1
+INITIAL_TAPER_WIDTH = 0.1
 DIFFERENCES = [
     "Pressure uses a potential-flow polarisation approximation and electron compression; total energy uses ion-current partition and species transport.",
     "Pressure polarisation potential includes electron pressure with its signed mass/charge weight; total energy includes ions only.",
     "Pressure native inversion uses FD X / spectral Z; total energy uses face/corner FV X-Z.",
     "Pressure retains cell-centred corner-gradient viscous heating; total energy uses conservative face work.",
-    "The pressure perturbation vanishes at both X faces. Pressure uses Neumann ion-pressure guards; total energy imposes mean-Neumann, zero-AC-midpoint pressure and psi guards. Physical initial fields are matched and boundary-adjacent cells remain in the error norms.",
+    "The pressure perturbation is zero in fixed-width radial wall buffers, with a C2 taper into the interior. Pressure uses Neumann ion-pressure guards; total energy imposes mean-Neumann, zero-AC-midpoint pressure and psi guards. Physical initial fields are matched and boundary-adjacent cells remain in the error norms.",
     "Explicit SI metric pairs enforce the 5 cm box; the legacy recalculate_metric path produces inconsistent Z metric pairs for Bnorm=0.35 T.",
     "Common phi solves the continuum ion-only zero-vorticity problem; both discrete vorticities are initialized from this same sampled physical state.",
 ]
@@ -332,6 +334,8 @@ def input_text(config, row):
         "max_timestep": c["max_timestep"],
         "viscosity": c["viscosity"],
         "custom_D": c["custom_D"],
+        "initial_wall_buffer": INITIAL_WALL_BUFFER,
+        "initial_taper_width": INITIAL_TAPER_WIDTH,
         "diagnose": str(c["diagnose"]).lower(),
         "boundary_options": boundary_options,
         "laplacian_boundary_options": (
@@ -516,11 +520,25 @@ def execute(exe, directory, config, timeout, *, seed=False):
     if interrupted:
         raise KeyboardInterrupt
     if code and not accept_completed_outputs(directory, config, status, seed=seed):
+        failure = (
+            f"Run timed out after {timeout:g} s"
+            if termination_reason == "timeout"
+            else f"Run failed ({code})"
+        )
         raise AuditError(
-            f"Run failed ({code}): {log}\n"
-            + "\n".join(log.read_text().splitlines()[-30:])
+            f"{failure}: {log}\n" + "\n".join(log.read_text().splitlines()[-30:])
         )
     return status
+
+
+def initial_pressure(x, z):
+    """Keep the interchange perturbation away from both radial walls."""
+    distance = 0.5 - abs(x - 0.5)
+    ramp = np.clip((distance - INITIAL_WALL_BUFFER) / INITIAL_TAPER_WIDTH, 0, 1)
+    envelope = ramp**3 * (10 - 15 * ramp + 6 * ramp**2)
+    return 1 + 0.1 * envelope[:, None] * np.sin(2 * np.pi * x[:, None]) * np.sin(
+        2 * np.pi * x[:, None] - z[None, :]
+    )
 
 
 def initial_state(run):
@@ -530,9 +548,7 @@ def initial_state(run):
     x = (np.arange(nx + 4) - 2 + 0.5) / nx
     z = np.arange(nz) * 2 * np.pi / nz
     shape = (nx + 4, ds.sizes["y"], nz)
-    pressure = 1 + 0.1 * np.sin(2 * np.pi * x[:, None]) * np.sin(
-        2 * np.pi * x[:, None] - z[None, :]
-    )
+    pressure = initial_pressure(x, z)
     # Both pressure wall values are constant, so their harmonic extension is 1.
     potential = 1 - pressure
     p = xr.DataArray(

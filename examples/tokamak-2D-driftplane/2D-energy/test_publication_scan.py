@@ -322,10 +322,11 @@ def test_total_energy_input_uses_plan_c_boundary_options(
         assert ("phi_boundary_velocity =" in text) == (radial_boundary == "no_slip")
 
 
-def test_tapered_initial_state_has_no_total_energy_perpendicular_flow(runner):
+@pytest.mark.parametrize("nx", [8, 16, 32, 64, 128, 256])
+def test_tapered_initial_state_has_no_wall_sheet_or_total_energy_flow(runner, nx):
     from types import SimpleNamespace
 
-    _, geometry = grid(nx=32, nz=32)
+    _, geometry = grid(nx=nx, nz=nx)
     run = SimpleNamespace(
         data=geometry,
         mxg=2,
@@ -340,15 +341,35 @@ def test_tapered_initial_state_has_no_total_energy_perpendicular_flow(runner):
         interior(initial["Eion"] - 1.5 * initial["Ph+"]), 0, atol=1e-15
     )
     perturbation = interior(initial["Ph+"]) - 1
-    assert float(abs(perturbation.isel(x=0)).max()) < 0.25 * float(
-        abs(perturbation).max()
-    )
+    # Both wall-adjacent rows lie in a constant buffer.
+    assert float(abs(perturbation.isel(x=[0, -1])).max()) == 0
     run.formulation = "pressure"
     pressure_initial = runner.initial_state(run)
+    if nx >= 16:
+        # At these resolutions their stencil neighbours are also in the buffer.
+        np.testing.assert_allclose(
+            interior(pressure_initial["Vort"]).isel(x=[0, -1]), 0, atol=1e-12
+        )
+    # The legacy electron mass contribution leaves smooth bulk vorticity.
+    expected = legacy_operator(1, initial["Pe"], geometry).divergence / -1836
+    np.testing.assert_allclose(
+        interior(pressure_initial["Vort"]), interior(expected), atol=1e-10
+    )
     for name in ("Pe", "Ph+", "phi", "Nh+"):
         np.testing.assert_array_equal(
             interior(initial[name]), interior(pressure_initial[name])
         )
+
+
+def test_initial_pressure_preserves_central_perturbation_and_flat_walls(runner):
+    x = np.array([0, 0.05, 0.1, 0.2, 0.25, 0.5, 0.75, 0.8, 0.9, 0.95, 1])
+    z = np.arange(16) * 2 * np.pi / 16
+    pressure = runner.initial_pressure(x, z)
+    np.testing.assert_array_equal(pressure[[0, 1, 2, 8, 9, 10]], 1)
+    original = 1 + 0.1 * np.sin(2 * np.pi * x[:, None]) * np.sin(
+        2 * np.pi * x[:, None] - z[None, :]
+    )
+    np.testing.assert_allclose(pressure[3:8], original[3:8], atol=1e-15)
 
 
 def test_saved_time_lookup_rejects_nearest_output(runner):
@@ -378,10 +399,11 @@ def test_run_timeout_records_failure_and_stops_process(runner, tmp_path):
     exe.chmod(0o755)
     directory = tmp_path / "run with spaces"
     directory.mkdir()
-    with pytest.raises(AuditError, match="Run failed"):
+    with pytest.raises(AuditError, match="Run timed out after 0.1 s"):
         runner.execute(exe, directory, {"nproc": 1}, 0.1)
     status = json.loads((directory / "status.json").read_text())
     assert status["exit_code"] == -1
+    assert status["termination_reason"] == "timeout"
     assert status["command"] == [str(exe), "-d", str(directory)]
     assert status["elapsed_s"] < 6
 

@@ -6,6 +6,12 @@ Both include `classical_diffusion`, with a constant normalised diffusivity
 It generates refinement tables and figures and supports preparing and importing
 remote runs. See [publication-study.md](publication-study.md) for the full study.
 
+For weak diffusion and interchange dynamics, use `--custom-D 0.001`
+(0.0143 m²/s); the historical default strongly damps the perturbation. The
+initial pressure now has constant radial wall buffers and a smooth taper,
+removing the pressure-model vorticity sheets caused by the previous profile.
+This changes the initial state: start a new study to compare the formulations.
+
 `ion-thermal-gain-<boundary>.pdf` plots the signed full-simulation gain
 `U_i(T)-U_i(0)` against mesh spacing on a logarithmic axis. Available pressure
 and ion-energy runs share the plot; with at least three suitable ion-energy
@@ -18,6 +24,7 @@ Install `tools/energy_analysis/requirements.txt` and the extra plotting package
 
 ```sh
 python examples/tokamak-2D-driftplane/2D-energy/publication_scan.py --help
+python examples/tokamak-2D-driftplane/2D-energy/publication_scan.py --smoke --custom-D 0.001
 python -m pytest examples/tokamak-2D-driftplane/2D-energy
 ```
 

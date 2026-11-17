@@ -835,10 +835,14 @@ The problem is interchange relaxation in a 5 cm by 5 cm X-Z slab, with
 curvature radius :math:`R=1.5` m and magnetic field :math:`B=0.35` T.
 Both species start at density :math:`n=2\times10^{18}` m\ :sup:`-3` with the
 same normalised pressure profile
-:math:`P_i=P_e=1+0.1\sin(2\pi\xi)\sin(2\pi\xi-\theta)`, where
+:math:`P_i=P_e=1+0.1 S(\xi)\sin(2\pi\xi)\sin(2\pi\xi-\theta)`, where
 :math:`\xi=X/L_X\in[0,1]` and :math:`\theta=2\pi Z/L_Z`.
-The perturbation vanishes at both X faces, making the initial pressure
-constant in Z there. With hydrogen and ``average_atomic_mass = 1``,
+The envelope :math:`S` is zero within 0.1 of either radial wall and one at
+distances of 0.2 or greater. Between these distances it uses
+:math:`s^3(10-15s+6s^2)`, with :math:`s=(\min(\xi,1-\xi)-0.1)/0.1`.
+The taper has continuous first and second derivatives and fixed physical
+width across resolutions. Its constant wall buffers satisfy the pressure
+boundary conditions of both formulations. With hydrogen and ``average_atomic_mass = 1``,
 :math:`\psi=P_i`; the initial potential :math:`\phi=1-P_i` therefore gives
 :math:`\Phi=1`, :math:`\Omega=0` and :math:`K_\perp=0` for the total-energy
 formulation. The E×B and diamagnetic drifts initially cancel in its combined
@@ -850,17 +854,27 @@ Curvature converts thermal energy into perpendicular kinetic energy;
 viscosity returns kinetic energy to heat. There are no prescribed sources,
 conduction or sheath losses. The pressure formulation retains its Neumann
 ion-pressure guards and signed electron contribution to the pressure
-potential, so its initial discrete vorticity and kinetic energy can differ.
+potential, so it retains a small, smooth initial bulk vorticity. The previous
+unbuffered profile had a nonzero radial pressure derivative at the wall;
+its Neumann pressure guards and zero-midpoint potential guards created an
+initial first-cell vorticity sheet that grew in proportion to inverse grid
+spacing. The constant buffers remove this initial mismatch.
 
-The figures below use :math:`16^2` and :math:`32^2` physical cells, fixed
+The figures below were generated with the previous unbuffered profile on
+:math:`16^2` and :math:`32^2` physical cells, fixed
 potential boundaries, viscosity 1 m\ :sup:`2`/s and 100 output intervals to
-normalised time :math:`10^4`. From the repository root, reproduce them with:
+normalised time :math:`10^4`. From the repository root, generate a comparison
+with the updated buffered profile using:
 
 .. code-block:: bash
 
    python examples/tokamak-2D-driftplane/2D-energy/publication_scan.py \
      --exe build/hermes-3 --levels 2 --base-nx 16 --base-nz 16 \
      --phi-boundary fixed --end-time 10000 --outputs 100
+
+For weakly diffusive interchange dynamics, add ``--custom-D 0.001``
+(0.0143 m\ :sup:`2`/s). The historical default, 1.19 (17 m\ :sup:`2`/s),
+strongly damps the perturbation. Start a fresh study for the updated profile.
 
 The runner also supports resolution scans: its defaults are four grids
 (:math:`32^2`, :math:`64^2`, :math:`128^2`, :math:`256^2`), duration 20000 and

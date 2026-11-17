@@ -2143,8 +2143,9 @@ the recovery. A pressure-potential perturbation that retains a nonzero AC
 value at the wall creates a steep radial gradient when these guards are
 applied. A smooth perturbation that vanishes at the X faces avoids this
 initial mismatch. In the hydrogen
-:ref:`2D-energy comparison <subsec-2d-energy-comparison>`, the tapered pressure
-profile has :math:`\psi=P_i` and the initial :math:`\phi=1-P_i` gives
+:ref:`2D-energy comparison <subsec-2d-energy-comparison>`, the pressure
+profile has constant radial wall buffers and :math:`\psi=P_i`.
+The initial :math:`\phi=1-P_i` gives
 :math:`\Phi=1`, zero vorticity and zero perpendicular kinetic energy under
 the component's wall conditions.
 

@@ -103,8 +103,16 @@ function = 1
 source = 0
 bndry_all = neumann
 
+[initial_profile]
+# Fractions of Lrad, fixed across resolutions. The quintic taper has zero
+# first and second derivatives at each end; both wall buffers are constant.
+wall_buffer = ${initial_wall_buffer}
+taper_width = ${initial_taper_width}
+ramp = clamp((0.5-abs(x-0.5)-wall_buffer)/taper_width, 0, 1)
+envelope = ramp^3*(10-15*ramp+6*ramp^2)
+
 [Pe]
-function = 1 + 0.1*sin(2*pi*x)*sin(2*pi*x-z)
+function = 1 + 0.1*initial_profile:envelope*sin(2*pi*x)*sin(2*pi*x-z)
 source = 0
 bndry_all = neumann
 
