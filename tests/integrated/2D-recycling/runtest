@@ -238,7 +238,6 @@ def reconstruct_target_recycle(name):
     sheath_ion_heat_flow = (
         abs(gamma_i * sheath["Nd+"] * sheath["Td+"] * sheath["Vd+"])
         * daparsheath
-        / volume
     )
 
     recycle_energy_flow = (

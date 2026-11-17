@@ -274,7 +274,7 @@ void Recycling::transform_impl(GuardedOptions& state) {
           BoutReal tisheath = (T[i] + T[ig]) * 0.5;
           BoutReal visheath = (V[i] + V[ig]) * 0.5;
           BoutReal sheath_ion_heat_flow =
-              std::abs(gamma_i * nisheath * tisheath * visheath * daparsheath / volume);
+              std::abs(gamma_i * nisheath * tisheath * visheath * daparsheath);
 
           // Blend fast (ion energy) and thermal (constant energy) recycling
           // Calculate returning neutral heat flow in [W]
@@ -368,7 +368,7 @@ void Recycling::transform_impl(GuardedOptions& state) {
           BoutReal tisheath = (T[i] + T[ig]) * 0.5;
           BoutReal visheath = (V[i] + V[ig]) * 0.5;
           BoutReal sheath_ion_heat_flow =
-              std::abs(gamma_i * nisheath * tisheath * visheath * daparsheath / volume);
+              std::abs(gamma_i * nisheath * tisheath * visheath * daparsheath);
 
           // Blend fast (ion energy) and thermal (constant energy) recycling
           // Calculate returning neutral heat flow in [W]
