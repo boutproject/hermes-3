@@ -15,7 +15,7 @@
 /// Reads data from a file, then interpolates at required values.
 struct OpenADASRateCoefficient {
   /// Read the file, extracting data for the given ionisation level
-  /// @param filename   The file to read. Path relative to run working directory
+  /// @param filename   The file to read. Path relative to json_folder
   /// @param level      The first index in the log coefficient array
   ///                   (ionisation level)
   OpenADASRateCoefficient(const std::string& filename, std::size_t level);
