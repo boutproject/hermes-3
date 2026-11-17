@@ -20,16 +20,15 @@ struct SelflimitingSource : public NamedComponent<SelflimitingSource> {
 private:
   std::string name; ///< Species name
 
-  bool diagnose;                     ///< Outputting diagnostics?
-  Field3D selflimiting_densityform;  ///< Tunable form of the density source
-  Field3D selflimiting_pressureform; ///< Tunable form of the pressure source
+  bool diagnose;        ///< Outputting diagnostics?
+  Field3D densityform;  ///< Tunable form of the density source
+  Field3D pressureform; ///< Tunable form of the pressure source
 
-  BoutReal selflimiting_density;     ///< Density above the source will be dampened
-  BoutReal selflimiting_temperature; ///< Temperature above the source will be dampened
+  BoutReal density_setpoint;     ///< Density above the source will be dampened
+  BoutReal temperature_setpoint; ///< Temperature above the source will be dampened
+  BoutReal density_overshoot;    ///< Density interval in which the source is dampened
   BoutReal
-      selflimiting_density_overshoot; ///< Density interval in which the source is dampened
-  BoutReal
-      selflimiting_temperature_overshoot; ///< Temperature interval in which the source is dampened
+      temperature_overshoot; ///< Temperature interval in which the source is dampened
 
   Field3D density_source;
   Field3D energy_source;

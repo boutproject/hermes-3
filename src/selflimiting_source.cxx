@@ -13,8 +13,8 @@ namespace {
 // This function uses logistic growth to dampen this over the interval overshoot from 1 to 0
 // k = 5.0/overshoot is chosen so the function goes from 1 to ~0.1 in the inverval of the overshoot
 // This function just returns the correction, which has to be multiplied with the actual source
-Field3D selflimiting_sourceterm(const Field3D& thisfield, const BoutReal maximum,
-                                const BoutReal overshoot) {
+Field3D sourceterm(const Field3D& thisfield, const BoutReal maximum,
+                   const BoutReal overshoot) {
   BoutReal k = 5.0 / overshoot;
   BoutReal x0 = maximum + overshoot / 2.0;
   return (1.0 - (1.0 / (1.0 + exp(-k * (thisfield - x0)))));
@@ -39,69 +39,67 @@ SelflimitingSource::SelflimitingSource(std::string name, Options& alloptions, So
 
   auto& soptions = options["selflimiting_source"];
 
-  selflimiting_density = soptions["density_setpoint"]
-                             .doc("Density [m^-3] above which the source term will be "
+  density_setpoint = soptions["density_setpoint"]
+                         .doc("Density [m^-3] above which the source term will be "
+                              "dampened. Only active when > 0.")
+                         .withDefault<BoutReal>(-1.0)
+                     / Nnorm;
+
+  temperature_setpoint = soptions["temperature_setpoint"]
+                             .doc("Temperature [eV] above which the source term will be "
                                   "dampened. Only active when > 0.")
                              .withDefault<BoutReal>(-1.0)
-                         / Nnorm;
+                         / Tnorm;
 
-  selflimiting_temperature =
-      soptions["temperature_setpoint"]
-          .doc("Temperature [eV] above which the source term will be "
-               "dampened. Only active when > 0.")
-          .withDefault<BoutReal>(-1.0)
-      / Tnorm;
-
-  if (selflimiting_density > 0.0) {
+  if (density_setpoint > 0.0) {
 
     BoutReal densitysource_normalisation = Nnorm * Omega_ci;
 
-    selflimiting_densityform = soptions["density_form"]
-                                   .doc("Form of the selflimiting density source.")
-                                   .withDefault<Field3D>(Field3D{0.0})
-                               / densitysource_normalisation;
+    densityform = soptions["density_form"]
+                      .doc("Form of the selflimiting density source.")
+                      .withDefault<Field3D>(Field3D{0.0})
+                  / densitysource_normalisation;
 
-    selflimiting_density_overshoot =
-        soptions["density_overshoot"]
-            .doc("Density [m^-3] interval in which the source term is "
-                 "dampened when selflimiting_density > 0.")
-            .withDefault<BoutReal>(2e18)
-        / Nnorm;
+    density_overshoot = soptions["density_overshoot"]
+                            .doc("Density [m^-3] interval in which the source term is "
+                                 "dampened when density_setpoint > 0.")
+                            .withDefault<BoutReal>(2e18)
+                        / Nnorm;
 
-    if (selflimiting_density_overshoot <= 0.0) {
+    if (density_overshoot <= 0.0) {
       throw BoutException("Density overshoot must be positive but is {}",
-                          selflimiting_density_overshoot);
+                          density_overshoot);
     }
   }
 
-  if (selflimiting_temperature > 0.0) {
+  if (temperature_setpoint > 0.0) {
     BoutReal pressuresource_normalisation =
         SI::qe * Nnorm * Tnorm * Omega_ci; // [Pa/s] or [W/m^3] if converted to energy
 
-    selflimiting_pressureform = soptions["pressure_form"]
-                                    .doc("Form of the selflimiting pressure source.")
-                                    .withDefault<Field3D>(Field3D{0.0})
-                                / pressuresource_normalisation;
+    pressureform = soptions["pressure_form"]
+                       .doc("Form of the selflimiting pressure source.")
+                       .withDefault<Field3D>(Field3D{0.0})
+                   / pressuresource_normalisation;
 
-    selflimiting_temperature_overshoot =
+    temperature_overshoot =
         soptions["temperature_overshoot"]
             .doc("Temperature [eV] interval in which the source term is "
-                 "dampened when selflimiting_temperature > 0.")
+                 "dampened when temperature_setpoint > 0.")
             .withDefault<BoutReal>(10.0)
         / Tnorm;
 
-    if (selflimiting_temperature_overshoot <= 0.0) {
+    if (temperature_overshoot <= 0.0) {
       throw BoutException("Temperature overshoot must be positive but is {}",
-                          selflimiting_temperature_overshoot);
+                          temperature_overshoot);
     }
   }
 
   substitutePermissions("name", {name});
   std::vector<std::string> output_vars;
-  if (selflimiting_density > 0.0) {
+  if (density_setpoint > 0.0) {
     output_vars.push_back("density_source");
   }
-  if (selflimiting_temperature > 0.0) {
+  if (temperature_setpoint > 0.0) {
     output_vars.push_back("energy_source");
   }
 
@@ -112,19 +110,16 @@ void SelflimitingSource::transform_impl(GuardedOptions& state) {
 
   GuardedOptions species = state["species"][objectName()];
 
-  if (species.isSet("density") && (selflimiting_density > 0.0)) {
+  if (species.isSet("density") && (density_setpoint > 0.0)) {
     const Field3D N = GET_NOBOUNDARY(Field3D, species["density"]);
-    density_source = selflimiting_densityform
-                     * selflimiting_sourceterm(N, selflimiting_density,
-                                               selflimiting_density_overshoot);
+    density_source = densityform * sourceterm(N, density_setpoint, density_overshoot);
     add(species["density_source"], density_source);
   }
 
-  if (species.isSet("temperature") && (selflimiting_temperature > 0.0)) {
+  if (species.isSet("temperature") && (temperature_setpoint > 0.0)) {
     const Field3D T = GET_NOBOUNDARY(Field3D, species["temperature"]);
-    energy_source = (3.0 / 2.0) * selflimiting_pressureform
-                    * selflimiting_sourceterm(T, selflimiting_temperature,
-                                              selflimiting_temperature_overshoot);
+    energy_source = (3.0 / 2.0) * pressureform
+                    * sourceterm(T, temperature_setpoint, temperature_overshoot);
     add(species["energy_source"], energy_source);
   }
 }
