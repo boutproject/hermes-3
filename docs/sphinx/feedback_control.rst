@@ -399,11 +399,15 @@ temperature settles at depends on e.g. the source terms.
 and additionally via
 `grid variables <https://bout-dev.readthedocs.io/en/latest/user_docs/input_grids.html#generating-input-grids>`__.
 ``density_form`` is normalized by
-.. ::math
+
+.. math::
+
    N_{norm}\cdot \Omega
 
 and the ``pressure_form`` is normalized by
-.. ::math
+
+.. math::
+
    q_{e} \cdot N_{norm} \cdot T_{norm} \cdot \Omega
 
 The function used for the damping is
