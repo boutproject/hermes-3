@@ -430,6 +430,22 @@ if(HERMES_TESTS)
   hermes_add_integrated_test(1D-conduction-fci REQUIRES BOUT_USE_METRIC_3D)
   hermes_add_integrated_test(1D-golden-answer-fci REQUIRES BOUT_USE_METRIC_3D)
 
+  # Unstructured-mesh counterparts of the FCI MMS tests
+  foreach(
+    test
+    1D-density-fci
+    1D-momentum-fci
+    1D-pressure-fci
+    1D-ionviscosity-fci
+    1D-electronviscosity-fci
+    1D-conduction-fci
+    2D-density-anomalous-fci
+    2D-fluid-anomalous-fci)
+    hermes_add_integrated_test(
+      ${test}-unstructured REQUIRES BOUT_USE_METRIC_3D BOUT_HAS_PETSC
+      zoidberg_unstructured_FOUND)
+  endforeach()
+
   option(HERMES_UNIT_TESTS "Build the unit tests" ON)
   option(HERMES_DIVOPS_MMS_TESTS "Build the differential operator MMS tests" ON)
 
