@@ -236,8 +236,7 @@ def reconstruct_target_recycle(name):
 
     ### Calculate energy source
     sheath_ion_heat_flow = (
-        abs(gamma_i * sheath["Nd+"] * sheath["Td+"] * sheath["Vd+"])
-        * daparsheath
+        abs(gamma_i * sheath["Nd+"] * sheath["Td+"] * sheath["Vd+"]) * daparsheath
     )
 
     recycle_energy_flow = (
