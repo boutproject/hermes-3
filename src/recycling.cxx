@@ -492,8 +492,7 @@ void Recycling::transform_impl(GuardedOptions& state) {
             // Blend fast (ion energy) and thermal (constant energy) recycling
             // Calculate returning neutral heat flow in [W]
             BoutReal recycle_energy_flow =
-                ion_energy_flow * channel.sol_multiplier
-                    * channel.sol_fast_recycle_energy_factor
+                ion_energy_flow * multiplier * channel.sol_fast_recycle_energy_factor
                     * channel.sol_fast_recycle_fraction // Fast recycling part
                 + recycle_particle_flow * (1 - channel.sol_fast_recycle_fraction)
                       * channel.sol_energy; // Thermal recycling part
@@ -615,8 +614,7 @@ void Recycling::transform_impl(GuardedOptions& state) {
               // Blend fast (ion energy) and thermal (constant energy) recycling
               // Calculate returning neutral heat flow in [W]
               BoutReal recycle_energy_flow =
-                  ion_energy_flow * channel.pfr_multiplier
-                      * channel.pfr_fast_recycle_energy_factor
+                  ion_energy_flow * multiplier * channel.pfr_fast_recycle_energy_factor
                       * channel.pfr_fast_recycle_fraction // Fast recycling part
                   + recycle_particle_flow * (1 - channel.pfr_fast_recycle_fraction)
                         * channel.pfr_energy; // Thermal recycling part
