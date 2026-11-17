@@ -15,7 +15,7 @@ from numpy import abs, array, log, max, mean, sqrt
 
 this_dir = Path(__file__).resolve().parent
 sys.path.append(str(this_dir.parent))
-from unstructured_utils import make_unstructured_input  # noqa: E402
+from unstructured_utils import make_unstructured_input
 
 # BOUT++ index coordinates x, z of the structured grid (R in [1.5, 2.5],
 # Z periodic with period 1) in terms of the unstructured grid geometry

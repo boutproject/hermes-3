@@ -157,7 +157,7 @@ def main():
 
         folder = here / "US_slab_with_BC"
         folder.mkdir(exist_ok=True)
-        for ny in (128,):
+        for ny in (256,):
             write(
                 folder / f"US_slab_with_BC_{ny}.fci.grid.nc",
                 args.force,

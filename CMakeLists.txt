@@ -440,7 +440,8 @@ if(HERMES_TESTS)
     1D-electronviscosity-fci
     1D-conduction-fci
     2D-density-anomalous-fci
-    2D-fluid-anomalous-fci)
+    2D-fluid-anomalous-fci
+    1D-golden-answer-fci)
     hermes_add_integrated_test(
       ${test}-unstructured REQUIRES BOUT_USE_METRIC_3D BOUT_HAS_PETSC
       zoidberg_unstructured_FOUND)
