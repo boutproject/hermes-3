@@ -556,14 +556,13 @@ void Recycling::transform_impl(GuardedOptions& state) {
               channel.pump_density_source(mesh->xend, iy, iz) -=
                   pump_neutral_particle_sink;
               channel.pump_energy_source(mesh->xend, iy, iz) -= pump_neutral_energy_sink;
-
-            } else {
-              // Save to wall diagnostic (pump sinks are 0 if not on pump)
-              channel.wall_recycle_density_source(mesh->xend, iy, iz) +=
-                  recycle_particle_flow / volume;
-              channel.wall_recycle_energy_source(mesh->xend, iy, iz) +=
-                  recycle_energy_flow / volume;
             }
+
+            // Save to wall diagnostic
+            channel.wall_recycle_density_source(mesh->xend, iy, iz) +=
+                recycle_particle_flow / volume;
+            channel.wall_recycle_energy_source(mesh->xend, iy, iz) +=
+                recycle_energy_flow / volume;
 
             // Save to solver
             density_source(mesh->xend, iy, iz) +=
@@ -684,14 +683,13 @@ void Recycling::transform_impl(GuardedOptions& state) {
                     pump_neutral_particle_sink;
                 channel.pump_energy_source(mesh->xstart, iy, iz) -=
                     pump_neutral_energy_sink;
-
-              } else {
-                // Save to wall diagnostic (pump sinks are 0 if not on pump)
-                channel.wall_recycle_density_source(mesh->xstart, iy, iz) +=
-                    recycle_particle_flow / volume - pump_neutral_particle_sink;
-                channel.wall_recycle_energy_source(mesh->xstart, iy, iz) +=
-                    recycle_energy_flow / volume - pump_neutral_energy_sink;
               }
+
+              // Save to wall diagnostic, pumped or not (pump sinks have their own)
+              channel.wall_recycle_density_source(mesh->xstart, iy, iz) +=
+                  recycle_particle_flow / volume;
+              channel.wall_recycle_energy_source(mesh->xstart, iy, iz) +=
+                  recycle_energy_flow / volume;
 
               // Save to solver
               density_source(mesh->xstart, iy, iz) +=
