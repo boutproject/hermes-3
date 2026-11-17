@@ -303,6 +303,26 @@ if(HERMES_TESTS)
       PRE_BUILD
       COMMAND ${PYTHON_EXECUTABLE} create_fci_grids.py
       WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/grids)
+
+    # Unstructured FCI grids need zoidberg.unstructured, which the released
+    # zoidberg does not have yet. bout++Config.cmake does not export a
+    # zoidberg variable, so check here.
+    execute_process(
+      COMMAND ${PYTHON_EXECUTABLE} -c
+              "import importlib.util as u; exit(u.find_spec('zoidberg.unstructured') is None)"
+      RESULT_VARIABLE zoidberg_unstructured_missing
+      OUTPUT_QUIET ERROR_QUIET)
+    if(zoidberg_unstructured_missing EQUAL 0)
+      set(zoidberg_unstructured_FOUND ON)
+      add_custom_command(
+        TARGET setup-test
+        PRE_BUILD
+        COMMAND ${PYTHON_EXECUTABLE} create_unstructured_grids.py
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/grids/fci_unstructured)
+    else()
+      set(zoidberg_unstructured_FOUND OFF)
+      message(STATUS "zoidberg.unstructured not found: skipping unstructured FCI tests")
+    endif()
     file(CREATE_LINK ${CMAKE_CURRENT_SOURCE_DIR}/grids
          ${CMAKE_CURRENT_BINARY_DIR}/grids SYMBOLIC)
   endif()
