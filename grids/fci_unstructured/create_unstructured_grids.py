@@ -87,6 +87,26 @@ def slab_y_poloidal():
     )
 
 
+def slab_bc_poloidal():
+    """Counterpart of slab_with_BC (4 x 4 interior cells): 5 x 4 nodes, the
+    smallest mesh that supports the order-4 parallel stencils (19 nodes).
+    The field is straight, so every node solves the same 1D problem; a small
+    mesh keeps the 256-plane golden-answer test fast."""
+    return UnstructuredPoloidalGrid.slab(
+        5,
+        4,
+        LX,
+        LZ,
+        R0=RSHIFT - 0.5 * LX,
+        Z0=z0(4),
+        jitter=0.2,
+        jitter_dirs="z",
+        periodic_R=False,
+        periodic_Z=True,
+        seed=100,
+    )
+
+
 def slab_xz_poloidal(n):
     """Counterpart of MMS_slab_xz (n x n interior points): n x n nodes,
     doubly periodic. The MMS solutions are periodic in x and z, and
@@ -198,7 +218,7 @@ def main():
                 folder / f"US_slab_with_BC_{ny}.fci.grid.nc",
                 args.force,
                 lambda fn, ny=ny: make_unstructured_grid(
-                    fn, slab_y_poloidal(), field(), ny=ny, Ly=100.0, walls_y=True
+                    fn, slab_bc_poloidal(), field(), ny=ny, Ly=100.0, walls_y=True
                 ),
             )
 
