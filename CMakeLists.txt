@@ -446,6 +446,10 @@ if(HERMES_TESTS)
       ${test}-unstructured REQUIRES BOUT_USE_METRIC_3D BOUT_HAS_PETSC
       zoidberg_unstructured_FOUND)
   endforeach()
+  # Variant with Dirichlet x walls (wall nodes held at the solution)
+  hermes_add_integrated_test(
+    2D-density-anomalous-fci-unstructured-walls REQUIRES BOUT_USE_METRIC_3D
+    BOUT_HAS_PETSC zoidberg_unstructured_FOUND)
 
   option(HERMES_UNIT_TESTS "Build the unit tests" ON)
   option(HERMES_DIVOPS_MMS_TESTS "Build the differential operator MMS tests" ON)

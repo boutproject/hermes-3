@@ -57,7 +57,9 @@ def _rewrite(value: str):
     return new
 
 
-def make_unstructured_input(structured_test: str, xu: str, zu: str, here: Path):
+def make_unstructured_input(
+    structured_test: str, xu: str, zu: str, here: Path, dirichlet_nodes: bool = False
+):
     """Write ``here/data/BOUT.inp`` from ``../<structured_test>/data/BOUT.inp``.
 
     Parameters
@@ -69,6 +71,10 @@ def make_unstructured_input(structured_test: str, xu: str, zu: str, here: Path):
         structured grid in terms of ``gridvar:R`` and ``gridvar:Z``
     here : Path
         Directory of the unstructured test
+    dirichlet_nodes : bool
+        Grid has Dirichlet wall nodes in the x guard cells: use the
+        ``dirichlet_node`` boundary condition (value at each guard cell)
+        instead of ``dirichlet`` (value half way to the interior)
     """
     source = here.parent / structured_test / "data" / "BOUT.inp"
     lines = source.read_text().splitlines()
@@ -101,6 +107,9 @@ def make_unstructured_input(structured_test: str, xu: str, zu: str, here: Path):
         m = _KEY_VALUE.match(line)
         if m and not line.lstrip().startswith("#"):
             indent, key, eq, value, comment = m.groups()
+            if dirichlet_nodes and key.startswith("bndry_") and "dirichlet(" in value:
+                value = value.replace("dirichlet(", "dirichlet_node(")
+                line = f"{indent}{key}{eq}{value}{comment}"
             new = _rewrite(value)
             if new is not None:
                 out.append(f"{indent}{key}{eq}{new}{comment}")

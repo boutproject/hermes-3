@@ -106,6 +106,26 @@ def slab_xz_poloidal(n):
     )
 
 
+def slab_xz_walls_poloidal(n):
+    """Counterpart of MMS_slab_xz with its Dirichlet x walls: n + 1 node
+    layers from R = 1.5 to 2.5 (nodes on both walls), periodic in Z. The wall
+    nodes become Dirichlet nodes (dirichlet_walls=True)."""
+    return UnstructuredPoloidalGrid.slab(
+        n + 1,
+        n,
+        LX,
+        LZ,
+        R0=RSHIFT - 0.5 * LX,
+        Z0=z0(n),
+        jitter=0.2,
+        jitter_dirs="rz",
+        periodic_R=False,
+        periodic_Z=True,
+        seed=300 + n,
+        r_on_walls=True,
+    )
+
+
 def write(filename, force, build):
     if filename.exists() and not force:
         print(filename, "exists")
@@ -152,6 +172,22 @@ def main():
                 args.force,
                 lambda fn, n=n: make_unstructured_grid(
                     fn, slab_xz_poloidal(n), field(), ny=1, Ly=2.0 * np.pi
+                ),
+            )
+
+        folder = here / "US_slab_xz_walls"
+        folder.mkdir(exist_ok=True)
+        for n in (16, 32):
+            write(
+                folder / f"US_slab_xz_walls_{n}.fci.grid.nc",
+                args.force,
+                lambda fn, n=n: make_unstructured_grid(
+                    fn,
+                    slab_xz_walls_poloidal(n),
+                    field(),
+                    ny=1,
+                    Ly=2.0 * np.pi,
+                    dirichlet_walls=True,
                 ),
             )
 
