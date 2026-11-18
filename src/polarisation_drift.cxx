@@ -76,8 +76,9 @@ PolarisationDrift::PolarisationDrift(std::string name, Options& alloptions,
     radial_model.walls = !mesh->periodicX;
     radial_model.chi_ac =
         options["polarisation_ac_boundary"]
-            .doc("Auxiliary AC wall condition: neumann or dirichlet; DC uses ion wall "
-                 "rates")
+            .doc("Auxiliary AC wall condition: neumann (default) or dirichlet; "
+                 "DC uses the phi wall rate, neglecting the pressure-potential "
+                 "wall rate")
             .withDefault(bout::ion_energy::PolarisationACBoundary::neumann);
     radial_model.chi_flags =
         radial_model.chi_ac == bout::ion_energy::PolarisationACBoundary::neumann
@@ -645,10 +646,10 @@ void PolarisationDrift::solveConservativePotential(const Field3D& rhs) {
   // Preserve the existing periodic inverse/gauge; physical X uses the
   // separate mixed-boundary inverse, matching applyPolarisationBoundary.
   Laplacian& inverse = *phiSolver;
-  // The DC wall value approximates d(Phi)/dt by d(phi_b)/dt. The pressure
-  // potential's wall rate d(psi_bar_b)/dt is only known in finally(), so it is
-  // neglected here. Corrections retain homogeneous spectral boundaries; the
-  // inhomogeneous value enters through every FV residual, including the first.
+  // chi approximates d(Phi)/dt, whose wall value is d(phi_w)/dt + d(psi_w(z))/dt.
+  // The closure uses d(phi_w)/dt for DC and neglects the pressure-potential
+  // wall rate; AC defaults to Neumann. Corrections retain homogeneous boundaries.
+  // The inhomogeneous value enters through every FV residual, including the first.
   chi = bout::ion_energy::fixedPolarisationPotential(
       boussinesq_coeff, rhs, inverse, polarisation_corrections, radial_model.chi_ac,
       radial_model.walls ? &wall_rate_inner : nullptr,
@@ -729,8 +730,9 @@ void PolarisationDrift::transformConservative(GuardedOptions& state) {
     return result;
   };
   // Each rank owns complete periodic Z lines, so wall-line means are local.
-  // Uniform weights remove current/weight correlations from wall transport;
-  // net work remains the wall Phi midpoint times the net wall current.
+  // Thermal energy, parallel motion and particle fractions use wall-line means.
+  // Work uses the local Phi midpoint, including the pressure work of the
+  // polarisation current at a conducting wall.
   if (radial_model.walls
       && (mesh->getNZPE() != 1 || mesh->zstart != 0 || mesh->zend + 1 != mesh->LocalNz)) {
     throw BoutException("Polarisation wall transport requires complete periodic Z lines");
@@ -853,12 +855,8 @@ void PolarisationDrift::transformConservative(GuardedOptions& state) {
     }
     const int cell = inner ? x + 1 : x;
     for (int y = mesh->ystart; y <= mesh->yend; ++y) {
-      BoutReal work = 0.0, thermal = 0.0, kinetic_parallel = 0.0;
+      BoutReal thermal = 0.0, kinetic_parallel = 0.0;
       BoutReal original_pressure = 0.0;
-      for (int z = 0; z < mesh->LocalNz; ++z) {
-        work += 0.5 * (phi(x, y, z) + phi(x + 1, y, z) + psi(x, y, z) + psi(x + 1, y, z));
-      }
-      work /= mesh->LocalNz;
       forAllIons(allspecies, [&](GuardedOptions species) {
         const BoutReal AA = get<BoutReal>(species["AA"]);
         const BoutReal Z = get<BoutReal>(species["charge"]);
@@ -885,6 +883,8 @@ void PolarisationDrift::transformConservative(GuardedOptions& state) {
         kinetic_parallel += 0.5 * AA * fraction * velocity * velocity / Z;
       });
       for (int z = 0; z < mesh->LocalNz; ++z) {
+        const BoutReal work =
+            0.5 * (phi(x, y, z) + phi(x + 1, y, z) + psi(x, y, z) + psi(x + 1, y, z));
         const BoutReal pressure_mid = 0.5 * (psi(x, y, z) + psi(x + 1, y, z));
         const BoutReal revised = work + (thermal + kinetic_parallel);
         const BoutReal volume = coord->J()(cell, y, z) * coord->dx()(cell, y, z)
@@ -919,15 +919,17 @@ void PolarisationDrift::outputConservative(Options& state) {
   const auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
   const auto rho_s0 = get<BoutReal>(state["rho_s0"]);
   const BoutReal Pnorm = SI::qe * Tnorm * Nnorm;
-  set(state["polarisation_drift_version"], 2);
-  set_with_attrs(
-      state["ion_chi"], chi,
-      {{"time_dimension", "t"},
-       {"units", "V s^-1"},
-       {"conversion", Tnorm * Omega_ci},
-       {"long_name", "Auxiliary polarisation current potential"},
-       {"description", "DC wall value is d(phi_b)/dt during relaxation; "
-                       "the wall rate of the pressure potential is neglected"}});
+  set_with_attrs(state["polarisation_drift_version"], 3,
+                 {{"description", "Conservative polarisation transport with local "
+                                  "Phi wall work and mean species transport weights"}});
+  set_with_attrs(state["ion_chi"], chi,
+                 {{"time_dimension", "t"},
+                  {"units", "V s^-1"},
+                  {"conversion", Tnorm * Omega_ci},
+                  {"long_name", "Auxiliary polarisation current potential"},
+                  {"description", "Approximates d(Phi)/dt; DC wall value is d(phi_w)/dt, "
+                                  "the local pressure-potential wall rate is neglected, "
+                                  "and AC defaults to Neumann"}});
   if (diagnose) {
     set_with_attrs(state["parallel_current"], Jpar,
                    {{"time_dimension", "t"},
@@ -945,15 +947,24 @@ void PolarisationDrift::outputConservative(Options& state) {
                       {"source", "polarisation_drift"}});
     }
     for (const auto& [species, sources] : diagnostics.getChildren()) {
-      for (const auto* name : {"wall_energy_weight", "wall_work_weight",
-                               "wall_thermal_weight", "wall_pressure_mismatch"}) {
+      for (const auto& [name, description] :
+           {std::pair{"wall_energy_weight",
+                      "Physical X-wall face weight: local Phi plus wall-line mean "
+                      "thermal and parallel kinetic energy"},
+            std::pair{"wall_work_weight", "Physical X-wall face work weight: local Phi "
+                                          "midpoint, including pressure work"},
+            std::pair{"wall_thermal_weight",
+                      "Physical X-wall face weight: wall-line mean thermal and "
+                      "parallel kinetic energy"},
+            std::pair{"wall_pressure_mismatch",
+                      "Wall-line mean species pressure transport weight minus the "
+                      "local pressure-potential midpoint"}}) {
         set_with_attrs(state[std::string{"polarisation_"} + name],
                        sources[name].as<Field3D>(),
                        {{"time_dimension", "t"},
                         {"units", "V"},
                         {"conversion", Tnorm},
-                        {"description", "Physical X-wall face transport weight; "
-                                        "uniform along each periodic Z line"}});
+                        {"description", description}});
       }
       set_with_attrs(state["particle_pol_wall_loss_" + species],
                      sources["wall_loss"].as<Field3D>(),

@@ -209,29 +209,17 @@ void forAllIons(const Options& allspecies, Function func) {
 } // namespace
 
 namespace bout::ion_energy {
-/// Impose mean Neumann and zero AC midpoint conditions on a wall pressure field.
+/// Impose radial Neumann guards on a pressure or pressure-potential field.
 ///
 /// @param[in,out] f Pressure or pressure-potential field. Each owned radial guard
-///                 layer is set to 2*DC(f)(interior,y) - f(interior,y,z), using the
-///                 wall-adjacent interior cell for every layer.
+///                 layer copies the wall-adjacent physical cell at the same Y
+///                 and Z, retaining pressure fluctuations along the wall.
 ///
 /// Returns no value. Only physical Y rows at physical X walls are written;
 /// interior cells and Y guards are preserved. Periodic X is a no-op and no
 /// communication occurs.
-/// @throws BoutException If nonperiodic X does not have complete local periodic Z lines.
-void applyWallPressureBoundary(Field3D& f) {
-  auto* localmesh = f.getMesh();
-  if (localmesh->periodicX) {
-    return;
-  }
-  if (localmesh->getNZPE() != 1 || localmesh->zstart != 0
-      || localmesh->zend + 1 != localmesh->LocalNz) {
-    throw BoutException("radial_boundary requires complete periodic Z lines");
-  }
-  // Calculate the mean once for each wall row, then copy the first guard outward.
-  const Field2D mean = DC(f);
-  fillRadialGuards(
-      f, [&](int x, int, int, int y, int z) { return 2.0 * mean(x, y) - f(x, y, z); });
+void applyNeumannPressureBoundary(Field3D& f) {
+  fillRadialGuards(f, [&](int x, int, int, int y, int z) { return f(x, y, z); });
 }
 
 /// Fill vorticity guards for stress-free or Neumann radial walls.
@@ -710,14 +698,14 @@ XZFaceFluxes reynoldsFaces(const Field3D& c, const Field3D& vort, const Field3D&
 /// @param c Static Boussinesq coefficient, with valid geometry and guards.
 /// @param vort Full physical vorticity, with two valid radial MC guard layers.
 /// @param phi Electric potential, with communicated guards and reflected walls.
-/// @param psi Pressure potential, with communicated guards and reflected AC walls.
+/// @param psi Pressure potential, with communicated guards and Neumann radial walls.
 /// @returns Area-integrated increasing-coordinate faces including dy: X indices
 ///          xstart-1..xend, Z on physical cells; unused entries are zero.
 ///
 /// R reads only one radial guard layer of the input potentials. Tangential
 /// diagonal FV divergences are evaluated from those samples, never extrapolated
 /// or communicated. The MC stencil of vort still reads two layers. Reflected
-/// wall midpoints make the advective X-wall velocity zero; R retains the same
+/// phi wall midpoints make the advective X-wall velocity zero; R retains the same
 /// two-point normal wall gradients as perpendicularFaces and their Z differences.
 /// No wall closure, input mutation, boundary filling or communication occurs.
 /// This standalone entry computes geometry coefficients locally; the component
@@ -1049,9 +1037,9 @@ void EvolveVorticityIonEnergy::transform_impl(GuardedOptions& state) {
   // first output the guess is K⊥ = 0.
   // Pressure guards must be consistent before the first Phi correction.
   Pi_sum = floor((2. / 3) * (Eion - ion_KE_parallel - ion_KE_perp_guess), 0.0);
-  bout::ion_energy::applyWallPressureBoundary(Pi_sum);
+  bout::ion_energy::applyNeumannPressureBoundary(Pi_sum);
   psi = pressure_weight * Pi_sum;
-  bout::ion_energy::applyWallPressureBoundary(psi);
+  bout::ion_energy::applyNeumannPressureBoundary(psi);
   const BoutReal vort_tolerance = vort_atol + (phi_rtol * max(abs(Vort), true));
 
   int iteration = 0;
@@ -1068,6 +1056,8 @@ void EvolveVorticityIonEnergy::transform_impl(GuardedOptions& state) {
 
     mesh->communicate(phi, psi);
     applyPotentialBoundary();
+    // Conducting walls fix phi's Z-uniform midpoint. Neumann psi guards give
+    // Phi the local wall value phi_w + psi_w without constraining wall pressure.
     // The spectral solver is only an approximate inverse. Defect correction
     // converges to the same finite-volume operator used for kinetic energy.
     phi = correctPotential(Vort, phi + psi) - psi;
@@ -1084,9 +1074,9 @@ void EvolveVorticityIonEnergy::transform_impl(GuardedOptions& state) {
     // Ensure that P does not go negative.
     Pi_sum = floor((2. / 3) * (Eion - ion_KE_parallel - ion_KE_perp), 0.0);
 
-    bout::ion_energy::applyWallPressureBoundary(Pi_sum);
+    bout::ion_energy::applyNeumannPressureBoundary(Pi_sum);
     psi = pressure_weight * Pi_sum;
-    bout::ion_energy::applyWallPressureBoundary(psi);
+    bout::ion_energy::applyNeumannPressureBoundary(psi);
     mesh->communicate(phi, psi);
     applyPotentialBoundary();
 
@@ -1343,10 +1333,11 @@ void EvolveVorticityIonEnergy::outputVars(Options& state) {
   acceptWarmStart();
 
   set_with_attrs(
-      state["evolve_vorticity_ion_energy_version"], 7,
+      state["evolve_vorticity_ion_energy_version"], 8,
       {{"description", "Component equation and discretisation version: "
                        "MC full-vorticity advection plus compact central R; "
-                       "Phi-weighted polarisation work with wall-uniform transport; "
+                       "Neumann radial ion pressure and pressure potential; "
+                       "local Phi-weighted wall work with mean species transport; "
                        "viscous drift energy carried by polarisation transport; "
                        "conservative polarisation owned by polarisation_drift; "
                        "boundary-conditioned parallel/extra/collisional currents; "
@@ -1690,8 +1681,8 @@ Field3D EvolveVorticityIonEnergy::correctPotential(const Field3D& rhs,
 Field3D EvolveVorticityIonEnergy::correctPotential(const Field3D& rhs,
                                                    const Field3D& potential,
                                                    Laplacian& approximate_inverse) const {
-  // Homogeneous correction boundaries preserve the separately imposed phi
-  // boundaries, including INVERT_SET values supplied by a restart.
+  // Homogeneous correction boundaries preserve the supplied local Phi wall
+  // midpoint phi_w + psi_w(z), including phi_w restored from a restart.
   Field3D residual{zeroFrom(rhs)};
   const Field3D forward =
       bout::ion_energy::Div_a_Grad_perp_XZ(boussinesq_coeff, potential);

@@ -48,9 +48,11 @@ struct RadialBoundaryModel {
   int chi_flags{INVERT_AC_GRAD};
 };
 
-/// Mean radial Neumann and zero AC midpoint, copied to all radial guards.
+/// Copy the adjacent physical pressure value to every radial guard layer.
 /// Physical Y rows and X walls only; interior and periodic X are preserved.
-void applyWallPressureBoundary(Field3D& f);
+void applyNeumannPressureBoundary(Field3D& f);
+/// Compatibility entry point for radial Neumann pressure guards.
+inline void applyWallPressureBoundary(Field3D& f) { applyNeumannPressureBoundary(f); }
 /// Neumann vorticity, or zero midpoint for a stress-free wall; all X guards.
 void applyVorticityWallBoundary(Field3D& w, bool midpoint_zero);
 
