@@ -132,9 +132,9 @@ heating share is an internal ion/electron transfer.
 ``ion_chi_residual`` measures the selected RHS minus the full FV operator on
 chi; it is not a residual against the completed vorticity derivative. Analysis
 uses the same selected RHS when reconstructing chi. Output versions are
-``evolve_vorticity_ion_energy_version = 9`` and ``polarisation_drift_version = 4``;
-analysis accepts ion-energy versions 4 through 9, defaults missing tags to
-version 4 and rejects unknown versions.
+``evolve_vorticity_ion_energy_version = 1`` and ``polarisation_drift_version = 1``.
+Analysis requires the explicit ion-energy version-1 tag and rejects missing tags
+and unsupported versions. Earlier development versions were not released.
 
 ``reynoldsFaceFluxes()`` evaluates :math:`\Omega\mathbf{v}_E+\mathbf{R}`.
 Only full vorticity uses MC donor reconstruction with the face velocity from

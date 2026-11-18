@@ -28,10 +28,10 @@ guards and their fixed/free-slip/no-slip wall rates retain their original
 meaning. `ion_phi_dissipation` is reset on every RHS evaluation, is zero in
 nonphysical cells, and is saved when ion-energy diagnostics are enabled. Its
 units/conversion match `ddt(Vort)` (`A m^-3`, `qe*Nnorm*Omega_ci`).
-`ion_phi_dissipation_enabled` saves the resolved option. Component version 7
-adds this optional term to the version-6 formulation; the restart layout is
-unchanged. Analysis accepts versions 4 through 7 and reconstructs the damping
-from potential, thermodynamic fields and geometry.
+`ion_phi_dissipation_enabled` saves the resolved option. The ion-energy
+version-1 contract includes this optional term; restart storage is versioned
+separately. Analysis requires the explicit version-1 tag and reconstructs the
+damping from potential, thermodynamic fields and geometry.
 
 This term is a numerical vorticity rate, rather than a measured physical
 parallel current or external power sink. It has no explicit ion/electron

@@ -12,7 +12,7 @@ from functools import lru_cache
 import numpy as np
 import xarray as xr
 
-from .dataset import AuditError
+from .dataset import AuditError, require_ion_energy_version
 from .inventory import _kinetic, energy_densities, soft_floor
 from .operators import calculate_kperp, spectral_ddz
 from .transfers import (
@@ -193,7 +193,7 @@ def slab_contract(run, *, closed_wall_diffusion=False):
         allowed_components.add("sound_speed")
         if options["sound_speed"].get_bool("alfven_wave", False):
             raise AuditError("Alfven wave-speed reconstruction is unavailable")
-    if component_version(run) in (5, 6, 7, 8, 9):
+    if run.formulation == "total_energy":
         allowed_components.add(polarisation_owner(run))
     if closed_wall_diffusion and "classical_diffusion" in components:
         # This component closes complete physical boundary faces, including
@@ -267,25 +267,17 @@ def radial_boundary_mode(run):
 
 
 def component_version(run):
-    """Validate the ion-energy equation/discretisation version, defaulting to 4.
-
-    Unversioned development snapshots use version 4. Other formulations
-    do not use this component's version. Unknown versions require a new analysis
-    implementation rather than an assumed wall-current reconstruction.
-    """
+    """Validate the current ion-energy contract; other formulations have no tag."""
     if run.formulation != "total_energy":
         return None
-    version = run.data.attrs.get("metadata", {}).get(
-        "evolve_vorticity_ion_energy_version", 4
+    return require_ion_energy_version(
+        run.data.attrs.get("metadata", {}).get("evolve_vorticity_ion_energy_version")
     )
-    if version not in (4, 5, 6, 7, 8, 9):
-        raise AuditError(f"Unsupported evolve_vorticity_ion_energy version: {version}")
-    return int(version)
 
 
 def polarisation_owner(run):
-    """Resolve the enabled conservative drift owner for version 5 and later."""
-    if component_version(run) not in (5, 6, 7, 8, 9):
+    """Resolve the enabled conservative drift owner for total ion energy."""
+    if component_version(run) is None:
         return run.model
     options = run.data.options
     names = str(options["hermes:components"]).strip(" ()\t\r\n").split(",")
@@ -304,12 +296,12 @@ def polarisation_owner(run):
             or str(options[name]["implementation"]) != "conservative"
         ):
             raise AuditError(
-                "Version 5 requires implementation=conservative polarisation drift"
+                "Ion energy requires implementation=conservative polarisation drift"
             )
         owners.append(name)
     if len(owners) != 1:
         raise AuditError(
-            "Version 5 requires exactly one enabled conservative polarisation drift"
+            "Ion energy requires exactly one enabled conservative polarisation drift"
         )
     return owners[0]
 
@@ -350,9 +342,6 @@ def polarisation_ac_boundary(run):
 def fill_wall_guards(field, run, condition):
     """Apply the radial wall stencil, retaining the caller's Y guards."""
     result = field.copy()
-    reflected_pressure = condition == "pressure" and (
-        not hasattr(run, "formulation") or component_version(run) not in (8, 9)
-    )
     for interior, guards, step in (
         (run.mxg, range(run.mxg - 1, -1, -1), -1),
         (
@@ -363,9 +352,7 @@ def fill_wall_guards(field, run, condition):
     ):
         first = field.isel(x=interior, drop=True)
         for layer, guard in enumerate(guards, 1):
-            if reflected_pressure:
-                value = 2 * first.mean("z") - first
-            elif condition == "zero":
+            if condition == "zero":
                 value = -first
             elif condition == "free_o2":
                 value = first + layer * (
@@ -425,15 +412,11 @@ def polarisation_corrections(run):
     return int(count)
 
 
-def _validate_polarisation_solver(run, periodic_x):
+def _validate_polarisation_solver(run):
     section = run.data.options[polarisation_owner(run)]
     if polarisation_ac_boundary(run) not in ("neumann", "dirichlet"):
         raise AuditError("Unknown polarisation_ac_boundary")
-    key = (
-        "laplacian"
-        if periodic_x or component_version(run) in (5, 6, 7, 8, 9)
-        else "polarisation_laplacian"
-    )
+    key = "laplacian"
     opts = section[key] if key in section else None  # noqa: SIM401 -- BoutOptions has no get()
     # The C++ component inherits only the solver type from the phi subsection.
     recovery = run.data.options[run.model]
@@ -472,7 +455,7 @@ def solve_polarisation(run, rhs, periodic_x, periodic_y):
     This reproduces the transport potential, rather than converging to the FV
     inverse. Nonperiodic X uses midpoint Dirichlet DC and the selected AC guards.
     """
-    _validate_polarisation_solver(run, periodic_x)
+    _validate_polarisation_solver(run)
     return _solve_polarisation(
         run, rhs, periodic_x, periodic_y, polarisation_corrections(run)
     )
@@ -1216,8 +1199,8 @@ def compare_flux_diagnostics(run, fluxes):
 def closed_slab_outward_power(run, *, densities=None):
     """Signed SI wall powers for a singleton-Y slab with closed species ExB faces.
 
-    Uses the complete wall budget, including full Reynolds/chi currents for new
-    outputs. Missing chi yields incomplete coverage even with Neumann AC.
+    Uses the complete wall budget, including full Reynolds/chi currents.
+    Missing chi yields incomplete coverage even with Neumann AC.
     Classical diffusion has closed physical faces and adds no wall power;
     its interior sources are outside local RHS reconstruction coverage.
     No interior auxiliary solve is used. The optional densities argument remains

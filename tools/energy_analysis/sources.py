@@ -136,11 +136,11 @@ def external_power(run):
     for name, kinds in components(run):
         for kind in map(str.strip, kinds.split(",")):
             if kind == "polarisation_drift":
-                from .fluxes import component_version, polarisation_owner
+                from .fluxes import polarisation_owner
 
                 try:
                     if (
-                        component_version(run) in (5, 6, 7, 8, 9)
+                        run.formulation == "total_energy"
                         and polarisation_owner(run) == name
                     ):
                         continue

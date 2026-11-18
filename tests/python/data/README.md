@@ -35,7 +35,7 @@ define the strip at every resolution.
 
 The wall-amplitude test runs 128² through t = 1200 at spacing 5. Its
 `ion-energy-wall-envelope.json` records the generated input hash, resolved
-configuration, measured maxima and bounds. Native version-9 maxima are
+configuration, measured maxima and bounds. Native version-1 maxima are
 2.11665e-8 in modes 16–31 and 3.13835e-8 in modes 32–63. Bounds of 3.5e-8
 and 5e-8 give about 60% margin. These are absolute first-cell wall RMS values,
 independent of interior amplitude. The input deliberately matches the

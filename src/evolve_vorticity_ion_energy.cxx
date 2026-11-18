@@ -1333,7 +1333,7 @@ void EvolveVorticityIonEnergy::outputVars(Options& state) {
   acceptWarmStart();
 
   set_with_attrs(
-      state["evolve_vorticity_ion_energy_version"], 9,
+      state["evolve_vorticity_ion_energy_version"], 1,
       {{"description", "Component equation and discretisation version: "
                        "MC full-vorticity advection plus compact central R; "
                        "Neumann radial ion pressure and pressure potential; "

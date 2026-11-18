@@ -1,7 +1,7 @@
 {
   "description": "Fixed-wall D=0.1 publication input, matched startup, one rank, original solver tolerances, spacing 5 through t=1200.",
-  "component_version": 9,
-  "polarisation_drift_version": 4,
+  "component_version": 1,
+  "polarisation_drift_version": 1,
   "configuration": {
     "levels": 3,
     "base_nx": 16,

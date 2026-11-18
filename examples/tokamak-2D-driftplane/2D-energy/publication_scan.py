@@ -55,7 +55,7 @@ DIFFERENCES = [
     "Pressure polarisation potential includes electron pressure with its signed mass/charge weight; total energy includes ions only.",
     "Pressure native inversion uses FD X / spectral Z; total energy uses face/corner FV X-Z.",
     "Pressure retains cell-centred corner-gradient viscous heating; total energy uses conservative face work.",
-    "The pressure perturbation is zero in fixed-width radial wall buffers, with a C2 taper into the interior. Pressure uses Neumann ion-pressure guards; total energy uses Neumann pressure and psi guards with local Phi wall work and local species transport from version 9. Physical initial fields are matched and boundary-adjacent cells remain in the error norms.",
+    "The pressure perturbation is zero in fixed-width radial wall buffers, with a C2 taper into the interior. Pressure uses Neumann ion-pressure guards; total energy uses Neumann pressure and psi guards with local Phi wall work and local species transport in version 1. Physical initial fields are matched and boundary-adjacent cells remain in the error norms.",
     "Explicit SI metric pairs enforce the 5 cm box; the legacy recalculate_metric path produces inconsistent Z metric pairs for Bnorm=0.35 T.",
     "Common phi solves the continuum ion-only zero-vorticity problem; both discrete vorticities are initialized from this same sampled physical state.",
 ]

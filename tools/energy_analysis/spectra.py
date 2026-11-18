@@ -6,7 +6,7 @@ from pathlib import Path
 
 import numpy as np
 
-from .dataset import AuditError
+from .dataset import AuditError, require_ion_energy_version
 
 BANDS = {"16-31": (16, 31), "32-63": (32, 63)}
 
@@ -72,17 +72,8 @@ def analyse_native_bands(
         dumps = [stack.enter_context(Dataset(path)) for path in paths]
         times = np.asarray(dumps[0]["t_array"][:])
         for dump in dumps:
-            if int(dump["evolve_vorticity_ion_energy_version"][...]) not in (
-                4,
-                5,
-                6,
-                7,
-                8,
-                9,
-            ):
-                raise AuditError(
-                    "Fixed-band monitor requires ion-energy version 4 through 9"
-                )
+            version = dump.variables.get("evolve_vorticity_ion_energy_version")
+            require_ion_energy_version(version[...] if version is not None else None)
             if dump["Vort"].shape[2] != 1 or int(dump["NYPE"][...]) != 1:
                 raise AuditError("Band monitor requires a singleton-Y drift plane")
             if int(dump["NXPE"][...]) != len(dumps):

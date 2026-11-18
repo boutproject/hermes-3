@@ -145,7 +145,10 @@ def dataset():
             base * value if name not in ("Bxy", "dy") else xr.ones_like(ds.J) * value
         )
     options = BoutOptions()
-    options["hermes:components"] = "e, d+, impurity, evolve_vorticity_ion_energy"
+    options["hermes:components"] = (
+        "e, d+, impurity, evolve_vorticity_ion_energy, polarisation_drift"
+    )
+    options["polarisation_drift:implementation"] = "conservative"
     for name, mass, charge in (("e", "1/1836", -1), ("d+", 2, 1), ("impurity", 3, 2)):
         options.getSection(name)
         options[name]["AA"] = mass
@@ -158,6 +161,7 @@ def dataset():
     ds.attrs = {
         "options": options,
         "metadata": {
+            "evolve_vorticity_ion_energy_version": 1,
             "MXG": 2,
             "MYG": 0,
             "nx": 12,
@@ -717,7 +721,7 @@ def test_fixed_auxiliary_fourier_response(dataset, periodic, mode, corrections):
     from energy_analysis.fluxes import solve_polarisation, solve_polarisation_reference
 
     dataset["g13"] *= 0
-    dataset.options["evolve_vorticity_ion_energy:polarisation_corrections"] = (
+    dataset.options["polarisation_drift:polarisation_corrections"] = (
         "1+1" if corrections == 2 else str(corrections)
     )
     run = open_run(dataset)
@@ -754,7 +758,7 @@ def test_auxiliary_rejects_invalid_correction_count(dataset, count):
     from energy_analysis.fluxes import solve_polarisation
 
     dataset["g13"] *= 0
-    dataset.options["evolve_vorticity_ion_energy:polarisation_corrections"] = count
+    dataset.options["polarisation_drift:polarisation_corrections"] = count
     with pytest.raises(AuditError, match="nonnegative integer"):
         solve_polarisation(open_run(dataset), xr.zeros_like(dataset.phi), False, True)
 
@@ -774,8 +778,7 @@ def test_auxiliary_rejects_unsupported_inverse(dataset, periodic, key, value):
     from energy_analysis.fluxes import solve_polarisation
 
     dataset["g13"] *= 0
-    section = "laplacian" if periodic else "polarisation_laplacian"
-    dataset.options[f"evolve_vorticity_ion_energy:{section}:{key}"] = value
+    dataset.options[f"polarisation_drift:laplacian:{key}"] = value
     with pytest.raises(AuditError, match="Polarisation reconstruction"):
         solve_polarisation(
             open_run(dataset), xr.zeros_like(dataset.phi), periodic, True
@@ -802,7 +805,7 @@ def test_relaxing_auxiliary_dc_uses_wall_rate(dataset):
     opts = dataset.options
     opts["evolve_vorticity_ion_energy:radial_boundary"] = "no_slip"
     opts["evolve_vorticity_ion_energy:phi_boundary_velocity"] = "1000"
-    opts["evolve_vorticity_ion_energy:polarisation_corrections"] = 0
+    opts["polarisation_drift:polarisation_corrections"] = 0
     nx = dataset.sizes["x"] - 4
     x = dataset.x - 2 + 0.5
     slope = 0.003
@@ -823,12 +826,12 @@ def test_auxiliary_rejects_dc_removal_and_unknown_ac_mode(dataset):
     from energy_analysis.fluxes import solve_polarisation
 
     run = open_run(dataset)
-    opts = dataset.options["evolve_vorticity_ion_energy"]
+    opts = dataset.options["polarisation_drift"]
     opts["polarisation_ac_boundary"] = "unknown"
     with pytest.raises(AuditError, match="polarisation_ac_boundary"):
         solve_polarisation(run, xr.ones_like(dataset.phi), False, True)
     opts["polarisation_ac_boundary"] = "neumann"
-    opts["polarisation_laplacian:global_flags"] = "1"
+    opts["laplacian:global_flags"] = "1"
     with pytest.raises(AuditError, match="retain the DC"):
         solve_polarisation(run, xr.ones_like(dataset.phi), False, True)
 
@@ -1102,7 +1105,7 @@ def test_wall_rates_from_stored_midpoints_without_diagnostics(dataset):
     dataset.options["periodicX"] = "false"
     run.data.metadata.update(ixseps1=12, ixseps2=12, jyseps1_1=-1, jyseps2_2=0)
     dataset.options[run.model]["radial_boundary"] = "no_slip"
-    dataset.options[run.model]["polarisation_ac_boundary"] = "neumann"
+    dataset.options["polarisation_drift"]["polarisation_ac_boundary"] = "neumann"
     run.data["phi"] = dataset.phi + dataset.t
     run.data["ion_chi"] = xr.zeros_like(run.data.phi)
     budget = wall_budget(run)
@@ -1110,7 +1113,7 @@ def test_wall_rates_from_stored_midpoints_without_diagnostics(dataset):
     assert_allclose(budget.phi_wall_rate, run.frequency)
     assert_allclose(budget.outward, 0)
     run.data = run.data.drop_vars("ion_chi")
-    dataset.options[run.model]["polarisation_ac_boundary"] = "dirichlet"
+    dataset.options["polarisation_drift"]["polarisation_ac_boundary"] = "dirichlet"
     incomplete = wall_budget(run)
     assert incomplete.attrs["coverage"] == "incomplete"
     assert any("chi" in term for term in incomplete.attrs["missing_terms"])
@@ -1212,7 +1215,7 @@ def shared_current_case(dataset):
     options["mesh:bxcvy"] = 0
     options["evolve_vorticity_ion_energy:poloidal_flows"] = "false"
     options["evolve_vorticity_ion_energy:radial_boundary"] = "fixed"
-    options["evolve_vorticity_ion_energy:polarisation_ac_boundary"] = "dirichlet"
+    options["polarisation_drift:polarisation_ac_boundary"] = "dirichlet"
     for s in ("e", "d+", "impurity"):
         options[s]["type"] = (
             "quasineutral, evolve_pressure, zero_current"
@@ -1237,82 +1240,92 @@ def shared_current_case(dataset):
     return run
 
 
-@pytest.mark.parametrize("version", (None, 4, 5, 6, 7, 8, 9))
-def test_component_version(dataset, version):
+def test_component_version(dataset):
     from energy_analysis.fluxes import component_version
 
-    if version is not None:
-        dataset.attrs["metadata"] = {
-            **dataset.metadata,
-            "evolve_vorticity_ion_energy_version": version,
-        }
-    assert component_version(open_run(dataset)) == (4 if version is None else version)
+    assert component_version(open_run(dataset)) == 1
 
 
-@pytest.mark.parametrize("version", (4, 7, 8, 9))
-def test_versioned_pressure_guards_retain_physical_wall_fluctuations(dataset, version):
+@pytest.mark.parametrize("version", (None, 2, 3, 4, 5, 6, 7, 8, 9, 99))
+def test_open_run_rejects_unsupported_component_version(dataset, version):
+    if version is None:
+        del dataset.attrs["metadata"]["evolve_vorticity_ion_energy_version"]
+    else:
+        dataset.attrs["metadata"]["evolve_vorticity_ion_energy_version"] = version
+    with pytest.raises(
+        AuditError, match="Unsupported evolve_vorticity_ion_energy version"
+    ):
+        open_run(dataset)
+
+
+def test_neumann_pressure_guards_retain_physical_wall_fluctuations(dataset):
     from energy_analysis.fluxes import fill_wall_guards
 
-    dataset.attrs["metadata"]["evolve_vorticity_ion_energy_version"] = version
     case = open_run(dataset)
     pressure = dataset.Tion * (1 + 0.1 * np.cos(2 * np.pi * dataset.z / 8))
     bounded = fill_wall_guards(pressure, case, "pressure")
     for cell, guards in ((case.mxg, (0, 1)), (-case.mxg - 1, (-2, -1))):
         physical = pressure.isel(x=cell, drop=True)
-        expected = physical if version >= 8 else 2 * physical.mean("z") - physical
         for guard in guards:
-            assert_allclose(bounded.isel(x=guard, drop=True), expected, atol=0, rtol=0)
+            assert_allclose(bounded.isel(x=guard, drop=True), physical, atol=0, rtol=0)
     assert_allclose(
         bounded.isel(x=slice(2, -2)), pressure.isel(x=slice(2, -2)), atol=0, rtol=0
     )
 
 
-def test_conservative_owner_preserves_version_four_analysis(dataset):
+def test_conservative_owner_alias_and_option_ownership(dataset):
     from energy_analysis import summary
     from energy_analysis.fluxes import (
         polarisation_ac_boundary,
         polarisation_corrections,
+        polarisation_owner,
     )
 
     run = shared_current_case(dataset)
     options = run.data.options
-    options[run.model]["polarisation_ac_boundary"] = "dirichlet"
-    options[run.model]["polarisation_corrections"] = 7
+    options["polarisation_drift:polarisation_corrections"] = 7
     before = summary(run)
-    run.data.attrs["metadata"] = {
-        **run.data.metadata,
-        "evolve_vorticity_ion_energy_version": 5,
-    }
-    options["hermes:components"] = str(options["hermes:components"]) + ", ion_drift"
+    options["hermes:components"] = str(options["hermes:components"]).replace(
+        "polarisation_drift", "ion_drift"
+    )
     options["ion_drift:type"] = "polarisation_drift"
     options["ion_drift:implementation"] = "conservative"
     options["ion_drift:polarisation_ac_boundary"] = "dirichlet"
     options["ion_drift:polarisation_corrections"] = 7
-    # Deliberately conflicting old-owner values must no longer affect drift.
+    # Conflicting recovery settings must not affect the enabled drift owner.
     options[run.model]["polarisation_ac_boundary"] = "neumann"
     options[run.model]["polarisation_corrections"] = 0
+    options[run.model]["laplacian:global_flags"] = 1
+    assert polarisation_owner(run) == "ion_drift"
     assert polarisation_ac_boundary(run) == "dirichlet"
     assert polarisation_corrections(run) == 7
     after = summary(run)
     assert after["diagnostics"] == before["diagnostics"]
-    assert after["evolve_vorticity_ion_energy_version"] == 5
+    assert after["evolve_vorticity_ion_energy_version"] == 1
 
 
-def test_version_five_missing_or_legacy_drift_is_rejected(dataset):
+@pytest.mark.parametrize("configuration", ("missing", "legacy", "duplicate"))
+def test_missing_legacy_or_duplicate_drift_is_rejected(dataset, configuration):
     from energy_analysis.fluxes import polarisation_owner
 
     run = open_run(dataset)
-    run.data.attrs["metadata"] = {
-        **run.data.metadata,
-        "evolve_vorticity_ion_energy_version": 5,
-    }
-    with pytest.raises(AuditError, match="exactly one enabled"):
-        polarisation_owner(run)
-    run.data.options["hermes:components"] = (
-        str(run.data.options["hermes:components"]) + ", polarisation_drift"
+    options = run.data.options
+    if configuration == "missing":
+        options["hermes:components"] = str(options["hermes:components"]).replace(
+            ", polarisation_drift", ""
+        )
+    elif configuration == "legacy":
+        options["polarisation_drift:implementation"] = "legacy"
+    else:
+        options["hermes:components"] += ", ion_drift"
+        options["ion_drift:type"] = "polarisation_drift"
+        options["ion_drift:implementation"] = "conservative"
+    message = (
+        "implementation=conservative"
+        if configuration == "legacy"
+        else "exactly one enabled"
     )
-    run.data.options["polarisation_drift:implementation"] = "legacy"
-    with pytest.raises(AuditError, match="implementation=conservative"):
+    with pytest.raises(AuditError, match=message):
         polarisation_owner(run)
 
 
@@ -1322,18 +1335,14 @@ def test_full_neumann_wall_coverage_requires_chi(dataset):
     from energy_analysis.walls import wall_budget
 
     run = shared_current_case(dataset)
-    run.data.options["evolve_vorticity_ion_energy:polarisation_ac_boundary"] = "neumann"
-    run.data.attrs["metadata"] = {
-        **run.data.metadata,
-        "evolve_vorticity_ion_energy_version": 4,
-    }
+    run.data.options["polarisation_drift:polarisation_ac_boundary"] = "neumann"
     assert wall_budget(run).attrs["coverage"] == "complete"
     missing = wall_budget(replace(run, data=run.data.drop_vars("ion_chi")))
     assert missing.attrs["coverage"] == "incomplete"
     assert any("chi" in term for term in missing.attrs["missing_terms"])
 
 
-@pytest.mark.parametrize("version", (1, 2, 3, 99))
+@pytest.mark.parametrize("version", (2, 3, 4, 5, 6, 7, 8, 9, 99))
 def test_unknown_component_version_is_rejected(dataset, version):
     from energy_analysis.fluxes import component_version
 
@@ -1354,10 +1363,6 @@ def test_full_wall_budget_with_parallel_compression(dataset, g13):
     from energy_analysis.walls import wall_budget
 
     run = shared_current_case(dataset)
-    run.data.attrs["metadata"] = {
-        **run.data.metadata,
-        "evolve_vorticity_ion_energy_version": 4,
-    }
     run.data.options["e:p_div_v"] = "true"
     # Parallel compression prevents a complete RHS reconstruction, but does
     # not change the X-Z wall-current reconstruction used by the MMS audit.
@@ -1505,16 +1510,9 @@ def test_common_polarisation_faces_and_diagnostic_comparison(dataset):
 
 
 @pytest.mark.parametrize("saved_momentum", (False, True))
-@pytest.mark.parametrize("version", (4, 7, 8, 9))
-def test_versioned_wall_transport_energy_and_momentum_per_particle(
-    dataset, saved_momentum, version
-):
+def test_local_wall_transport_energy_and_momentum_per_particle(dataset, saved_momentum):
     from energy_analysis.transfers import polarisation_wall_weights
 
-    dataset.attrs["metadata"]["evolve_vorticity_ion_energy_version"] = version
-    if version >= 5:
-        dataset.options["hermes:components"] += ", polarisation_drift"
-        dataset.options["polarisation_drift:implementation"] = "conservative"
     phase = np.cos(2 * np.pi * dataset.z / dataset.sizes["z"])
     dataset["Nd+"] = dataset["Nd+"] * (1 + 0.4 * phase)
     dataset["Nimpurity"] = dataset["Nimpurity"] * (1 - 0.3 * phase)
@@ -1538,28 +1536,19 @@ def test_versioned_wall_transport_energy_and_momentum_per_particle(
     run = open_run(dataset)
     weights = polarisation_wall_weights(run)
     rho = 2 * dataset["Nd+"] + 3 * dataset["Nimpurity"]
-    for face, cell in ((1, 2), (-3, -3)):
+    for face in (1, -3):
 
         def midpoint(value, face=face):
             return (
                 value.isel(x=face, drop=True) + value.isel(x=face + 1, drop=True)
             ) / 2
 
-        local = version == 9
         temperature = midpoint(dataset.Tion)
-        if not local:
-            temperature = temperature.mean("z")
         energy = 0 * temperature
         for name, mass, charge in (("d+", 2, 1), ("impurity", 3, 2)):
             fraction = mass * dataset["N" + name] / rho
-            partition = (
-                midpoint(fraction)
-                if local
-                else fraction.isel(x=cell, drop=True).mean("z")
-            ) / charge
+            partition = midpoint(fraction) / charge
             velocity = midpoint(velocities[name])
-            if not local:
-                velocity = velocity.mean("z")
             particle = weights["particle_" + name].isel(x=face, drop=True)
             assert_allclose(particle, xr.ones_like(particle) * partition, atol=2e-15)
             assert_allclose(
@@ -1568,22 +1557,14 @@ def test_versioned_wall_transport_energy_and_momentum_per_particle(
                 atol=2e-15,
             )
             energy += partition * (1.5 * temperature + 0.5 * mass * velocity**2)
-            # This state distinguishes the energy of the mean flow from the
-            # mean kinetic energy of the nonuniform wall-face flow.
-            assert local or (
-                float(
-                    (midpoint(velocities[name]) ** 2).mean("z").min()
-                    - (velocity**2).max()
-                )
-                > 0.01
-            )
+            # The varying local flow and species fraction must survive at the face.
+            assert float(particle.std("z").min()) > 0.01
+            assert float(velocity.std("z").min()) > 0.1
         thermal_kinetic = (weights.total - weights.work).isel(x=face, drop=True)
         assert_allclose(
             thermal_kinetic, xr.ones_like(thermal_kinetic) * energy, atol=2e-15
         )
         work = midpoint(dataset.phi + energy_densities(run).pressure_potential)
-        if version < 8:
-            work = work.mean("z")
         actual = weights.work.isel(x=face, drop=True)
         assert_allclose(actual, xr.ones_like(actual) * work, atol=2e-15)
 

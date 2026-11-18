@@ -2908,7 +2908,7 @@ TEST_F(EvolveVorticityIonEnergyTest, FullChiWallCurrentMatchesPolarisationContin
     component.transform(state);
     component.finally(state);
     const auto output = diagnostics(component);
-    EXPECT_EQ(output["evolve_vorticity_ion_energy_version"].as<int>(), 9);
+    EXPECT_EQ(output["evolve_vorticity_ion_energy_version"].as<int>(), 1);
     const Field3D chi = output["ion_chi"].as<Field3D>();
     const Field3D c{1.0 / SQ(coord->Bxy())};
     const Field3D forward = bout::ion_energy::Div_a_Grad_perp_XZ(c, chi);

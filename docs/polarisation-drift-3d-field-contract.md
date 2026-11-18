@@ -112,16 +112,18 @@ the completed state.
 | `ef<s>_tot_xlow/ylow`, `ef<s>_adv_ylow`, `ef<s>_visc_heat_ylow` | Pressure evolution | Numerical thermal-energy faces, advection and numerical viscous heating flux | W; `P0 w0 L0^3` | Fx-, Fy- | Explicitly may be incomplete; inspect selected components and sum each contribution once |
 | `E<species-pair>_coll` | `braginskii_heat_exchange` | Pairwise thermal exchange | W m^-3; `P0 w0` | C | Diagnose-only; volume-integrated pair contributions must cancel |
 
-Version 5 of `evolve_vorticity_ion_energy` pairs with version 1 of
+Version 1 of `evolve_vorticity_ion_energy` pairs with version 1 of
 `polarisation_drift`, with `implementation = conservative`. The auxiliary
 options `polarisation_ac_boundary`, `polarisation_corrections` and `laplacian`
-are owned by the drift section. Version-4 dumps retain their original
-ion-energy option ownership. Version 6 pairs with conservative drift version 2,
-adds completed parallel/optional currents to the auxiliary and vorticity RHS,
-and evaluates parallel electrical work after sheath conditioning. Version 7
-adds optional collective-sound-speed potential damping during ion finalisation;
-the auxiliary equation is unchanged. Analysis supports versions 4/5/6/7. Standalone
-`polarisation_drift` defaults to `legacy`.
+are owned by the drift section. Completed parallel/optional currents enter the
+auxiliary and vorticity RHS, and parallel electrical work uses sheath-conditioned
+fields. Optional collective-sound-speed potential damping is added during ion
+finalisation and excluded from the auxiliary equation. Radial walls use Neumann
+pressure and pressure-potential guards with local wall work and species transport
+weights. Analysis requires the explicit ion-energy version-1 tag; untagged data
+and earlier development versions are unsupported. Standalone `polarisation_drift`
+defaults to `legacy`. Both approaches emit `polarisation_drift_implementation`;
+only conservative transport emits `polarisation_drift_version`.
 
 The following state fields are published on every RHS independently of
 `diagnose`; they are component inputs, with normalised values and valid

@@ -2350,14 +2350,12 @@ The ion-energy radial wall model is selected by ``radial_boundary``.
 guard fills and wall-state evolution; selecting ``no_slip`` still reads and
 validates ``phi_boundary_velocity``.
 
-Output metadata ``evolve_vorticity_ion_energy_version = 9`` and
-``polarisation_drift_version = 4`` identify Neumann pressure guards, local
-wall work and local species transport. Version 8 uses Neumann pressure and
-local work with wall-mean species transport. Earlier supported versions
-retain their reflected pressure guards and wall-mean weights in analysis.
-Analysis supports versions 4 through 9, assumes version 4 when the tag is
-absent, and reads auxiliary settings from the appropriate owner. Restart
-wall-storage versioning is separate.
+Output metadata ``evolve_vorticity_ion_energy_version = 1`` and
+``polarisation_drift_version = 1`` identify Neumann pressure and pressure-potential
+guards, local wall work and local species transport. Analysis requires the
+explicit ion-energy version-1 tag and reads auxiliary settings from the
+conservative drift section. Untagged data and earlier development versions are
+unsupported. Restart wall-storage versioning is separate.
 
 Diagnosed ``parallel_current``, ``ion_parallel_current`` and
 ``electron_parallel_current`` retain the completed target guards.

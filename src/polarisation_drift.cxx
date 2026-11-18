@@ -909,7 +909,7 @@ void PolarisationDrift::outputConservative(Options& state) {
   const auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
   const auto rho_s0 = get<BoutReal>(state["rho_s0"]);
   const BoutReal Pnorm = SI::qe * Tnorm * Nnorm;
-  set_with_attrs(state["polarisation_drift_version"], 4,
+  set_with_attrs(state["polarisation_drift_version"], 1,
                  {{"description", "Conservative polarisation transport with local "
                                   "Phi wall work and local species transport weights"}});
   set_with_attrs(state["ion_chi"], chi,

@@ -13,6 +13,13 @@ class AuditError(ValueError):
     """An audit prerequisite is missing or unsupported."""
 
 
+def require_ion_energy_version(version):
+    """Require the current ion-energy contract; untagged data is unsupported."""
+    if version != 1:
+        raise AuditError(f"Unsupported evolve_vorticity_ion_energy version: {version}")
+    return 1
+
+
 @dataclass(frozen=True)
 class Species:
     name: str
@@ -310,6 +317,8 @@ def open_run(source, *, species=None, chunks=None):
         path,
         formulation,
     )
+    if formulation == "total_energy":
+        require_ion_energy_version(metadata.get("evolve_vorticity_ion_energy_version"))
     for name in required[1:]:
         if not bool(np.isfinite(run.interior(ds[name])).all().compute()):
             raise AuditError(f"Nonfinite physical field {name}")

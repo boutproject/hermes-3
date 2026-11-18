@@ -76,17 +76,14 @@ Complete from ordinary state, geometry and resolved options:
 
 `ion_chi` is saved even with `diagnose=false`. `wall_budget` reconstructs
 full-vorticity MC transport plus the central Reynolds remainder. It applies
-versioned wall weights. Version 9 uses local guard/cell midpoints of the mass
-partition, temperature and parallel velocity; parallel kinetic energy squares
+local wall weights: guard/cell midpoints of the mass partition, temperature and
+parallel velocity; parallel kinetic energy squares
 the local face velocity. Neumann pressure guards retain wall fluctuations while
 the electrostatic midpoint is conducting and Z-uniform. The local work weight
 is `Phi_w = phi_b + psi_w(z)`, so net work is the face sum of `Phi_w * Jpol_n`.
-Version 8 uses local work with wall-mean transport; versions 4–7 retain
-wall-mean work and transport with reflected pressure guards. Signed exchanges
-are reported by wall and physical Y row, with totals and absolute face-flux sums.
-Full-current budgets require `ion_chi`
-with both AC conditions;
-snapshots without it report incomplete coverage for that contribution. Sheaths,
+Signed exchanges are reported by wall and physical Y row, with totals and
+absolute face-flux sums. Full-current budgets require `ion_chi` with both AC
+conditions; snapshots without it report incomplete coverage for that contribution. Sheaths,
 unrecognised source components, unsaved mesh sources, time-dependent source
 prefactors, core-only source masks, and unimplemented geometry also report
 missing terms. Collisional heat exchange cancels in the plasma total.
@@ -107,12 +104,13 @@ uses `matplotlib`.
 `reconstruct_fluxes` rebuilds full-vorticity MC advection and the central
 metric remainder, then combines Reynolds and chi faces into the polarisation
 current. Particle, momentum and energy use arithmetic interior face averages
-and the versioned local or wall-mean weights described above. The energy coefficient is
+and the local wall weights described above. The energy coefficient is
 `phi+psi+sum_s[(A_s/Z_s)/rho*(1.5*P_s+Kparallel_s)]`.
 The optional `polarisation_flux_x/z` diagnostics include area integration and
 use the lower-cell face index; their comparisons include the lower X wall and
 exclude undefined outer guards. Saved chi is used directly; an auxiliary solve
-supports older snapshots that lack it.
+is available for supported version-1 snapshots without chi within the slab
+RHS reconstruction coverage.
 
 `DivEExB` advects `Eion`. Post-processing provides
 `DivEExB_perpendicular`, `DivEExB_thermal_parallel` and `reynolds_heating`.
@@ -127,18 +125,18 @@ grids with varying metrics without requiring complete RHS coverage.
 
 ## Component version and radial currents
 
-The output tag `evolve_vorticity_ion_energy_version` identifies the equation
-and discretisation contract. Version 5 moves conservative transport to
-`polarisation_drift` version 1, selected explicitly with
+The output tag `evolve_vorticity_ion_energy_version = 1` identifies the current
+equation and discretisation contract. Analysis requires this explicit tag;
+untagged data and earlier development versions are unsupported. Conservative
+transport belongs to `polarisation_drift` version 1, selected explicitly with
 `implementation=conservative`. Its `polarisation_ac_boundary`,
 `polarisation_corrections` and `laplacian` settings belong to the drift section.
-Version 4 and untagged snapshots retain their original ion-energy ownership.
-Version 6 pairs with conservative drift version 2, includes completed parallel
-current in auxiliary/vorticity evolution and evaluates parallel electrical
-work after sheath conditioning. Versions 4 through 9 are supported. The existing
-slab budget coverage remains restricted; version support does not establish
-tokamak/sheath power-ledger coverage. Unknown versions are rejected. Reynolds and chi wall faces are retained for
-both AC conditions. Numerical diagnostic names and conversions are preserved.
+Completed parallel current enters auxiliary/vorticity evolution, and parallel
+electrical work uses sheath-conditioned fields. The slab budget coverage remains
+restricted; the version tag does not establish tokamak/sheath power-ledger
+coverage. Reynolds and chi wall faces are retained for both AC conditions.
+Numerical diagnostic names and conversions are preserved. Restart wall-storage
+versioning is separate.
 
 The auxiliary solve excludes the viscous rate, so polarisation transport
 carries ion viscous drift work. `DivEviscous` remains diagnostic stress work;
@@ -146,19 +144,19 @@ it is excluded from the energy RHS and outward energy budget to avoid double
 counting. Electron heating remains an internal transfer. Saved chi takes
 precedence over reconstruction. The default is ten defect corrections.
 
-For versions 4/5, current continuity is `DivJpol+DivJdia=Rchi`, including wall
-cells. Version 6 adds `DivJpar` and enabled `DivJextra`/`DivJcol` on the left.
-Its existing X-Z analysis paths are tested; general nonzero-parallel-current
-RHS/chi reconstruction remains unfinished and is not validated by tag support. The residual
-controls the gauge dependence of local energy partition. Global budgets alone
-do not establish radial boundary truncation accuracy. The exact wall rate would include `dt(psi_w(z))`. Chi retains the
-electrostatic DC wall rate and default Neumann AC, neglecting this local
+Current continuity is `DivJpol+DivJdia+DivJpar+DivJextra+DivJcol=Rchi`, including
+wall cells, with optional currents included when enabled. The existing X-Z
+analysis paths are tested; general nonzero-parallel-current RHS/chi
+reconstruction remains unfinished. The residual controls the gauge dependence
+of local energy partition. Global budgets alone do not establish radial boundary
+truncation accuracy. The exact wall rate would include `dt(psi_w(z))`. Chi retains
+the electrostatic DC wall rate and default Neumann AC, neglecting this local
 pressure-potential rate. The optional Dirichlet AC condition sets a zero AC
 midpoint; it does not estimate the missing pressure-potential rate.
 
 Use `PYTHONPATH=tools python -m energy_analysis.spectra RUN_DIR --output bands.json`
 for fixed-mode wall/interior RMS, radial profiles and e-folding widths. This
-streaming monitor supports singleton-Y, X-decomposed native version-4-through-9 dumps;
+streaming monitor supports singleton-Y, X-decomposed native version-1 dumps;
 supply physical domain lengths if they differ from 50 mm. Bands 16–31 and
 32–63 are fixed physical modes, independent of resolution. Wall amplitudes use
 first physical cell centres. Widths include their half-cell offset from the
@@ -166,16 +164,14 @@ wall; crossings without wall dominance are flagged. A missing crossing has
 no width. Native pytest regressions run with `HERMES_EXECUTABLE=build/hermes-3`;
 add `--run-slow` for the drift-plane envelope test.
 
-Version 7 adds optional numerical parallel phi damping using collective sound
-speed. The completed vorticity rate includes `ion_phi_dissipation`; auxiliary
-chi continuity excludes both damping and viscosity. The diagnostic is a
-vorticity rate with the `ddt(Vort)` conversion, not an external power sink.
+Optional numerical parallel phi damping uses collective sound speed. The
+completed vorticity rate includes `ion_phi_dissipation`; auxiliary chi continuity
+excludes both damping and viscosity. The diagnostic is a vorticity rate with the
+`ddt(Vort)` conversion, not an external power sink.
 The resolved option is saved as `ion_phi_dissipation_enabled`.
 
-Version 8 pairs with conservative drift version 3 and uses Neumann radial
-pressure guards and local Phi wall work. Version 9 pairs with drift version 4
-and also uses local species particle, momentum and thermal/parallel kinetic
-weights. Uniform wall states and periodic-X fields retain their previous
-transport. The native frozen-state and varying-fraction regressions are in
-`tests/python/test_local_wall_transport.py`; nonlinear convergence and
-regenerated wall envelopes use the fixed-wall D = 0.1 publication input.
+The wall condition uses conducting, Z-uniform phi, Neumann pressure and psi
+guards, local Phi wall work and local species particle, momentum and
+thermal/parallel kinetic weights. The native frozen-state and varying-fraction
+regressions are in `tests/python/test_local_wall_transport.py`; nonlinear
+convergence and regenerated wall envelopes use the fixed-wall D = 0.1 publication input.
