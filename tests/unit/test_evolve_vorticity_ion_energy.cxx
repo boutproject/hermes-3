@@ -2478,8 +2478,7 @@ TEST_F(IonEnergyManyGuardsTest, PressureAndVorticityFillEveryRadialGuard) {
         EXPECT_EQ(pressure[i], original[i]);
         EXPECT_EQ(vort[i], original[i]);
       } else {
-        const BoutReal mean = 2.0 + 0.2 * x + 0.03 * i.y();
-        EXPECT_NEAR(pressure[i], 2 * mean - original(x, i.y(), i.z()), 2e-14);
+        EXPECT_EQ(pressure[i], original(x, i.y(), i.z()));
         EXPECT_EQ(vort[i], (midpoint_zero ? -1 : 1) * original(x, i.y(), i.z()));
       }
     }
@@ -2554,12 +2553,8 @@ TEST_F(EvolveVorticityIonEnergyTest, WallModelsPairParticleChargeAndEnergyBudget
       for (int x : {mesh->xstart, mesh->xend}) {
         const int guard = x == mesh->xstart ? x - 1 : x + 1;
         for (int y = mesh->ystart; y <= mesh->yend; ++y) {
-          BoutReal midpoint = 0.0;
           for (int z = 0; z < nz; ++z) {
-            midpoint += (psi(x, y, z) + psi(guard, y, z)) / (2 * nz);
-          }
-          for (int z = 0; z < nz; ++z) {
-            EXPECT_NEAR((psi(x, y, z) + psi(guard, y, z)) / 2, midpoint, 1e-12);
+            EXPECT_EQ(psi(guard, y, z), psi(x, y, z));
             EXPECT_NEAR((phi(x, y, z) + phi(guard, y, z)) / 2, 0.01, 1e-12);
             EXPECT_EQ(physical(guard, y, z),
                       (std::string{mode} == "free_slip" ? -1 : 1) * physical(x, y, z));
@@ -2913,7 +2908,7 @@ TEST_F(EvolveVorticityIonEnergyTest, FullChiWallCurrentMatchesPolarisationContin
     component.transform(state);
     component.finally(state);
     const auto output = diagnostics(component);
-    EXPECT_EQ(output["evolve_vorticity_ion_energy_version"].as<int>(), 7);
+    EXPECT_EQ(output["evolve_vorticity_ion_energy_version"].as<int>(), 9);
     const Field3D chi = output["ion_chi"].as<Field3D>();
     const Field3D c{1.0 / SQ(coord->Bxy())};
     const Field3D forward = bout::ion_energy::Div_a_Grad_perp_XZ(c, chi);
@@ -3039,8 +3034,11 @@ public:
       const BoutReal fp = (1 - 2 * x) * (1 - r / 6);
       const BoutReal fpp = -2 + r / 3 - SQ(1 - 2 * x) / 6;
       const BoutReal fppp = 1 - 2 * x;
-      const BoutReal exact = (f * fppp - fp * fpp) / 2 * (cos(2 * z) - sin(2 * z))
-                             - (3 * fp * fpp + f * fppp) / 2;
+      const BoutReal q = 0.2 * cos(PI * x), qp = -0.2 * PI * sin(PI * x);
+      const BoutReal qpp = -PI * PI * q, qppp = -PI * PI * qp;
+      const BoutReal exact = (fp * fpp - f * fppp) * sin(z) * cos(z)
+                             - (2 * fp * qpp + f * qppp + fpp * qp) / 2
+                             + ((f * qppp - fpp * qp) / 2 + fp * q - f * qp) * cos(2 * z);
       const BoutReal error = abs(actual[i] - exact);
       all_error += error;
       if (i.x() == mesh->xstart || i.x() == mesh->xend) {

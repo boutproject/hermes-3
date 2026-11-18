@@ -1888,17 +1888,14 @@ With ``poloidal_flows = true``, the shared XPPM operator adds full-vorticity
 X--Y advection to the current divergence and weighted polarisation transport.
 The Reynolds work and face-current diagnostics describe the X--Z construction.
 
-The reflected radial wall guards retain a bounded first-cell Reynolds
-divergence error when the potential has nonzero normal curvature at the wall.
-An O(h) wall-face discrepancy gives an O(1) first-cell error over an O(h)
-volume, limiting whole-domain mean absolute convergence to first order while
-the smooth interior converges near second order. For the zero-wall-curvature
-reference, wall maximum and whole-domain mean absolute errors converge at
-second order. MC limiting at interior extrema can still reduce whole-domain
-RMS and maximum orders to about 1.5 and 1, respectively. These are properties
-of the retained wall representation and limiter, not an imposed zero Reynolds
-wall current. See :ref:`subsec-reynolds-wall-convergence` for the independent
-reference tests and centred-donor diagnostic control.
+The conducting electrostatic guards and Neumann pressure guards retain
+wall-varying pressure without a singular wall-cell energy source. The exact
+input-expression state checks second-order approach of native wall-cell rates.
+The independently differentiated Reynolds reference also checks transport
+with Neumann pressure. MC limiting at extrema can reduce RMS and maximum
+orders relative to whole-domain mean absolute error. See
+:ref:`subsec-reynolds-wall-convergence` for the reference states and the
+centred-donor diagnostic control.
 
 Numerical parallel potential damping is enabled with ``phi_dissipation = true``
 (default ``false``). After recovery and boundary completion, finalisation adds
@@ -2008,31 +2005,33 @@ At each physical radial wall and Y row, define
 
 .. math::
 
-   \alpha_s=\left\langle\frac{A_s n_s}{\rho}\right\rangle_z,\qquad
-   \overline{T}_s=\langle T_{s,\mathrm{face}}\rangle_z,\qquad
-   \overline{V}_s=\langle V_{\parallel s,\mathrm{face}}\rangle_z.
+   \alpha_s=\frac{1}{2}\left[
+       \left(\frac{A_s n_s}{\rho}\right)_g+
+       \left(\frac{A_s n_s}{\rho}\right)_0\right],\qquad
+   T_{s,w}=\frac{T_{s,g}+T_{s,0}}{2},\qquad
+   V_{s,w}=\frac{V_{\parallel s,g}+V_{\parallel s,0}}{2}.
 
-The mass fraction uses the adjacent physical cell. Face temperature and
-parallel velocity are guard/cell midpoints after applying boundary conditions.
-The Z-uniform wall particle, momentum and energy weights are
+Here :math:`g` and :math:`0` denote the adjacent guard and physical cell.
+The particle partition, temperature and parallel velocity use local face
+midpoints after applying boundary conditions. Under Neumann guards these
+values equal the adjacent-cell values. The wall weights are
 
 .. math::
 
    w_{n,s}=\frac{\alpha_s}{Z_s},\qquad
-   w_{M,s}=\frac{A_s\alpha_s\overline{V}_s}{Z_s},\qquad
-   w_E=\Phi_{\mathrm{wall}}+
+   w_{M,s}=\frac{A_s\alpha_s V_{s,w}}{Z_s},\qquad
+   w_E=\Phi_w+
        \sum_s\frac{\alpha_s}{Z_s}
-       \left(\frac{3}{2}\overline{T}_s+
-             \frac{1}{2}A_s\overline{V}_s^2\right).
+       \left(\frac{3}{2}T_{s,w}+\frac{1}{2}A_s V_{s,w}^2\right).
 
-These are products of separate means. Energy and momentum transported through
-a wall equal the particle flux times the mean energy or momentum per particle;
-a mean of the products would include correlations with the particle partition.
-Uniform weights remove wall-current/weight correlations. Net wall work remains
-:math:`\Phi_{\mathrm{wall}}` times the net wall current, and particle, momentum
-and energy exchange is retained. Every rank owns complete periodic Z lines;
-radial walls reject Z decomposition. Interior weights are unchanged, and the
-chi coefficient is not weighted inside the perpendicular-gradient operator.
+Each face carries particles with their local energy and momentum per particle.
+The work weight :math:`\Phi_w=\phi_b+\psi_w(z)` includes the pressure work of
+the polarisation current at a conducting wall. It pays the perpendicular
+kinetic-energy wall flux cell by cell. Net wall work is the face sum of
+:math:`\Phi_w J_{\mathrm{pol},n}`; both factors can vary along the wall.
+Transport weights require no Z average. Conducting-potential recovery retains
+its own complete-Z-line requirement. The chi coefficient is not weighted
+inside the perpendicular-gradient operator.
 
 The work part uses the pressure potential :math:`\psi` that defines
 :math:`\Phi`, with the fixed reference mass normalisation. Thermal and parallel
@@ -2118,31 +2117,27 @@ For nonperiodic X, ``radial_boundary`` selects the wall model:
      - Closed
      - :math:`d\phi_b/dt`
 
-Every mode holds the AC midpoint of both :math:`\phi` and :math:`\psi`
-at zero and explicitly closes normal E×B energy advection. Total ion pressure
-``Pi_sum`` and pressure potential ``psi`` independently have radial midpoint
-values equal to their adjacent interior Z means. For the first interior
-cell :math:`0` and adjacent guard cell :math:`g`,
+Every mode holds the electrostatic potential midpoint at the conducting,
+Z-uniform value :math:`\phi_b` and explicitly closes normal E×B energy
+advection. Total ion pressure ``Pi_sum`` and pressure potential ``psi`` have
+Neumann radial guards. For the first physical cell :math:`0` and adjacent
+guard cell :math:`g`,
 
 .. math::
 
-   \frac{f_g+f_0}{2}=\langle f_0\rangle_Z,
+   \phi_g=2\phi_b-\phi_0,\qquad f_g=f_0,
    \qquad f\in\{P_i,\psi\}.
 
-This gives a Neumann condition for the DC part and a zero midpoint Dirichlet
-condition for the AC part of each field. The condition on psi is reapplied
-after composition weighting. Its species-pressure identity above holds in
-physical cells; its radial guards are imposed independently because mixture
-weights can vary there. Individual species pressures and ``Tion`` need not
-satisfy this same simple AC condition. Potential, pressure and physical
-vorticity fill all remaining radial guard columns by copying the first guard;
-these wall helpers act only on physical Y rows.
+The wall value of :math:`\Phi` is therefore :math:`\phi_b+\psi_0(z)`.
+The pressure-potential condition is reapplied after composition weighting.
+Species pressures and ``Tion`` also use Neumann guards. Pressure fluctuations
+may reach the wall without imposing an additional constraint on ion energy.
+Potential, pressure and physical vorticity fill all remaining radial guard
+columns by copying the first guard; these helpers act only on physical Y rows.
 
-Initial vorticity and total energy must use the same imposed wall guards as
-the recovery. A pressure-potential perturbation that retains a nonzero AC
-value at the wall creates a steep radial gradient when these guards are
-applied. A smooth perturbation that vanishes at the X faces avoids this
-initial mismatch. In the hydrogen
+Initial vorticity and total energy must use the same discrete :math:`\Phi`
+and wall guards as recovery. Smooth Neumann pressure may have a nonzero AC
+value at either wall. In the hydrogen
 :ref:`2D-energy comparison <subsec-2d-energy-comparison>`, the pressure
 profile has constant radial wall buffers and :math:`\psi=P_i`.
 The initial :math:`\phi=1-P_i` gives
@@ -2355,15 +2350,14 @@ The ion-energy radial wall model is selected by ``radial_boundary``.
 guard fills and wall-state evolution; selecting ``no_slip`` still reads and
 validates ``phi_boundary_velocity``.
 
-Output metadata ``evolve_vorticity_ion_energy_version = 7`` and
-``polarisation_drift_version = 2`` identify the split ownership and completed
-parallel-current/electrical-work equations, preserving
-full-vorticity MC transport plus the central Reynolds remainder, pressure-potential
-polarisation work, Z-uniform wall transport weights and viscous work carried
-by polarisation transport, with optional numerical parallel potential damping.
-Analysis supports versions 4, 5, 6 and 7, assumes version 4
-when the tag is absent, and reads auxiliary settings from the appropriate
-owner. Restart wall-storage versioning is separate.
+Output metadata ``evolve_vorticity_ion_energy_version = 9`` and
+``polarisation_drift_version = 4`` identify Neumann pressure guards, local
+wall work and local species transport. Version 8 uses Neumann pressure and
+local work with wall-mean species transport. Earlier supported versions
+retain their reflected pressure guards and wall-mean weights in analysis.
+Analysis supports versions 4 through 9, assumes version 4 when the tag is
+absent, and reads auxiliary settings from the appropriate owner. Restart
+wall-storage versioning is separate.
 
 Diagnosed ``parallel_current``, ``ion_parallel_current`` and
 ``electron_parallel_current`` retain the completed target guards.
@@ -2391,7 +2385,15 @@ plus :math:`1.1|C|\|R_\chi\|_\infty` for one RHS evaluation, with an independent
 upper bound on the residual. The generator writes smooth identical physical
 evolved cells directly; no preparation simulation or binary fixture is needed.
 The slow drift-plane regression checks absolute vorticity RMS in fixed poloidal
-mode bands 16–31 and 32–63. It does not use a wall/interior ratio.
+mode bands 16–31 and 32–63 for the buffered, fixed-wall D = 0.1 publication
+input at 128² through :math:`t=1200`. Its bounds are recorded in
+``tests/python/data/ion-energy-wall-envelope.json``. The slow publication
+regression runs 16², 32² and 64² through :math:`t=5000`, checking shrinking
+adjacent kinetic-energy differences and a stable outer-10% share.
+The exact input-expression frozen state at 16², 32² and 64² checks
+second-order approach of the native wall-cell energy and Reynolds-current
+rates. A 16×8×16 two-ion regression checks local face-source identities
+with varying wall fractions and parallel velocities, and fully paid wall work.
 
 The default outputs are ``Eion``, ``Tion``, ``Vort``, ``phi`` and ``ion_chi``.
 Pressure/potential recovery starts from the phi and perpendicular kinetic
@@ -2434,6 +2436,14 @@ polarisation current rather than the exact time derivative of
 :math:`\phi+\psi`; viscosity and numerical potential damping are excluded
 from its RHS.
 
+The exact wall rate would be :math:`\partial_t\Phi_w=
+\partial_t\phi_b+\partial_t\psi_w(z)`. The auxiliary closure neglects the
+pressure-potential wall rate: its DC midpoint uses :math:`\partial_t\phi_b`
+and its default AC condition is Neumann. The optional AC Dirichlet condition
+sets the AC midpoint to zero. Neither condition supplies an estimate of
+:math:`\partial_t\psi_w`; energy conservation uses the current returned by
+this approximate closure with the same local work weight.
+
 For nonperiodic X in every wall mode, ``phi_wall_rate`` records the midpoint
 rates in V/s in physical radial guard cells, with zero interior and Y boundary
 values. It is zero for ``fixed`` and ``free_slip``. Normal output ``Vort``
@@ -2455,7 +2465,7 @@ When viscosity is specified, diagnostics also include ``kinematic_viscosity``,
 ``DivEviscous``. The latter is diagnostic stress work and is not subtracted
 from the ion-energy RHS. Wall diagnostics ``polarisation_wall_energy_weight``,
 ``polarisation_wall_work_weight``, ``polarisation_wall_thermal_weight`` and
-``polarisation_wall_pressure_mismatch`` record the uniform energy, work and
+``polarisation_wall_pressure_mismatch`` record the local energy, work and
 thermal-plus-parallel weights and the difference between transported pressure
 weight and the wall pressure potential. These additional outputs require
 ``diagnose = true``.

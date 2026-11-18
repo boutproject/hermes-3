@@ -268,8 +268,9 @@ template and restart builder use the same profile.
 The shared physical potential is sampled from the analytic continuum ion-only
 zero-vorticity solution: the harmonic extension is `Phi=1`, so `phi=1-P`.
 Both models have zero phi midpoints. The pressure formulation uses homogeneous Neumann
-ion-pressure guards; total ion energy imposes mean-Neumann, zero-AC-midpoint
-guards on ion pressure and its pressure potential. Electron pressure retains
+ion-pressure guards; total ion energy version 9 uses Neumann guards on ion
+pressure and its pressure potential, local Φ wall work and local transport
+weights. Electron pressure retains
 its species Neumann guards. These guard conditions leave the initial physical
 density, pressures and potential matched.
 Each model's initial `Vort` is obtained by applying its own forward operator

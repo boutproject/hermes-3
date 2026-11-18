@@ -27,12 +27,12 @@ def reference(case="periodic"):
             if case == "wall"
             else radial + radial**2 + r(13, 6) * radial**3
         )
-        phi, psi = f * s.cos(z), 1 + f * s.sin(z)
+        phi, psi = f * s.cos(z), 1 + r(1, 5) * s.cos(s.pi * x) * s.sin(z)
     elif case in ("annulus", "cpp"):
         g11, g13, g33 = s.Integer(1), -r(1, 4) / x, r(17, 16) / x**2
         J, c = x, x**2
         phi = s.sin(s.pi * (x - 1)) * s.cos(z)
-        psi = r(1, 5) * s.sin(s.pi * (x - 1)) ** 2 * s.sin(2 * z)
+        psi = r(1, 5) * s.cos(2 * s.pi * (x - 1)) * s.sin(2 * z)
     else:
         phase = x if case == "cpp" else x + z
         g11 = 1 + r(1, 10) * s.cos(x)

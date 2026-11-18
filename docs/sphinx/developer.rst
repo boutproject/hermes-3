@@ -132,8 +132,8 @@ heating share is an internal ion/electron transfer.
 ``ion_chi_residual`` measures the selected RHS minus the full FV operator on
 chi; it is not a residual against the completed vorticity derivative. Analysis
 uses the same selected RHS when reconstructing chi. Output versions are
-``evolve_vorticity_ion_energy_version = 7`` and ``polarisation_drift_version = 2``;
-analysis accepts ion-energy versions 4 through 7, defaults missing tags to
+``evolve_vorticity_ion_energy_version = 9`` and ``polarisation_drift_version = 4``;
+analysis accepts ion-energy versions 4 through 9, defaults missing tags to
 version 4 and rejects unknown versions.
 
 ``reynoldsFaceFluxes()`` evaluates :math:`\Omega\mathbf{v}_E+\mathbf{R}`.
@@ -157,12 +157,16 @@ Recovery publishes its transport inputs independently of ``diagnose``.
 
 Polarisation transport combines minus the full Reynolds and chi faces once,
 then applies arithmetic face averages of species/energy weights in the interior.
-At each radial wall and Y row, it uses Z-uniform weights: the mean physical-cell
-mass fraction times separate means of face temperature and parallel velocity.
-The kinetic weight squares the mean velocity. Work uses the wall midpoint of
-:math:`\Phi`. These products of means preserve signed wall exchange while
-removing correlations between transport weights and wall current. Wall runs
-require complete periodic Z lines on each rank. ``DivEExB`` advects total
+At each radial wall and Y row, it uses local face mass fractions, temperatures
+and parallel velocities. The kinetic weight squares the local face velocity.
+Neumann guards make these traces equal to the adjacent physical state. Work
+uses :math:`\Phi_w=\phi_b+\psi_w(z)`, pairing local pressure work with the
+perpendicular kinetic-energy wall flux. The electrostatic midpoint is
+Z-uniform and pressure potential is Neumann; recovery imposes their sum as
+the inversion boundary. The auxiliary chi closure retains a DC midpoint of
+:math:`\partial_t\phi_b` and default Neumann AC, neglecting
+:math:`\partial_t\psi_w(z)`. Wall transport requires no Z average; conducting
+potential recovery retains its complete-Z-line requirement. ``DivEExB`` advects total
 ``Eion`` with the shared XPPM operator and closes normal radial energy flux;
 the perpendicular kinetic-energy work flux is included in this advection.
 ``reynolds_work`` is an X--Z diagnostic, rather than a separate energy RHS term.
@@ -1740,8 +1744,8 @@ The integrated tests exercise ``evolve_vorticity_ion_energy``:
   independent electron momentum with inertia, nonzero current divergence and
   numerical potential damping, ending at normalised time 0.02. Both use a
   Cartesian slab with zero magnetic curvature. The radial pressure-potential
-  shape is :math:`P(a)=[1-\cos(2a)]^2` for ``parallel_current`` and
-  :math:`P(a)=1-\cos(2a)` for ``parallel_current_wall``, where
+  shape is :math:`P(a)=1+[1-\cos(2a)]^2` for ``parallel_current`` and
+  :math:`P(a)=2-\cos(2a)` for ``parallel_current_wall``, where
   :math:`a=\pi X/L` and :math:`L=10`. The first has
   :math:`\phi_{XX}=\psi_{XX}=0` at both walls and checks global L2/Linfinity
   orders. The second retains nonzero psi wall curvature, checks the fixed
@@ -1752,9 +1756,10 @@ The integrated tests exercise ``evolve_vorticity_ion_energy``:
   Other fields retain L2 error caps in the selected region; chi absolute
   error is diagnostic-only, while finiteness and convergence remain required.
   Chi reference RMS and relative RMS error are saved. Analytic chi includes
-  parallel-current divergence. Z-dependent ion primitive harmonics have a
-  :math:`\sin^2(a)` envelope so their radial wall values are independent of Z,
-  avoiding a separate error from averaging wall transport weights.
+  parallel-current divergence. Density and parallel-velocity harmonics have a
+  :math:`\sin^2(a)` envelope so their radial wall values are independent of Z.
+  The pressure potential and temperature have nonzero wall AC and Neumann
+  guards; local wall transport retains their fluctuations.
   Continuum forcing does not cancel numerical potential damping.
   ``--verify`` adds tighter temporal integration at the second resolution and
   serial/MPI agreement at the coarsest resolution, including chi. These
@@ -1877,26 +1882,29 @@ Reynolds stress wall convergence
 ````````````````````````````````
 
 ``tests/python/test_reynolds_transport.py`` uses an independently differentiated
-covariant current and recovers Phi from the same FV Dirichlet problem as the
-model before subtracting sampled psi. It retains nonzero normal Reynolds
-current and the vorticity boundary condition. The zero-wall-curvature reference
-uses :math:`r=x(1-x)` and :math:`f=r+r^2+(13/6)r^3`, with
-:math:`\phi=f\cos z` and :math:`\psi=1+f\sin z`.
-It satisfies :math:`f''=0` and :math:`\Omega_x=0` at both walls. With production
-reflection and MC donors, wall maximum orders are 1.97/1.98 and domain mean
-absolute orders are 1.98/2.00 on 32/64/128 cells. MC extrema give domain RMS
-orders about 1.5 and maximum orders about 1; a centred-donor diagnostic control
-restores approximately second-order RMS/maximum convergence.
+covariant current. It samples Neumann :math:`\psi=1+0.2\cos(\pi x)\sin z`
+and solves the conducting FV phi problem so that :math:`\mathcal{L}(\phi+\psi)`
+equals the prescribed vorticity in physical cells. Pressure has nonzero wall AC.
+Both profiles use :math:`r=x(1-x)` and :math:`\phi=f\cos z`. The profile
+:math:`f=r+r^2+(13/6)r^3` has zero electrostatic wall curvature and checks
+second-order wall maxima and domain mean errors with MC donors. A centred-donor
+control also checks RMS and maximum convergence. The profile
+:math:`f=r-r^2/12` has finite electrostatic wall curvature; domain mean and
+outer-three-cell RMS errors converge near second order, while the interior
+RMS bound allows order 1.5 from MC-limited extrema. Wall maximum errors must
+shrink rather than approach a finite Taylor limit. Both sampled and recovered
+states are checked. Viscosity and density-source coverage remain active.
 
-The original curved-wall reference uses :math:`f=r-r^2/12`. Its first-cell
-error remains O(1): separate reflected potential/pressure guards and FV
-recovery give an O(h) face discrepancy that is divided by cell width. The
-error occupies O(h) domain volume, so all-cell mean absolute orders are
-1.22/1.13, while interior RMS orders are 1.80/1.90. The regression therefore
-requires first-order domain mean error, near-second-order interior RMS and
-a bounded nonvanishing wall error; the independent Taylor-limit checks remain.
-Viscosity and density-source coverage are retained. Mean absolute error, RMS
-and maximum norms have different convergence rates and must be named explicitly.
+``tests/python/test_local_wall_transport.py`` evaluates a separate exact
+input-expression state at 16², 32² and 64² on one rank. It sets
+:math:`\Omega=\mathcal{L}(\Phi)` and :math:`E_i=3p_i/2+K_\perp` with the
+same discrete wall traces used in recovery. Adjacent wall-cell RMS-rate
+differences must shrink by a factor between 3.5 and 4.5 for both energy and
+Reynolds divergence at both walls. Recovery uses ``phi_rtol=vort_atol=1e-12``
+and ``phi_atol=1e-3``, achievable through 64². The 16×8×16 varying-fraction
+regression retains per-species particle and momentum face identities, local
+thermal/parallel kinetic energy weights, energy/current closure, positive
+ion temperature and zero unpaid work at every saved state through :math:`t=0.1`.
 
 ``tests/unit/diagnose_reynolds_wall.py`` provides independent X/Z refinements,
 analytic-sample/guard-continuation/face-current probes and a centred-donor
@@ -1910,8 +1918,8 @@ energy budget alone does not establish local wall accuracy.
 
 The legacy ``2D-energy`` regression retains its existing registration. The
 publication refinement scan is an example in
-``examples/tokamak-2D-driftplane/2D-energy``; it is run manually and has no CTest
-smoke test. Its README describes plotting dependencies and remote execution.
+``examples/tokamak-2D-driftplane/2D-energy``; its fixed-wall D = 0.1 total-energy case also has the slow CTest
+``ion-energy-publication-convergence`` at 16²–64² through :math:`t=5000`. Its README describes plotting dependencies and remote execution.
 
 2D-recycling
 ~~~~~~~~~~~~~~

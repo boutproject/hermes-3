@@ -1,7 +1,22 @@
+import os
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools"))
+
+
+import pytest
+
+
+@pytest.fixture
+def hermes_executable():
+    root = Path(__file__).resolve().parents[2]
+    executable = Path(
+        os.environ.get("HERMES_EXECUTABLE", root / "build/hermes-3")
+    ).resolve()
+    if not executable.is_file():
+        pytest.skip("Build Hermes-3 or set HERMES_EXECUTABLE to run native regressions")
+    return executable
 
 
 def pytest_addoption(parser):

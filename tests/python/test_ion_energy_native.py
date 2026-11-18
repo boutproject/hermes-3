@@ -1,6 +1,6 @@
 """Gauge, wall-energy and fixed-band wall-amplitude checks on native outputs."""
 
-import os
+import json
 import shutil
 import subprocess
 from pathlib import Path
@@ -18,19 +18,9 @@ ROOT = Path(__file__).resolve().parents[2]
 INPUT = Path(__file__).parent / "data/ion-energy/BOUT.inp"
 
 
-@pytest.fixture
-def hermes_executable():
-    executable = Path(
-        os.environ.get("HERMES_EXECUTABLE", ROOT / "build/hermes-3")
-    ).resolve()
-    if not executable.is_file():
-        pytest.skip("Build Hermes-3 or set HERMES_EXECUTABLE to run native regressions")
-    return executable
-
-
-def run(executable, folder, *overrides):
+def run(executable, folder, *overrides, input_path=INPUT, timeout=1200):
     folder.mkdir(parents=True, exist_ok=True)
-    shutil.copyfile(INPUT, folder / "BOUT.inp")
+    shutil.copyfile(input_path, folder / "BOUT.inp")
     command = [str(executable), "-d", str(folder), *overrides]
     with (folder / "run.log").open("w") as log:
         completed = subprocess.run(
@@ -38,7 +28,7 @@ def run(executable, folder, *overrides):
             cwd=folder,
             stdout=log,
             stderr=subprocess.STDOUT,
-            timeout=1200,
+            timeout=timeout,
             check=False,
         )
     assert completed.returncode == 0, (folder / "run.log").read_text()[-6000:]
@@ -136,8 +126,8 @@ def test_potential_gauge_invariance(hermes_executable, tmp_path, viscosity):
 def test_total_energy_closes_against_wall_power(hermes_executable, tmp_path):
     path = run(hermes_executable, tmp_path / "wall-energy")
     with Dataset(path) as dump:
-        assert int(dump["evolve_vorticity_ion_energy_version"][...]) == 7
-        assert int(dump["polarisation_drift_version"][...]) == 2
+        assert int(dump["evolve_vorticity_ion_energy_version"][...]) == 9
+        assert int(dump["polarisation_drift_version"][...]) == 4
         physical = lambda name: np.asarray(dump[name][:, 2:-2, 0, :])
         volume = (
             np.asarray(dump["J"][:])
@@ -164,8 +154,8 @@ def test_total_energy_closes_against_wall_power(hermes_executable, tmp_path):
             midpoint = (phi[:, face] + phi[:, face + 1]) / 2
             assert_allclose(work[:, face], midpoint, atol=2e-12, rtol=0)
             assert_allclose(
-                (current[:, face] * work[:, face]).sum(axis=-1),
-                midpoint.mean(axis=-1) * current[:, face].sum(axis=-1),
+                current[:, face] * (work[:, face] - midpoint),
+                0,
                 atol=1e-15,
                 rtol=1e-12,
             )
@@ -188,23 +178,19 @@ def test_total_energy_closes_against_wall_power(hermes_executable, tmp_path):
 @pytest.mark.slow
 def test_drift_plane_fixed_band_wall_amplitudes(hermes_executable, tmp_path):
     from energy_analysis.spectra import analyse_native_bands
+    from ion_energy_publication import run_case
 
     folder = tmp_path / "drift-plane"
-    run(
-        hermes_executable,
-        folder,
-        "mesh:nx=132",
-        "mesh:nz=128",
-        "solver:nout=240",
-        "solver:output_step=5",
-        "solver:atol=1e-10",
-        "solver:rtol=1e-5",
-        "e:diagnose=false",
-        "h+:diagnose=false",
-    )
+    run_case(hermes_executable, folder, 128, endpoint=1200, output_step=5, nproc=1)
     report = analyse_native_bands(folder)
     assert report["endpoint"] == 1200
-    # Rounded bounds include margin above the maximum individual-wall RMS
-    # over the complete 128² trajectory for these expressions and tolerances.
-    for band, threshold in (("16-31", 3e-5), ("32-63", 5e-6)):
-        assert report["vorticity"][band]["maximum_individual_wall_RMS"] < threshold
+    (folder / "wall-bands.json").write_text(json.dumps(report, indent=2) + "\n")
+    envelope = json.loads(
+        (INPUT.parent.parent / "ion-energy-wall-envelope.json").read_text()
+    )
+    assert report["n"] == envelope["n"]
+    for band, bounds in envelope["vorticity"].items():
+        assert (
+            report["vorticity"][band]["maximum_individual_wall_RMS"]
+            < bounds["upper_bound"]
+        )

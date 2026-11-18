@@ -62,8 +62,10 @@ def test_parallel_potential_curvature_at_both_walls(variant):
         for name in ("phi", "psi"):
             curvature = s.simplify(s.diff(fields[name], exact.X, 2).subs(exact.X, face))
             assert (curvature == 0) is (variant == "parallel_current" or name == "phi")
-        for name in ("Ni", "Nj", "NVi", "NVj", "Tion", "Pe"):
+        for name in ("Ni", "Nj", "NVi", "NVj", "Pe"):
             assert s.simplify(s.diff(fields[name], exact.Z).subs(exact.X, face)) == 0
+        assert s.simplify(s.diff(fields["psi"], exact.X).subs(exact.X, face)) == 0
+        assert s.simplify(s.diff(fields["psi"], exact.Z).subs(exact.X, face)) != 0
 
 
 @pytest.mark.parametrize("variant", exact.PARALLEL_VARIANTS)
@@ -90,7 +92,7 @@ def test_parallel_profiles_separate_reynolds_wall_error(variant):
         }
         wall = SimpleNamespace(mxg=2)
         phi = fill_wall_guards(values["phi"], wall, "zero")
-        psi = fill_wall_guards(values["psi"], wall, "pressure")
+        psi = fill_wall_guards(values["psi"], wall, "neumann")
         omega = fill_wall_guards(values["Vort"], wall, "neumann")
         geometry = xr.Dataset(
             {
@@ -132,12 +134,8 @@ def test_parallel_profiles_separate_reynolds_wall_error(variant):
         ]
     )
     assert np.all(interior_orders > 1.8), errors
-    if variant == "parallel_current":
-        assert np.all(global_orders > 1.8), errors
-        assert errors[-1]["wall_max"] < errors[-2]["wall_max"] / 3
-    else:
-        assert global_orders[-1] < 1.0, errors
-        assert errors[-1]["wall_max"] > 0.8 * errors[-2]["wall_max"], errors
+    assert np.all(global_orders > 1.8), errors
+    assert errors[-1]["wall_max"] < errors[-2]["wall_max"] / 3
 
 
 def test_common_temperature_single_ion_limits():

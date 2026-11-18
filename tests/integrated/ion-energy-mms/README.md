@@ -13,12 +13,13 @@ does not require SymPy; generating and symbolically checking inputs does.
 | `viscosity` | Zero-current viscous slab with zero potential | Full physical domain |
 | `curvature` | Zero-current slab with magnetic curvature | Full physical domain |
 
-The first two cases isolate the radial-wall Reynolds error. The pressure
-potential uses P(a)=(1−cos(2a))² in the smooth case and P(a)=1−cos(2a) in the
-curved case, where a=πX/L. Analytic chi inverses are supplied for both. Both envelope
-Z-dependent ion density, velocity and temperature harmonics with sin²(πX/L),
-so their wall values are independent of Z. This makes the continuum solution
-compatible with the separate Z averaging of wall transport weights. Their L2 and L∞
+The first two cases compare zero and finite radial pressure-potential
+curvature. The pressure potential uses P(a)=1+(1−cos(2a))² in the smooth case
+and P(a)=2−cos(2a) in the curved case, where a=πX/L. Both have Neumann ψ with
+nonzero wall AC. Analytic chi inverses include the constant radial pressure
+harmonic. The sin²(πX/L) envelope keeps density and parallel velocity uniform
+along each wall, while temperature varies locally with ψ. Local polarisation
+transport carries these wall values without averaging. Their L2 and L∞
 order limits are **1.4 and 0.9**, respectively, consistent with MC limiting near
 extrema. The curved-wall variant checks these orders in the fixed central half
 of the radial domain, and reports global errors and orders without gating them.
@@ -58,7 +59,11 @@ python tests/integrated/ion-energy-mms/operator_convergence.py --output /tmp/ope
 ```
 
 Use `--exe` to select a build and `--output-root` to keep results in a chosen
-parent directory. Each level doubles X, Y and Z resolution, starting at 8 × 16
+parent directory. Use `--nproc` to select the MPI rank count and `--mpiexec srun`
+to launch with Slurm; additional launcher options go in `--mpi-args`.
+`NXPE` is left unset so BOUT++ chooses an X-Y decomposition automatically.
+The inputs use CVODE's default BDF method with Newton iteration.
+Each level doubles X, Y and Z resolution, starting at 8 × 16
 × 8 physical cells. At least two levels are required. Parallel-current cases
 end at t=0.02 with four output intervals; legacy cases end at t=0.1 with twenty.
 Both use output intervals of 0.005. Independent electron momentum introduces a

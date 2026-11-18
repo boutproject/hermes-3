@@ -1,6 +1,5 @@
 # Template; regenerate committed variants using python mms.py --all.
 periodicX = false
-NXPE = 1
 MXG = 2
 MYG = 2
 ZMIN = 0
@@ -57,8 +56,6 @@ type = identity
 
 [solver]
 type = cvode
-adams_moulton = true
-func_iter = true
 mms = true
 mms_initialise = true
 nout = 5

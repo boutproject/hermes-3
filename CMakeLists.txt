@@ -542,7 +542,25 @@ if(HERMES_TESTS)
       PROPERTIES LABELS
                  "unit;energy"
                  TIMEOUT
-                 120
+                 600
+                 WORKING_DIRECTORY
+                 "${CMAKE_CURRENT_SOURCE_DIR}"
+                 ENVIRONMENT
+                 "HERMES_EXECUTABLE=$<TARGET_FILE:hermes-3>")
+    add_test(
+      NAME ion-energy-publication-convergence
+      COMMAND
+        "${HERMES_ENERGY_PYTHON}" -m pytest -q --run-slow
+        "${CMAKE_CURRENT_SOURCE_DIR}/tests/python/test_ion_energy_convergence.py"
+    )
+    set_tests_properties(
+      ion-energy-publication-convergence
+      PROPERTIES LABELS
+                 "integration;energy;slow"
+                 PROCESSORS
+                 2
+                 TIMEOUT
+                 26000
                  WORKING_DIRECTORY
                  "${CMAKE_CURRENT_SOURCE_DIR}"
                  ENVIRONMENT
@@ -558,7 +576,7 @@ if(HERMES_TESTS)
       PROPERTIES LABELS
                  "integration;energy;slow"
                  TIMEOUT
-                 1800
+                 8400
                  WORKING_DIRECTORY
                  "${CMAKE_CURRENT_SOURCE_DIR}"
                  ENVIRONMENT

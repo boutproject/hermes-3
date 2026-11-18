@@ -758,6 +758,8 @@ struct ConcreteComponentTests : public ComponentTest,
     // exercise wall models with two guards; use periodic X for this interface test.
     if (typname == "evolve_vorticity_ion_energy") {
       bout::globals::mesh->periodicX = true;
+      options["hermes"]["components"] = "object_name, polarisation_drift";
+      options["polarisation_drift"]["implementation"] = "conservative";
     }
     if (required_params.isSection(typname)) {
       options[objname] = required_params[typname].copy();

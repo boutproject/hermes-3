@@ -51,10 +51,12 @@ def common_temperature(psi, ni, nj):
 
 def pressure_shape(a, variant):
     if variant == "parallel_current":
-        return (1 - s.cos(2 * a)) ** 2
+        return 1 + (1 - s.cos(2 * a)) ** 2
     if variant == "parallel_current_wall":
-        return 1 - s.cos(2 * a)
-    return s.Rational(813, 287) - s.Rational(1100, 287) * s.cos(2 * a) + s.cos(4 * a)
+        return 2 - s.cos(2 * a)
+    return (
+        1 + s.Rational(813, 287) - s.Rational(1100, 287) * s.cos(2 * a) + s.cos(4 * a)
+    )
 
 
 def chi_shape(a, theta, *, variant="baseline"):
@@ -64,11 +66,14 @@ def chi_shape(a, theta, *, variant="baseline"):
     (d_aa+4*d_theta_theta)chi = physical Reynolds divergence / c.
     Multiply by kX^2 and the two amplitudes for physical chi.
     """
+    wall_harmonic = s.Rational(8, 17) * s.cos(a) * s.cos(2 * theta)
     if variant == "parallel_current":
-        # P=(1-cos(2a))^2 has P=P'=P''=0 at both radial walls.
+        # The constant radial pressure harmonic has nonzero wall AC. The
+        # remaining shape has P'=P''=0 at both radial walls.
         # The cosine inverse has Neumann AC and zero Dirichlet DC traces.
         return (
-            s.Rational(16, 17) * s.cos(a)
+            wall_harmonic
+            + s.Rational(16, 17) * s.cos(a)
             - s.Rational(36, 25) * s.cos(3 * a)
             + s.Rational(20, 41) * s.cos(5 * a)
             + (
@@ -79,21 +84,27 @@ def chi_shape(a, theta, *, variant="baseline"):
             * s.sin(theta) ** 2
         )
     if variant == "parallel_current_wall":
-        # P=1-cos(2a) retains finite curvature at both walls. Its larger
-        # wall/interior curvature ratio exposes the wall error on 8..64 grids.
+        # P=2-cos(2a) retains finite pressure-potential curvature at both
+        # walls, with the same nonzero wall AC as the zero-curvature profile.
         return (
-            s.Rational(10, 17) * s.cos(a)
+            wall_harmonic
+            + s.Rational(10, 17) * s.cos(a)
             - s.Rational(18, 25) * s.cos(3 * a)
             + (s.Rational(14, 17) * s.cos(a) - s.Rational(14, 25) * s.cos(3 * a))
             * s.sin(theta) ** 2
         )
     return (
-        40 * s.cos(5 * a)
-        - s.Rational(792, 7) * s.cos(3 * a)
-        + s.Rational(512, 7) * s.cos(a)
-    ) / 41 + (84 * s.cos(5 * a) - 252 * s.cos(3 * a) + 168 * s.cos(a)) * s.sin(
-        theta
-    ) ** 2 / 41
+        wall_harmonic
+        + (
+            40 * s.cos(5 * a)
+            - s.Rational(792, 7) * s.cos(3 * a)
+            + s.Rational(512, 7) * s.cos(a)
+        )
+        / 41
+        + (84 * s.cos(5 * a) - 252 * s.cos(3 * a) + 168 * s.cos(a))
+        * s.sin(theta) ** 2
+        / 41
+    )
 
 
 @lru_cache(maxsize=len(VARIANTS))
@@ -111,9 +122,8 @@ def model(variant="baseline"):
         raise ValueError(f"Unknown MMS variant: {variant}")
     H = metric(variant)
     nu = r(2, 100) if variant == "viscosity" else s.Integer(0)
-    # Wall transport uses Z-averaged partition, temperature and velocity.
-    # Make their continuum wall values independent of Z so that this separate
-    # projection error does not obscure the Reynolds wall-curvature comparison.
+    # Wall-uniform density and velocity isolate the parallel-current operator
+    # comparison; temperature retains the local pressure-potential fluctuation.
     wall_envelope = s.sin(a) ** 2 if variant in PARALLEL_VARIANTS else s.Integer(1)
     ni = (
         1
@@ -136,13 +146,13 @@ def model(variant="baseline"):
     shape = pressure_shape(a, variant)
     psi = r(12, 10) + r(4, 100) * s.cos(b - tau) + amp_psi * shape * s.sin(theta)
     if variant in ("skew", "viscosity"):
-        # These focused recovery/viscosity cases vanish to sixth order at X
-        # faces: all mixed normal fluxes and Omega_X are compatible there.
+        # The radial perturbation vanishes to sixth order at X faces; the
+        # constant radial harmonic retains nonzero wall AC and Neumann guards.
         phi = s.Integer(0)
         psi = (
             r(12, 10)
             + r(4, 100) * s.cos(b - tau)
-            + amp_psi * (1 - s.cos(2 * a)) ** 3 * s.sin(theta)
+            + amp_psi * (1 + (1 - s.cos(2 * a)) ** 3) * s.sin(theta)
         )
     ti = common_temperature(psi, ni, nj)
     pi, pj = ni * ti, nj * ti
@@ -331,7 +341,7 @@ def evaluate(name, x, y, z, time, variant="baseline"):
 def preflight(variant="baseline"):
     """Check the analytic elliptic, closure and boundary contracts."""
     a, d = s.symbols("a d", real=True)
-    shape = s.Rational(813, 287) - s.Rational(1100, 287) * s.cos(2 * a) + s.cos(4 * a)
+    shape = pressure_shape(a, "baseline")
     f, p = s.sin(a) * s.cos(d), shape * s.sin(d)
     L = lambda q: s.diff(q, a, 2) + 4 * s.diff(q, d, 2)
     D = lambda q, h: 2 * (s.diff(q, a) * s.diff(h, d) - s.diff(q, d) * s.diff(h, a))
@@ -342,7 +352,9 @@ def preflight(variant="baseline"):
     assert s.simplify(residual) == 0, "Analytic chi does not solve the physical RHS"
     rx = -L(f + p) * s.diff(f, d) - s.diff(alpha, a) / 2 - L(f) * s.diff(f + p, d)
     for face in (0, s.pi):
-        for q in (shape, s.diff(shape, a), chi, s.diff(chi, a), rx, s.diff(alpha, a)):
+        assert s.simplify(shape.subs(a, face)) == 1
+        assert s.simplify(s.integrate(chi.subs(a, face), (d, 0, 2 * s.pi))) == 0
+        for q in (s.diff(shape, a), s.diff(chi, a), rx, s.diff(alpha, a)):
             assert s.simplify(q.subs(a, face)) == 0
     fields, rhs, _, terms = model(variant)
     assert all(name in fields for name in RECOVERED), "Missing recovered MMS field"
@@ -380,7 +392,7 @@ def preflight(variant="baseline"):
         assert s.simplify(current - fields["Jpar"]) == 0
         assert s.simplify(s.diff(current, Y) - fields["DivJpar"]) == 0
         for face in (0, LENGTH):
-            for name in ("Ni", "Nj", "NVi", "NVj", "Tion", "Pe"):
+            for name in ("Ni", "Nj", "NVi", "NVj", "Pe"):
                 assert s.simplify(s.diff(fields[name], Z).subs(X, face)) == 0, (
                     name,
                     face,
@@ -408,27 +420,25 @@ def preflight(variant="baseline"):
         for face in (0, LENGTH):
             for name in ("psi", "Vort", "chi"):
                 assert s.simplify(s.diff(fields[name], X).subs(X, face)) == 0
-            for name in ("chi", "Vort"):
-                assert s.simplify(fields[name].subs(X, face)) == 0
-            assert s.simplify((H * grad(fields["psi"]))[0].subs(X, face)) == 0
         assert fields["chi"] == 0
         assert s.simplify(rhs["Vort"] - terms.get("Vort.viscosity", 0)) == 0
     for face in (0, LENGTH):
         assert s.simplify(fields["phi"].subs(X, face)) == 0
+        assert s.simplify(s.diff(fields["psi"], Z).subs(X, face)) != 0
         for name in ("Ni", "Nj", "NVi", "NVj", "Pe", "Pi", "pi", "pj", "Tion", "psi"):
             assert s.simplify(s.diff(fields[name], X).subs(X, face)) == 0, name
-    # Rigorous primitive bounds (|P| <= 2200/287); density floors stay inactive.
+    # Rigorous primitive bounds (|P| <= 9); floors stay inactive.
     assert (
         s.Rational(12, 10)
         - s.Rational(4, 100)
-        - s.Rational(2, 100) * s.Rational(2200, 287) * s.Rational(105, 100)
+        - s.Rational(2, 100) * s.Integer(9) * s.Rational(105, 100)
         > 0
     )
     if variant == "curvature":
         psi_upper = (
             s.Rational(12, 10)
             + s.Rational(4, 100)
-            + s.Rational(2, 100) * s.Rational(2200, 287) * s.Rational(105, 100)
+            + s.Rational(2, 100) * s.Integer(9) * s.Rational(105, 100)
         )
         # Pi <= 4*psi/3 for positive ni,nj, so the replaced Pe is positive too.
         assert 4 - s.Rational(1, 50) - s.Rational(4, 3) * psi_upper > 0

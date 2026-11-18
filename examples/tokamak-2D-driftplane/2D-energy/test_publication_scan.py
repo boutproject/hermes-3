@@ -323,10 +323,14 @@ def test_total_energy_input_uses_plan_c_boundary_options(
 
 
 @pytest.mark.parametrize("nx", [8, 16, 32, 64, 128, 256])
-def test_tapered_initial_state_has_no_wall_sheet_or_total_energy_flow(runner, nx):
+@pytest.mark.parametrize("version", (4, 8, 9))
+def test_tapered_initial_state_has_no_wall_sheet_or_total_energy_flow(
+    runner, nx, version
+):
     from types import SimpleNamespace
 
     _, geometry = grid(nx=nx, nz=nx)
+    geometry.attrs["metadata"] = {"evolve_vorticity_ion_energy_version": version}
     run = SimpleNamespace(
         data=geometry,
         mxg=2,

@@ -2,12 +2,16 @@
 
 ## Unreleased
 
-- Make `evolve_vorticity_ion_energy` polarisation work consistent with the
-  pressure potential and perpendicular kinetic energy. Use uniform radial-wall
-  particle, momentum and energy weights formed from separate wall-line means.
+- Use Neumann radial ion-pressure and pressure-potential guards with a conducting,
+  Z-uniform electrostatic wall potential. The generalised potential includes the
+  local wall pressure potential.
+- Carry polarisation wall work, particles, momentum and thermal/parallel kinetic
+  energy with local face weights. Identify this contract with ion-energy version
+  9 and conservative drift version 4; retain the auxiliary chi approximation.
 - Carry ion viscous drift work through polarisation energy transport;
   retain `DivEviscous` as a diagnostic and preserve electron heating transfer.
-- Default to ten auxiliary polarisation corrections and identify the transport
-  contract with component metadata version 4.
+- Default to ten auxiliary polarisation corrections.
 - Add generated-restart gauge, wall-energy and slow fixed-band wall-amplitude
-  regressions; update native-output flux and spectral analysis.
+  regressions, exact frozen-state wall convergence and varying-fraction
+  multispecies identities. Add a slow D = 0.1 publication convergence regression;
+  update native-output analysis with versioned wall transport reconstruction.
