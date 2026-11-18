@@ -177,10 +177,9 @@ Field3D Div_n_bxGrad_f_B_XPPM(const Field3D& n, const Field3D& f, bool bndry_flu
       BoutReal fpm = 0.25 * (f[i] + f[xp] + f[zm] + f[xpzm]);
       BoutReal fpp = 0.25 * (f[i] + f[xp] + f[zp] + f[xpzp]);
 
-      BoutReal vU = 0.5 * (h[i] + h[zp]) * (fmp - fpp) / cellwidth_U; // -J*df/dx
-      BoutReal vD = 0.5 * (h[i] + h[zm]) * (fmm - fpm) / cellwidth_D; // -J*df/dx
-
-      BoutReal vR = 0.5 * (h[i] + h[xp]) * (fpp - fpm) / cellheight_R; // J*df/dz
+      BoutReal vU = 0.5 * (h[i] + h[zp]) * (fmp - fpp) / cellwidth_U;
+      BoutReal vD = 0.5 * (h[i] + h[zm]) * (fmm - fpm) / cellwidth_D;
+      BoutReal vR = 0.5 * (h[i] + h[xp]) * (fpp - fpm) / cellheight_R;
       BoutReal vL = 0.5 * (h[i] + h[xm]) * (fmp - fmm) / cellheight_L;
 
       // X Fluxes
