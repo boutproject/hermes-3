@@ -729,14 +729,12 @@ void PolarisationDrift::transformConservative(GuardedOptions& state) {
     }
     return result;
   };
-  // Each rank owns complete periodic Z lines, so wall-line means are local.
-  // Thermal energy, parallel motion and particle fractions use wall-line means.
-  // Work uses the local Phi midpoint, including the pressure work of the
-  // polarisation current at a conducting wall.
-  if (radial_model.walls
-      && (mesh->getNZPE() != 1 || mesh->zstart != 0 || mesh->zend + 1 != mesh->LocalNz)) {
-    throw BoutException("Polarisation wall transport requires complete periodic Z lines");
-  }
+  // Energy, momentum and particles carried through a radial wall use the local
+  // wall-face state. Neumann guards make these values equal to the adjacent cell.
+  // Work uses the local Phi midpoint, including conducting-wall pressure work.
+  const auto midpoint = [](const Field3D& value, int x, int y, int z) {
+    return 0.5 * (value(x, y, z) + value(x + 1, y, z));
+  };
   const auto* coord = phi.getCoordinates();
   Field3D wall_energy_weight = zeroFrom(phi);
   Field3D wall_work_weight = zeroFrom(phi);
@@ -752,13 +750,9 @@ void PolarisationDrift::transformConservative(GuardedOptions& state) {
       }
       const int cell = inner ? x + 1 : x;
       for (int y = mesh->ystart; y <= mesh->yend; ++y) {
-        BoutReal mean = 0.0;
         for (int z = 0; z < mesh->LocalNz; ++z) {
-          mean += weight(cell, y, z);
-        }
-        mean /= mesh->LocalNz;
-        for (int z = 0; z < mesh->LocalNz; ++z) {
-          const BoutReal revised = prescribed ? (*prescribed)(x, y, z) : mean;
+          const BoutReal revised =
+              prescribed ? (*prescribed)(x, y, z) : midpoint(weight, x, y, z);
           const BoutReal volume = coord->J()(cell, y, z) * coord->dx()(cell, y, z)
                                   * coord->dy()(cell, y, z) * coord->dz()(cell, y, z);
           result(cell, y, z) += (inner ? -1.0 : 1.0) * polarisation_flux.x(x, y, z)
@@ -788,6 +782,12 @@ void PolarisationDrift::transformConservative(GuardedOptions& state) {
   // Jps = (A_s n_s / rho) Jpol, Gamma_ps = Jps / Z_s. Use the actual
   // mass density, so the species currents sum to Jpol above the floor.
   mass_density = floor(mass_density, average_atomic_mass * density_floor);
+  const auto wallFraction = [&](const Field3D& density, BoutReal mass, int x, int y,
+                                int z) {
+    return 0.5
+           * (mass * density(x, y, z) / mass_density(x, y, z)
+              + mass * density(x + 1, y, z) / mass_density(x + 1, y, z));
+  };
   // The pressure potential uses the same reference mass normalisation as Phi
   // and K_perp. Transporting work as Phi Jpol keeps the local thermal/kinetic
   // partition independent of a constant potential gauge up to the auxiliary
@@ -817,31 +817,23 @@ void PolarisationDrift::transformConservative(GuardedOptions& state) {
     }
     if (species.isSet("momentum")) {
       const Field3D NV = GET_NOBOUNDARY(Field3D, species["momentum"]);
-      Field3D mean_momentum_weight = zeroFrom(phi);
+      Field3D wall_momentum_weight = zeroFrom(phi);
       const Field3D V = GET_NOBOUNDARY(Field3D, species["velocity"]);
       for (int x : {mesh->xstart - 1, mesh->xend}) {
         const bool inner = x == mesh->xstart - 1;
         if (mesh->periodicX || (inner && !mesh->firstX()) || (!inner && !mesh->lastX())) {
           continue;
         }
-        const int cell = inner ? x + 1 : x;
         for (int y = mesh->ystart; y <= mesh->yend; ++y) {
-          BoutReal fraction = 0.0, velocity = 0.0;
           for (int z = 0; z < mesh->LocalNz; ++z) {
-            fraction += AA * N(cell, y, z) / mass_density(cell, y, z);
-            velocity += 0.5 * (V(x, y, z) + V(x + 1, y, z));
-          }
-          fraction /= mesh->LocalNz;
-          velocity /= mesh->LocalNz;
-          for (int z = 0; z < mesh->LocalNz; ++z) {
-            mean_momentum_weight(x, y, z) = AA * fraction * velocity / Z;
+            wall_momentum_weight(x, y, z) =
+                AA * wallFraction(N, AA, x, y, z) * midpoint(V, x, y, z) / Z;
           }
         }
       }
-      // Use the product of the mean particle partition and mean per-particle
-      // momentum, matching the particles transported through the wall.
+      // The local particle partition carries its local per-particle momentum.
       const Field3D momentum_source =
-          -wallWeighted(coefficient * NV, &mean_momentum_weight);
+          -wallWeighted(coefficient * NV, &wall_momentum_weight);
       add(species["momentum_source"], momentum_source);
       set(species["polarisation_momentum_source"], momentum_source);
     }
@@ -855,46 +847,44 @@ void PolarisationDrift::transformConservative(GuardedOptions& state) {
     }
     const int cell = inner ? x + 1 : x;
     for (int y = mesh->ystart; y <= mesh->yend; ++y) {
-      BoutReal thermal = 0.0, kinetic_parallel = 0.0;
-      BoutReal original_pressure = 0.0;
+      const auto nz = static_cast<size_t>(mesh->LocalNz);
+      std::vector<BoutReal> thermal(nz, 0.0), kinetic_parallel(nz, 0.0);
+      std::vector<BoutReal> pressure_transport(nz, 0.0);
       forAllIons(allspecies, [&](GuardedOptions species) {
         const BoutReal AA = get<BoutReal>(species["AA"]);
         const BoutReal Z = get<BoutReal>(species["charge"]);
         const Field3D N = GET_NOBOUNDARY(Field3D, species["density"]);
         const Field3D T = GET_NOBOUNDARY(Field3D, species["temperature"]);
-        BoutReal fraction = 0.0, temp = 0.0, velocity = 0.0;
+        const bool has_velocity = species.isSet("velocity");
+        Field3D V;
+        if (has_velocity) {
+          V = GET_NOBOUNDARY(Field3D, species["velocity"]);
+        }
         for (int z = 0; z < mesh->LocalNz; ++z) {
-          fraction += AA * N(cell, y, z) / mass_density(cell, y, z);
-          temp += 0.5 * (T(x, y, z) + T(x + 1, y, z));
+          const auto index = static_cast<size_t>(z);
+          const BoutReal partition = wallFraction(N, AA, x, y, z);
+          const BoutReal temp = midpoint(T, x, y, z);
+          const BoutReal velocity = has_velocity ? midpoint(V, x, y, z) : 0.0;
+          pressure_transport[index] += partition * temp / Z;
+          thermal[index] += 1.5 * partition * temp / Z;
+          kinetic_parallel[index] += 0.5 * AA * partition * velocity * velocity / Z;
         }
-        fraction /= mesh->LocalNz;
-        temp /= mesh->LocalNz;
-        if (species.isSet("velocity")) {
-          const Field3D V = GET_NOBOUNDARY(Field3D, species["velocity"]);
-          for (int z = 0; z < mesh->LocalNz; ++z) {
-            velocity += 0.5 * (V(x, y, z) + V(x + 1, y, z));
-          }
-          velocity /= mesh->LocalNz;
-        }
-        // Products of separate means give the transported particle flux times
-        // its mean energy per particle; a mean of products would not do so.
-        original_pressure += fraction * temp / Z;
-        thermal += 1.5 * fraction * temp / Z;
-        kinetic_parallel += 0.5 * AA * fraction * velocity * velocity / Z;
       });
       for (int z = 0; z < mesh->LocalNz; ++z) {
+        const auto index = static_cast<size_t>(z);
         const BoutReal work =
             0.5 * (phi(x, y, z) + phi(x + 1, y, z) + psi(x, y, z) + psi(x + 1, y, z));
         const BoutReal pressure_mid = 0.5 * (psi(x, y, z) + psi(x + 1, y, z));
-        const BoutReal revised = work + (thermal + kinetic_parallel);
+        const BoutReal transported = thermal[index] + kinetic_parallel[index];
+        const BoutReal revised = work + transported;
         const BoutReal volume = coord->J()(cell, y, z) * coord->dx()(cell, y, z)
                                 * coord->dy()(cell, y, z) * coord->dz()(cell, y, z);
         DivEpol(cell, y, z) += (inner ? -1.0 : 1.0) * polarisation_flux.x(x, y, z)
                                * (revised - E_adv(cell, y, z)) / volume;
         wall_energy_weight(x, y, z) = revised;
         wall_work_weight(x, y, z) = work;
-        wall_thermal_weight(x, y, z) = thermal + kinetic_parallel;
-        wall_pressure_mismatch(x, y, z) = original_pressure - pressure_mid;
+        wall_thermal_weight(x, y, z) = transported;
+        wall_pressure_mismatch(x, y, z) = pressure_transport[index] - pressure_mid;
       }
     }
   }
@@ -919,9 +909,9 @@ void PolarisationDrift::outputConservative(Options& state) {
   const auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
   const auto rho_s0 = get<BoutReal>(state["rho_s0"]);
   const BoutReal Pnorm = SI::qe * Tnorm * Nnorm;
-  set_with_attrs(state["polarisation_drift_version"], 3,
+  set_with_attrs(state["polarisation_drift_version"], 4,
                  {{"description", "Conservative polarisation transport with local "
-                                  "Phi wall work and mean species transport weights"}});
+                                  "Phi wall work and local species transport weights"}});
   set_with_attrs(state["ion_chi"], chi,
                  {{"time_dimension", "t"},
                   {"units", "V s^-1"},
@@ -949,15 +939,15 @@ void PolarisationDrift::outputConservative(Options& state) {
     for (const auto& [species, sources] : diagnostics.getChildren()) {
       for (const auto& [name, description] :
            {std::pair{"wall_energy_weight",
-                      "Physical X-wall face weight: local Phi plus wall-line mean "
+                      "Physical X-wall face weight: local Phi plus local "
                       "thermal and parallel kinetic energy"},
             std::pair{"wall_work_weight", "Physical X-wall face work weight: local Phi "
                                           "midpoint, including pressure work"},
             std::pair{"wall_thermal_weight",
-                      "Physical X-wall face weight: wall-line mean thermal and "
+                      "Physical X-wall face weight: local thermal and "
                       "parallel kinetic energy"},
             std::pair{"wall_pressure_mismatch",
-                      "Wall-line mean species pressure transport weight minus the "
+                      "Local species pressure transport weight minus the "
                       "local pressure-potential midpoint"}}) {
         set_with_attrs(state[std::string{"polarisation_"} + name],
                        sources[name].as<Field3D>(),

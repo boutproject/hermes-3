@@ -1333,11 +1333,11 @@ void EvolveVorticityIonEnergy::outputVars(Options& state) {
   acceptWarmStart();
 
   set_with_attrs(
-      state["evolve_vorticity_ion_energy_version"], 8,
+      state["evolve_vorticity_ion_energy_version"], 9,
       {{"description", "Component equation and discretisation version: "
                        "MC full-vorticity advection plus compact central R; "
                        "Neumann radial ion pressure and pressure potential; "
-                       "local Phi-weighted wall work with mean species transport; "
+                       "local Phi-weighted wall work and local species transport; "
                        "viscous drift energy carried by polarisation transport; "
                        "conservative polarisation owned by polarisation_drift; "
                        "boundary-conditioned parallel/extra/collisional currents; "
