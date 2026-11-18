@@ -77,9 +77,11 @@ def analyse_native_bands(
                 5,
                 6,
                 7,
+                8,
+                9,
             ):
                 raise AuditError(
-                    "Fixed-band monitor requires ion-energy version 4, 5, 6 or 7"
+                    "Fixed-band monitor requires ion-energy version 4 through 9"
                 )
             if dump["Vort"].shape[2] != 1 or int(dump["NYPE"][...]) != 1:
                 raise AuditError("Band monitor requires a singleton-Y drift plane")

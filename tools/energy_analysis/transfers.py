@@ -262,13 +262,12 @@ def polarisation_energy_coefficient(run):
 
 
 def polarisation_wall_weights(run):
-    """Products of mean particle partitions and mean wall-face quantities.
+    """Versioned wall work, particle, momentum and thermal/kinetic weights.
 
-    Fractions use the adjacent physical cell. Temperature and parallel
-    velocity use guard/cell midpoints after boundary conditions. Each wall
-    line is complete in Z; the kinetic weight squares the mean velocity.
+    Version 9 uses local wall-face states; older transport versions use the
+    products of wall-line means. Work is local from version 8 onward.
     """
-    from .fluxes import species_velocity
+    from .fluxes import component_version, species_velocity
 
     ds = run.data
     ions = [s for s in run.species if s.name != "e" and abs(s.charge) > 1e-5]
@@ -292,15 +291,25 @@ def polarisation_wall_weights(run):
         midpoint = lambda f, face=face: (
             (f.isel(x=face, drop=True) + f.isel(x=face + 1, drop=True)) / 2
         )
-        work = midpoint(Phi).mean("z")
-        thermal, kinetic = 0 * work, 0 * work
+        work = (
+            midpoint(Phi)
+            if component_version(run) in (8, 9)
+            else midpoint(Phi).mean("z")
+        )
+        base = midpoint(Phi) if component_version(run) == 9 else midpoint(Phi).mean("z")
+        thermal, kinetic = 0 * base, 0 * base
         for s in ions:
-            partition = (s.mass * ds["N" + s.name] / rho).isel(x=cell, drop=True).mean(
-                "z"
-            ) / s.charge
+            fraction = s.mass * ds["N" + s.name] / rho
             velocity = species_velocity(run, s)
-            vmean = midpoint(velocity).mean("z")
-            thermal += 1.5 * partition * midpoint(ds.Tion).mean("z")
+            if component_version(run) == 9:
+                partition = midpoint(fraction) / s.charge
+                vmean = midpoint(velocity)
+                temperature = midpoint(ds.Tion)
+            else:
+                partition = fraction.isel(x=cell, drop=True).mean("z") / s.charge
+                vmean = midpoint(velocity).mean("z")
+                temperature = midpoint(ds.Tion).mean("z")
+            thermal += 1.5 * partition * temperature
             kinetic += 0.5 * s.mass * partition * vmean**2
             result["particle_" + s.name][{"x": face}] = partition
             result["momentum_" + s.name][{"x": face}] = s.mass * partition * vmean

@@ -140,7 +140,7 @@ def external_power(run):
 
                 try:
                     if (
-                        component_version(run) in (5, 6, 7)
+                        component_version(run) in (5, 6, 7, 8, 9)
                         and polarisation_owner(run) == name
                     ):
                         continue

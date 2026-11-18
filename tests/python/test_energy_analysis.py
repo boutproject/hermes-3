@@ -1237,7 +1237,7 @@ def shared_current_case(dataset):
     return run
 
 
-@pytest.mark.parametrize("version", (None, 4, 5, 6, 7))
+@pytest.mark.parametrize("version", (None, 4, 5, 6, 7, 8, 9))
 def test_component_version(dataset, version):
     from energy_analysis.fluxes import component_version
 
@@ -1247,6 +1247,24 @@ def test_component_version(dataset, version):
             "evolve_vorticity_ion_energy_version": version,
         }
     assert component_version(open_run(dataset)) == (4 if version is None else version)
+
+
+@pytest.mark.parametrize("version", (4, 7, 8, 9))
+def test_versioned_pressure_guards_retain_physical_wall_fluctuations(dataset, version):
+    from energy_analysis.fluxes import fill_wall_guards
+
+    dataset.attrs["metadata"]["evolve_vorticity_ion_energy_version"] = version
+    case = open_run(dataset)
+    pressure = dataset.Tion * (1 + 0.1 * np.cos(2 * np.pi * dataset.z / 8))
+    bounded = fill_wall_guards(pressure, case, "pressure")
+    for cell, guards in ((case.mxg, (0, 1)), (-case.mxg - 1, (-2, -1))):
+        physical = pressure.isel(x=cell, drop=True)
+        expected = physical if version >= 8 else 2 * physical.mean("z") - physical
+        for guard in guards:
+            assert_allclose(bounded.isel(x=guard, drop=True), expected, atol=0, rtol=0)
+    assert_allclose(
+        bounded.isel(x=slice(2, -2)), pressure.isel(x=slice(2, -2)), atol=0, rtol=0
+    )
 
 
 def test_conservative_owner_preserves_version_four_analysis(dataset):
@@ -1487,11 +1505,16 @@ def test_common_polarisation_faces_and_diagnostic_comparison(dataset):
 
 
 @pytest.mark.parametrize("saved_momentum", (False, True))
-def test_wall_transport_uses_mean_energy_and_momentum_per_particle(
-    dataset, saved_momentum
+@pytest.mark.parametrize("version", (4, 7, 8, 9))
+def test_versioned_wall_transport_energy_and_momentum_per_particle(
+    dataset, saved_momentum, version
 ):
     from energy_analysis.transfers import polarisation_wall_weights
 
+    dataset.attrs["metadata"]["evolve_vorticity_ion_energy_version"] = version
+    if version >= 5:
+        dataset.options["hermes:components"] += ", polarisation_drift"
+        dataset.options["polarisation_drift:implementation"] = "conservative"
     phase = np.cos(2 * np.pi * dataset.z / dataset.sizes["z"])
     dataset["Nd+"] = dataset["Nd+"] * (1 + 0.4 * phase)
     dataset["Nimpurity"] = dataset["Nimpurity"] * (1 - 0.3 * phase)
@@ -1522,13 +1545,21 @@ def test_wall_transport_uses_mean_energy_and_momentum_per_particle(
                 value.isel(x=face, drop=True) + value.isel(x=face + 1, drop=True)
             ) / 2
 
-        temperature = midpoint(dataset.Tion).mean("z")
+        local = version == 9
+        temperature = midpoint(dataset.Tion)
+        if not local:
+            temperature = temperature.mean("z")
         energy = 0 * temperature
         for name, mass, charge in (("d+", 2, 1), ("impurity", 3, 2)):
-            partition = (mass * dataset["N" + name] / rho).isel(x=cell, drop=True).mean(
-                "z"
+            fraction = mass * dataset["N" + name] / rho
+            partition = (
+                midpoint(fraction)
+                if local
+                else fraction.isel(x=cell, drop=True).mean("z")
             ) / charge
-            velocity = midpoint(velocities[name]).mean("z")
+            velocity = midpoint(velocities[name])
+            if not local:
+                velocity = velocity.mean("z")
             particle = weights["particle_" + name].isel(x=face, drop=True)
             assert_allclose(particle, xr.ones_like(particle) * partition, atol=2e-15)
             assert_allclose(
@@ -1539,7 +1570,7 @@ def test_wall_transport_uses_mean_energy_and_momentum_per_particle(
             energy += partition * (1.5 * temperature + 0.5 * mass * velocity**2)
             # This state distinguishes the energy of the mean flow from the
             # mean kinetic energy of the nonuniform wall-face flow.
-            assert (
+            assert local or (
                 float(
                     (midpoint(velocities[name]) ** 2).mean("z").min()
                     - (velocity**2).max()
@@ -1550,6 +1581,11 @@ def test_wall_transport_uses_mean_energy_and_momentum_per_particle(
         assert_allclose(
             thermal_kinetic, xr.ones_like(thermal_kinetic) * energy, atol=2e-15
         )
+        work = midpoint(dataset.phi + energy_densities(run).pressure_potential)
+        if version < 8:
+            work = work.mean("z")
+        actual = weights.work.isel(x=face, drop=True)
+        assert_allclose(actual, xr.ones_like(actual) * work, atol=2e-15)
 
 
 def test_wall_exchange_for_density_momentum_and_energy_without_diagnostics(dataset):

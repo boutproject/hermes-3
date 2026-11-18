@@ -193,7 +193,7 @@ def slab_contract(run, *, closed_wall_diffusion=False):
         allowed_components.add("sound_speed")
         if options["sound_speed"].get_bool("alfven_wave", False):
             raise AuditError("Alfven wave-speed reconstruction is unavailable")
-    if component_version(run) in (5, 6, 7):
+    if component_version(run) in (5, 6, 7, 8, 9):
         allowed_components.add(polarisation_owner(run))
     if closed_wall_diffusion and "classical_diffusion" in components:
         # This component closes complete physical boundary faces, including
@@ -269,21 +269,23 @@ def radial_boundary_mode(run):
 def component_version(run):
     """Validate the ion-energy equation/discretisation version, defaulting to 4.
 
-    Unversioned development snapshots use the current model. Other formulations
+    Unversioned development snapshots use version 4. Other formulations
     do not use this component's version. Unknown versions require a new analysis
     implementation rather than an assumed wall-current reconstruction.
     """
     if run.formulation != "total_energy":
         return None
-    version = run.data.metadata.get("evolve_vorticity_ion_energy_version", 4)
-    if version not in (4, 5, 6, 7):
+    version = run.data.attrs.get("metadata", {}).get(
+        "evolve_vorticity_ion_energy_version", 4
+    )
+    if version not in (4, 5, 6, 7, 8, 9):
         raise AuditError(f"Unsupported evolve_vorticity_ion_energy version: {version}")
     return int(version)
 
 
 def polarisation_owner(run):
-    """Resolve the enabled conservative drift owner for version-5/6/7 snapshots."""
-    if component_version(run) not in (5, 6, 7):
+    """Resolve the enabled conservative drift owner for version 5 and later."""
+    if component_version(run) not in (5, 6, 7, 8, 9):
         return run.model
     options = run.data.options
     names = str(options["hermes:components"]).strip(" ()\t\r\n").split(",")
@@ -348,6 +350,9 @@ def polarisation_ac_boundary(run):
 def fill_wall_guards(field, run, condition):
     """Apply the radial wall stencil, retaining the caller's Y guards."""
     result = field.copy()
+    reflected_pressure = condition == "pressure" and (
+        not hasattr(run, "formulation") or component_version(run) not in (8, 9)
+    )
     for interior, guards, step in (
         (run.mxg, range(run.mxg - 1, -1, -1), -1),
         (
@@ -358,7 +363,7 @@ def fill_wall_guards(field, run, condition):
     ):
         first = field.isel(x=interior, drop=True)
         for layer, guard in enumerate(guards, 1):
-            if condition == "pressure":
+            if reflected_pressure:
                 value = 2 * first.mean("z") - first
             elif condition == "zero":
                 value = -first
@@ -426,7 +431,7 @@ def _validate_polarisation_solver(run, periodic_x):
         raise AuditError("Unknown polarisation_ac_boundary")
     key = (
         "laplacian"
-        if periodic_x or component_version(run) in (5, 6, 7)
+        if periodic_x or component_version(run) in (5, 6, 7, 8, 9)
         else "polarisation_laplacian"
     )
     opts = section[key] if key in section else None  # noqa: SIM401 -- BoutOptions has no get()
