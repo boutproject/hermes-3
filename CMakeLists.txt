@@ -548,13 +548,13 @@ if(HERMES_TESTS)
                  ENVIRONMENT
                  "HERMES_EXECUTABLE=$<TARGET_FILE:hermes-3>")
     add_test(
-      NAME ion-energy-publication-convergence
+      NAME ion-energy-scan-convergence
       COMMAND
         "${HERMES_ENERGY_PYTHON}" -m pytest -q --run-slow
         "${CMAKE_CURRENT_SOURCE_DIR}/tests/python/test_ion_energy_convergence.py"
     )
     set_tests_properties(
-      ion-energy-publication-convergence
+      ion-energy-scan-convergence
       PROPERTIES LABELS
                  "integration;energy;slow"
                  PROCESSORS

@@ -18,11 +18,11 @@ test checks each species' particle and momentum face-source identity, the
 energy/current identities, local thermal and kinetic weights, zero unpaid
 wall work and positive ion temperature.
 
-The slow tests generate the fixed-wall publication input from
-`examples/tokamak-2D-driftplane/2D-energy/publication-input.inp.template`, using
+The slow tests generate the fixed-wall scan input from
+`examples/tokamak-2D-driftplane/2D-energy/scan-input.inp.template`, using
 its matched-startup generator and the original solver tolerances. Both use
 custom_D = 0.1 and viscosity = 1. The convergence test uses two MPI ranks,
-matching the publication comparison; the wall-envelope test uses one rank.
+matching the example comparison; the wall-envelope test uses one rank.
 The pressure perturbation has
 fixed physical wall buffers and a C² taper, so refinement samples the same
 physical initial condition. Generated restarts are runtime artifacts.
@@ -39,8 +39,10 @@ configuration, measured maxima and bounds. Native version-1 maxima are
 2.11665e-8 in modes 16–31 and 3.13835e-8 in modes 32–63. Bounds of 3.5e-8
 and 5e-8 give about 60% margin. These are absolute first-cell wall RMS values,
 independent of interior amplitude. The input deliberately matches the
-publication physical setup, including classical diffusion, rather than the
+example physical setup, including classical diffusion, rather than the
 small undiffused gauge input.
+The envelope retains the measured input hash separately: renaming the runner
+changes only the current input's header comment, with identical physical options.
 
 Run the native checks after building Hermes:
 

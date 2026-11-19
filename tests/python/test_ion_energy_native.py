@@ -178,7 +178,7 @@ def test_total_energy_closes_against_wall_power(hermes_executable, tmp_path):
 @pytest.mark.slow
 def test_drift_plane_fixed_band_wall_amplitudes(hermes_executable, tmp_path):
     from energy_analysis.spectra import analyse_native_bands
-    from ion_energy_publication import run_case
+    from ion_energy_scan import run_case
 
     folder = tmp_path / "drift-plane"
     run_case(hermes_executable, folder, 128, endpoint=1200, output_step=5, nproc=1)

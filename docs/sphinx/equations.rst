@@ -2383,9 +2383,9 @@ plus :math:`1.1|C|\|R_\chi\|_\infty` for one RHS evaluation, with an independent
 upper bound on the residual. The generator writes smooth identical physical
 evolved cells directly; no preparation simulation or binary fixture is needed.
 The slow drift-plane regression checks absolute vorticity RMS in fixed poloidal
-mode bands 16–31 and 32–63 for the buffered, fixed-wall D = 0.1 publication
+mode bands 16–31 and 32–63 for the buffered, fixed-wall D = 0.1 scan
 input at 128² through :math:`t=1200`. Its bounds are recorded in
-``tests/python/data/ion-energy-wall-envelope.json``. The slow publication
+``tests/python/data/ion-energy-wall-envelope.json``. The slow scan
 regression runs 16², 32² and 64² through :math:`t=5000`, checking shrinking
 adjacent kinetic-energy differences and a stable outer-10% share.
 The exact input-expression frozen state at 16², 32² and 64² checks

@@ -48,5 +48,5 @@ docker/docker-compose.override.yaml
 *venv/
 dist/
 
-# Retained publication scans (raw data, PDFs, tables and manifests)
-/examples/tokamak-2D-driftplane/2D-energy/publication-results/
+# Retained resolution scans (raw data, PDFs, tables and manifests)
+/examples/tokamak-2D-driftplane/2D-energy/results/

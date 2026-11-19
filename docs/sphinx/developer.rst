@@ -1711,7 +1711,7 @@ Passing it does not distinguish physical heating from an energy leak.
 
 The runner does not assert quantitative energy or entropy bounds, or check convergence.
 
-See :ref:`subsec-2d-energy-comparison` for the publication resolution scan, and :ref:`subsec-ion-energy-tests` for the total ion energy tests.
+See :ref:`subsec-2d-energy-comparison` for the resolution scan, and :ref:`subsec-ion-energy-tests` for the total ion energy tests.
 
 .. _subsec-ion-energy-tests:
 
@@ -1917,9 +1917,9 @@ cells. These checks retain the robust production wall method; an integral
 energy budget alone does not establish local wall accuracy.
 
 The legacy ``2D-energy`` regression retains its existing registration. The
-publication refinement scan is an example in
+refinement scan is an example in
 ``examples/tokamak-2D-driftplane/2D-energy``; its fixed-wall D = 0.1 total-energy case also has the slow CTest
-``ion-energy-publication-convergence`` at 16²–64² through :math:`t=5000`. Its README describes plotting dependencies and remote execution.
+``ion-energy-scan-convergence`` at 16²–64² through :math:`t=5000`. Its README describes plotting dependencies and local execution.
 
 2D-recycling
 ~~~~~~~~~~~~~~

@@ -92,13 +92,13 @@ is not carried by an evolved electron reservoir and is not assumed to cancel.
 
 Optional diagnostics are compared with reconstructed inventories. Existing
 `fluxes`, `operators`, `transport`, `pressure` and `convergence` APIs remain
-available for supported snapshot audits and the publication example.
+available for supported snapshot audits and the resolution-scan example.
 `testing.Study` supplies isolated run directories, hashes, logs, execution status,
 criteria checks and `result.json` to the thin integrated runners.
 
 Run Python checks with `python -m pytest tests/python`, or use CTest's
 `energy-analysis-python`. Plotting is optional; the
-[publication example](../../examples/tokamak-2D-driftplane/2D-energy/README.md)
+[resolution-scan example](../../examples/tokamak-2D-driftplane/2D-energy/README.md)
 uses `matplotlib`.
 
 `reconstruct_fluxes` rebuilds full-vorticity MC advection and the central
@@ -174,4 +174,4 @@ The wall condition uses conducting, Z-uniform phi, Neumann pressure and psi
 guards, local Phi wall work and local species particle, momentum and
 thermal/parallel kinetic weights. The native frozen-state and varying-fraction
 regressions are in `tests/python/test_local_wall_transport.py`; nonlinear
-convergence and regenerated wall envelopes use the fixed-wall D = 0.1 publication input.
+convergence and regenerated wall envelopes use the fixed-wall D = 0.1 scan input.

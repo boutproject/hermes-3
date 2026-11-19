@@ -1,4 +1,4 @@
-# Shared physical setup. publication_scan.py supplies the substituted values and
+# Shared physical setup. run_scan.py supplies the substituted values and
 # builds matched time-zero restarts using each formulation's forward operator.
 NXPE = ${nproc}
 MYG = 0

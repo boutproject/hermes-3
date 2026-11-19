@@ -1,12 +1,12 @@
-"""Run the fixed-wall D=0.1 publication input with its matched startup state."""
+"""Run the fixed-wall D=0.1 scan input with its matched startup state."""
 
 import importlib.util
 import json
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-SOURCE = ROOT / "examples/tokamak-2D-driftplane/2D-energy/publication_scan.py"
-spec = importlib.util.spec_from_file_location("ion_energy_publication_scan", SOURCE)
+SOURCE = ROOT / "examples/tokamak-2D-driftplane/2D-energy/run_scan.py"
+spec = importlib.util.spec_from_file_location("ion_energy_run_scan", SOURCE)
 scan = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(scan)
 

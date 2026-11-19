@@ -824,12 +824,12 @@ located in located in ``examples\tcv-x21``.
 2D-energy (energy comparison and resolution scan)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-``examples/tokamak-2D-driftplane/2D-energy/publication_scan.py`` compares the ion pressure
+``examples/tokamak-2D-driftplane/2D-energy/run_scan.py`` compares the ion pressure
 formulation (``vorticity``, ``polarisation_drift`` and ``evolve_pressure``)
 with ``evolve_vorticity_ion_energy``. Both evolve hydrogen density and electron
 pressure with quasineutral electrons and no parallel dynamics. The regression in ``tests/integrated/2D-energy/runtest`` checks the pressure
 formulation separately; see :ref:`subsec-2d-energy-test`. The scan generates
-inputs from ``examples/tokamak-2D-driftplane/2D-energy/publication-input.inp.template``.
+inputs from ``examples/tokamak-2D-driftplane/2D-energy/scan-input.inp.template``.
 
 The problem is interchange relaxation in a 5 cm by 5 cm X-Z slab, with
 curvature radius :math:`R=1.5` m and magnetic field :math:`B=0.35` T.
@@ -868,7 +868,7 @@ with the updated buffered profile using:
 
 .. code-block:: bash
 
-   python examples/tokamak-2D-driftplane/2D-energy/publication_scan.py \
+   python examples/tokamak-2D-driftplane/2D-energy/run_scan.py \
      --exe build/hermes-3 --levels 2 --base-nx 16 --base-nz 16 \
      --phi-boundary fixed --end-time 10000 --outputs 100
 
@@ -933,7 +933,7 @@ CSV/JSON energy and error tables. Energy histories use one six-panel PNG by
 default; ``--energy-format pdf-panels`` exports six separate PDFs, each with
 its own labels and legend. Inputs, outputs, logs and a manifest are retained
 for ``--resume`` or ``--analyse-only``. See
-``examples/tokamak-2D-driftplane/2D-energy/publication-study.md`` for the full interface.
+``examples/tokamak-2D-driftplane/2D-energy/scan-study.md`` for the full interface.
 
 .. figure:: figs/2D-energy-comparison-state.png
    :name: energy-comparison-state

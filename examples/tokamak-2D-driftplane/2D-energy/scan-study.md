@@ -1,6 +1,6 @@
-# Interchange publication study
+# Interchange resolution study
 
-`publication_scan.py` runs matched pressure and total-ion-energy formulations
+`run_scan.py` runs matched pressure and total-ion-energy formulations
 and retains the inputs, time-zero restart files, raw dumps, logs and scalar
 analysis. Energy drift and spatial self-convergence are separate measurements:
 conserving total energy does not establish spatial accuracy. The historical pressure-sign regression remains in
@@ -16,19 +16,19 @@ python -m pip install -r tools/energy_analysis/requirements.txt matplotlib
 Run the study from the repository root:
 
 ```sh
-python examples/tokamak-2D-driftplane/2D-energy/publication_scan.py \
+python examples/tokamak-2D-driftplane/2D-energy/run_scan.py \
   --exe build/hermes-3 --phi-boundary both --accuracy-pilot \
   --output-root /path/to/results
 
 # Bounded validation: 8² and 16², fixed and relaxing boundaries, viscosity=0.
-python examples/tokamak-2D-driftplane/2D-energy/publication_scan.py --smoke
+python examples/tokamak-2D-driftplane/2D-energy/run_scan.py --smoke
 
 # Recreate plots and tables without executing Hermes.
-python examples/tokamak-2D-driftplane/2D-energy/publication_scan.py \
+python examples/tokamak-2D-driftplane/2D-energy/run_scan.py \
   --analyse-only /path/to/results/interchange-TIMESTAMP --latex
 
 # Export each energy-history panel as a standalone PDF.
-python examples/tokamak-2D-driftplane/2D-energy/publication_scan.py \
+python examples/tokamak-2D-driftplane/2D-energy/run_scan.py \
   --analyse-only /path/to/results/interchange-TIMESTAMP --energy-format pdf-panels
 ```
 
@@ -37,7 +37,7 @@ python examples/tokamak-2D-driftplane/2D-energy/publication_scan.py \
 The default matrix has eight runs: both formulations on four physical grids
 (32², 64², 128², 256²), with fixed phi boundaries. `--phi-boundary both`
 produces sixteen runs. Cases run sequentially and each owns its inputs and
-outputs. The publication matrix is an explicit longer study; `--smoke` is
+outputs. The full matrix is an explicit longer study; `--smoke` is
 the bounded, inviscid validation profile.
 
 | Option | Default | Meaning |
@@ -58,7 +58,7 @@ the bounded, inviscid validation profile.
 | `--nproc` | `1` | MPI ranks, decomposing X only |
 | `--timeout` | `7200` | Wall-clock limit [s] for each startup or simulation launch |
 | `--exe` | `hermes-3` or `build/hermes-3` | Repository executable, preferring the former when present |
-| `--output-root` | `publication-results` beside the script | Parent of a new `interchange-TIMESTAMP` study |
+| `--output-root` | `results` beside the script | Parent of a new `interchange-TIMESTAMP` study |
 
 `--phi-boundary relax` selects solver-managed relaxation in both formulations.
 The pressure model uses `(mean(phi_adjacent)-phi_b)/tau`, with
@@ -89,10 +89,8 @@ it is not a standalone bound on the recovered field error. Use the accuracy
 pilot described below to compare solver and output errors with spatial errors.
 
 Total-ion-energy inputs select the wall model through `radial_boundary`;
-Laplacian boundary flags are supplied only to the pressure formulation. When
-running the script from `build/tests/integrated/2D-energy`, refresh the copied
-script and template after source changes with `cmake -S . -B build` from the
-repository root.
+Laplacian boundary flags are supplied only to the pressure formulation.
+Run the maintained script from the repository root.
 
 Four snapshot times default to fractions 0, 1/4, 1/2 and 1 of the duration;
 the convergence time defaults to half the duration. Explicit
@@ -107,7 +105,7 @@ shows ion internal energy density `3*Pi/2` from pressure evolution; other
 choices plot the selected field.
 The lower row shows perpendicular kinetic energy density from total ion energy.
 
-Every run gets its own generated `BOUT.inp` from `publication-input.inp.template`.
+Every run gets its own generated `BOUT.inp` from `scan-input.inp.template`.
 The study manifest records configuration, input/executable/runner hashes,
 hashes of separately built Hermes/BOUT libraries, checkout revisions and dirty
 state, Python environment and MPI layout.
@@ -137,7 +135,7 @@ the same check for previously failed runs. Incomplete or unreadable outputs
 remain failures; a keyboard interrupt stops the current invocation even when
 its outputs are complete.
 
-## Extending and distributing a study
+## Extending and selecting a study
 
 To add resolution levels without repeating all the original simulation flags,
 use `--extend`. The number of levels is the **new total**, not the number to
@@ -145,7 +143,7 @@ add. All saved simulation settings and the original executable path are
 inherited; only an increased level count is accepted.
 
 ```sh
-python examples/tokamak-2D-driftplane/2D-energy/publication_scan.py \
+python examples/tokamak-2D-driftplane/2D-energy/run_scan.py \
   --extend /path/to/results/interchange-TIMESTAMP --levels 5 \
   --allow-runner-change
 ```
@@ -157,80 +155,10 @@ finest grid as its convergence reference. Decreasing the level count or
 changing physical settings is rejected. The runner-version override is needed
 only when the script has changed since the study was created or last resumed.
 
-For remote execution, prepare matched initial conditions locally:
-
-```sh
-python examples/tokamak-2D-driftplane/2D-energy/publication_scan.py \
-  --extend /path/to/results/interchange-TIMESTAMP --levels 5 \
-  --allow-runner-change --prepare-only
-```
-
-`--prepare-only` also works with a new study or `--resume`. It runs the
-zero-output startup simulations needed to generate native restart metadata,
-then writes matched time-zero restarts and a standalone `run-remote.py` into
-each pending case. It stops before the full simulations and analysis.
-`--cases CASE [CASE ...]` selects particular directory names, such as
-`fixed-pressure-128x128` and `fixed-total_energy-128x128`, for preparation or
-execution. Completed cases are skipped. Prepared restarts are retained and
-can also be used by an ordinary local resume.
-
-Copy these files from each prepared case to a directory on the other machine:
-
-- `BOUT.inp`;
-- all `BOUT.restart.<rank>.nc` files;
-- `initial-state.nc`, `remote-case.json` and `run-remote.py`.
-
-The nested `startup/` directory is not needed remotely. Keep the original
-`initial-state.nc` and `remote-case.json` locally. The remote simulation needs
-the same Hermes/BOUT source revisions and MPI rank count, but can use a build
-for a different architecture. The helper needs only Python's standard library:
-
-```sh
-python3 /remote/cases/fixed-pressure-128x128/run-remote.py \
-  --exe /remote/hermes/build/hermes-3 --source-root /remote/hermes
-```
-
-The helper verifies the prepared file hashes and uses the saved MPI process
-count. `--mpiexec PATH` selects a launcher; `--timeout SECONDS` sets an optional
-wall-clock limit. MPI inherits the remote environment. The helper retains
-stdout/stderr in `run.log` and writes `remote-execution.json` with the exit
-code, hostname, executable/library hashes and checkout revisions. It refuses
-to overwrite an existing attempt. Copy `BOUT.inp`, every rank's
-`BOUT.dmp.<rank>.nc`, `BOUT.settings`, logs, and `remote-execution.json` back under their original
-case directory names in a return directory, then import them:
-
-```sh
-python examples/tokamak-2D-driftplane/2D-energy/publication_scan.py \
-  --import-runs /path/to/results/interchange-TIMESTAMP \
-  --import-from /path/to/returned-cases \
-  --cases fixed-pressure-128x128 fixed-total_energy-128x128
-```
-
-Alternatively copy outputs directly into the original local case directories
-and omit `--import-from`. No local Hermes executable or MPI launcher is needed
-for importing. Without `--cases`, import scans pending cases with returned
-dumps. Existing completed cases are reused. Each imported case must have the
-original input, every MPI rank's full time axis, finite final state, the
-expected grid and physical box, and the matched initial pressure, density,
-potential, vorticity and (for total energy) `Eion`. External outputs are staged
-and checked before replacing a local failed attempt or writing completion
-status. Known source-revision mismatches or a build changed during execution
-are rejected. A nonzero remote exit is retained and can be accepted when the
-outputs pass these checks.
-
-Manual remote launches are supported too: return the input, dumps and logs
-and import them the same way. Return `BOUT.settings` when available: its
-resolved values must agree with every supplied input option. If it is absent,
-loading falls back to `BOUT.inp`, and the import records that only supplied
-options were available. If `remote-execution.json` is absent, the script
-records the exit code and remote build provenance as unknown and prints a
-warning. It does not invent a successful exit code. Use the helper when
-collecting publication evidence.
-
-Import registers completion without running remaining simulations or doing
-analysis. Use `--resume` to complete the matrix, or `--analyse-only` to analyse
-the completed subset. Copied dumps alone are not treated as completed by a
-resume; import them first.
+`--cases CASE [CASE ...]` selects particular directory names for local
+execution, such as `fixed-pressure-128x128` and `fixed-total_energy-128x128`.
+Completed cases are skipped. When cases remain pending, use `--resume`
+to complete the matrix or `--analyse-only` to plot the completed subset.
 
 ## Physical setup and startup
 

@@ -1,10 +1,12 @@
-# Drift-plane energy publication scan
+# Drift-plane energy scan
 
 The scan compares matched legacy pressure and total ion energy formulations.
 Both include `classical_diffusion`, with a constant normalised diffusivity
 `custom_D=1.19` (17 m²/s for this setup), configurable with `--custom-D`.
-It generates refinement tables and figures and supports preparing and importing
-remote runs. See [publication-study.md](publication-study.md) for the full study.
+It runs local cases and generates refinement tables and figures. See
+[scan-study.md](scan-study.md) for the full study.
+New studies are saved in `results/interchange-TIMESTAMP` beside the script;
+`--output-root` selects another parent directory.
 
 For weak diffusion and interchange dynamics, use `--custom-D 0.001`
 (0.0143 m²/s); the historical default strongly damps the perturbation. The
@@ -23,8 +25,8 @@ Install `tools/energy_analysis/requirements.txt` and the extra plotting package
 `matplotlib`. Run from the repository root:
 
 ```sh
-python examples/tokamak-2D-driftplane/2D-energy/publication_scan.py --help
-python examples/tokamak-2D-driftplane/2D-energy/publication_scan.py --smoke --custom-D 0.001
+python examples/tokamak-2D-driftplane/2D-energy/run_scan.py --help
+python examples/tokamak-2D-driftplane/2D-energy/run_scan.py --smoke --custom-D 0.001
 python -m pytest examples/tokamak-2D-driftplane/2D-energy
 ```
 
@@ -32,6 +34,6 @@ This example is outside CTest. The legacy `2D-energy` regression remains in
 `tests/integrated/2D-energy`; total ion energy conservation gates are the four
 `ion-energy-*` integrated tests.
 
-The input template is `publication-input.inp.template`. See the
+The input template is `scan-input.inp.template`. See the
 [Sphinx comparison](https://hermes3.readthedocs.io/en/latest/examples.html#subsec-2d-energy-comparison)
 for the energy definitions and reproduced figures.

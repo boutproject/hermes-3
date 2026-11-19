@@ -1,4 +1,4 @@
-"""Nonlinear self-convergence of the fixed-wall publication drift plane."""
+"""Nonlinear self-convergence of the fixed-wall drift-plane scan."""
 
 import json
 
@@ -6,11 +6,11 @@ import numpy as np
 import pytest
 from energy_analysis import open_run
 from energy_analysis.inventory import energy_densities
-from ion_energy_publication import run_case
+from ion_energy_scan import run_case
 
 
 @pytest.mark.slow
-def test_publication_total_energy_self_convergence(hermes_executable, tmp_path):
+def test_scan_total_energy_self_convergence(hermes_executable, tmp_path):
     rows = []
     for n in (16, 32, 64):
         folder = run_case(
