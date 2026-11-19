@@ -28,6 +28,8 @@ struct BraginskiiElectronViscosity : public NamedComponent<BraginskiiElectronVis
   ///     Output diagnostic SNVe_viscosity?
   ///   - eta_limit_alpha: float, default -1.0
   ///     Flux limiter coefficient. < 0 means no limiter
+  ///   - precondition: bool, default false
+  ///     Precondition the electron parallel viscosity in the momentum equation
   BraginskiiElectronViscosity(const std::string& name, Options& alloptions, Solver*);
 
   void outputVars(Options& state) override;
@@ -40,6 +42,8 @@ private:
   Field3D viscosity;        ///< The viscosity momentum source
 
   bout::FieldMetricParallel sqrtB; ///< Magnetic field variables
+
+  bool precondition; ///< Apply viscosity preconditioner
 
   /// Inputs
   /// - species

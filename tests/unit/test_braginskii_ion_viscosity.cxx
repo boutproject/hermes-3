@@ -4,6 +4,7 @@
 #include "gtest/gtest.h"
 
 #include "../../include/braginskii_ion_viscosity.hxx"
+#include "../../include/viscosity_precon.hxx"
 #include "fake_mesh_fixture.hxx"
 #include "test_extras.hxx" // FakeMesh
 
@@ -181,6 +182,32 @@ TEST_F(BraginskiiIonViscosityTest, ViscosityCollisionMode) {
     ASSERT_NE(visc1[i], 0.);
     ASSERT_DOUBLE_EQ(2 * visc1[i], visc2[i]);
   }
+}
+
+TEST_F(BraginskiiIonViscosityTest, PreconditionPublishesEta) {
+  namespace pc = hermes::viscosity_precon;
+  Options state;
+  state["species"]["d+"]["density"] = 1;
+  state["species"]["d+"]["temperature"] = 1;
+  state["species"]["d+"]["charge"] = 1;
+  state["species"]["d+"]["AA"] = 2.;
+  state["species"]["d+"]["velocity"] = linearGradient(1., 0., 1., 1., 1., 0., 0.);
+  state["species"]["d+"]["collision_frequencies"]["d+_d+_coll"] = 1.0;
+  state["species"]["d+"]["pressure"] = constantGradient(0, 0., 1., 0.);
+
+  // Off by default: a stale entry is removed and nothing is published
+  pc::frozen["d+"] = {};
+  component.declareAllSpecies({"d+"});
+  component.transform(state);
+  EXPECT_EQ(pc::frozen.count("d+"), 0);
+
+  options["test2"]["precondition"] = true;
+  BraginskiiIonViscosity component2("test2", options, nullptr);
+  component2.declareAllSpecies({"d+"});
+  component2.transform(state);
+  ASSERT_EQ(pc::frozen.count("d+"), 1);
+  EXPECT_TRUE(pc::frozen["d+"].eta.isAllocated());
+  pc::frozen.clear();
 }
 
 // TODO: Add tests for more types of collisions (e.g., electron-ion, charge-exchante, ion

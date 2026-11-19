@@ -27,6 +27,7 @@
 #include "../include/component.hxx"
 #include "../include/div_ops.hxx"
 #include "../include/hermes_utils.hxx"
+#include "../include/viscosity_precon.hxx"
 
 using bout::globals::mesh;
 
@@ -77,6 +78,10 @@ BraginskiiIonViscosity::BraginskiiIonViscosity(const std::string& name,
                              .doc("Include input for q95 when using bounce frequency "
                                   "modification to viscosity")
                              .withDefault(4.0);
+
+  precondition = options["precondition"]
+                     .doc("Apply parallel viscosity preconditioner")
+                     .withDefault<bool>(false);
 
   bounce_frequency_epsilon =
       options["bounce_frequency_epsilon"]
@@ -160,6 +165,8 @@ void BraginskiiIonViscosity::transform_impl(GuardedOptions& state) {
       continue; // Skip electrons -> only ions
     }
     const auto& species_name = kv.first;
+    // Preconditioner coefficients are refreshed by every RHS evaluation
+    hermes::viscosity_precon::frozen.erase(species_name);
 
     GuardedOptions species = allspecies[species_name];
 
@@ -301,6 +308,10 @@ void BraginskiiIonViscosity::transform_impl(GuardedOptions& state) {
       }
 
       add(species["momentum_source"], div_Pi_cipar);
+      if (precondition) {
+        // Frozen coefficient for EvolveMomentum::precon
+        hermes::viscosity_precon::frozen[species_name] = {copy(eta)};
+      }
 
       if (viscous_heating) {
         subtract(species["energy_source"], V * div_Pi_cipar); // Internal energy

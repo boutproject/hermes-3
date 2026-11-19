@@ -4,6 +4,7 @@
 #include "gtest/gtest.h"
 
 #include "../../include/braginskii_electron_viscosity.hxx"
+#include "../../include/viscosity_precon.hxx"
 #include "fake_mesh_fixture.hxx"
 #include "test_extras.hxx" // FakeMesh
 
@@ -139,4 +140,27 @@ TEST_F(BraginskiiElectronViscosityTest, ViscosityVelocityScaling) {
     ASSERT_NE(visc1[i], 0.);
     ASSERT_DOUBLE_EQ(2 * visc1[i], visc2[i]);
   }
+}
+
+TEST_F(BraginskiiElectronViscosityTest, PreconditionPublishesEta) {
+  namespace pc = hermes::viscosity_precon;
+  Options state;
+  state["species"]["e"]["velocity"] = linearGradient(1., 0., 1., 1., 1., 0., 0.);
+  state["species"]["e"]["collision_frequency"] = 1.;
+  state["species"]["e"]["pressure"] = constantGradient(0, 0., 1., 0.);
+
+  // Off by default: a stale entry is removed and nothing is published
+  pc::frozen["e"] = {};
+  component.transform(state);
+  EXPECT_EQ(pc::frozen.count("e"), 0);
+
+  options["test2"]["precondition"] = true;
+  BraginskiiElectronViscosity component2("test2", options, nullptr);
+  component2.transform(state);
+  ASSERT_EQ(pc::frozen.count("e"), 1);
+  const Field3D P = state["species"]["e"]["pressure"];
+  BOUT_FOR_SERIAL(i, P.getRegion("RGN_NOBNDRY")) {
+    EXPECT_DOUBLE_EQ(pc::frozen["e"].eta[i], (4. / 3) * 0.73 * P[i]);
+  }
+  pc::frozen.clear();
 }

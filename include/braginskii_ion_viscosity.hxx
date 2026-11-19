@@ -38,6 +38,8 @@ struct BraginskiiIonViscosity : public NamedComponent<BraginskiiIonViscosity> {
   ///   - perpendicular: bool, default false
   ///         Include perpendicular flows?
   ///         Requires curvature vector and phi potential
+  ///   - precondition: bool, default false
+  ///     Precondition the ion parallel viscosity in the momentum equation
   ///
   BraginskiiIonViscosity(const std::string& name, Options& alloptions, Solver*);
 
@@ -72,6 +74,8 @@ private:
     Field3D bounce_factor;
     Field3D nu_star;
   };
+
+  bool precondition; ///< Apply viscosity preconditioner
 
   bout::FieldMetricParallel Bxy, sqrtB; ///< Magnetic field variables
   Field3D Grad_par_logB;
