@@ -274,7 +274,7 @@ void Recycling::transform_impl(GuardedOptions& state) {
           BoutReal tisheath = (T[i] + T[ig]) * 0.5;
           BoutReal visheath = (V[i] + V[ig]) * 0.5;
           BoutReal sheath_ion_heat_flow =
-              std::abs(gamma_i * nisheath * tisheath * visheath * daparsheath / volume);
+              std::abs(gamma_i * nisheath * tisheath * visheath * daparsheath);
 
           // Blend fast (ion energy) and thermal (constant energy) recycling
           // Calculate returning neutral heat flow in [W]
@@ -317,8 +317,8 @@ void Recycling::transform_impl(GuardedOptions& state) {
 
             // Divide flows by volume to get sources
             // Save to pump diagnostic
-            channel.pump_density_source[i] = -pump_neutral_particle_sink;
-            channel.pump_energy_source[i] = -pump_neutral_energy_sink;
+            channel.pump_density_source[i] -= pump_neutral_particle_sink;
+            channel.pump_energy_source[i] -= pump_neutral_energy_sink;
           }
 
           // Put recycling sources into diagnostic
@@ -368,7 +368,7 @@ void Recycling::transform_impl(GuardedOptions& state) {
           BoutReal tisheath = (T[i] + T[ig]) * 0.5;
           BoutReal visheath = (V[i] + V[ig]) * 0.5;
           BoutReal sheath_ion_heat_flow =
-              std::abs(gamma_i * nisheath * tisheath * visheath * daparsheath / volume);
+              std::abs(gamma_i * nisheath * tisheath * visheath * daparsheath);
 
           // Blend fast (ion energy) and thermal (constant energy) recycling
           // Calculate returning neutral heat flow in [W]
@@ -411,8 +411,8 @@ void Recycling::transform_impl(GuardedOptions& state) {
 
             // Divide flows by volume to get sources
             // Save to pump diagnostic
-            channel.pump_density_source[i] = -pump_neutral_particle_sink;
-            channel.pump_energy_source[i] = -pump_neutral_energy_sink;
+            channel.pump_density_source[i] -= pump_neutral_particle_sink;
+            channel.pump_energy_source[i] -= pump_neutral_energy_sink;
           }
 
           // Put recycling sources into diagnostic
@@ -492,8 +492,7 @@ void Recycling::transform_impl(GuardedOptions& state) {
             // Blend fast (ion energy) and thermal (constant energy) recycling
             // Calculate returning neutral heat flow in [W]
             BoutReal recycle_energy_flow =
-                ion_energy_flow * channel.sol_multiplier
-                    * channel.sol_fast_recycle_energy_factor
+                ion_energy_flow * multiplier * channel.sol_fast_recycle_energy_factor
                     * channel.sol_fast_recycle_fraction // Fast recycling part
                 + recycle_particle_flow * (1 - channel.sol_fast_recycle_fraction)
                       * channel.sol_energy; // Thermal recycling part
@@ -553,17 +552,16 @@ void Recycling::transform_impl(GuardedOptions& state) {
 
               // Divide flows by volume to get sources
               // Save to pump diagnostic
-              channel.pump_density_source(mesh->xend, iy, iz) =
-                  -pump_neutral_particle_sink;
-              channel.pump_energy_source(mesh->xend, iy, iz) = -pump_neutral_energy_sink;
-
-            } else {
-              // Save to wall diagnostic (pump sinks are 0 if not on pump)
-              channel.wall_recycle_density_source(mesh->xend, iy, iz) +=
-                  recycle_particle_flow / volume;
-              channel.wall_recycle_energy_source(mesh->xend, iy, iz) +=
-                  recycle_energy_flow / volume;
+              channel.pump_density_source(mesh->xend, iy, iz) -=
+                  pump_neutral_particle_sink;
+              channel.pump_energy_source(mesh->xend, iy, iz) -= pump_neutral_energy_sink;
             }
+
+            // Save to wall diagnostic
+            channel.wall_recycle_density_source(mesh->xend, iy, iz) +=
+                recycle_particle_flow / volume;
+            channel.wall_recycle_energy_source(mesh->xend, iy, iz) +=
+                recycle_energy_flow / volume;
 
             // Save to solver
             density_source(mesh->xend, iy, iz) +=
@@ -616,8 +614,7 @@ void Recycling::transform_impl(GuardedOptions& state) {
               // Blend fast (ion energy) and thermal (constant energy) recycling
               // Calculate returning neutral heat flow in [W]
               BoutReal recycle_energy_flow =
-                  ion_energy_flow * channel.pfr_multiplier
-                      * channel.pfr_fast_recycle_energy_factor
+                  ion_energy_flow * multiplier * channel.pfr_fast_recycle_energy_factor
                       * channel.pfr_fast_recycle_fraction // Fast recycling part
                   + recycle_particle_flow * (1 - channel.pfr_fast_recycle_fraction)
                         * channel.pfr_energy; // Thermal recycling part
@@ -680,18 +677,17 @@ void Recycling::transform_impl(GuardedOptions& state) {
 
                 // Divide flows by volume to get sources
                 // Save to pump diagnostic
-                channel.pump_density_source(mesh->xstart, iy, iz) =
-                    -pump_neutral_particle_sink;
-                channel.pump_energy_source(mesh->xstart, iy, iz) =
-                    -pump_neutral_energy_sink;
-
-              } else {
-                // Save to wall diagnostic (pump sinks are 0 if not on pump)
-                channel.wall_recycle_density_source(mesh->xstart, iy, iz) +=
-                    recycle_particle_flow / volume - pump_neutral_particle_sink;
-                channel.wall_recycle_energy_source(mesh->xstart, iy, iz) +=
-                    recycle_energy_flow / volume - pump_neutral_energy_sink;
+                channel.pump_density_source(mesh->xstart, iy, iz) -=
+                    pump_neutral_particle_sink;
+                channel.pump_energy_source(mesh->xstart, iy, iz) -=
+                    pump_neutral_energy_sink;
               }
+
+              // Save to wall diagnostic, pumped or not (pump sinks have their own)
+              channel.wall_recycle_density_source(mesh->xstart, iy, iz) +=
+                  recycle_particle_flow / volume;
+              channel.wall_recycle_energy_source(mesh->xstart, iy, iz) +=
+                  recycle_energy_flow / volume;
 
               // Save to solver
               density_source(mesh->xstart, iy, iz) +=
