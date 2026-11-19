@@ -232,11 +232,17 @@ features and requires higher resolution to converge to the same
 accuracy. The optimal choice of method is problem-dependent.
 
 The CMake flag ``-DHERMES_SLOPE_LIMITER`` sets the choice of slope
-limiter.  The default method is ``MC``, which has been found to
-provide a good balance for problems of interest. If more dissipation
-is required then this can be changed to ``MinMod``;
-if less dissipation is required then this can be changed
-to ``Superbee``.
+limiter.  The default method is ``VanAlbada``, which is differentiable
+and so works well with the nonlinear solvers and finite-difference
+Jacobians. An improved, experimental version ``VanAlbadaSmooth``
+smoothly reduces to central differences when cell differences are very small,
+which can prevent significant performance degradation at stagnation points.
+
+``MC`` is the previous default; it is a bit less dissipative but
+switches abruptly at extrema. If more dissipation is required then this
+can be changed to ``MinMod``; if less dissipation is required then this
+can be changed to ``Superbee``. Unlike Van Albada, each of these three limiters have
+non-differentiable kinks which can cause performance issues.
 
 The appropriate limiter is problem-dependent. ``MinMod`` can work well
 for 1D tokamak simulations with steep gradients, e.g. simulations of detachment

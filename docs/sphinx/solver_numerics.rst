@@ -263,8 +263,8 @@ Slope (flux) limiters
 The choice of slope limiter is important: a dissipative limiter increases
 numerical dissipation but can substantially improve solver stability and
 robustness. See :ref:`sec-slope-limiter-settings` for how to change the
-limiter. The default is ``MC``, which has a good balance between
-stability and accuracy.
+limiter. The default is ``VanAlbada``, which is fully differentiable unlike
+MC, MinMod and Superbee. This makes it more suitable for the nonlinear solver.
 
 Dynamics parallel to the magnetic field are solved using a 2nd-order
 slope-limiter method.  For any number of fluids we solve the number
@@ -280,13 +280,29 @@ Cell edge values are reconstructed using a configurable limiter. The
 available compile-time choices of ``HERMES_SLOPE_LIMITER`` are:
 
 ``MC``
-   Monotonised central second-order limiter. This is the default.
+   Monotonised central second-order limiter.
 
 ``VanAlbada``
    Symmetric second-order limiter using a smooth approximation to the
    usual limiter switch. This is often friendlier to nonlinear solvers
    and finite-difference Jacobian calculations because the reconstruction
-   remains differentiable at extrema.
+   remains differentiable at extrema. This is the default.
+
+``VanAlbadaSmooth``
+   Experimental, improved version of the VanAlbada limiter to prevent
+   numerical issues due to domain regions with very small differences,
+   e.g. at stagnation points.
+   This Van Albada limiter features a tolerance that smoothly switches the limiter
+   off, giving the central (second-order) slope, when the cell differences
+   are small compared with the tolerance. The tolerance is ``1e-3`` times the
+   RMS of the three cell values. The limiter also clips peaks and dips
+   between cells, and that clip is smoothed with the same tolerance. This
+   removes the chatter in the reconstruction at near-symmetric stagnation
+   points, where Newton updates can flip the sign of tiny cell differences.
+   The tolerance does not depend on the grid, so on very fine grids the
+   limiter tends to second order at smooth extrema. Based on Eq. 37 of van
+   Albada, van Leer and Roberts (1982), A&A 108, 76. See the BOUT++
+   documentation on differential operators for details.
 
 ``WENO3``
    Third-order Jiang-Shu WENO reconstruction on the same three-point stencil.
@@ -371,8 +387,8 @@ through CMake cache options:
      -DHERMES_SLOPE_LIMITER=MC
 
 ``HERMES_SLOPE_LIMITER``
-   Available values are ``MC``, ``VanAlbada``, ``WENO3``, ``MinMod``,
-   ``Upwind``, and ``Superbee``.
+   Available values are ``MC``, ``VanAlbada``, ``VanAlbadaSmooth``,
+   ``WENO3``, ``MinMod``, ``Upwind``, and ``Superbee``.
 
 
 The
