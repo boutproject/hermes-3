@@ -1,5 +1,7 @@
+#include <cmath>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include <bout/bout_types.hxx>
 #include <bout/region.hxx>
@@ -63,11 +65,24 @@ public:
     return result;
   }
 
-  BraginskiiConduction makeComponent(BoutReal kappa, std::string mode = "braginskii") {
+  BraginskiiConduction makeComponent(BoutReal kappa, std::string mode = "braginskii",
+                                     BoutReal kappa_timescale_limit = -1.) {
     Options opts = options.copy();
     opts["test+"]["kappa_coefficient"] = kappa;
     opts["test+"]["conduction_collisions_mode"] = std::move(mode);
+    opts["test+"]["kappa_timescale_limit"] = kappa_timescale_limit;
     return BraginskiiConduction("test+", opts, nullptr);
+  }
+
+  // Helper to make state for the conduction timescale limiter
+  Options makeStateTimescaleLimiter(BoutReal density = 1.) {
+    Options state = state_base.copy();
+    state["species"]["test+"]["charge"] = 1;
+    state["species"]["test+"]["density"].force(density);
+    state["species"]["test+"]["collision_frequencies"]["test+_test+_coll"] = 1.;
+    state["species"]["test+"]["collision_frequency"] = 1.;
+    state["species"]["test+"]["temperature"] = temp1;
+    return state;
   }
 
   Field3D getDeriv(const Options& state) {
@@ -186,6 +201,78 @@ TEST_F(BraginskiiConductionTest, ConductionCollisionsMode) {
   BOUT_FOR_SERIAL(i, conduction_brag.getRegion("RGN_NOBNDRY")) {
     EXPECT_NE(conduction_brag[i], 0.);
     EXPECT_DOUBLE_EQ(conduction_brag[i], 2 * conduction_multi[i]);
+  }
+}
+
+// Test timescale limiter. Fake mesh is closed field lines only.
+TEST_F(BraginskiiConductionTest, KappaTimescaleLimitFormula) {
+  // The density enters only the limiter, so varying it tests the limiter alone
+  for (const auto& [tau_limit, density] :
+       std::vector<std::pair<BoutReal, BoutReal>>{{1., 1.}, {2., 1.}, {1., 2.}}) {
+    BraginskiiConduction component = this->makeComponent(1., "braginskii", tau_limit);
+    Options state = this->makeStateTimescaleLimiter(density);
+
+    component.declareAllSpecies({"test+"});
+    component.transform(state);
+    Options outputs = this->output_base.copy();
+    component.outputVars(outputs);
+
+    ASSERT_TRUE(outputs.isSet("kappa_par_test+_timelim_max"));
+    ASSERT_TRUE(outputs.isSet("kappa_par_test+_unlimited"));
+
+    // kappa_par / kappa_par_unlimited = 1 / (1 + kappa_par_unlimited / kappa_par_max)
+    //                                 = 1 / (1 + 0.5 / (n / tau_limit))
+    //                                 = 1 / (1 + 0.5 * tau_limit / n)
+    const BoutReal limit_factor = 1. / (1. + 0.5 * tau_limit / density);
+    Field3D kappa_par_max = outputs["kappa_par_test+_timelim_max"];
+    Field3D kappa_par_unlimited = outputs["kappa_par_test+_unlimited"];
+    Field3D kappa_par = state["species"]["test+"]["kappa_par"];
+    BOUT_FOR_SERIAL(i, kappa_par.getRegion("RGN_NOBNDRY")) {
+      // kappa_par_max = n * dl^2 / tau_limit
+      //               = n * (dy * sqrt(g_22))^2 / tau_limit
+      //               = n * (1 * sqrt(1))^2 / tau_limit
+      //               = n / tau_limit
+      EXPECT_DOUBLE_EQ(kappa_par_max[i], density / tau_limit);
+      // kappa_par_unlimited = kappa_coefficient * P * (1 / nu) / AA
+      //                     = 1 * 1 * (1 / 1) / 2
+      //                     = 0.5
+      EXPECT_DOUBLE_EQ(kappa_par_unlimited[i], 0.5);
+      // kappa_par = kappa_par_unlimited / (1 + kappa_par_unlimited / kappa_par_max)
+      //           = 0.5 / (1 + 0.5 / (n / tau_limit))
+      //           = 0.5 * limit_factor
+      EXPECT_DOUBLE_EQ(kappa_par[i], 0.5 * limit_factor);
+      // Harmonic combination: 1 / kappa_par = 1 / kappa_par_unlimited + 1 / kappa_par_max
+      EXPECT_DOUBLE_EQ(kappa_par[i], kappa_par_unlimited[i] * kappa_par_max[i]
+                                         / (kappa_par_unlimited[i] + kappa_par_max[i]));
+    }
+  }
+}
+
+// Test that timescale limiter is inactive on open field lines
+TEST_F(BraginskiiConductionTest, KappaTimescaleLimitOpenFieldLines) {
+  static_cast<FakeMesh*>(mesh)->ix_separatrix = 0; // Open field lines
+  BraginskiiConduction component_off = this->makeComponent(1.);
+  BraginskiiConduction component_limit = this->makeComponent(1., "braginskii", 1.);
+  Options state_off = this->makeStateTimescaleLimiter();
+  Options state_limit = this->makeStateTimescaleLimiter();
+
+  component_off.declareAllSpecies({"test+"});
+  component_off.transform(state_off);
+  component_limit.declareAllSpecies({"test+"});
+  component_limit.transform(state_limit);
+  Options outputs = this->output_base.copy();
+  component_limit.outputVars(outputs);
+
+  Field3D kappa_par_max = outputs["kappa_par_test+_timelim_max"];
+  Field3D kappa_par_unlimited = outputs["kappa_par_test+_unlimited"];
+  Field3D kappa_par = state_limit["species"]["test+"]["kappa_par"];
+  Field3D conduction_off = this->getDeriv(state_off);
+  Field3D conduction_limit = this->getDeriv(state_limit);
+  BOUT_FOR_SERIAL(i, kappa_par.getRegion("RGN_NOBNDRY")) {
+    EXPECT_TRUE(std::isnan(kappa_par_max[i]));
+    EXPECT_DOUBLE_EQ(kappa_par[i], kappa_par_unlimited[i]);
+    EXPECT_NE(conduction_off[i], 0.);
+    EXPECT_DOUBLE_EQ(conduction_limit[i], conduction_off[i]);
   }
 }
 

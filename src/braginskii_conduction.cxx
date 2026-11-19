@@ -82,6 +82,15 @@ BraginskiiConduction::BraginskiiConduction(const std::string& name, Options& all
             .doc("Flux limiter factor. < 0 means no limit. Typical is 0.2 "
                  "for electrons, 1 for ions.")
             .withDefault(-1.0);
+    // Normalised by the time unit, so the option is in seconds
+    all_kappa_timescale_limit[name] =
+        options["kappa_timescale_limit"]
+            .doc("Limit conduction timescale for parallel heat conduction (seconds). "
+                 "Helps prevent unphysically fast conduction causing numerical "
+                 "'flashes' in the core, especially in small cells. "
+                 "<= 0 means off. Default 1e-8s (10ns) for electrons, off otherwise.")
+            .withDefault(name == "e" ? 1e-8 : -1.0)
+        / alloptions["units"]["seconds"].as<BoutReal>();
     all_conduction_collisions_mode[name] =
         options["conduction_collisions_mode"]
             .doc("Can be multispecies: all collisions, or "
@@ -271,6 +280,9 @@ void BraginskiiConduction::transform_impl(GuardedOptions& state) {
     //
     // Note: Coefficient is slightly different for electrons (3.16) and ions (3.9)
     kappa_par = kappa_coefficient * Pfloor * tau / AA;
+    if (all_diagnose[name]) {
+      all_kappa_par_unlimited[name] = copy(kappa_par);
+    }
 
     if (kappa_limit_alpha > 0.0) {
       /*
@@ -291,6 +303,40 @@ void BraginskiiConduction::transform_impl(GuardedOptions& state) {
 
       // This results in a harmonic average of the heat fluxes
       kappa_par /= (1. + abs(q_SH / softFloor(q_fl, 1e-10)));
+
+      if (all_diagnose[name]) {
+        // Max kappa due to free-streaming flux limiter
+        all_kappa_par_fluxlim_max[name] =
+            softFloor(q_fl, 1e-10) / softFloor(Field3D(abs(Grad_par(T))), 1e-10);
+      }
+    }
+
+    const BoutReal kappa_timescale_limit = all_kappa_timescale_limit[name];
+    if (kappa_timescale_limit > 0.0) {
+      // Limit conduction timescale on closed field lines.
+      // This prevents "core flashes", oscillations due to
+      // tiny corrugations in core Te due to solver tolerance
+      // resulting in an extremely rapid conductive relaxation, which
+      // then activates slope limiters and causes significant
+      // nonlinearity and solver slowdowns.
+      // The default is 10ns for electrons which should be below
+      // any physical conduction timescale.
+      const Coordinates* coord = mesh->getCoordinates();
+      Field3D kappa_max{emptyFrom(kappa_par)};
+      kappa_max = BoutNaN;
+      BOUT_FOR(i, kappa_par.getRegion("RGN_NOBNDRY")) {
+        if (!mesh->periodicY(i.x())) {
+          continue;
+        }
+        const BoutReal dl = coord->dy()[i] * sqrt(coord->g_22()[i]);
+        const BoutReal n = softFloor(N[i], 1e-10);
+        kappa_max[i] = n * SQ(dl) / kappa_timescale_limit;
+        kappa_par[i] /= 1. + kappa_par[i] / kappa_max[i];
+      }
+      if (all_diagnose[name]) {
+        // Max kappa due to timescale flux limiter
+        all_kappa_par_timelim_max[name] = kappa_max;
+      }
     }
 
     // Values of kappa on cell boundaries are needed for fluxes. Not all collision
@@ -377,7 +423,7 @@ void BraginskiiConduction::outputVars(Options& state) {
                     {"conversion", (Pnorm * Omega_ci * SQ(rho_s0)) / Tnorm},
                     {"long_name", name + " heat conduction coefficient"},
                     {"species", name},
-                    {"source", "evolve_pressure"}});
+                    {"source", "braginskii_conduction"}});
 
     set_with_attrs(state[std::string("K") + name + std::string("_cond")], nu,
                    {{"time_dimension", "t"},
@@ -385,7 +431,7 @@ void BraginskiiConduction::outputVars(Options& state) {
                     {"conversion", Omega_ci},
                     {"long_name", "collision frequency for conduction"},
                     {"species", name},
-                    {"source", "evolve_pressure"}});
+                    {"source", "braginskii_conduction"}});
 
     set_with_attrs(state[fmt::format("ef{}_cond_ylow", name)], flow_ylow_conduction,
                    {{"time_dimension", "t"},
@@ -394,6 +440,39 @@ void BraginskiiConduction::outputVars(Options& state) {
                     {"standard_name", "power"},
                     {"long_name", name + " conduction through Y cell face."},
                     {"species", name},
-                    {"source", "evolve_pressure"}});
+                    {"source", "braginskii_conduction"}});
+
+    set_with_attrs(state[fmt::format("kappa_par_{}_unlimited", name)],
+                   all_kappa_par_unlimited[name],
+                   {{"time_dimension", "t"},
+                    {"units", "W / m / eV"},
+                    {"conversion", (Pnorm * Omega_ci * SQ(rho_s0)) / Tnorm},
+                    {"long_name", name + " heat conduction coefficient before limiters"},
+                    {"species", name},
+                    {"source", "braginskii_conduction"}});
+
+    if (all_kappa_limit_alpha[name] > 0.0) {
+      set_with_attrs(state[fmt::format("kappa_par_{}_fluxlim_max", name)],
+                     all_kappa_par_fluxlim_max[name],
+                     {{"time_dimension", "t"},
+                      {"units", "W / m / eV"},
+                      {"conversion", (Pnorm * Omega_ci * SQ(rho_s0)) / Tnorm},
+                      {"long_name", name + " maximum kappa due to flux limitation"},
+                      {"species", name},
+                      {"source", "braginskii_conduction"}});
+    }
+
+    if (all_kappa_timescale_limit[name] > 0.0) {
+      set_with_attrs(state[fmt::format("kappa_par_{}_timelim_max", name)],
+                     all_kappa_par_timelim_max[name],
+                     {{"time_dimension", "t"},
+                      {"units", "W / m / eV"},
+                      {"conversion", (Pnorm * Omega_ci * SQ(rho_s0)) / Tnorm},
+                      {"long_name", name
+                                        + " maximum kappa due to timescale limitation "
+                                          "(closed field lines only)"},
+                      {"species", name},
+                      {"source", "braginskii_conduction"}});
+    }
   }
 }

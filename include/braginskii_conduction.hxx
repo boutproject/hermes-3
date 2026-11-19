@@ -32,6 +32,10 @@ struct BraginskiiConduction : public NamedComponent<BraginskiiConduction> {
   ///   - kappa_coefficient            Heat conduction constant. Default is 3.16 for
   ///                                  electrons, 3.9 otherwise
   ///   - kappa_limit_alpha            Flux limiter, off by default.
+  ///   - kappa_timescale_limit        Closed field lines: limit kappa_par so that the
+  ///                                  two-cell conduction time is at least about this
+  ///                                  many seconds. Default 1e-8 (10 ns) for
+  ///                                  electrons, off for other species.
   ///   - conduction_collisions_mode   Can be multispecies: all collisions, or braginskii:
   ///                                  self collisions and ie
   ///
@@ -58,6 +62,14 @@ private:
       all_kappa_coefficient; ///< Leading numerical coefficient in parallel heat flux
                              ///< calculation
   std::map<std::string, BoutReal> all_kappa_limit_alpha; ///< Flux limit if >0
+  std::map<std::string, BoutReal>
+      all_kappa_timescale_limit; ///< Closed-field-line limiter time if > 0, normalised
+  std::map<std::string, Field3D>
+      all_kappa_par_unlimited; ///< kappa_par before the flux and timescale limiters
+  std::map<std::string, Field3D>
+      all_kappa_par_fluxlim_max; ///< Largest kappa_par the flux limiter allows
+  std::map<std::string, Field3D>
+      all_kappa_par_timelim_max; ///< Largest kappa_par the timescale limiter allows
   std::map<std::string, Field3D>
       all_flow_ylow_conduction; ///< Conduction energy flow diagnostics
   /// Save more diagnostics?
