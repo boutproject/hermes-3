@@ -184,6 +184,7 @@ def error_norms(field, reference, volume):
 
 
 def global_differences(values, refinement):
+    """Estimate orders from adjacent difference magnitudes, retaining their signs."""
     q = np.asarray(values, dtype=float)
     if refinement < 2 or not np.isfinite(q).all() or len(q) < 2:
         raise AuditError(
@@ -202,13 +203,15 @@ def global_differences(values, refinement):
         if i < len(signed) - 1:
             if abs(signed[i]) <= floor or abs(signed[i + 1]) <= floor:
                 reason = "roundoff dominated"
-            elif signed[i] * signed[i + 1] <= 0:
-                reason = "oscillatory differences"
             else:
                 order = float(
                     np.log(abs(signed[i] / signed[i + 1])) / np.log(refinement)
                 )
-                reason = "adjacent signed differences"
+                reason = (
+                    "oscillatory differences"
+                    if np.signbit(signed[i]) != np.signbit(signed[i + 1])
+                    else "adjacent signed differences"
+                )
         rows.append(
             {
                 "Q_J": float(value),

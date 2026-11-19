@@ -1004,13 +1004,18 @@ def write_tables(study, energies, convergence, config, *, latex=False):
             print(
                 f"Local field errors in {rows[0]['field_units']}; reference: each formulation's finest grid"
             )
+            print(
+                "Orders use absolute adjacent Kperp differences from three grids; "
+                "sign changes are flagged and roundoff omits the order."
+            )
         else:
             print(
                 "Pressure corrected residual: unavailable (legacy polarisation/full Phi boundary work incomplete)"
             )
-        print(" | ".join(fields))
+        printed_fields = [*fields, "order_status"] if name == "convergence" else fields
+        print(" | ".join(printed_fields))
         for row in rows:
-            print(" | ".join(formatted(row[k]) for k in fields))
+            print(" | ".join(formatted(row[k]) for k in printed_fields))
         if latex:
             labels = {
                 "final_drift_J": r"$\Delta E$ [J]",
@@ -1187,13 +1192,9 @@ def thermal_gain_figure(study, config, boundary, groups):
                     linestyle=":",
                     label=rf"$h\to0$: $\Delta U_i={fit['limit_J']:.4g}$ J",
                 )
-    title = (
-        rf"{boundary} $\phi$; full duration $T={config['end_time']:g}/\omega_{{ci}}$"
-    )
-    if fit["status"] != "fit":
-        title += "\nIon-energy fit unavailable: " + fit["status"]
-    axis.set_xlabel(r"Physical mesh spacing $h=\Delta X$ [mm] (log scale)")
-    axis.set_ylabel(r"Ion thermal energy gain $U_i(T)-U_i(0)$ [J]")
+    title = rf"{boundary} $\phi$; $t = {config['end_time']:g}/\omega_{{ci}}$"
+    axis.set_xlabel(r"Mesh spacing $\Delta x$ [mm]")
+    axis.set_ylabel(r"Ion thermal energy gain $U_i(t)-U_i(0)$ [J]")
     axis.set_title(title, fontsize=10)
     axis.legend(fontsize=8)
     axis.grid(True, which="both", alpha=0.2)
@@ -1281,24 +1282,54 @@ def energy_figures(study, config, boundary, groups, *, energy_format="png"):
         if separate:
             axis.legend(fontsize=8, ncol=2)
 
-    context = f"{boundary} phi; viscosity {config['viscosity']:g} m²/s"
-    residual_note = (
-        "Corrected pressure residual unavailable: "
-        "incomplete legacy boundary/exchange coverage"
-    )
     if separate:
         for (fig, _), (name, _) in zip(canvases, panels):
-            title = f"{context}\nparallel kinetic energy = 0"
-            if name == "model-relative-change":
-                title += "\n" + residual_note.replace(": ", ":\n")
-            fig.suptitle(title)
             fig.savefig(study / f"energy-{boundary}-{name}.pdf")
             plt.close(fig)
     else:
         axes[0].legend(fontsize=6, ncol=2)
-        fig.suptitle(f"{context}; parallel kinetic energy = 0\n{residual_note}")
         fig.savefig(study / f"energy-{boundary}.png", dpi=160)
         plt.close(fig)
+
+
+def local_error_figure(study, config, boundary, groups):
+    """Local errors with a power-law fit to the two finest ion-energy error points."""
+    import matplotlib.pyplot as plt
+
+    colours = {"pressure": "tab:blue", "total_energy": "tab:orange"}
+    fig, axes = plt.subplots(1, 2, figsize=(8, 3.5))
+    for form, rows in groups.items():
+        for axis, name, label in zip(axes, ("L2", "Linf"), (r"$l_2$", r"$l_\inf$")):
+            values = [
+                (res["lx"] / key[2] * 1e3, res["error"][name])
+                for key, res in rows[:-1]
+                if res["error"][name] > 0
+            ]
+            if values:
+                h, e = np.asarray(values).T
+                axis.loglog(
+                    h, e, "o-", color=colours[form], label=form.replace("_", " ")
+                )
+                if form == "total_energy" and len(values) >= 2:
+                    order = np.log(e[-2] / e[-1]) / np.log(h[-2] / h[-1])
+                    fit_h = np.geomspace(h[-1], h[0], 100)
+                    axis.loglog(
+                        fit_h,
+                        e[-1] * (fit_h / h[-1]) ** order,
+                        "--",
+                        color="black",
+                        label=f"order {order:.2g}",
+                    )
+            axis.set_xlabel("Mesh spacing ΔX [mm]")
+            axis.set_ylabel(f"{label} [{rows[0][1]['unit']}]")
+    for axis in axes:
+        if axis.get_legend_handles_labels()[0]:
+            axis.legend(fontsize=8)
+    fig.suptitle(
+        rf"{boundary} $\phi$; {config['field'].replace('_', ' ')} at $t = {config['convergence_time']:g}/\omega_{{ci}}$"
+    )
+    fig.savefig(study / f"local-error-{boundary}.pdf")
+    plt.close(fig)
 
 
 def figures(study, config, results, style=None, *, energy_format="png"):
@@ -1445,33 +1476,12 @@ def figures(study, config, results, style=None, *, energy_format="png"):
         axes[2].set_ylabel("Observed order")
         axes[0].legend(fontsize=8)
         fig.suptitle(
-            f"{boundary} phi; t={config['convergence_time']:g} normalised; orders omitted for oscillatory/roundoff sequences"
+            f"{boundary} phi; t={config['convergence_time']:g} normalised; orders from absolute differences, omitted at roundoff"
         )
         fig.savefig(study / f"global-convergence-{boundary}.pdf")
         plt.close(fig)
 
-        fig, axes = plt.subplots(1, 2, figsize=(8, 3.5))
-        for form, rows in groups.items():
-            for axis, name in zip(axes, ("L2", "Linf")):
-                values = [
-                    (res["lx"] / key[2] * 1e3, res["error"][name])
-                    for key, res in rows[:-1]
-                    if res["error"][name] > 0
-                ]
-                if values:
-                    h, e = np.asarray(values).T
-                    axis.loglog(
-                        h, e, "o-", color=colours[form], label=form.replace("_", " ")
-                    )
-                axis.set_xlabel("Physical ΔX [mm]")
-                axis.set_ylabel(f"{name} [{rows[0][1]['unit']}]")
-        if axes[0].get_legend_handles_labels()[0]:
-            axes[0].legend(fontsize=8)
-        fig.suptitle(
-            f"{boundary} phi; {config['field'].replace('_', ' ')} at t={config['convergence_time']:g}\nEach formulation uses its own finest reference; all physical cells"
-        )
-        fig.savefig(study / f"local-error-{boundary}.pdf")
-        plt.close(fig)
+        local_error_figure(study, config, boundary, groups)
 
 
 def analyse(

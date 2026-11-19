@@ -364,7 +364,14 @@ $$
 
 Two levels supply one difference; at least three are needed for an order.
 Four levels supply three differences and two possible order estimates.
-Orders are omitted when adjacent differences change sign or reach roundoff.
+Extending a study recomputes these differences over all completed grids and
+uses the new finest grid for local errors. Five levels provide three possible
+order estimates, regardless of the original level count.
+Orders use the absolute adjacent differences even when their signs change.
+`order_status` flags sign changes as `oscillatory differences`; a positive order
+means their magnitudes shrink under refinement. This measures the decay of
+adjacent differences without assuming a single signed leading error term.
+Orders are omitted when either adjacent difference reaches roundoff.
 Completed subsets with unequal refinement ratios also omit adjacent orders;
 equally spaced refinement triples use their actual ratio.
 Each formulation uses its own finest reference, which is a numerical approximation.
@@ -460,7 +467,10 @@ Each boundary policy produces state, energy-history and convergence figures:
   ion thermal energy for available formulations, plus the ion-energy continuum
   fit and its status. Always exported, independently of `--energy-format`.
 - `local-error-*.pdf`: absolute RMS and maximum error against each formulation's
-  own finest reference.
+  own finest reference. Each panel includes a power-law fit through the two
+  highest-resolution total-ion-energy error points, with its order shown to
+  two significant figures in the legend. The finest reference has no error
+  point and is excluded from the fit.
 
 `--energy-format png` saves the energy histories in one six-panel PNG per
 boundary policy. `--energy-format pdf-panels` instead saves six standalone PDFs,
@@ -478,6 +488,9 @@ The export choice applies to the current invocation and can be changed with
 are the same in both modes; existing figure files are retained.
 
 `energy-table` and `convergence-table` are printed and saved as CSV and JSON.
+The printed convergence table includes `order_status`, flagging oscillatory
+differences and explaining unavailable orders such as roundoff or an
+insufficient refinement triple.
 `--latex` adds tables from the same numeric data. Field units are retained in
 the convergence data. Each run also retains `inventory.nc` and `analysis.json`,
 including diagnostic comparisons and boundary/viscous audit information.

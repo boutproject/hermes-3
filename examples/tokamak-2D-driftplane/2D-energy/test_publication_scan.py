@@ -118,8 +118,25 @@ def test_adjacent_orders_and_oscillatory_roundoff_sequences():
     assert rows[0]["observed_order"] == pytest.approx(2)
     assert rows[1]["observed_order"] == pytest.approx(2)
     assert rows[-1]["finest_difference_J"] is None
-    assert global_differences([1, 2, 1], 2)[0]["observed_order"] is None
+    oscillatory = global_differences([1, 2, 1], 2)[0]
+    assert oscillatory["observed_order"] == 0
+    assert oscillatory["order_status"] == "oscillatory differences"
+    shrinking = global_differences([1 + (-0.25) ** i for i in range(5)], 2)
+    assert [row["observed_order"] for row in shrinking[:3]] == pytest.approx([2, 2, 2])
+    assert all(
+        row["order_status"] == "oscillatory differences" for row in shrinking[:3]
+    )
+    assert [row["adjacent_signed_J"] for row in shrinking[:4]] == pytest.approx(
+        [1.25, -0.3125, 0.078125, -0.01953125]
+    )
+    growing = global_differences([1, -2, 4], 2)[0]
+    assert growing["observed_order"] == -1
+    assert growing["order_status"] == "oscillatory differences"
     assert global_differences([1, 1, 1], 2)[0]["order_status"] == "roundoff dominated"
+    assert (
+        global_differences([1, 1 + 1e-15, 1], 2)[0]["order_status"]
+        == "roundoff dominated"
+    )
     assert global_differences([1, 2], 2)[0]["observed_order"] is None
 
 
@@ -596,6 +613,65 @@ def test_thermal_gain_pdf_overlays_signed_gains_and_continuum_fit(
     assert report["data"][0]["final_ion_thermal_J"] == 9
 
 
+@pytest.mark.parametrize("grids", [(8, 16), (8, 16, 32, 64, 128)])
+def test_local_error_fit_uses_finest_ion_energy_pair_and_formats_each_order(
+    runner, tmp_path, monkeypatch, grids
+):
+    import matplotlib.pyplot as plt
+    from matplotlib.figure import Figure
+
+    orders = {"L2": 1.87, "Linf": 1.234}
+    groups = {}
+    for form in ("pressure", "total_energy"):
+        rows = []
+        for nx in grids:
+            errors = {name: 2 * (8 / nx) ** order for name, order in orders.items()}
+            # Coarse outliers distinguish the finest-pair fit from an all-grid fit.
+            if nx <= 16:
+                errors = {name: value * 5 for name, value in errors.items()}
+            if nx == grids[-1]:
+                errors = dict.fromkeys(orders)
+            rows.append(
+                (("fixed", form, nx, nx), {"lx": 0.05, "unit": "Pa", "error": errors})
+            )
+        groups[form] = rows
+    captured = []
+    original_savefig = Figure.savefig
+
+    def capture(fig, path, **kwargs):
+        captured.extend(fig.axes)
+        assert (
+            fig._suptitle.get_text()
+            == r"fixed $\phi$; ion pressure at $t = 4/\omega_{ci}$"
+        )
+        original_savefig(fig, path, **kwargs)
+
+    monkeypatch.setattr(Figure, "savefig", capture)
+    config = {"field": "ion_pressure", "convergence_time": 4}
+    with plt.rc_context({"figure.constrained_layout.use": True}):
+        runner.local_error_figure(tmp_path, config, "fixed", groups)
+    assert (tmp_path / "local-error-fixed.pdf").read_bytes().startswith(b"%PDF-")
+    for axis, (name, order) in zip(captured, orders.items(), strict=True):
+        lines = {line.get_label(): line for line in axis.lines}
+        legend = [text.get_text() for text in axis.get_legend().get_texts()]
+        if len(grids) == 2:
+            assert set(lines) == {"pressure", "total energy"}
+            assert not any(label.startswith("order ") for label in legend)
+            continue
+        label = f"order {order:.2g}"
+        assert set(lines) == {"pressure", "total energy", label}
+        assert label in legend
+        fit = lines[label]
+        assert fit.get_linestyle() == "--"
+        fit_h = np.asarray(fit.get_xdata())
+        # The fit is anchored at nx=64; nx=128 is the excluded reference.
+        fine_h = 0.05 / 64 * 1e3
+        fine_error = 2 * (8 / 64) ** order
+        np.testing.assert_allclose(
+            fit.get_ydata(), fine_error * (fit_h / fine_h) ** order
+        )
+
+
 @pytest.mark.parametrize("formulation", ["pressure", "total_energy"])
 def test_partial_reanalysis_plots_single_completed_formulation(
     runner, tmp_path, monkeypatch, formulation
@@ -1033,6 +1109,87 @@ def test_extension_runs_only_new_grids_and_keeps_completed_data(
     executed.clear()
     assert runner.main(flags) == 0
     assert set(executed) == {"fixed-pressure-32x32", "fixed-total_energy-32x32"}
+
+
+@pytest.mark.parametrize("oscillatory", [False, True])
+def test_extension_reanalyses_all_grids_and_explains_missing_orders(
+    runner, portable_study, monkeypatch, capsys, oscillatory
+):
+    import json
+
+    study, _, manifest = portable_study
+    runner.extend_study(study, manifest, {**manifest["configuration"], "levels": 3})
+    # Both sequences initially give a valid order; new grids can reverse the
+    # adjacent differences without being excluded from the analysis.
+    values = {
+        "pressure": [4, 5.4, 5.7, 5.5, 5.65],
+        "total_energy": [4.1, 5.05, 5.15, 5.144, 5.136],
+    }
+    analysed = []
+
+    def analyse_run(directory, config):
+        row = next(
+            row for row in manifest["runs"] if row["directory"] == directory.name
+        )
+        analysed.append((directory.name, config["levels"]))
+        result = synthetic_plot_result(row["nx"], 0.1)
+        result["comparison"] += row["nx"] ** -2
+        if oscillatory:
+            result["Q"] = values[row["formulation"]][row["level"]]
+        return result
+
+    monkeypatch.setattr(runner, "analyse_run", analyse_run)
+    monkeypatch.setattr(runner, "figures", lambda *args, **kwargs: None)
+    runner.analyse(study, manifest)
+    before = json.loads((study / "convergence-table.json").read_text())
+    assert len(before) == 6
+    for rows in (before[:3], before[3:]):
+        assert rows[0]["observed_order"] is not None
+        assert rows[1]["observed_order"] is None
+        assert rows[2]["L2"] is None
+    capsys.readouterr()
+
+    runner.extend_study(study, manifest, {**manifest["configuration"], "levels": 5})
+    analysed.clear()
+    runner.analyse(study, manifest)
+    after = json.loads((study / "convergence-table.json").read_text())
+    assert len(after) == len(analysed) == 10
+    assert set(analysed) == {(row["directory"], 5) for row in manifest["runs"]}
+    output = capsys.readouterr().out
+    assert "observed_order | L2 | Linf | order_status" in output
+    assert "Orders use absolute adjacent Kperp differences from three grids" in output
+    for form, rows in (("pressure", after[:5]), ("total_energy", after[5:])):
+        assert [row["grid"] for row in rows] == [
+            f"{nx}x{nx}" for nx in (4, 8, 16, 32, 64)
+        ]
+        assert rows[2]["L2"] > 0  # Former finest grid now has a finer reference.
+        for row, nx in zip(rows[:-1], (4, 8, 16, 32), strict=True):
+            assert row["L2"] == pytest.approx(nx**-2 - 64**-2)
+        if oscillatory:
+            np.testing.assert_allclose([row["Q_J"] for row in rows], values[form])
+            assert rows[1]["observed_order"] == pytest.approx(
+                np.log2(
+                    abs(
+                        (values[form][1] - values[form][2])
+                        / (values[form][2] - values[form][3])
+                    )
+                )
+            )
+            assert rows[1]["order_status"] == "oscillatory differences"
+            if form == "pressure":
+                assert rows[2]["observed_order"] == pytest.approx(np.log2(0.2 / 0.15))
+                assert rows[2]["order_status"] == "oscillatory differences"
+            else:
+                assert rows[2]["observed_order"] < 0
+        else:
+            assert [row["observed_order"] for row in rows[:3]] == pytest.approx(
+                [2, 2, 2]
+            )
+        assert rows[3]["order_status"] == "two adjacent differences required"
+        assert rows[4]["order_status"] == "finest reference"
+        assert rows[4]["L2"] is None
+    if oscillatory:
+        assert "oscillatory differences" in output
 
 
 @pytest.mark.parametrize(
