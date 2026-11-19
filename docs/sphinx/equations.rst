@@ -2315,6 +2315,7 @@ Other options in ``[evolve_vorticity_ion_energy]`` are:
 - ``laplacian``: Subsection containing options for the approximate
   potential-recovery Laplacian solver.
 - ``diagnose``: Save additional energy and flux diagnostics (default ``false``).
+- ``external_heating``: Add a spatially varying heating source in units of W/m^3.
 
 Auxiliary options belong to ``[polarisation_drift]``:
 

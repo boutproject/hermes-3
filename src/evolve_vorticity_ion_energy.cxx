@@ -789,6 +789,7 @@ EvolveVorticityIonEnergy::EvolveVorticityIonEnergy(std::string name, Options& al
   }
 
   const Options& units = alloptions["units"];
+  const BoutReal Nnorm = units["inv_meters_cubed"];
   const BoutReal Tnorm = units["eV"];
   const BoutReal Omega_ci = 1. / units["seconds"].as<BoutReal>();
   const BoutReal Bnorm = units["Tesla"];
@@ -966,6 +967,12 @@ EvolveVorticityIonEnergy::EvolveVorticityIonEnergy(std::string name, Options& al
 
   diagnose =
       options["diagnose"].doc("Output additional diagnostics?").withDefault<bool>(false);
+
+  const BoutReal source_normalisation = SI::qe * Nnorm * Tnorm * Omega_ci; // [W/m^3]
+
+  external_heating =
+      options["external_heating"].doc("Heating source in [W/m^3]").withDefault(0.0)
+      / source_normalisation;
 }
 
 void EvolveVorticityIonEnergy::acceptWarmStart() {
@@ -1300,7 +1307,7 @@ void EvolveVorticityIonEnergy::finally(const Options& state) {
   Eion_src = sumIonEnergySources(state["species"]);
 
   ddt(Eion) = -(DivEExB + DivEelectric + DivEparallel + DivEpol) - phi_Div_Je
-              - electron_viscous_heating + Eion_src;
+              - electron_viscous_heating + Eion_src + external_heating;
 }
 
 void EvolveVorticityIonEnergy::calculateViscosity() {
@@ -1370,6 +1377,15 @@ void EvolveVorticityIonEnergy::outputVars(Options& state) {
                   {"conversion", Tnorm},
                   {"standard_name", "temperature"},
                   {"long_name", "Common ion temperature"},
+                  {"species", "all ions"},
+                  {"source", "evolve_vorticity_ion_energy"}});
+
+  // Saving without time axis because heating is not varying in time
+  set_with_attrs(state["ion_external_heating"], external_heating,
+                 {{"units", "W/m^3"},
+                  {"conversion", SI::qe * Nnorm * Tnorm * Omega_ci},
+                  {"standard_name", "external heating"},
+                  {"long_name", "external ion heating"},
                   {"species", "all ions"},
                   {"source", "evolve_vorticity_ion_energy"}});
 

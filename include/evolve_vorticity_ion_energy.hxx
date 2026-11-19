@@ -269,6 +269,8 @@ private:
 
   bool diagnose; ///< Output additional diagnostics?
 
+  Field3D external_heating; ///< External heating power
+
   /// Inputs
   /// - species
   ///   - <name>
