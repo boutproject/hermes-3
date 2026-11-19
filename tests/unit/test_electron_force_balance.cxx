@@ -90,14 +90,14 @@ TEST_F(ElectronForceBalanceTest, ForceBalance) {
 
   // Should have E = momentum_source / density = 0.5 / 2.0
 
-  options["species"]["ion"]["density"] = 1.0;
-  options["species"]["ion"]["charge"] = 3.0;
+  options["species"]["h+"]["density"] = 1.0;
+  options["species"]["h+"]["charge"] = 3.0;
 
-  component.declareAllSpecies({"e", "ion"});
+  component.declareAllSpecies({"e", "h+"});
   component.transform(options);
 
   // Should give ion momentum source charge * E = 3 * 0.5 / 2.0
-  Field3D F = get<Field3D>(options["species"]["ion"]["momentum_source"]);
+  Field3D F = get<Field3D>(options["species"]["h+"]["momentum_source"]);
 
   BOUT_FOR_SERIAL(i, F.getRegion("RGN_NOBNDRY")) {
     ASSERT_DOUBLE_EQ(F[i], 3. * 0.5 / 2.0) << "Momentum source not correct at " << i;

@@ -21,8 +21,10 @@ struct CXReaction : public Reaction {
    *
    * @param name
    * @param alloptions  The options object
+   * @param use_standalone_config Use the first reaction config entry without advancing
+   * the shared instance counter.
    */
-  CXReaction(std::string name, Options& alloptions);
+  CXReaction(std::string name, Options& alloptions, bool use_standalone_config = false);
 
   /**
    * @brief CXReaction constructor used by component factory.

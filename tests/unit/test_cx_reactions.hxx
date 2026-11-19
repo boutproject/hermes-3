@@ -8,7 +8,10 @@
 namespace hermes {
 
 struct ConcreteCXReaction : public CXReaction {
-  using CXReaction::CXReaction;
+  ConcreteCXReaction(std::string name, Options& options, Solver* = nullptr)
+      : CXReaction(name, options, true) {}
+  // Expose (protected) get_reaction_data() for testing
+  using Reaction::get_reaction_data;
   static constexpr auto type = "test_cx_reaction";
 };
 

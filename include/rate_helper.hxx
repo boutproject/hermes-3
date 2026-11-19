@@ -52,7 +52,10 @@ public:
   /// The reaction rate Field3D
   Field3D rate;
 
-  /// Collision frequencies keyed by reactant name
+  /// True only when the function passed to calc_rates() gives zero for the (rank-local) rate Field.
+  bool is_zero{false};
+
+  /// Collision frequencies keyed by reactant name. Left empty if RateHelper is initialised with no reactants.
   std::vector<Field3D> collision_frequencies;
 
   /**

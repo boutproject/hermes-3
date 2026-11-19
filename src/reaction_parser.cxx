@@ -1,6 +1,7 @@
 #include <algorithm>
 
 #include "hermes_utils.hxx"
+#include "species_parser.hxx"
 
 #include "reaction_parser.hxx"
 
@@ -10,8 +11,9 @@ ReactionParser::ReactionParser(const std::string& reaction_str)
   const std::string rp_sep{"->"};
   const std::size_t sep_len = rp_sep.length();
   if (reaction_str.length() < sep_len + 2) {
-    throw BoutException("Reaction string not long enough to include at least on reactant "
-                        "and one product!");
+    throw BoutException(
+        "Reaction string not long enough to include at least one reactant "
+        "and one product!");
   }
   auto sep_idx = reaction_str.find(rp_sep);
   if (sep_idx == std::string::npos) {
@@ -88,26 +90,26 @@ ReactionParser::get_species(std::vector<std::string> species_names,
     // are involved in a reaction.
     std::copy_if(species_names.begin(), species_names.end(),
                  std::back_inserter(filtered_species_names), [](std::string sp_name) {
-                   return identifySpeciesType(sp_name) == SpeciesType::electron;
+                   return SpeciesParser::get_type(sp_name) == SpeciesType::electron;
                  });
     break;
   case species_filter::heavy:
     // Filter out electrons ('e')
     std::copy_if(species_names.begin(), species_names.end(),
                  std::back_inserter(filtered_species_names), [](std::string sp_name) {
-                   return identifySpeciesType(sp_name) != SpeciesType::electron;
+                   return SpeciesParser::get_type(sp_name) != SpeciesType::electron;
                  });
     break;
   case species_filter::ion:
     std::copy_if(species_names.begin(), species_names.end(),
                  std::back_inserter(filtered_species_names), [](std::string sp_name) {
-                   return identifySpeciesType(sp_name) == SpeciesType::ion;
+                   return isIonSpeciesType(SpeciesParser::get_type(sp_name));
                  });
     break;
   case species_filter::neutral:
     std::copy_if(species_names.begin(), species_names.end(),
                  std::back_inserter(filtered_species_names), [](std::string sp_name) {
-                   return identifySpeciesType(sp_name) == SpeciesType::neutral;
+                   return isNeutralSpeciesType(SpeciesParser::get_type(sp_name));
                  });
     break;
   case species_filter::produced: {

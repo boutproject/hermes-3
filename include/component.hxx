@@ -28,6 +28,7 @@
 #include "guarded_options.hxx"
 #include "hermes_utils.hxx"
 #include "permissions.hxx"
+#include "species_parser.hxx"
 
 class Solver; // Time integrator
 
@@ -45,14 +46,18 @@ struct SpeciesInformation {
 
   SpeciesInformation(const std::initializer_list<std::string> species) {
     for (const auto& sp : species) {
-      // FIXME: identifySpecies only identifies positive ions
-      // FIXME: identifySpecies has no concept of ebeam
-      const SpeciesType type = identifySpeciesType(sp);
+      // FIXME: SpeciesParser has no concept of ebeam
+      const SpeciesParser parsed_species(sp);
+      const SpeciesType type = parsed_species.get_type();
       if (type == SpeciesType::electron) {
         electrons.push_back(sp);
-      } else if (type == SpeciesType::ion) {
-        positive_ions.push_back(sp);
-      } else if (type == SpeciesType::neutral) {
+      } else if (isIonSpeciesType(type)) {
+        if (parsed_species.get_charge() < 0) {
+          negative_ions.push_back(sp);
+        } else {
+          positive_ions.push_back(sp);
+        }
+      } else if (isNeutralSpeciesType(type)) {
         neutrals.push_back(sp);
       } else {
         throw BoutException("Species {} has unrecognised type {}", sp, toString(type));

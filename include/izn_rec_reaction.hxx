@@ -25,8 +25,11 @@ protected:
    *
    * @param name
    * @param options  The options object containing configuration parameters
+   * @param use_standalone_config Use the first reaction config entry without advancing
+   * the shared instance counter.
    */
-  IznRecReaction(std::string short_reaction_type, std::string name, Options& options);
+  IznRecReaction(std::string short_reaction_type, std::string name, Options& options,
+                 bool use_standalone_config = false);
 
   /**
    * @brief Perform additional transform tasks specific to ionisation/recombination
@@ -71,8 +74,10 @@ struct IznReaction : public IznRecReaction {
    *
    * @param name
    * @param options The options object
+   * @param use_standalone_config Use the first reaction config entry without advancing
+   * the shared instance counter.
    */
-  IznReaction(std::string name, Options& options);
+  IznReaction(std::string name, Options& options, bool use_standalone_config = false);
   /**
    * @brief Constructor used by the component factory.
    *
@@ -96,8 +101,10 @@ struct RecReaction : public IznRecReaction {
    *
    * @param name
    * @param options
+   * @param use_standalone_config Use the first reaction config entry without advancing
+   * the shared instance counter.
    */
-  RecReaction(std::string name, Options& options);
+  RecReaction(std::string name, Options& options, bool use_standalone_config = false);
   /**
    * @brief Constructor used by the component factory.
    *

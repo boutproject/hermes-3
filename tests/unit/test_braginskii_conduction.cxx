@@ -31,7 +31,7 @@ public:
                                  {"meters", 1.0},
                                  {"seconds", 1.0},
                                  {"inv_meters_cubed", 1e19}}},
-                               {"test+",
+                               {"he+",
                                 {{"type", "evolve_energy"},
                                  {"thermal_conduction", true},
                                  {"diagnose", true}}},
@@ -40,9 +40,9 @@ public:
         state_base(
             {{"fastest_wave", 0.},
              {"species",
-              {{"test+",
+              {{"he+",
                 {{"velocity", 0.}, {"density", 1.}, {"pressure", 1.}, {"AA", 2.}}}}}}) {
-    Options::root()["Ptest+"]["function"] = "1.0";
+    Options::root()["Phe+"]["function"] = "1.0";
     temp1 = linearGradient(1., 0., 0., 1., 1., 0., 0.);
     temp2 = linearGradient(0., 0., 0., 1., 2., 0., 0.);
     temp_perp_variation = linearGradient(0., 1., 2., 0., 0., 0., 0.);
@@ -65,13 +65,13 @@ public:
 
   BraginskiiConduction makeComponent(BoutReal kappa, std::string mode = "braginskii") {
     Options opts = options.copy();
-    opts["test+"]["kappa_coefficient"] = kappa;
-    opts["test+"]["conduction_collisions_mode"] = std::move(mode);
-    return BraginskiiConduction("test+", opts, nullptr);
+    opts["he+"]["kappa_coefficient"] = kappa;
+    opts["he+"]["conduction_collisions_mode"] = std::move(mode);
+    return BraginskiiConduction("he+", opts, nullptr);
   }
 
   Field3D getDeriv(const Options& state) {
-    return state["species"]["test+"]["energy_source"];
+    return state["species"]["he+"]["energy_source"];
   }
 };
 
@@ -80,18 +80,18 @@ TEST_F(BraginskiiConductionTest, ConductionGradientScaling) {
   Options state0;
   Options state1 = this->state_base.copy();
   Options state2;
-  state1["species"]["test+"]["charge"] = 1;
-  state1["species"]["test+"]["collision_frequencies"]["test+_test+_coll"] = 1.;
-  state1["species"]["test+"]["collision_frequency"] = 1.;
+  state1["species"]["he+"]["charge"] = 1;
+  state1["species"]["he+"]["collision_frequencies"]["he+_he+_coll"] = 1.;
+  state1["species"]["he+"]["collision_frequency"] = 1.;
 
   state0 = state1.copy();
   state2 = state1.copy();
 
-  state0["species"]["test+"]["temperature"] = this->temp_perp_variation;
-  state1["species"]["test+"]["temperature"] = this->temp1;
-  state2["species"]["test+"]["temperature"] = this->temp2;
+  state0["species"]["he+"]["temperature"] = this->temp_perp_variation;
+  state1["species"]["he+"]["temperature"] = this->temp1;
+  state2["species"]["he+"]["temperature"] = this->temp2;
 
-  component.declareAllSpecies({"test+"});
+  component.declareAllSpecies({"he+"});
   component.transform(state0);
   component.transform(state1);
   component.transform(state2);
@@ -111,15 +111,15 @@ TEST_F(BraginskiiConductionTest, ConductionKappaScaling) {
   BraginskiiConduction component1 = this->makeComponent(1.);
   BraginskiiConduction component2 = this->makeComponent(2.);
   Options state1 = this->state_base.copy();
-  state1["species"]["test+"]["charge"] = 1;
-  state1["species"]["test+"]["collision_frequencies"]["test+_test+_coll"] = 1.;
-  state1["species"]["test+"]["collision_frequency"] = 1.;
-  state1["species"]["test+"]["temperature"] = this->temp1;
+  state1["species"]["he+"]["charge"] = 1;
+  state1["species"]["he+"]["collision_frequencies"]["he+_he+_coll"] = 1.;
+  state1["species"]["he+"]["collision_frequency"] = 1.;
+  state1["species"]["he+"]["temperature"] = this->temp1;
   Options state2 = state1.copy();
 
-  component1.declareAllSpecies({"test+"});
+  component1.declareAllSpecies({"he+"});
   component1.transform(state1);
-  component2.declareAllSpecies({"test+"});
+  component2.declareAllSpecies({"he+"});
   component2.transform(state2);
 
   Field3D conduction1 = this->getDeriv(state1);
@@ -136,20 +136,20 @@ TEST_F(BraginskiiConductionTest, ConductionCollisionScaling) {
   Options state0;
   Options state1 = this->state_base.copy();
   Options state2;
-  state1["species"]["test+"]["charge"] = 1;
-  state1["species"]["test+"]["temperature"] = this->temp1;
+  state1["species"]["he+"]["charge"] = 1;
+  state1["species"]["he+"]["temperature"] = this->temp1;
 
   state0 = state1.copy();
   state2 = state1.copy();
 
-  state0["species"]["test+"]["collision_frequencies"]["test+_test+_coll"] = 0.5;
-  state0["species"]["test+"]["collision_frequency"] = 0.5;
-  state1["species"]["test+"]["collision_frequencies"]["test+_test+_coll"] = 1.;
-  state1["species"]["test+"]["collision_frequency"] = 1.;
-  state2["species"]["test+"]["collision_frequencies"]["test+_test+_coll"] = 2.;
-  state2["species"]["test+"]["collision_frequency"] = 2.;
+  state0["species"]["he+"]["collision_frequencies"]["he+_he+_coll"] = 0.5;
+  state0["species"]["he+"]["collision_frequency"] = 0.5;
+  state1["species"]["he+"]["collision_frequencies"]["he+_he+_coll"] = 1.;
+  state1["species"]["he+"]["collision_frequency"] = 1.;
+  state2["species"]["he+"]["collision_frequencies"]["he+_he+_coll"] = 2.;
+  state2["species"]["he+"]["collision_frequency"] = 2.;
 
-  component.declareAllSpecies({"test+"});
+  component.declareAllSpecies({"he+"});
   component.transform(state0);
   component.transform(state1);
   component.transform(state2);
@@ -169,16 +169,16 @@ TEST_F(BraginskiiConductionTest, ConductionCollisionsMode) {
   BraginskiiConduction component_braginskii = this->makeComponent(1., "braginskii");
   BraginskiiConduction component_multispecies = this->makeComponent(1., "multispecies");
   Options state_brag = this->state_base.copy();
-  state_brag["species"]["test+"]["charge"] = 1;
-  state_brag["species"]["test+"]["temperature"] = this->temp1;
-  state_brag["species"]["test+"]["collision_frequencies"]["test+_test+_coll"] = 0.5;
-  state_brag["species"]["test+"]["collision_frequencies"]["test+_e_coll"] = 0.5;
-  state_brag["species"]["test+"]["collision_frequency"] = 1.0;
+  state_brag["species"]["he+"]["charge"] = 1;
+  state_brag["species"]["he+"]["temperature"] = this->temp1;
+  state_brag["species"]["he+"]["collision_frequencies"]["he+_he+_coll"] = 0.5;
+  state_brag["species"]["he+"]["collision_frequencies"]["he+_e_coll"] = 0.5;
+  state_brag["species"]["he+"]["collision_frequency"] = 1.0;
   Options state_multi = state_brag.copy();
 
-  component_braginskii.declareAllSpecies({"test+"});
+  component_braginskii.declareAllSpecies({"he+"});
   component_braginskii.transform(state_brag);
-  component_multispecies.declareAllSpecies({"test+", "e"});
+  component_multispecies.declareAllSpecies({"he+", "e"});
   component_multispecies.transform(state_multi);
 
   Field3D conduction_brag = this->getDeriv(state_brag);

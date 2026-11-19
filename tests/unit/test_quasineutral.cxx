@@ -46,7 +46,7 @@ TEST_F(QuasineutralTest, TransformOneSpecies) {
   Options options = {{"test", {{"charge", -1.0}, {"AA", 2.0}}}};
 
   Quasineutral component("test", options, nullptr);
-  component.declareAllSpecies({{"i"}, {}});
+  component.declareAllSpecies({"i"});
 
   Options state{{"species", {{"i", {{"charge", 1.5}, {"density", 2.0}}}}}};
   component.transform(state);

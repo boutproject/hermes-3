@@ -21,15 +21,12 @@ TEST(ReactionTest, InputOptions) {
   valid_input1[comp_name]["data_srcs"] = "(Amjuel)";
   Options valid_input2 = base_input.copy();
   valid_input2[comp_name]["data_srcs"] = "(Amjuel,Amjuel)";
-  ReactionBase::reset_instance_counter();
   ASSERT_NO_THROW(ConcreteCXReaction(comp_name, valid_input1));
-  ReactionBase::reset_instance_counter();
   ASSERT_NO_THROW(ConcreteCXReaction(comp_name, valid_input2));
 
   // Setting num_data_srcs != (1 || num_reactions) should throw
   Options invalid_input1 = base_input.copy();
   invalid_input1[comp_name]["data_srcs"] = "(Amjuel,Amjuel,Amjuel)";
-  ReactionBase::reset_instance_counter();
   ASSERT_THROW(ConcreteCXReaction(comp_name, invalid_input1), BoutException);
 
   // Setting one or two data IDs should work
@@ -37,16 +34,28 @@ TEST(ReactionTest, InputOptions) {
   valid_input3[comp_name]["data_ids"] = "H.2_3.1.8";
   Options valid_input4 = base_input.copy();
   valid_input4[comp_name]["data_ids"] = "H.2_3.1.8,H.2_3.1.8";
-  ReactionBase::reset_instance_counter();
   ASSERT_NO_THROW(ConcreteCXReaction(comp_name, valid_input3));
-  ReactionBase::reset_instance_counter();
   ASSERT_NO_THROW(ConcreteCXReaction(comp_name, valid_input4));
 
   // Setting num_data_ids != (1 || num_reactions) should throw
   Options invalid_input2 = base_input.copy();
   invalid_input2[comp_name]["data_ids"] = "H.2_3.1.8,H.2_3.1.8,H.2_3.1.8";
-  ReactionBase::reset_instance_counter();
   ASSERT_THROW(ConcreteCXReaction(comp_name, invalid_input2), BoutException);
+}
+
+/// @brief If no reaction data is set, Reaction.get_reaction_data() must throw.
+TEST(ReactionTest, ThrowsWithoutReactionData) {
+  const std::string comp_name = "test";
+  Options base_input{
+      {comp_name, {{"type", "(h + h+ -> h+ + h, d + d+ -> d+ + d)"}}},
+      {"units", {{"eV", 1.0}, {"inv_meters_cubed", 1.0}, {"seconds", 1.0}}}};
+
+  // Don't read any reaction data
+  base_input[comp_name]["data_srcs"] = "none";
+  base_input[comp_name]["data_ids"] = "none";
+
+  ConcreteCXReaction component(comp_name, base_input);
+  ASSERT_THROW(component.get_reaction_data(), BoutException);
 }
 
 //======================== CX reaction class tests =======================
@@ -70,7 +79,6 @@ TEST(CXReactionTest, InvalidReactionStrings) {
   for (const auto& invalid_reaction_str :
        {too_few_reactants, too_many_reactants, too_few_products, too_many_products,
         invalid_cx1, invalid_cx2}) {
-    ReactionBase::reset_instance_counter();
     Options options = base_options.copy();
     options["test"]["type"] = invalid_reaction_str;
     ASSERT_THROW(ConcreteCXReaction("test", options), BoutException);
@@ -91,7 +99,6 @@ TEST(CXReactionTest, OrderIndependentReactionStrs) {
   // Test that all of the strings allow construction without throwing
   for (const auto& valid_reaction_str :
        {DT_cx_order1, DT_cx_order2, DT_cx_order3, DT_cx_order4}) {
-    ReactionBase::reset_instance_counter();
     Options options = base_options.copy();
     options["test"]["type"] = valid_reaction_str;
     ASSERT_NO_THROW(ConcreteCXReaction("test", options));
