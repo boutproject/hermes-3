@@ -6,7 +6,23 @@
 
 #include "component.hxx"
 
+/// Perpendicular diffusion of particles, carried parallel momentum and energy.
+///
+/// A positive custom_D sets the normalised particle and thermal-energy
+/// diffusivity. The energy source is Div(1.5 D Grad_perp P), using the species
+/// pressure or N*T when only temperature is supplied. No collision frequencies
+/// are required in this mode.
+///
+/// Negative custom_D (default -1) calculates the ambipolar particle diffusivity
+/// from electron collisions, transports 1.5 T with the particles, and adds
+/// perpendicular temperature conduction for each charged species. A value of
+/// zero calculates the same particle diffusivity but omits conduction.
+///
+/// All physical X and Y boundary face fluxes are closed, including mixed-metric
+/// contributions. Periodic and inter-processor faces are retained.
 struct ClassicalDiffusion : public NamedComponent<ClassicalDiffusion> {
+  /// Options: custom_D selects the transport model; diagnose outputs the
+  /// normalised particle diffusivity as D_classical with SI conversion metadata.
   ClassicalDiffusion(std::string name, Options& alloptions, Solver*);
 
   void outputVars(Options& state) override;
@@ -17,8 +33,8 @@ private:
   Coordinates::FieldMetric Bsq; // Magnetic field squared
 
   bool diagnose;     ///< Output additional diagnostics?
-  Field3D Dn;        ///< Particle diffusion coefficient
-  BoutReal custom_D; ///< User-set particle diffusion coefficient override
+  Field3D Dn;        ///< Realised normalised perpendicular particle diffusivity
+  BoutReal custom_D; ///< Normalised diffusivity override; positive selects custom mode
 
   // Flow diagnostics
   Field3D cls_pf_perp_xlow, cls_pf_perp_ylow;
