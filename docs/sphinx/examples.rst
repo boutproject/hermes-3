@@ -828,7 +828,8 @@ located in located in ``examples\tcv-x21``.
 formulation (``vorticity``, ``polarisation_drift`` and ``evolve_pressure``)
 with ``evolve_vorticity_ion_energy``. Both evolve hydrogen density and electron
 pressure with quasineutral electrons and no parallel dynamics. The scan generates
-inputs from ``examples/tokamak-2D-driftplane/2D-energy/scan-input.inp.template``.
+inputs from ``scan-pressure.inp.template`` and ``scan-total-energy.inp.template``
+in ``examples/tokamak-2D-driftplane/2D-energy``.
 
 The problem is interchange relaxation in a 5 cm by 5 cm X-Z slab, with
 curvature radius :math:`R=1.5` m and magnetic field :math:`B=0.35` T.

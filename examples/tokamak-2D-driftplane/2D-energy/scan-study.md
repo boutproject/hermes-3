@@ -106,7 +106,11 @@ shows ion internal energy density `3*Pi/2` from pressure evolution; other
 choices plot the selected field.
 The lower row shows perpendicular kinetic energy density from total ion energy.
 
-Every run gets its own generated `BOUT.inp` from `scan-input.inp.template`.
+Every run gets its own generated `BOUT.inp` from `scan-pressure.inp.template`
+or `scan-total-energy.inp.template`. Component lists, evolving-field sections
+and operator settings are explicit in each template; the runner substitutes
+scan parameters and the selected wall condition. The manifest hashes both
+templates when checking resume compatibility.
 The study manifest records configuration, input/executable/runner hashes,
 hashes of separately built Hermes/BOUT libraries, checkout revisions and dirty
 state, Python environment and MPI layout.
@@ -177,7 +181,7 @@ collision-frequency component in this setup.
 There is no parallel flow, additional collisional conduction, prescribed source
 or hyperdiffusion. Both use reference atomic mass 1.
 The box is 5 cm × 5 cm, with R=1.5 m, B=0.35 T, Nnorm=2e18 m⁻³ and Tnorm=5 eV.
-The template supplies consistent SI metric pairs explicitly and uses
+Both templates supply consistent SI metric pairs explicitly and use
 `normalise_metric=true`; the legacy `recalculate_metric` path mixes B units
 when constructing its Z metric for this setup. Guard widths stay fixed when
 physical grid counts are refined: `MXG=2`, `MYG=0`, `mesh:ny=1` and
@@ -193,7 +197,7 @@ envelope `S` is zero within 0.1 of either radial wall, one at distances of
 where `s=(distance-0.1)/0.1`. Its first and second derivatives vanish at
 both taper endpoints. The buffer and taper widths are fractions of the box,
 fixed across resolutions; the central perturbation is unchanged. The
-template and restart builder use the same profile.
+templates and restart builder use the same profile.
 The shared physical potential is sampled from the analytic continuum ion-only
 zero-vorticity solution: the harmonic extension is `Phi=1`, so `phi=1-P`.
 Both models have zero phi midpoints. The pressure formulation uses homogeneous Neumann
@@ -231,7 +235,7 @@ These differences are recorded in every manifest.
 
 Use `--custom-D 0.001` (0.0143 m²/s) to study weakly diffusive dynamics;
 the historical default `1.19` is strongly diffusive. A fresh study is required
-for the buffered initial profile because the template and restart fields have
+for the buffered initial profile because the templates and restart fields have
 changed. Existing data can still be inspected with `--analyse-only`.
 
 The local runner limits each launch to `--timeout` seconds and records

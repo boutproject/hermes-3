@@ -47,6 +47,10 @@ from energy_analysis.pressure import legacy_operator, legacy_viscous_work
 from energy_analysis.report import revision
 
 SCHEMA = 1
+INPUT_TEMPLATES = {
+    "pressure": HERE / "scan-pressure.inp.template",
+    "total_energy": HERE / "scan-total-energy.inp.template",
+}
 INITIAL_WALL_BUFFER = 0.1
 INITIAL_TAPER_WIDTH = 0.1
 DIFFERENCES = [
@@ -317,42 +321,12 @@ def input_text(config, row):
         "initial_taper_width": INITIAL_TAPER_WIDTH,
         "diagnose": str(c["diagnose"]).lower(),
         "boundary_options": boundary_options,
-        "laplacian_boundary_options": (
-            "inner_boundary_flags = 16\nouter_boundary_flags = 16" if pressure else ""
-        ),
-        "model": "vorticity" if pressure else "evolve_vorticity_ion_energy",
-        "components": "vorticity, polarisation_drift"
-        if pressure
-        else "evolve_vorticity_ion_energy, polarisation_drift",
-        "ion_components": "evolve_density, evolve_pressure"
-        if pressure
-        else "evolve_density",
-        "ion_pressure_options": "thermal_conduction = false\nlow_p_diffuse_perp = false\nlow_T_diffuse_perp = false\ndamp_p_nt = false\np_div_v = false"
-        if pressure
-        else "",
-        "model_options": (
-            "diamagnetic = true\ndiamagnetic_polarisation = true\nbndry_flux = false\nexb_advection = true\nexb_advection_simplified = false\nsplit_n0 = false\nphi_dissipation = false\nvort_dissipation = false\nsheath_boundary = false\nhyper_z = -1"
-            if pressure
-            else f"density_floor = 1e-7\nphi_atol = {c['phi_atol']}\nphi_rtol = {c['phi_rtol']}\nvort_atol = {c['vort_atol']}\nphi_max_iterations = 400"
-        ),
-        "polarisation_options": (
-            "[polarisation_drift]\nboussinesq = true\naverage_atomic_mass = 1\ndiamagnetic_polarisation = true\nadvection = true\ndiagnose = "
-            + str(c["diagnose"]).lower()
-        )
-        if pressure
-        else "[polarisation_drift]\nimplementation = conservative",
+        "phi_atol": c["phi_atol"],
+        "phi_rtol": c["phi_rtol"],
+        "vort_atol": c["vort_atol"],
     }
-    text = string.Template((HERE / "scan-input.inp.template").read_text()).substitute(
-        values
-    )
-    # Only the formulation's evolving fields have initial-profile sections.
-    import re
-
-    section = "Eion" if pressure else "Ph+"
-    text = re.sub(
-        r"\[" + re.escape(section) + r"\]\n.*?(?=\n\[)", "", text, flags=re.DOTALL
-    )
-    return text
+    template = INPUT_TEMPLATES[row["formulation"]]
+    return string.Template(template.read_text()).substitute(values)
 
 
 def check_output_times(values, config, source, *, seed=False):
@@ -1783,14 +1757,14 @@ def main(argv=None):
         raise AuditError("Timeout must be positive")
     exe_hash = digest(exe)
     runtime_hashes = runtime_artifacts(exe)
-    template_hash = digest(HERE / "scan-input.inp.template")
+    template_hashes = {form: digest(path) for form, path in INPUT_TEMPLATES.items()}
     if args.resume:
         study = args.resume.resolve()
         manifest = json.loads((study / "manifest.json").read_text())
         if (
             not compatible_configuration(manifest["configuration"], config)
             or manifest["executable"]["sha256"] != exe_hash
-            or manifest["template_sha256"] != template_hash
+            or manifest["template_sha256"] != template_hashes
             or manifest.get("runtime_artifacts") != runtime_hashes
         ):
             raise AuditError(
@@ -1832,7 +1806,7 @@ def main(argv=None):
             "runs": rows,
             "executable": {"path": str(exe), "sha256": exe_hash},
             "runtime_artifacts": runtime_hashes,
-            "template_sha256": template_hash,
+            "template_sha256": template_hashes,
             "runner_sha256": digest(__file__),
             "formulation_differences": DIFFERENCES,
             "revisions": {

@@ -979,7 +979,9 @@ def resume_case(runner, tmp_path, monkeypatch):
         "configuration": runner.configuration(runner.parser().parse_args(argv)),
         "executable": {"sha256": runner.digest(executable)},
         "runtime_artifacts": runner.runtime_artifacts(executable),
-        "template_sha256": runner.digest(runner.HERE / "scan-input.inp.template"),
+        "template_sha256": {
+            form: runner.digest(path) for form, path in runner.INPUT_TEMPLATES.items()
+        },
         "runner_sha256": "original-runner",
         "runs": [],
     }
@@ -1004,7 +1006,7 @@ def test_resume_runner_change_is_explicit_and_recorded(runner, resume_case):
 
 
 @pytest.mark.parametrize(
-    "change", ["configuration", "executable", "template", "library"]
+    "change", ["configuration", "executable", "pressure", "total_energy", "library"]
 )
 def test_runner_override_preserves_simulation_hash_guards(runner, resume_case, change):
     study, argv, manifest = resume_case
@@ -1012,8 +1014,8 @@ def test_runner_override_preserves_simulation_hash_guards(runner, resume_case, c
         manifest["configuration"]["end_time"] *= 2
     elif change == "executable":
         manifest["executable"]["sha256"] = "changed"
-    elif change == "template":
-        manifest["template_sha256"] = "changed"
+    elif change in ("pressure", "total_energy"):
+        manifest["template_sha256"][change] = "changed"
     else:
         manifest["runtime_artifacts"] = {}
     runner.save_json(study / "manifest.json", manifest)
@@ -1053,7 +1055,9 @@ def scan_study(runner, tmp_path):
         "configuration": config,
         "executable": {"path": str(exe), "sha256": runner.digest(exe)},
         "runtime_artifacts": runner.runtime_artifacts(exe),
-        "template_sha256": runner.digest(runner.HERE / "scan-input.inp.template"),
+        "template_sha256": {
+            form: runner.digest(path) for form, path in runner.INPUT_TEMPLATES.items()
+        },
         "runner_sha256": runner.digest(runner.__file__),
         "revisions": {"hermes": {"revision": "expected-source"}},
         "runs": rows,

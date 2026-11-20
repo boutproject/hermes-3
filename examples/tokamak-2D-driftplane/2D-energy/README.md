@@ -33,6 +33,8 @@ python -m pytest examples/tokamak-2D-driftplane/2D-energy
 This example is outside CTest. `ion-energy-closed` is the small two-rank
 conservation gate; `ion-energy-mms` is the optional 3D spatial-accuracy study.
 
-The input template is `scan-input.inp.template`. See the
+The formulation inputs are [scan-pressure.inp.template](scan-pressure.inp.template)
+and [scan-total-energy.inp.template](scan-total-energy.inp.template). Each contains
+its component and operator settings explicitly. See the
 [Sphinx comparison](https://hermes3.readthedocs.io/en/latest/examples.html#subsec-2d-energy-comparison)
 for the energy definitions and reproduced figures.

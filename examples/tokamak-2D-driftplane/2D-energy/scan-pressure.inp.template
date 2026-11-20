@@ -1,4 +1,4 @@
-# Shared physical setup. run_scan.py supplies the substituted values and
+# Pressure formulation. run_scan.py supplies the substituted values and
 # builds matched time-zero restarts using each formulation's forward operator.
 NXPE = ${nproc}
 MYG = 0
@@ -57,7 +57,7 @@ max_timestep = ${max_timestep}
 mxstep = 1e6
 
 [hermes]
-components = e, h+, ${components}, classical_diffusion
+components = e, h+, vorticity, polarisation_drift, classical_diffusion
 recalculate_metric = false
 normalise_metric = true
 Nnorm = 2e18
@@ -85,7 +85,7 @@ evolve_log = false
 diagnose = ${diagnose}
 
 [h+]
-type = ${ion_components}
+type = evolve_density, evolve_pressure
 charge = 1
 AA = 1
 bndry_flux = false
@@ -96,7 +96,11 @@ low_n_diffuse_perp = false
 hyper_z = -1
 evolve_log = false
 diagnose = ${diagnose}
-${ion_pressure_options}
+thermal_conduction = false
+low_p_diffuse_perp = false
+low_T_diffuse_perp = false
+damp_p_nt = false
+p_div_v = false
 
 [Nh+]
 function = 1
@@ -125,20 +129,31 @@ bndry_all = neumann
 function = 0
 bndry_all = neumann
 
-[Eion]
-function = 1.5*Pe:function
-bndry_all = neumann
-
-[${model}]
+[vorticity]
 average_atomic_mass = 1
 poloidal_flows = false
 viscosity = ${viscosity}
 ${boundary_options}
 diagnose = ${diagnose}
-${model_options}
+diamagnetic = true
+diamagnetic_polarisation = true
+bndry_flux = false
+exb_advection = true
+exb_advection_simplified = false
+split_n0 = false
+phi_dissipation = false
+vort_dissipation = false
+sheath_boundary = false
+hyper_z = -1
 
-[${model}:laplacian]
+[vorticity:laplacian]
 type = cyclic
-${laplacian_boundary_options}
+inner_boundary_flags = 16
+outer_boundary_flags = 16
 
-${polarisation_options}
+[polarisation_drift]
+boussinesq = true
+average_atomic_mass = 1
+diamagnetic_polarisation = true
+advection = true
+diagnose = ${diagnose}
