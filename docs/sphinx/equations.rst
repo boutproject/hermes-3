@@ -2159,9 +2159,7 @@ and has no default. Its normalised value is
 ``units:meters / units:seconds``. With a fixed
 velocity, fixed vorticity and negligible evolution of the mean pressure
 potential, the rigid-rotation relaxation time in a slab of physical width
-:math:`L` is :math:`L/(2\kappa)`. The
-:ref:`radial-boundary regression <subsec-ion-energy-tests>`
-isolates this limit using cold, uniform ions. An evolving pressure potential
+:math:`L` is :math:`L/(2\kappa)`. The cold, uniform-ion slab limit provides an analytic relaxation reference. An evolving pressure potential
 can change the measured potential relaxation time in warm-ion runs.
 
 The wall state is the arithmetic midpoint of the reflected guard/interior pair,
@@ -2187,8 +2185,7 @@ mesh. Treating the stored midpoint as a true face value in a one-sided stencil
 would introduce a first-order wall-rate error. Multiplication by
 :math:`M_b` converts the coordinate derivative to a normal derivative.
 For 3D metrics, the geometry is averaged over Z before taking this square root.
-The :ref:`wall-relaxation regressions <subsec-ion-energy-tests>` check
-rigid-rotation decay and uniform-vorticity drift. C++ unit tests check
+C++ unit tests check
 the finite-volume wall flux and boundary rate.
 The boundary state is integrated by the time solver and saved in restarts.
 All wall modes require at least two radial guard cells, complete periodic Z
@@ -2375,24 +2372,10 @@ absent viscosity contributes zero. Rate audits of MMS solver derivatives must
 also subtract the injected continuum vorticity source. This diagnostic is
 separate from physical parallel current and from auxiliary continuity.
 
-The generated-restart pytest regression in
-``tests/python/test_ion_energy_native.py`` checks potential shifts
-:math:`C=-1,0,+1` on an 8×8 radial-wall grid with viscosity off and on.
-It compares evolved-field RHS values, recovered ion temperature, perpendicular
-kinetic energy and polarisation currents. Its tolerance is a numerical floor
-plus :math:`1.1|C|\|R_\chi\|_\infty` for one RHS evaluation, with an independent
-upper bound on the residual. The generator writes smooth identical physical
-evolved cells directly; no preparation simulation or binary fixture is needed.
-The slow drift-plane regression checks absolute vorticity RMS in fixed poloidal
-mode bands 16–31 and 32–63 for the buffered, fixed-wall D = 0.1 scan
-input at 128² through :math:`t=1200`. Its bounds are recorded in
-``tests/python/data/ion-energy-wall-envelope.json``. The slow scan
-regression runs 16², 32² and 64² through :math:`t=5000`, checking shrinking
-adjacent kinetic-energy differences and a stable outer-10% share.
-The exact input-expression frozen state at 16², 32² and 64² checks
-second-order approach of the native wall-cell energy and Reynolds-current
-rates. A 16×8×16 two-ion regression checks local face-source identities
-with varying wall fractions and parallel velocities, and fully paid wall work.
+The :ref:`ion-energy tests <subsec-ion-energy-tests>` retain a small periodic
+conservation regression and one optional 3D manufactured-solution study with
+skew metric, viscosity and magnetic curvature. Production unit tests cover
+local wall transport, source conversion and discrete current/energy identities.
 
 The default outputs are ``Eion``, ``Tion``, ``Vort``, ``phi`` and ``ion_chi``.
 Pressure/potential recovery starts from the phi and perpendicular kinetic

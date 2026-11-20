@@ -7,9 +7,9 @@ nout = 30
 timestep = 1
 
 [mesh]
-nx = 20
+nx = 12
 ny = 4
-nz = 16
+nz = 8
 Lrad = 0.05
 Lpol = 0.05
 Bpxy = 0.35

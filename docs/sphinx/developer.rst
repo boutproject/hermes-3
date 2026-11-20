@@ -1542,6 +1542,9 @@ of the script.
 2D-energy (interchange energy and entropy)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+This section records the physics of the former pressure-sign regression,
+which has been removed from the integrated suite.
+
 Evolves vorticity, electron density, and electron and ion pressure in a 2D
 (32 x 32) X-Z box with magnetic curvature. Includes kinematic viscosity and the
 ion polarisation compression term. The input selects ``e, h+, vorticity,
@@ -1718,134 +1721,51 @@ See :ref:`subsec-2d-energy-comparison` for the resolution scan, and :ref:`subsec
 Total ion energy tests
 ~~~~~~~~~~~~~~~~~~~~~~
 
-The integrated tests exercise ``evolve_vorticity_ion_energy``:
+The suite retains two integrated ion-energy scenarios:
 
-- ``ion-energy-closed`` checks energy, particles and charge in a periodic
-  two-ion curvature slab, including changing perpendicular and parallel
-  kinetic reservoirs.
-- ``ion-energy-sources`` checks physical electron heating and moving-ion
-  density sources, with collisional heat exchange and output-cadence refinement.
-- ``ion-energy-walls`` checks the three radial wall modes, both AC conditions,
-  nonlinear perturbed budgets in every mode, absolute wall-flux and kinetic-energy
-  minimum checks, nonzero solenoidal wall exchange, density and local thermal-energy
-  minima above ``1e-3`` of their initial means at every output, rigid-rotation
-  decay, uniform-vorticity drift and perturbed restarts.
-- ``ion-energy-mms`` contains all continuum ion-energy MMS variants. Select
-  one with ``--variant`` (default ``parallel_current``) and choose geometric
-  refinements with ``--levels`` (at least two; default two without plotting).
-  Physical cells start at 8 x 16 x 8, and each refinement doubles X, Y and Z.
-  All variants have two ion species, finite parallel flows and periodic Y/Z.
-  The original ``baseline``, ``skew``, ``viscosity`` and ``curvature`` variants
-  retain zero-current closures and global L2 order limits of 1.7 on the first
-  refinement and 1.8 thereafter. They end at normalised time 0.1.
-  ``--verify`` checks diagnostics-on/off agreement for these variants.
-  Their three-level CTests are registered separately with the ``long`` label.
-- ``parallel_current`` and ``parallel_current_wall`` in that directory evolve
-  independent electron momentum with inertia, nonzero current divergence and
-  numerical potential damping, ending at normalised time 0.02. Both use a
-  Cartesian slab with zero magnetic curvature. The radial pressure-potential
-  shape is :math:`P(a)=1+[1-\cos(2a)]^2` for ``parallel_current`` and
-  :math:`P(a)=2-\cos(2a)` for ``parallel_current_wall``, where
-  :math:`a=\pi X/L` and :math:`L=10`. The first has
-  :math:`\phi_{XX}=\psi_{XX}=0` at both walls and checks global L2/Linfinity
-  orders. The second retains nonzero psi wall curvature, checks the fixed
-  region :math:`X/L\in[0.25,0.75]` and reports global errors and orders without
-  gating them. Both use MC-aware order limits of 1.4 for L2 and 0.9 for
-  Linfinity. L2 is volume-weighted RMS and Linfinity is maximum absolute
-  error; both exclude mesh guards and are measured at the final saved time.
-  Other fields retain L2 error caps in the selected region; chi absolute
-  error is diagnostic-only, while finiteness and convergence remain required.
-  Chi reference RMS and relative RMS error are saved. Analytic chi includes
-  parallel-current divergence. Density and parallel-velocity harmonics have a
-  :math:`\sin^2(a)` envelope so their radial wall values are independent of Z.
-  The pressure potential and temperature have nonzero wall AC and Neumann
-  guards; local wall transport retains their fluctuations.
-  Continuum forcing does not cancel numerical potential damping.
-  ``--verify`` adds tighter temporal integration at the second resolution and
-  serial/MPI agreement at the coarsest resolution, including chi. These
-  checks run only after spatial acceptance passes. Both variants have
-  two-level CTests with ``--verify --nproc 2`` and three-level ``long`` tests.
-  For any MMS variant, ``--plot`` writes CSV and vector PDF/SVG convergence
-  figures, defaults to four levels unless ``--levels`` overrides it, and
-  collects all requested resolutions despite spatial accuracy failures.
-  Execution and physics
-  failures still stop immediately. Without plotting, any failed gate stops
-  before the next launch. Completed-level errors, orders, failed gates and
-  partial figures are retained in ``result.json`` and the output directory;
-  failed checks give a nonzero exit status. Committed inputs run without
-  SymPy; matplotlib is required only for plotting. See
-  ``tests/integrated/ion-energy-mms/README.md`` for commands and runtime limits.
-- ``ion-energy-parallel-damping`` compares a short periodic case with damping
-  off/on, including the alternating-Y mode, recovered thermal/perpendicular
-  partition and serial/two-rank Y ownership. It checks that evolved total energy
-  has no numerical heating source.
-- ``ion-energy-sheath`` checks analytic target currents, completed parallel
-  current, electrical work and auxiliary continuity on an open-Y slab, with
-  serial/two-rank comparison. Component-reordering trajectory comparisons are
-  omitted after their observed differences were accepted as roundoff.
+- ``ion-energy-closed`` is the routine CI regression: an 8 x 4 x 8 periodic
+  two-ion curvature/viscosity slab on two MPI ranks. Diagnostics-on/off runs
+  check energy, species particles, charge, energy recovery and nontrivial
+  thermal/kinetic exchange. The fixed roundoff limit remains ``1e-10``.
+  The fields are Y-invariant to eliminate unpaired work from the zero-current
+  electron closure. The measured two-rank elapsed time is 13.2 seconds;
+  CTest reserves two cores and applies a 60-second ceiling.
+- ``ion-energy-mms`` is one optional 3D slab convergence study, extending the
+  former curved-wall current solution with ``g13=1/4``, viscosity ``0.02`` and
+  magnetic curvature ``0.1``. It evolves independent electron momentum and
+  derives periodic parallel current from continuum Reynolds, diamagnetic and
+  auxiliary-current continuity. The pressure potential has nonzero radial
+  wall curvature. The reference and forcing use no discrete RHS or numerical
+  inverse. Viscous stress and numerical potential damping remain outside chi.
+  Final-time spatial acceptance uses the fixed central radial half, with L2
+  and Linfinity order limits 1.4 and 0.9; global errors are recorded separately.
+  ``--verify`` adds tighter temporal integration and serial/MPI agreement.
+  The coarsest physical grid is 8 x 16 x 8, doubling in all dimensions.
+  ``--plot`` writes PDF/SVG figures and CSV norms, retaining failed gates.
 
-All ion-energy MMS variants use periodic Y and omit sheaths. Parallel currents
-are covered by the two parallel-current MMS variants; open-Y sheath boundary
-conditions are covered separately by ``ion-energy-sheath``. The original four
-MMS variants and closed/source/wall tests use zero parallel current.
-Conservation checks do not establish accuracy of the coupled MMS order gates.
-
-The runners use ``tools/energy_analysis`` for inventories, physical sources,
-wall powers and recovery checks. Budget analysis supports runs with diagnostics
-disabled; parallel-current MMS physics checks require diagnostics.
-Polarisation wall budgets report incomplete coverage when chi is absent,
-including Neumann AC runs.
-Budget upper limits have a floor of ``1e-10``. Solver-sensitive limits resolve
-as ``max(floor, rtol_factor * solver:rtol)`` from each run's options; linear
-invariants, recovery and diagnostic comparisons use fixed roundoff floors.
-Vorticity budgets use ``open_vorticity`` because time integration of sampled
-Reynolds and viscous wall fluxes introduces a cadence error. The perturbed walls
-use ``rtol = 1e-7`` and ``atol = 1e-10``; analytic cases retain tighter tolerances.
-The complete Reynolds current carries weighted wall fluxes with both AC conditions,
-so particle, energy and vorticity budgets use the open-wall limits even for
-Neumann AC. Full Reynolds wall current is included in the vorticity balance.
-The runner integrates signed wall exchanges in those balances and separately
-checks a minimum cumulative absolute wall energy exchange in each
-nonlinear case. Free-slip viscous wall power still introduces output-sampling
-error in energy balances. The production Reynolds reconstruction uses
-MC for full vorticity and a central metric remainder.
-MMS truncation errors, convergence orders and magnitude minima retain their
-separate criteria. Every effective limit is saved with its check.
-
-Inputs, hashes, execution status, check values and summaries are written to an
-isolated directory containing ``result.json``.
-
-Install ``tools/energy_analysis/requirements.txt`` in the Python environment
-used to configure CMake. The optional MMS generator and its Python identity
-checks additionally need ``tests/integrated/ion-energy-mms/requirements.txt``.
-CTest registration checks imports and reports missing dependencies; it does
-not require an environment in the source tree.
+The MMS is excluded from routine CI and from plain CTest unless configured
+with ``-DHERMES_ION_ENERGY_MMS=ON``. Routine Python analysis checks exclude the
+symbolic MMS module, publication plots and expensive symbolic Reynolds
+refinements. The prior separate source, wall, sheath and damping integrations
+and the legacy pressure-sign regression have been removed.
+Production component and discrete-operator unit tests remain.
 
 .. code-block:: sh
 
-   ctest --test-dir build -L energy -LE long --output-on-failure -j 2
+   ctest --test-dir build -L energy -LE validation --output-on-failure -j 2
    python tests/integrated/ion-energy-closed/runtest --exe build/hermes-3
-   python tests/integrated/ion-energy-mms/runtest --exe build/hermes-3 --variant parallel_current
-   python tests/integrated/ion-energy-mms/runtest --exe build/hermes-3 --variant parallel_current_wall --plot --levels 4
-   python tests/integrated/ion-energy-mms/mms.py --all --check --check-files
-   python tests/integrated/ion-energy-mms/operator_convergence.py --output /tmp/operator-orders.json
+   python tests/integrated/ion-energy-mms/mms.py --check --check-files
+   python -m pytest tests/python/test_ion_energy_mms.py tests/python/test_reynolds_transport.py
+   python tests/integrated/ion-energy-mms/runtest --exe build/hermes-3 --levels 2 --verify --timeout 10800
 
-``operator_convergence.py`` samples analytic MMS fields on X-Z planes at
-16/32/64, applies the component wall guards, and reports all-cell and interior
-L2 orders, first/last-cell and outer-three-cell errors, and error maxima
-for each Reynolds term and each species/energy
-weight. It uses the production full-vorticity MC advection and central remainder
-and needs SymPy, but no Hermes run.
-``--variants`` selects cases (default ``baseline curvature``), including the
-two parallel-current variants; ``--sizes`` overrides the doubled resolutions.
-Its interior norm omits two physical radial rows, unlike the fixed central
-half used by the coupled MMS runner. ``--y`` and ``--time`` select the analytic
-plane; ``--run`` checks the mirror against saved C++ diagnostics with a
-``1e-10`` limit. The diagnostic is not a CTest convergence gate and does not
-change the manufactured physics.
+The runners save input/executable hashes, execution times, effective limits and
+check values in isolated ``result.json`` directories. Python requirements are
+listed in ``tools/energy_analysis/requirements.txt``; the optional generator
+needs ``tests/integrated/ion-energy-mms/requirements.txt``. See the two test
+READMEs for the continuum construction and runtime options.
 
 ``energy-analysis-python`` covers synthetic inventories, discrete operators,
-coverage flags and generator identities. The uniform equilibrium and analytic
+coverage flags and runner failure sequencing. The uniform equilibrium and analytic
 AC wall assertions have C++ unit coverage in
 ``EvolveVorticityIonEnergyTest.UniformStateHasZeroRHS``,
 ``PolarisationPotentialHasFixedCorrectionResponse``, ``FixedAuxiliaryInverse*``
@@ -1895,17 +1815,6 @@ RMS bound allows order 1.5 from MC-limited extrema. Wall maximum errors must
 shrink rather than approach a finite Taylor limit. Both sampled and recovered
 states are checked. Viscosity and density-source coverage remain active.
 
-``tests/python/test_local_wall_transport.py`` evaluates a separate exact
-input-expression state at 16², 32² and 64² on one rank. It sets
-:math:`\Omega=\mathcal{L}(\Phi)` and :math:`E_i=3p_i/2+K_\perp` with the
-same discrete wall traces used in recovery. Adjacent wall-cell RMS-rate
-differences must shrink by a factor between 3.5 and 4.5 for both energy and
-Reynolds divergence at both walls. Recovery uses ``phi_rtol=vort_atol=1e-12``
-and ``phi_atol=1e-3``, achievable through 64². The 16×8×16 varying-fraction
-regression retains per-species particle and momentum face identities, local
-thermal/parallel kinetic energy weights, energy/current closure, positive
-ion temperature and zero unpaid work at every saved state through :math:`t=0.1`.
-
 ``tests/unit/diagnose_reynolds_wall.py`` provides independent X/Z refinements,
 analytic-sample/guard-continuation/face-current probes and a centred-donor
 control without evolving Hermes. Its midpoint face currents times area are
@@ -1916,10 +1825,10 @@ its exported samples to compare production faces/divergence, including wall
 cells. These checks retain the robust production wall method; an integral
 energy budget alone does not establish local wall accuracy.
 
-The legacy ``2D-energy`` regression retains its existing registration. The
-refinement scan is an example in
-``examples/tokamak-2D-driftplane/2D-energy``; its fixed-wall D = 0.1 total-energy case also has the slow CTest
-``ion-energy-scan-convergence`` at 16²–64² through :math:`t=5000`. Its README describes plotting dependencies and local execution.
+The legacy pressure-sign integration and long native wall/scan regressions
+have been removed. The refinement scan remains available as an example in
+``examples/tokamak-2D-driftplane/2D-energy``. Its README describes plotting
+requirements and local execution.
 
 2D-recycling
 ~~~~~~~~~~~~~~

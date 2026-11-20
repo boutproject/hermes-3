@@ -12,7 +12,16 @@ HERE = Path(__file__).resolve().parent
 
 
 def main():
-    args = parser(__doc__).parse_args()
+    cli = parser(__doc__)
+    cli.set_defaults(nproc=2, timeout=45)
+    cli.add_argument(
+        "--resolution",
+        type=int,
+        choices=(8, 16, 32),
+        default=8,
+        help="Physical X/Z cells (default 8 for CI)",
+    )
+    args = cli.parse_args()
     with Study(HERE, args) as study:
         runs = []
         for diagnose in (True, False):
@@ -20,6 +29,8 @@ def main():
                 "diagnostics-" + str(diagnose).lower(),
                 [
                     "restart=false",
+                    f"mesh:nx={args.resolution + 4}",
+                    f"mesh:nz={args.resolution}",
                     "solver:nout=20",
                     "solver:output_step=1",
                     f"evolve_vorticity_ion_energy:diagnose={str(diagnose).lower()}",

@@ -161,8 +161,8 @@ supply physical domain lengths if they differ from 50 mm. Bands 16–31 and
 32–63 are fixed physical modes, independent of resolution. Wall amplitudes use
 first physical cell centres. Widths include their half-cell offset from the
 wall; crossings without wall dominance are flagged. A missing crossing has
-no width. Native pytest regressions run with `HERMES_EXECUTABLE=build/hermes-3`;
-add `--run-slow` for the drift-plane envelope test.
+no width. The routine native regression is `tests/integrated/ion-energy-closed`;
+`tests/integrated/ion-energy-mms` provides the optional coupled 3D slab study.
 
 Optional numerical parallel phi damping uses collective sound speed. The
 completed vorticity rate includes `ion_phi_dissipation`; auxiliary chi continuity
@@ -172,6 +172,7 @@ The resolved option is saved as `ion_phi_dissipation_enabled`.
 
 The wall condition uses conducting, Z-uniform phi, Neumann pressure and psi
 guards, local Phi wall work and local species particle, momentum and
-thermal/parallel kinetic weights. The native frozen-state and varying-fraction
-regressions are in `tests/python/test_local_wall_transport.py`; nonlinear
-convergence and regenerated wall envelopes use the fixed-wall D = 0.1 scan input.
+thermal/parallel kinetic weights. Production unit tests retain wall identities
+and source/sheath component checks. The separate native wall regressions have
+been removed. The fixed-wall D = 0.1 scan remains available as an example in
+`examples/tokamak-2D-driftplane/2D-energy`.

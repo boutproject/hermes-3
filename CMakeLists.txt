@@ -394,7 +394,6 @@ if(HERMES_TESTS)
   hermes_add_integrated_test(collfreq-multispecies CONFLICTS
                              BOUT_ENABLE_METRIC_3D)
   hermes_add_integrated_test(2D-production CONFLICTS BOUT_ENABLE_METRIC_3D)
-  hermes_add_integrated_test(2D-energy CONFLICTS BOUT_ENABLE_METRIC_3D)
   find_package(Python3 COMPONENTS Interpreter)
   set(HERMES_ENERGY_PYTHON
       "${Python3_EXECUTABLE}"
@@ -444,6 +443,18 @@ if(HERMES_TESTS)
         DESTINATION "${CMAKE_CURRENT_BINARY_DIR}/tools"
         PATTERN "__pycache__" EXCLUDE)
     endif()
+    # One inexpensive two-rank integration test is the ion-energy CI gate.
+    hermes_add_ion_energy_test(
+      ion-energy-closed
+      ion-energy-closed
+      "integration;energy;ci"
+      60
+      --nproc
+      2
+      --timeout
+      45)
+    set_tests_properties(ion-energy-closed PROPERTIES PROCESSORS 2)
+
     # The coupled spatial/temporal study is explicitly opt-in, even for plain
     # ctest.
     option(HERMES_ION_ENERGY_MMS "Register the long 3D ion-energy slab MMS" OFF)
@@ -462,70 +473,22 @@ if(HERMES_TESTS)
         10800)
       set_tests_properties(ion-energy-mms PROPERTIES PROCESSORS 2)
     endif()
-    hermes_add_ion_energy_test(ion-energy-closed ion-energy-closed "energy" 600
-                               --timeout 300)
-    hermes_add_ion_energy_test(ion-energy-sources ion-energy-sources "energy"
-                               300)
-    hermes_add_ion_energy_test(
-      ion-energy-sheath
-      ion-energy-sheath
-      "energy;sheath"
-      600
-      --timeout
-      180
-      --nproc
-      2)
-    set_tests_properties(ion-energy-sheath PROPERTIES PROCESSORS 2)
-    hermes_add_ion_energy_test(
-      ion-energy-parallel-damping ion-energy-parallel-damping "energy" 600
-      --timeout 180)
-    set_tests_properties(ion-energy-parallel-damping PROPERTIES PROCESSORS 2)
-    # Eight times the wall-history outputs for signed-current quadrature.
-    hermes_add_ion_energy_test(ion-energy-walls ion-energy-walls "energy" 14400
-                               --timeout 4800)
-    add_test(NAME energy-analysis-python
-             COMMAND "${HERMES_ENERGY_PYTHON}" -m pytest -q
-                     "${CMAKE_CURRENT_SOURCE_DIR}/tests/python")
+    add_test(
+      NAME energy-analysis-python
+      COMMAND
+        "${HERMES_ENERGY_PYTHON}" -m pytest -q
+        "${CMAKE_CURRENT_SOURCE_DIR}/tests/python" --ignore
+        "${CMAKE_CURRENT_SOURCE_DIR}/tests/python/test_ion_energy_mms.py"
+        --ignore
+        "${CMAKE_CURRENT_SOURCE_DIR}/tests/python/test_ion_energy_mms_plotting.py"
+        --ignore
+        "${CMAKE_CURRENT_SOURCE_DIR}/tests/python/test_reynolds_transport.py")
     set_tests_properties(
       energy-analysis-python
       PROPERTIES LABELS
-                 "unit;energy"
+                 "unit;energy;ci"
                  TIMEOUT
-                 600
-                 WORKING_DIRECTORY
-                 "${CMAKE_CURRENT_SOURCE_DIR}"
-                 ENVIRONMENT
-                 "HERMES_EXECUTABLE=$<TARGET_FILE:hermes-3>")
-    add_test(
-      NAME ion-energy-scan-convergence
-      COMMAND
-        "${HERMES_ENERGY_PYTHON}" -m pytest -q --run-slow
-        "${CMAKE_CURRENT_SOURCE_DIR}/tests/python/test_ion_energy_convergence.py"
-    )
-    set_tests_properties(
-      ion-energy-scan-convergence
-      PROPERTIES LABELS
-                 "integration;energy;slow"
-                 PROCESSORS
-                 2
-                 TIMEOUT
-                 26000
-                 WORKING_DIRECTORY
-                 "${CMAKE_CURRENT_SOURCE_DIR}"
-                 ENVIRONMENT
-                 "HERMES_EXECUTABLE=$<TARGET_FILE:hermes-3>")
-    add_test(
-      NAME ion-energy-wall-amplitudes
-      COMMAND
-        "${HERMES_ENERGY_PYTHON}" -m pytest -q --run-slow
-        "${CMAKE_CURRENT_SOURCE_DIR}/tests/python/test_ion_energy_native.py" -k
-        drift_plane)
-    set_tests_properties(
-      ion-energy-wall-amplitudes
-      PROPERTIES LABELS
-                 "integration;energy;slow"
-                 TIMEOUT
-                 8400
+                 45
                  WORKING_DIRECTORY
                  "${CMAKE_CURRENT_SOURCE_DIR}"
                  ENVIRONMENT

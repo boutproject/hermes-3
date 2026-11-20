@@ -3,8 +3,9 @@
 `run_scan.py` runs matched pressure and total-ion-energy formulations
 and retains the inputs, time-zero restart files, raw dumps, logs and scalar
 analysis. Energy drift and spatial self-convergence are separate measurements:
-conserving total energy does not establish spatial accuracy. The historical pressure-sign regression remains in
-`tests/integrated/2D-energy/data/BOUT.inp` and its `runtest`.
+conserving total energy does not establish spatial accuracy. Routine conservation
+checks use `tests/integrated/ion-energy-closed`; the optional 3D convergence
+study uses `tests/integrated/ion-energy-mms`.
 
 Install the packages in `tools/energy_analysis/requirements.txt` plus
 `matplotlib` into your Python environment:

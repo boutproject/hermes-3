@@ -30,9 +30,8 @@ python examples/tokamak-2D-driftplane/2D-energy/run_scan.py --smoke --custom-D 0
 python -m pytest examples/tokamak-2D-driftplane/2D-energy
 ```
 
-This example is outside CTest. The legacy `2D-energy` regression remains in
-`tests/integrated/2D-energy`; total ion energy conservation gates are the four
-`ion-energy-*` integrated tests.
+This example is outside CTest. `ion-energy-closed` is the small two-rank
+conservation gate; `ion-energy-mms` is the optional 3D spatial-accuracy study.
 
 The input template is `scan-input.inp.template`. See the
 [Sphinx comparison](https://hermes3.readthedocs.io/en/latest/examples.html#subsec-2d-energy-comparison)

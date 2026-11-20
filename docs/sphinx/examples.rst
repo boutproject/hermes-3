@@ -827,8 +827,7 @@ located in located in ``examples\tcv-x21``.
 ``examples/tokamak-2D-driftplane/2D-energy/run_scan.py`` compares the ion pressure
 formulation (``vorticity``, ``polarisation_drift`` and ``evolve_pressure``)
 with ``evolve_vorticity_ion_energy``. Both evolve hydrogen density and electron
-pressure with quasineutral electrons and no parallel dynamics. The regression in ``tests/integrated/2D-energy/runtest`` checks the pressure
-formulation separately; see :ref:`subsec-2d-energy-test`. The scan generates
+pressure with quasineutral electrons and no parallel dynamics. The scan generates
 inputs from ``examples/tokamak-2D-driftplane/2D-energy/scan-input.inp.template``.
 
 The problem is interchange relaxation in a 5 cm by 5 cm X-Z slab, with
