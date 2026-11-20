@@ -480,8 +480,6 @@ if(HERMES_TESTS)
         "${CMAKE_CURRENT_SOURCE_DIR}/tests/python" --ignore
         "${CMAKE_CURRENT_SOURCE_DIR}/tests/python/test_ion_energy_mms.py"
         --ignore
-        "${CMAKE_CURRENT_SOURCE_DIR}/tests/python/test_ion_energy_mms_plotting.py"
-        --ignore
         "${CMAKE_CURRENT_SOURCE_DIR}/tests/python/test_reynolds_transport.py")
     set_tests_properties(
       energy-analysis-python

@@ -1746,8 +1746,8 @@ The suite retains two integrated ion-energy scenarios:
 
 The MMS is excluded from routine CI and from plain CTest unless configured
 with ``-DHERMES_ION_ENERGY_MMS=ON``. Routine Python analysis checks exclude the
-symbolic MMS module, publication plots and expensive symbolic Reynolds
-refinements. The prior separate source, wall, sheath and damping integrations
+symbolic MMS module and expensive symbolic Reynolds refinements. The prior
+separate source, wall, sheath and damping integrations
 and the legacy pressure-sign regression have been removed.
 Production component and discrete-operator unit tests remain.
 

@@ -154,14 +154,7 @@ the electrostatic DC wall rate and default Neumann AC, neglecting this local
 pressure-potential rate. The optional Dirichlet AC condition sets a zero AC
 midpoint; it does not estimate the missing pressure-potential rate.
 
-Use `PYTHONPATH=tools python -m energy_analysis.spectra RUN_DIR --output bands.json`
-for fixed-mode wall/interior RMS, radial profiles and e-folding widths. This
-streaming monitor supports singleton-Y, X-decomposed native version-1 dumps;
-supply physical domain lengths if they differ from 50 mm. Bands 16–31 and
-32–63 are fixed physical modes, independent of resolution. Wall amplitudes use
-first physical cell centres. Widths include their half-cell offset from the
-wall; crossings without wall dominance are flagged. A missing crossing has
-no width. The routine native regression is `tests/integrated/ion-energy-closed`;
+The routine native regression is `tests/integrated/ion-energy-closed`;
 `tests/integrated/ion-energy-mms` provides the optional coupled 3D slab study.
 
 Optional numerical parallel phi damping uses collective sound speed. The
