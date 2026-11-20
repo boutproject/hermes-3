@@ -27,7 +27,7 @@ numerical potential damping is enabled and is not cancelled by forcing.
 The runner checks final-time evolved and recovered fields at t=0.02, starting
 with 8 x 16 x 8 physical cells and doubling all dimensions. Spatial acceptance
 uses the fixed central radial half, X/L in [0.25,0.75], with L2/L-infinity
-order minima 1.4/0.9. Global norms remain recorded. Recovery, current continuity,
+order minima 1.4/0.9. Absolute field errors and global norms are diagnostic outputs. Recovery, current continuity,
 source ownership, completed vorticity rate and nonzero current/Reynolds/
 curvature/viscous signals are checked throughout the physical domain.
 `--verify` adds tighter temporal integration and serial/two-rank agreement.

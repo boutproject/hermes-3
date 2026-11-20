@@ -5,12 +5,5 @@
   "nontrivial": 0.0001,
   "parallel_kinetic_exchange": 5e-05,
   "diagnostics": 1e-10,
-  "diagnostic_error": 1e-10,
-  "observed_8x4x8_two_ranks": {
-    "elapsed_seconds": 13.183646624907851,
-    "energy_relative_drift": 5.50074e-16,
-    "curvature_exchange_relative": 0.00301343,
-    "ion_perpendicular_change_relative": 0.0062914,
-    "ion_parallel_change_relative": 0.000372132
-  }
+  "diagnostic_error": 1e-10
 }

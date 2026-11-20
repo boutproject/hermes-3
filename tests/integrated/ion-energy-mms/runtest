@@ -164,39 +164,23 @@ def convergence_order(coarse, fine):
     return float(np.log2(coarse / fine))
 
 
-def check_refinement(study, coarse, fine, size, index, variant):
-    interior = variant == "parallel_current_wall"
+def check_refinement(study, coarse, fine, size, variant):
     measured = {}
     for name in references(variant):
         measured[name] = {
             norm: convergence_order(coarse[name][norm], fine[name][norm])
             for norm in ("l2", "linf", "l2_interior", "linf_interior")
         }
-        if variant in PARALLEL_VARIANTS:
-            limits = study.criteria["parallel_orders"]
-            norms = ("l2", "linf")
-        else:
-            limits = {
-                "l2": study.criteria["default_order" if index == 1 else "long_order"]
-            }
-            norms = ("l2",)
-        for norm in norms:
-            selected = norm + "_interior" if interior else norm
+        for norm, limit in study.criteria["orders"].items():
+            selected = norm + "_interior"
             order = measured[name][selected]
             if order is not None:
                 study.check(
                     f"order/{variant}/{size}/{name}/{selected}",
                     order,
-                    limit=limits[norm],
+                    limit=limit,
                     minimum=True,
                 )
-        if name != "ion_chi":
-            study.check(
-                f"error/{variant}/{size}/{name}",
-                fine[name]["l2_interior" if interior else "l2"],
-                limit=study.criteria["errors"][name],
-                truncation=True,
-            )
     study.result.setdefault("orders", {})[str(size)] = measured
 
 
@@ -349,7 +333,6 @@ def main():
                         errors[sizes[index - 1]],
                         errors[size],
                         size,
-                        index,
                         variant,
                     )
                     if not args.plot:

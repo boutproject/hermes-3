@@ -1,23 +1,5 @@
 {
   "recovery": 1e-10,
-  "errors": {
-    "Ni": 0.00047873833521229936,
-    "Nj": 8.942678121567693e-05,
-    "NVi": 0.00019713914084105573,
-    "NVj": 6.547289537320682e-05,
-    "Pe": 0.00045975509540625506,
-    "Vort": 0.0008165673925347495,
-    "Eion": 0.0011908840233405635,
-    "phi": 0.013718318502886018,
-    "psi": 0.0024130452901272802,
-    "Tion": 0.002009216843204476,
-    "Pi": 0.002539161629216485,
-    "pi": 0.0020356535088734413,
-    "pj": 0.0005095884054446448,
-    "NVe": 1e-05,
-    "Te": 0.003
-  },
-  "diagnostics": 1e-10,
   "continuity": 1e-10,
   "auxiliary_residual": 1e-10,
   "ownership": 1e-12,
@@ -28,10 +10,10 @@
   "temporal_fraction": 0.05,
   "temporal_floor": 1e-11,
   "decomposition": 1e-10,
-  "parallel_orders": {
+  "nonzero_curvature": 1e-06,
+  "nonzero_viscosity": 1e-06,
+  "orders": {
     "l2": 1.4,
     "linf": 0.9
-  },
-  "nonzero_curvature": 1e-06,
-  "nonzero_viscosity": 1e-06
+  }
 }

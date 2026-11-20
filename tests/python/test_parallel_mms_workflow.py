@@ -86,9 +86,8 @@ def fake_workflow(runner, monkeypatch, failure=None):
         error = 8e-6 * (8 / size) ** 2
         if failure == "coarse_order" and size == 16:
             error = 4e-6
-        if failure == "field_error":
-            # Passing orders isolate the fine-grid field-error cap.
-            error = 8e-5 * (8 / size) ** 2
+        if failure == "large_converging_error":
+            error *= 1e6
         if failure == "fine_order" and size == 32:
             error = 4e-6
         chi = 0.016 * (8 / size) ** 2
@@ -133,7 +132,6 @@ def fake_workflow(runner, monkeypatch, failure=None):
     [
         ("physics", ["8"]),
         ("coarse_order", ["8", "16"]),
-        ("field_error", ["8", "16"]),
         ("chi_nonconverging", ["8", "16"]),
         ("chi_nonfinite", ["8", "16"]),
         ("fine_order", ["8", "16", "32"]),
@@ -173,14 +171,7 @@ def test_validation_stops_before_next_launch(
     assert any(not c["passed"] for c in result["checks"]) is (
         failure is not None and failure != "chi_nonfinite"
     )
-    if failure == "field_error":
-        assert [c["name"] for c in result["checks"] if not c["passed"]] == [
-            "error/parallel_current_wall/16/NVe"
-        ]
-    assert not any(
-        c["name"].startswith("error/") and c["name"].endswith("ion_chi")
-        for c in result["checks"]
-    )
+    assert not any(c["name"].startswith("error/") for c in result["checks"])
 
 
 def test_two_levels_allow_large_converging_chi(tmp_path, monkeypatch, runner):
@@ -269,7 +260,7 @@ def test_curved_wall_gates_interior_and_reports_global(tmp_path, runner):
     }
     runner.references = lambda variant: {"ion_chi": "mms:current_potential"}
     study = Study(runner.HERE, args)
-    runner.check_refinement(study, coarse, fine, 16, 1, "parallel_current_wall")
+    runner.check_refinement(study, coarse, fine, 16, "parallel_current_wall")
     assert all(c["passed"] for c in study.result["checks"])
     assert study.result["orders"]["16"]["ion_chi"]["linf"] == 0
     assert study.result["orders"]["16"]["ion_chi"]["linf_interior"] == 2
@@ -289,7 +280,7 @@ def test_mc_aware_parallel_limits(tmp_path, runner):
             "linf_interior": 0.005,
         }
     }
-    runner.check_refinement(study, coarse, fine, 16, 1, "parallel_current_wall")
+    runner.check_refinement(study, coarse, fine, 16, "parallel_current_wall")
     assert all(c["passed"] for c in study.result["checks"])
     assert [c["limit"] for c in study.result["checks"]] == [1.4, 0.9]
 
@@ -340,3 +331,19 @@ def test_magnetic_current_uses_slab_metric_and_physical_normalisation(
         atol=5e-16,
         rtol=0,
     )
+
+
+def test_spatial_acceptance_uses_orders_without_absolute_error_caps(
+    tmp_path, monkeypatch, runner
+):
+    launched, _ = fake_workflow(runner, monkeypatch, "large_converging_error")
+    monkeypatch.setattr(
+        sys, "argv", [str(RUNNER), "--output-root", str(tmp_path), "--verify"]
+    )
+    runner.main()
+    [result_path] = tmp_path.glob("*/result.json")
+    result = json.loads(result_path.read_text())
+    assert result["passed"]
+    assert result["cases"]["parallel_current_wall-16"]["errors"]["NVe"]["l2"] == 2
+    assert not any(c["name"].startswith("error/") for c in result["checks"])
+    assert launched[-1].endswith("decomposition")

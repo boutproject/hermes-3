@@ -1738,7 +1738,8 @@ The suite retains two integrated ion-energy scenarios:
   wall curvature. The reference and forcing use no discrete RHS or numerical
   inverse. Viscous stress and numerical potential damping remain outside chi.
   Final-time spatial acceptance uses the fixed central radial half, with L2
-  and Linfinity order limits 1.4 and 0.9; global errors are recorded separately.
+  and Linfinity order limits 1.4 and 0.9. Absolute field errors and global
+  norms are diagnostic outputs.
   ``--verify`` adds tighter temporal integration and serial/MPI agreement.
   The coarsest physical grid is 8 x 16 x 8, doubling in all dimensions.
   ``--plot`` writes PDF/SVG figures and CSV norms, retaining failed gates.
