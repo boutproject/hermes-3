@@ -38,7 +38,7 @@ runpy.run_path(sys.argv[0], run_name='__main__')
         check=False,
     )
     assert result.returncode == 0, result.stderr
-    assert "--variant" in result.stdout and "parallel_current_wall" in result.stdout
+    assert "--levels" in result.stdout and "--variant" not in result.stdout
 
 
 @pytest.fixture
@@ -153,8 +153,6 @@ def test_validation_stops_before_next_launch(
             str(RUNNER),
             "--output-root",
             str(tmp_path),
-            "--variant",
-            "parallel_current",
             "--levels",
             "3",
             "--verify",
@@ -165,7 +163,7 @@ def test_validation_stops_before_next_launch(
             runner.main()
     else:
         runner.main()
-    expected = ["parallel_current-" + suffix for suffix in suffixes]
+    expected = ["parallel_current_wall-" + suffix for suffix in suffixes]
     assert launched == expected
     assert plots == []
     [result_path] = tmp_path.glob("*/result.json")
@@ -177,7 +175,7 @@ def test_validation_stops_before_next_launch(
     )
     if failure == "field_error":
         assert [c["name"] for c in result["checks"] if not c["passed"]] == [
-            "error/parallel_current/16/NVe"
+            "error/parallel_current_wall/16/NVe"
         ]
     assert not any(
         c["name"].startswith("error/") and c["name"].endswith("ion_chi")
@@ -192,15 +190,17 @@ def test_two_levels_allow_large_converging_chi(tmp_path, monkeypatch, runner):
     )
     runner.main()
     assert launched == [
-        "parallel_current-8",
-        "parallel_current-16",
-        "parallel_current-16-tight",
-        "parallel_current-8-decomposition",
+        "parallel_current_wall-8",
+        "parallel_current_wall-16",
+        "parallel_current_wall-16-tight",
+        "parallel_current_wall-8-decomposition",
     ]
     [path] = tmp_path.glob("*/result.json")
     result = json.loads(path.read_text())
     assert result["passed"]
-    assert result["cases"]["parallel_current-16"]["errors"]["ion_chi"]["l2"] == 0.004
+    assert (
+        result["cases"]["parallel_current_wall-16"]["errors"]["ion_chi"]["l2"] == 0.004
+    )
 
 
 @pytest.mark.parametrize(
@@ -243,7 +243,7 @@ def test_plot_failure_saves_completed_levels(
         runner.main()
     assert plots == [sizes]
     expected_launches = [8, 16, 32] if failure == "execution" else sizes
-    assert launched == [f"parallel_current-{size}" for size in expected_launches]
+    assert launched == [f"parallel_current_wall-{size}" for size in expected_launches]
     [path] = tmp_path.glob("*/result.json")
     result = json.loads(path.read_text())
     assert not result["passed"]
@@ -254,12 +254,7 @@ def test_plot_failure_saves_completed_levels(
         assert set(result["orders"]) == {"16", "32", "64"}
 
 
-@pytest.mark.parametrize(
-    "variant, passes", [("parallel_current", False), ("parallel_current_wall", True)]
-)
-def test_curved_wall_gates_interior_and_reports_global(
-    tmp_path, runner, variant, passes
-):
+def test_curved_wall_gates_interior_and_reports_global(tmp_path, runner):
     args = SimpleNamespace(output_root=tmp_path)
     coarse = {
         "ion_chi": {"l2": 0.02, "linf": 0.1, "l2_interior": 0.02, "linf_interior": 0.1}
@@ -274,8 +269,8 @@ def test_curved_wall_gates_interior_and_reports_global(
     }
     runner.references = lambda variant: {"ion_chi": "mms:current_potential"}
     study = Study(runner.HERE, args)
-    runner.check_refinement(study, coarse, fine, 16, 1, variant)
-    assert all(c["passed"] for c in study.result["checks"]) is passes
+    runner.check_refinement(study, coarse, fine, 16, 1, "parallel_current_wall")
+    assert all(c["passed"] for c in study.result["checks"])
     assert study.result["orders"]["16"]["ion_chi"]["linf"] == 0
     assert study.result["orders"]["16"]["ion_chi"]["linf_interior"] == 2
 
@@ -294,7 +289,7 @@ def test_mc_aware_parallel_limits(tmp_path, runner):
             "linf_interior": 0.005,
         }
     }
-    runner.check_refinement(study, coarse, fine, 16, 1, "parallel_current")
+    runner.check_refinement(study, coarse, fine, 16, 1, "parallel_current_wall")
     assert all(c["passed"] for c in study.result["checks"])
     assert [c["limit"] for c in study.result["checks"]] == [1.4, 0.9]
 
@@ -320,3 +315,28 @@ def test_completed_rate_subtracts_one_continuum_mms_source(monkeypatch, runner):
         runner.vorticity_rate_residual(SimpleNamespace(data=ds)), 0
     )
     assert calls == [("Vort:source", 0.0), ("Vort:source", 0.02)]
+
+
+def test_magnetic_current_uses_slab_metric_and_physical_normalisation(
+    monkeypatch, runner
+):
+    z = 2 * np.pi * np.arange(16) / 16
+    sine = xr.DataArray(np.sin(z), dims="z")
+    cosine = xr.DataArray(np.cos(z), dims="z")
+    ds = xr.Dataset({"Pe": 2 + sine, "Bxy": 2.0, "dz": 2 * np.pi / 16})
+    ds.attrs["options"] = {
+        "mesh": SimpleNamespace(evaluate_scalar=lambda _: 0.0125),
+        "hermes": SimpleNamespace(evaluate_scalar=lambda _: 1.0),
+    }
+    run = SimpleNamespace(data=ds, length_scale=2.0)
+    monkeypatch.setattr(
+        runner,
+        "energy_densities",
+        lambda _: SimpleNamespace(ion_thermal=1.5 * (1 + 0.2 * cosine)),
+    )
+    np.testing.assert_allclose(
+        runner.diamagnetic_divergence(run),
+        0.05 * (cosine - 0.2 * sine),
+        atol=5e-16,
+        rtol=0,
+    )

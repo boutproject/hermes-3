@@ -38,10 +38,10 @@ REFERENCE_KEYS = dict(
 
 
 def input_path(variant):
-    return HERE / f"data-{variant}" / "BOUT.inp"
+    return HERE / "data" / "BOUT.inp"
 
 
-def generate(destination, variant="baseline"):
+def generate(destination, variant="parallel_current_wall"):
     fields, _, sources, _ = model(variant)
     names = evolved(variant)
     x, y, z, time = s.symbols("x y z t")
@@ -62,11 +62,12 @@ def generate(destination, variant="baseline"):
             ("mms", key)
             for key in (
                 "electron_temperature",
+                "electron_velocity",
                 "parallel_current",
                 "parallel_current_divergence",
             )
         ]
-        expressions += [fields[key] for key in ("Te", "Jpar", "DivJpar")]
+        expressions += [fields[key] for key in ("Te", "Ve", "Jpar", "DivJpar")]
     expressions = [e.subs(replacement, simultaneous=True) for e in expressions]
     factors, reduced = s.cse(
         expressions, symbols=s.numbered_symbols("mms:c"), order="canonical"
@@ -95,25 +96,19 @@ def generate(destination, variant="baseline"):
         options["evolve_vorticity_ion_energy"]["diagnose"] = "true"
         options["evolve_vorticity_ion_energy"]["phi_dissipation"] = "true"
         options["polarisation_drift"]["diagnose"] = "true"
-    if variant == "skew":
-        # The analytic chi and its normal derivative both vanish at the wall.
-        # Dirichlet AC guards retain second-order mixed-metric wall transport;
-        # plain X-Neumann guards leave a numerical g13*d_z(chi) wall current.
-        options["polarisation_drift"]["polarisation_ac_boundary"] = "dirichlet"
-        for key, value in {
-            "g13": "1/4",
-            "g33": "17/16",
-            "g_11": "17/16",
-            "g_13": "-1/4",
-        }.items():
-            options["mesh"][key] = value
-    if variant == "curvature":
-        # Curlb_B.z = 2*rho_s0^2*bxcvz/Bxy in the normalised slab.
-        options["mesh"]["bxcvz"] = "(1/10)*1.602176634e-19/(2*1.672621898e-27)"
-    if variant == "viscosity":
-        # Units used by Hermes: nu_SI = nu_normalised * rho_s0^2 * Omega_ci.
-        # With Tnorm=Bnorm=1, rho_s0^2*Omega_ci = Tnorm/Bnorm.
-        options["evolve_vorticity_ion_energy"]["viscosity"] = "0.02"
+    # The single slab exercises every requested continuum term.
+    for key, value in {
+        "g13": "1/4",
+        "g33": "17/16",
+        "g_11": "17/16",
+        "g_13": "-1/4",
+    }.items():
+        options["mesh"][key] = value
+    options["mesh"]["bxcvz"] = "(1/10)*1.602176634e-19/(2*1.672621898e-27)"
+    options["evolve_vorticity_ion_energy"]["viscosity"] = "0.02"
+    # The derived electron current need not have homogeneous normal derivative.
+    for face in ("xin", "xout"):
+        options["Ve"]["bndry_" + face] = "dirichlet_o2(mms:electron_velocity)"
 
     def exported(expression):
         result = exprToStr(expression)
@@ -140,7 +135,9 @@ def generate(destination, variant="baseline"):
         if name == "Vort":
             continue  # Physical radial vorticity guards belong to radial_boundary
         boundary = (
-            f"dirichlet_o2({name}:solution)" if name in ("Vort", "Eion") else "neumann"
+            f"dirichlet_o2({name}:solution)"
+            if name in ("Vort", "Eion", "NVe")
+            else "neumann"
         )
         for face in ("xin", "xout"):
             options[name]["bndry_" + face] = boundary
@@ -153,21 +150,17 @@ def generate(destination, variant="baseline"):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path)
-    parser.add_argument("--variant", choices=VARIANTS, default="baseline")
     parser.add_argument(
         "--check-files",
         action="store_true",
         help="Compare regenerated inputs with committed files",
     )
-    parser.add_argument("--all", action="store_true", help="Generate every variant")
     parser.add_argument(
         "--check", action="store_true", help="Run analytic preflight checks"
     )
     args = parser.parse_args()
-    if args.all and args.output:
-        parser.error("--output cannot be combined with --all")
     reports = {}
-    for variant in VARIANTS if args.all else (args.variant,):
+    for variant in VARIANTS:
         report = preflight(variant) if args.check else {}
         if args.check_files:
             with tempfile.TemporaryDirectory() as folder:

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Continuum ion-energy MMS variants, spatial convergence and publication plots."""
+"""Continuum 3D slab MMS, spatial convergence and publication plots."""
 
 import hashlib
 import json
@@ -11,7 +11,7 @@ import xarray as xr
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "tools"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from cases import EVOLVED, PARALLEL_VARIANTS, VARIANTS
+from cases import EVOLVED, PARALLEL_VARIANTS
 from energy_analysis import open_run
 from energy_analysis.convergence import manufactured_errors
 from energy_analysis.dataset import AuditError
@@ -69,6 +69,29 @@ def vorticity_rate_residual(run):
     )
 
 
+def diamagnetic_divergence(run):
+    """Independent FFT divergence of the slab's contravariant magnetic current."""
+    ds = run.data
+    curvature = (
+        2
+        * float(ds.options["mesh"].evaluate_scalar("bxcvz"))
+        * run.length_scale**2
+        / float(ds.options["hermes"].evaluate_scalar("Bnorm"))
+    )
+    pressure = ds.Pe + energy_densities(run).ion_thermal / 1.5
+    current = curvature * pressure / ds.Bxy
+    spacing = float(np.asarray(ds.dz).flat[0])
+    wave = 2 * np.pi * np.fft.fftfreq(ds.sizes["z"], d=spacing)
+    return xr.apply_ufunc(
+        lambda values: (
+            np.fft.ifft(1j * wave * np.fft.fft(values, axis=-1), axis=-1).real
+        ),
+        current,
+        input_core_dims=[["z"]],
+        output_core_dims=[["z"]],
+    )
+
+
 def check_physics(study, label, run, variant):
     ds = run.data
     errors = manufactured_errors(
@@ -78,9 +101,14 @@ def check_physics(study, label, run, variant):
     recovery = energy_densities(run)
     checks = {"recovery": (recovery.ion_reconstructed - ds.Eion, "recovery")}
     if variant in PARALLEL_VARIANTS:
+        magnetic = diamagnetic_divergence(run)
         checks.update(
             continuity=(
-                ds.DivJpol + ds.DivJpar - ds.ion_auxiliary_residual,
+                ds.DivJpol + ds.DivJpar + magnetic - ds.ion_auxiliary_residual,
+                "continuity",
+            ),
+            magnetic_current=(
+                ds.ion_current_rhs - ds.DivJReynolds - ds.DivJpar - magnetic,
                 "continuity",
             ),
             auxiliary_residual=(ds.ion_auxiliary_residual, "auxiliary_residual"),
@@ -100,11 +128,18 @@ def check_physics(study, label, run, variant):
             ("parallel_current", "nonzero_current"),
             ("DivJpar", "nonzero_divergence"),
             ("DivJReynolds", "nonzero_reynolds"),
+            ("DivJdia", "nonzero_curvature"),
+            ("DivJviscous", "nonzero_viscosity"),
             ("DivJpol", "nonzero_polarisation"),
         ):
+            value = (
+                ds.ion_current_rhs - ds.DivJpar - ds.DivJReynolds
+                if field == "DivJdia"
+                else ds[field]
+            )
             study.check(
                 label + "/" + criterion,
-                float(abs(run.interior(ds[field])).max()),
+                float(abs(run.interior(value)).max()),
                 criterion,
                 minimum=True,
             )
@@ -188,7 +223,7 @@ def check_temporal(study, base, tight, errors, variant):
 def parse_args():
     cli = parser(__doc__)
     cli.set_defaults(timeout=3600)
-    cli.add_argument("--variant", choices=VARIANTS, default="parallel_current")
+    cli.set_defaults(variant="parallel_current_wall", nproc=2)
     cli.add_argument(
         "--levels", type=int, help="Refinement levels: default 2, or 4 with --plot"
     )
@@ -200,7 +235,7 @@ def parse_args():
     cli.add_argument(
         "--verify",
         action="store_true",
-        help="Also check temporal refinement and MPI/diagnostic agreement",
+        help="Also check temporal refinement and serial/MPI agreement",
     )
     cli.add_argument(
         "--internal-progress",
@@ -232,7 +267,7 @@ def main():
     args = parse_args()
     variant = args.variant
     parallel = variant in PARALLEL_VARIANTS
-    template = HERE / f"data-{variant}" / "BOUT.inp"
+    template = HERE / "data" / "BOUT.inp"
     sizes = [8 * 2**i for i in range(args.levels)]
     with Study(HERE, args) as study:
         study.result.update(
@@ -293,18 +328,10 @@ def main():
                 label,
                 overrides,
                 template=template,
-                stall_seconds=next(
-                    (
-                        value
-                        for threshold, value in sorted(
-                            study.criteria.get("stall_seconds_by_size", {}).items(),
-                            key=lambda item: int(item[0]),
-                            reverse=True,
-                        )
-                        if size >= int(threshold)
-                    ),
-                    None,
-                ),
+                # A long manual study has one explicit per-launch time budget.
+                # Grid/rank-dependent gaps between saved outputs must not impose
+                # an unrelated shorter deadline on a progressing CVODE solve.
+                stall_seconds=args.timeout,
             )
 
         try:

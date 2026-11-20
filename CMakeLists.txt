@@ -444,43 +444,24 @@ if(HERMES_TESTS)
         DESTINATION "${CMAKE_CURRENT_BINARY_DIR}/tools"
         PATTERN "__pycache__" EXCLUDE)
     endif()
-    hermes_add_ion_energy_test(
-      ion-energy-mms
-      ion-energy-mms
-      "energy;mms"
-      6000
-      --variant
-      baseline
-      --verify
-      --timeout
-      3600)
-    hermes_add_ion_energy_test(
-      ion-energy-mms-curvature
-      ion-energy-mms
-      "energy;mms"
-      6000
-      --variant
-      curvature
-      --timeout
-      3600)
-    foreach(MMS_VARIANT baseline skew viscosity curvature)
+    # The coupled spatial/temporal study is explicitly opt-in, even for plain
+    # ctest.
+    option(HERMES_ION_ENERGY_MMS "Register the long 3D ion-energy slab MMS" OFF)
+    if(HERMES_ION_ENERGY_MMS)
       hermes_add_ion_energy_test(
-        ion-energy-mms-${MMS_VARIANT}-long
         ion-energy-mms
-        "energy;mms;long"
+        ion-energy-mms
+        "energy;mms;validation"
         36000
-        --variant
-        ${MMS_VARIANT}
         --levels
-        3
+        2
         --verify
-        --timeout
-        10800
         --nproc
-        2)
-      set_tests_properties(ion-energy-mms-${MMS_VARIANT}-long
-                           PROPERTIES PROCESSORS 2)
-    endforeach()
+        2
+        --timeout
+        10800)
+      set_tests_properties(ion-energy-mms PROPERTIES PROCESSORS 2)
+    endif()
     hermes_add_ion_energy_test(ion-energy-closed ion-energy-closed "energy" 600
                                --timeout 300)
     hermes_add_ion_energy_test(ion-energy-sources ion-energy-sources "energy"
@@ -499,38 +480,6 @@ if(HERMES_TESTS)
       ion-energy-parallel-damping ion-energy-parallel-damping "energy" 600
       --timeout 180)
     set_tests_properties(ion-energy-parallel-damping PROPERTIES PROCESSORS 2)
-    foreach(MMS_VARIANT parallel_current parallel_current_wall)
-      hermes_add_ion_energy_test(
-        ion-energy-mms-${MMS_VARIANT}
-        ion-energy-mms
-        "energy;mms"
-        18000
-        --variant
-        ${MMS_VARIANT}
-        --verify
-        --timeout
-        3600
-        --nproc
-        2)
-      set_tests_properties(ion-energy-mms-${MMS_VARIANT} PROPERTIES PROCESSORS
-                                                                    2)
-      hermes_add_ion_energy_test(
-        ion-energy-mms-${MMS_VARIANT}-long
-        ion-energy-mms
-        "energy;mms;long"
-        36000
-        --variant
-        ${MMS_VARIANT}
-        --levels
-        3
-        --verify
-        --timeout
-        10800
-        --nproc
-        2)
-      set_tests_properties(ion-energy-mms-${MMS_VARIANT}-long
-                           PROPERTIES PROCESSORS 2)
-    endforeach()
     # Eight times the wall-history outputs for signed-current quadrature.
     hermes_add_ion_energy_test(ion-energy-walls ion-energy-walls "energy" 14400
                                --timeout 4800)

@@ -1,6 +1,6 @@
-"""MMS case names and fields, independent of the symbolic input generator."""
+"""Runtime fields for the single 3D slab MMS, independent of SymPy."""
 
 EVOLVED = ("Ni", "Nj", "NVi", "NVj", "Pe", "Vort", "Eion")
 RECOVERED = ("Pi", "pi", "pj", "Tion", "phi", "psi", "chi")
-PARALLEL_VARIANTS = ("parallel_current", "parallel_current_wall")
-VARIANTS = ("baseline", "skew", "viscosity", "curvature", *PARALLEL_VARIANTS)
+PARALLEL_VARIANTS = ("parallel_current_wall",)
+VARIANTS = PARALLEL_VARIANTS

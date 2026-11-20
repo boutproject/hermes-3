@@ -1,4 +1,4 @@
-# Template; regenerate committed variants using python mms.py --all.
+# Template for the single 3D slab; regenerate with python mms.py.
 periodicX = false
 MXG = 2
 MYG = 2
@@ -11,9 +11,9 @@ TwistShift = false
 error_on_unused_options = false
 
 [mesh]
-nx = 20
+nx = 12
 ny = 16
-nz = 16
+nz = 8
 symmetricGlobalX = true
 symmetricGlobalY = true
 ixseps1 = nx
@@ -42,9 +42,6 @@ g_13 = 0
 g_23 = 0
 bxcvx = 0
 bxcvy = 0
-# Baseline, skew and viscosity retain their original zero curvature.
-# The curvature variant uses a finite total-pressure mode and an analytic chi
-# inverse (see README).
 bxcvz = 0
 
 [mesh:ddz]
@@ -58,11 +55,11 @@ type = identity
 type = cvode
 mms = true
 mms_initialise = true
-nout = 5
-output_step = 1
+nout = 4
+output_step = 0.005
 atol = 1e-12
 rtol = 1e-10
-max_timestep = 0.05
+max_timestep = 0.002
 mxstep = 10000
 
 [hermes]
@@ -136,3 +133,4 @@ alfven_wave = false
 
 [polarisation_drift]
 implementation = conservative
+polarisation_corrections = 32
