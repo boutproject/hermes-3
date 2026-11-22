@@ -36,6 +36,7 @@
 #include <tuple>
 #include <type_traits>
 #include <utility>
+#include <vector>
 
 using bout::globals::mesh;
 
@@ -60,7 +61,7 @@ void fillRadialGuards(Field& field, Value value) {
     for (int y = localmesh->ystart; y <= localmesh->yend; ++y) {
       for (int z = 0; z < localmesh->LocalNz; ++z) {
         for (int layer = 1; layer <= count; ++layer) {
-          field(interior + step * layer, y, z) = value(interior, step, layer, y, z);
+          field(interior + (step * layer), y, z) = value(interior, step, layer, y, z);
         }
       }
     }
@@ -301,7 +302,7 @@ const Region<Ind3D>& wallFaces(Mesh* m) {
       if ((x == m->xstart - 1 && m->firstX()) || (x == m->xend && m->lastX())) {
         for (int y = m->ystart; y <= m->yend; ++y) {
           for (int z = 0; z < m->LocalNz; ++z) {
-            indices.emplace_back((x * m->LocalNy + y) * m->LocalNz + z, m->LocalNy,
+            indices.emplace_back((((x * m->LocalNy) + y) * m->LocalNz) + z, m->LocalNy,
                                  m->LocalNz);
           }
         }
@@ -649,7 +650,8 @@ XZFaceFluxes reynoldsFaces(const Field3D& c, const Field3D& vort, const Field3D&
     const BoutReal dz = 0.5 * (coord->dz()[i] + coord->dz()[r]);
     const BoutReal dx = 0.5 * (coord->dx()[i] + coord->dx()[r]);
     const BoutReal velocity = J * (phi_corner[i] - phi_corner[i.zm()]);
-    const BoutReal px = (phi[r] - phi[i]) / dx, pz = velocity / (J * dz);
+    const BoutReal px = (phi[r] - phi[i]) / dx;
+    const BoutReal pz = velocity / (J * dz);
     const BoutReal hx = (Phi[r] - Phi[i]) / dx;
     const BoutReal hz = (Phi_corner[i] - Phi_corner[i.zm()]) / dz;
     const BoutReal hxz = (gradient.x[i] - gradient.x[i.zm()]) / dz;
@@ -670,10 +672,12 @@ XZFaceFluxes reynoldsFaces(const Field3D& c, const Field3D& vort, const Field3D&
   BOUT_FOR(i, phi.getRegion("RGN_NOBNDRY")) {
     const auto r = i.zp();
     // Retain the existing integrated Z velocity, including its cell-centred J.
-    const BoutReal J = coord->J()[i], dx = coord->dx()[i];
+    const BoutReal J = coord->J()[i];
+    const BoutReal dx = coord->dx()[i];
     const BoutReal dz = 0.5 * (coord->dz()[i] + coord->dz()[r]);
     const BoutReal velocity = J * (phi_corner[i.xm()] - phi_corner[i]);
-    const BoutReal px = -velocity / (J * dx), pz = (phi[r] - phi[i]) / dz;
+    const BoutReal px = -velocity / (J * dx);
+    const BoutReal pz = (phi[r] - phi[i]) / dz;
     const BoutReal hx = (Phi_corner[i] - Phi_corner[i.xm()]) / dx;
     const BoutReal hz = (Phi[r] - Phi[i]) / dz;
     const BoutReal hxz = (gradient.z[i] - gradient.z[i.xm()]) / dx;
@@ -887,6 +891,7 @@ EvolveVorticityIonEnergy::EvolveVorticityIonEnergy(std::string name, Options& al
                         .withDefault<bool>(false);
 
   density_floor = options["density_floor"].doc("Minimum density floor").withDefault(1e-7);
+  ASSERT0(density_floor > 1e-16); // Needs to be non-zero
 
   // Match vorticity's physical units, scalar coefficient and guards.
   include_viscosity = options.isSet("viscosity");
@@ -934,6 +939,12 @@ EvolveVorticityIonEnergy::EvolveVorticityIonEnergy(std::string name, Options& al
                   .doc("Absolute tolerance on the normalised forward vorticity residual")
                   .withDefault(1e-10);
 
+  phi_reset_initial_guess = options["phi_reset_initial_guess"]
+                                .doc("Reset the initial phi guess to the last output "
+                                     "value. Removes dependence on "
+                                     "previous calls.")
+                                .withDefault<bool>(false);
+
   // Read curvature vector
   try {
     Curlb_B.covariant = false; // Contravariant
@@ -970,9 +981,10 @@ EvolveVorticityIonEnergy::EvolveVorticityIonEnergy(std::string name, Options& al
 
   const BoutReal source_normalisation = SI::qe * Nnorm * Tnorm * Omega_ci; // [W/m^3]
 
-  external_heating =
-      options["external_heating"].doc("Heating source in [W/m^3]").withDefault(0.0)
-      / source_normalisation;
+  external_heating = options["external_heating"]
+                         .doc("Heating source in [W/m^3]")
+                         .withDefault(Field3D{0.0})
+                     / source_normalisation;
 }
 
 void EvolveVorticityIonEnergy::acceptWarmStart() {
@@ -987,10 +999,13 @@ void EvolveVorticityIonEnergy::transform_impl(GuardedOptions& state) {
   mesh->communicate(Vort, Eion);
   vorticity = copy(Vort);
 
-  // Start from the guess stored at the last output state, not from whatever
-  // the previous RHS call (possibly a Jacobian probe or rejected solver evaluation) left.
-  // This keeps the RHS a deterministic function of the state within a step.
-  phi = copy(phi_guess);
+  if (phi_reset_initial_guess) {
+    // Start from the guess stored at the last output state, not from whatever
+    // the previous RHS call (possibly a Jacobian probe or rejected solver evaluation) left.
+    // This keeps the RHS a deterministic function of the state within a step.
+    // It does however typically take more iterations to converge.
+    phi = copy(phi_guess);
+  }
 
   if (radial_model.walls) {
     // Assignment preserves vorticity's independently owned boundary rules.
@@ -1143,10 +1158,16 @@ void EvolveVorticityIonEnergy::transform_impl(GuardedOptions& state) {
   // Set temperature and pressure of each ion species
 
   Ti = Pi_sum / Ni_sum_floor;
+  // Only interior density is available here. Its radial guards can be zero,
+  // so dividing the Neumann pressure guards by the density floor creates a
+  // spurious hot wall. Extrapolate the recovered interior temperature instead.
+  bout::ion_energy::applyNeumannPressureBoundary(Ti);
   forAllIons(allspecies, [&](GuardedOptions species) {
     set(species["temperature"], Ti);
     auto Ni = GET_NOBOUNDARY(Field3D, species["density"]);
-    set(species["pressure"], Ni * Ti);
+    Field3D pressure = Ni * Ti;
+    bout::ion_energy::applyNeumannPressureBoundary(pressure);
+    set(species["pressure"], pressure);
   });
 
   //////////////////////////////////////////////////////////
@@ -1271,15 +1292,12 @@ void EvolveVorticityIonEnergy::finally(const Options& state) {
   //////////////////////////////////////////////////////////
   // Vorticity equation
 
+  // Note: current_rhs = DivJReynolds + DivJdia + DivJpar
+  // is set in polarisation_drift.
+  ddt(Vort) = current_rhs + DivJviscous + ion_phi_dissipation;
+
   if (radial_model.walls) {
-    ddt(Vort) = 0.0;
-    BOUT_FOR(i, Vort.getRegion("RGN_NOBNDRY")) {
-      ddt(Vort)[i] = current_rhs[i] + DivJviscous[i] + ion_phi_dissipation[i];
-    }
     writeWallRates();
-  } else {
-    ddt(Vort) = current_rhs + DivJviscous;
-    BOUT_FOR(i, Vort.getRegion("RGN_NOBNDRY")) { ddt(Vort)[i] += ion_phi_dissipation[i]; }
   }
 
   //////////////////////////////////////////////////////////
@@ -1420,6 +1438,7 @@ void EvolveVorticityIonEnergy::outputVars(Options& state) {
                     {"units", "A m^-3"},
                     {"conversion", SI::qe * Nnorm * Omega_ci},
                     {"long_name", "Reynolds current divergence"}});
+
     set_with_attrs(state["ddt(Vort)"], ddt(Vort),
                    {{"time_dimension", "t"},
                     {"units", "A m^-3"},

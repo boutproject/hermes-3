@@ -175,6 +175,7 @@ struct EvolveVorticityIonEnergy : public NamedComponent<EvolveVorticityIonEnergy
   ///   - phi_atol             Potential convergence scale [eV], default 1.0
   ///   - phi_rtol             Recovery relative tolerance, default 1e-3
   ///   - vort_atol            Normalised vorticity residual tolerance, default 1e-10
+  ///   - phi_reset_initial_guess  Use the same starting guess each time?
   ///   - laplacian            Approximate potential inverse options
   /// Auxiliary boundary, correction count and inverse options belong to drift.
   ///
@@ -241,10 +242,11 @@ private:
   std::vector<BoutReal> wall_rate_inner; ///< Current inner wall dphi/dt, by local y
   std::vector<BoutReal> wall_rate_outer; ///< Current outer wall dphi/dt, by local y
 
-  int phi_max_iterations; ///< Maximum number of Vort,E -> phi, Pi iterations
-  BoutReal phi_atol;      ///< Absolute tolerance on phi
-  BoutReal phi_rtol;      ///< Relative tolerance on phi
-  BoutReal vort_atol;     ///< Absolute tolerance on forward vorticity residual
+  int phi_max_iterations;       ///< Maximum number of Vort,E -> phi, Pi iterations
+  BoutReal phi_atol;            ///< Absolute tolerance on phi
+  BoutReal phi_rtol;            ///< Relative tolerance on phi
+  BoutReal vort_atol;           ///< Absolute tolerance on forward vorticity residual
+  bool phi_reset_initial_guess; ///< Reset the initial guess each time?
 
   VectorMetric Curlb_B; // Curvature vector Curl(b/B)
 

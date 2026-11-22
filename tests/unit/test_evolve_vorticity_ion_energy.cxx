@@ -53,8 +53,8 @@ public:
   }
 };
 
-template <int NY, int MYG = 1>
-class IonEnergyFixture : public FakeMeshFixture_tmpl<10, NY, 8, false, 2, MYG> {
+template <int NY, int MYG = 1, int NZ = 8>
+class IonEnergyFixture : public FakeMeshFixture_tmpl<10, NY, NZ, false, 2, MYG> {
 protected:
   // Laplacian solver state must not outlive the fixture's mesh.
   void SetUp() override {
@@ -115,6 +115,54 @@ using EvolveVorticityIonEnergyTest = IonEnergyFixture<5>;
 using IonEnergyParallelDampingTest = IonEnergyFixture<12, 2>;
 
 using IonEnergySingletonYTest = IonEnergyFixture<1, 0>;
+
+using IonEnergyDCWallTest = IonEnergyFixture<5, 1, 1>;
+
+// Density boundary values need not be valid during thermodynamic recovery.
+TEST_F(IonEnergyDCWallTest, ZeroDensityGuardsDoNotCreateHotWallEnergyFlux) {
+  mesh->getCoordinates()->setNon_uniform(false);
+  FakeSolver solver;
+  auto options = makeOptions();
+  options["test"]["radial_boundary"] = "no_slip";
+  IonEnergyTestSystem component("test", options, &solver);
+  declareSpecies(component);
+  solver.setState({{"Vort", Field3D{0.0}}, {"Eion", Field3D{3.0}}});
+  auto state = makeState();
+  for (const auto* name : {"d+", "he++"}) {
+    Field3D density = copy(state["species"][name]["density"].as<Field3D>());
+    for (const auto& i : density.getRegion("RGN_NOY")) {
+      if (i.x() < mesh->xstart || i.x() > mesh->xend) {
+        density[i] = 0.0;
+      }
+    }
+    state["species"][name]["density"] = density;
+  }
+  // A smooth parallel current drives a nonzero radial polarisation wall flux.
+  state["species"]["e"]["momentum"] =
+      makeField<Field3D>([](const Ind3D& i) { return 1e-5 * i.y() / 1836; });
+  component.transform(state);
+  component.finally(state);
+  const auto output = diagnostics(component);
+  const Field3D temperature = output["Tion"].as<Field3D>();
+  const Field3D phi = output["phi"].as<Field3D>();
+  for (const auto* name : {"d+", "he++"}) {
+    const Field3D pressure = state["species"][name]["pressure"].as<Field3D>();
+    const Field3D density = state["species"][name]["density"].as<Field3D>();
+    for (const auto& i : pressure.getRegion("RGN_NOY")) {
+      const int interior = std::clamp(i.x(), mesh->xstart, mesh->xend);
+      EXPECT_NEAR(temperature[i], 8. / 3, 1e-12);
+      EXPECT_NEAR(pressure[i], pressure(interior, i.y(), i.z()), 1e-12);
+      EXPECT_NEAR(phi[i], 0.0, 1e-12);
+      if (i.x() != interior) {
+        EXPECT_EQ(density[i], 0.0); // Recovery must preserve the density input.
+      }
+    }
+  }
+  const Field3D flux = output["polarisation_flux_x"].as<Field3D>();
+  EXPECT_GT(max(abs(flux), true), 1e-8);
+  EXPECT_LT(max(abs(output["DivEpol"].as<Field3D>()), true), 1e-3);
+  EXPECT_LT(max(abs(solver.getTimeDerivs()["Eion"].as<Field3D>()), true), 1e-3);
+}
 
 // Recovery and finite-volume energy identities.
 TEST_F(EvolveVorticityIonEnergyTest, UniformStateHasZeroRHS) {
