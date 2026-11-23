@@ -137,6 +137,139 @@ Field3D Div_n_bxGrad_f_B_XPPM(const Field3D& n, const Field3D& f, bool bndry_flu
   //    fmm --- vD --- fpm
   //
 
+  // Fci
+
+  if (n.isFci()) {
+
+    const auto& cellvolume = coord->cell_volume();
+
+    const auto& cellarea_R = coord->cell_area_xhigh();
+    const auto& cellarea_L = coord->cell_area_xlow();
+
+    const auto& cellarea_U = coord->cell_area_zhigh();
+    const auto& cellarea_D = coord->cell_area_zlow();
+
+    const auto& h =
+        sqrt(coord->g_11() * coord->g_22() * coord->g_33()) / (coord->J() * coord->Bxy());
+
+    // MC-limited reconstruction of n in the cell with value c
+    auto reconstruct = [](BoutReal m, BoutReal c, BoutReal p) {
+      Stencil1D s;
+      s.c = c;
+      s.m = m;
+      s.p = p;
+      s.mm = BoutNaN;
+      s.pp = BoutNaN;
+      MC(s);
+      return s;
+    };
+
+    BOUT_FOR(i, n.getRegion("RGN_NOBNDRY")) {
+
+      const auto xp = i.xp();
+      const auto xm = i.xm();
+      const auto zp = i.zp();
+      const auto zm = i.zm();
+
+      const auto xpzp = xp.zp();
+      const auto xmzm = xm.zm();
+      const auto xpzm = xp.zm();
+      const auto xmzp = xm.zp();
+
+      const bool at_inner = mesh->firstX() && (i.x() == mesh->xstart);
+      const bool at_outer = mesh->lastX() && (i.x() == mesh->xend);
+
+      // Face geometry. Symmetric in the two cells sharing each face, so that
+      // both cells compute exactly the same value.
+
+      BoutReal cellwidth_D = 0.25 * (coord->dx()[i] + coord->dx()[zm])
+                             * (sqrt(coord->g_11()[i]) + sqrt(coord->g_11()[zm]));
+      BoutReal cellwidth_U = 0.25 * (coord->dx()[i] + coord->dx()[zp])
+                             * (sqrt(coord->g_11()[i]) + sqrt(coord->g_11()[zp]));
+      BoutReal cellheight_R = 0.25 * (coord->dz()[i] + coord->dz()[xp])
+                              * (sqrt(coord->g_33()[i]) + sqrt(coord->g_33()[xp]));
+      BoutReal cellheight_L = 0.25 * (coord->dz()[i] + coord->dz()[xm])
+                              * (sqrt(coord->g_33()[i]) + sqrt(coord->g_33()[xm]));
+
+      BoutReal area_R = 0.5 * (cellarea_R[i] + cellarea_L[xp]);
+      BoutReal area_L = 0.5 * (cellarea_L[i] + cellarea_R[xm]);
+      BoutReal area_U = 0.5 * (cellarea_U[i] + cellarea_D[zp]);
+      BoutReal area_D = 0.5 * (cellarea_D[i] + cellarea_U[zm]);
+
+      // Stream function on the corners. Each corner is always summed in the
+      // same order (starting from the cell above-right of the corner), so the
+      // four cells sharing a corner get bit-identical values.
+
+      BoutReal fmm = 0.25 * (f[i] + f[xm] + f[zm] + f[xmzm]);
+      BoutReal fmp = 0.25 * (f[zp] + f[xmzp] + f[i] + f[xm]);
+      BoutReal fpm = 0.25 * (f[xp] + f[i] + f[xpzm] + f[zm]);
+      BoutReal fpp = 0.25 * (f[xpzp] + f[zp] + f[xp] + f[i]);
+
+      // Physical velocities on the faces
+
+      BoutReal vU = 0.5 * (h[i] + h[zp]) * (fmp - fpp) / cellwidth_U; // ~ -(1/B) df/dx
+      BoutReal vD = 0.5 * (h[i] + h[zm]) * (fmm - fpm) / cellwidth_D; // ~ -(1/B) df/dx
+
+      BoutReal vR = 0.5 * (h[i] + h[xp]) * (fpp - fpm) / cellheight_R; // ~ (1/B) df/dz
+      BoutReal vL = 0.5 * (h[i] + h[xm]) * (fmp - fmm) / cellheight_L; // ~ (1/B) df/dz
+
+      // Reconstruction of n on the faces of this cell
+
+      Stencil1D sx = reconstruct(n[xm], n[i], n[xp]);
+      Stencil1D sz = reconstruct(n[zm], n[i], n[zp]);
+
+      // X fluxes. The sign of the velocity determines which cell is upwind.
+
+      BoutReal flux_R = 0.0;
+      if (!at_outer || bndry_flux) {
+        BoutReal nR;
+        if (vR > 0.0) {
+          // Flux out of this cell
+          nR = sx.R;
+        } else if (at_outer) {
+          // Flux in from boundary
+          nR = 0.5 * (n[i] + n[xp]);
+        } else {
+          // Flux in from cell xp: its left face value
+          nR = reconstruct(n[i], n[xp], n[xp.xp()]).L;
+        }
+        flux_R = vR * nR * area_R;
+      }
+
+      BoutReal flux_L = 0.0;
+      if (!at_inner || bndry_flux) {
+        BoutReal nL;
+        if (vL < 0.0) {
+          // Flux out of this cell
+          nL = sx.L;
+        } else if (at_inner) {
+          // Flux in from boundary
+          nL = 0.5 * (n[i] + n[xm]);
+        } else {
+          // Flux in from cell xm: its right face value
+          nL = reconstruct(n[xm.xm()], n[xm], n[i]).R;
+        }
+        flux_L = vL * nL * area_L;
+      }
+
+      // Z fluxes
+
+      BoutReal nU = (vU > 0.0) ? sz.R : reconstruct(n[i], n[zp], n[zp.zp()]).L;
+      BoutReal nD = (vD < 0.0) ? sz.L : reconstruct(n[zm.zm()], n[zm], n[i]).R;
+
+      BoutReal flux_U = vU * nU * area_U;
+      BoutReal flux_D = vD * nD * area_D;
+
+      // Only this cell is updated
+
+      result[i] = (flux_R - flux_L + flux_U - flux_D) / cellvolume[i];
+    }
+
+    return result;
+  }
+
+  // Non-fci
+
   int nz = mesh->LocalNz;
   auto f_lowx_lowz = emptyFrom(f);
   for (int i = mesh->xstart; i <= mesh->xend + 1; i++) {
