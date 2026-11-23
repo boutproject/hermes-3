@@ -1290,6 +1290,18 @@ A table of the two forms used in Hermes-3, and the corresponding terms in `Simak
 .. doxygenstruct:: DiamagneticDrift
    :members:
 
+When simulations are using the Flux-coordinate independent (Fci) approach, Hermes-3 uses the formulation of
+`B Shanahan et al 2019 Plasma Phys. Control. Fusion 61 025007 <https://iopscience.iop.org/article/10.1088/1361-6587/aaed7d>`__.
+
+The curvature operator is written as
+
+.. math::
+   C(f) = \frac{2}{B} \mathbf{b} \times \nabla \log B \cdot \nabla f.
+
+This term is implemented by using the
+`bracket operator <https://bout-dev.readthedocs.io/en/latest/user_docs/differential_operators.html#the-bracket-operators>`__
+of BOUT++.
+
 
 polarisation_drift
 ~~~~~~~~~~~~~~~~~~

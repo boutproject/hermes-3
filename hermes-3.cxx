@@ -21,8 +21,6 @@
 */
 
 #include "hermes-3.hxx"
-#include "revision.hxx"
-
 #include "include/adas_carbon.hxx"
 #include "include/adas_lithium.hxx"
 #include "include/adas_neon.hxx"
@@ -67,6 +65,7 @@
 #include "include/recycling.hxx"
 #include "include/relax_potential.hxx"
 #include "include/scale_timederivs.hxx"
+#include "include/selflimiting_source.hxx"
 #include "include/set_temperature.hxx"
 #include "include/sheath_boundary.hxx"
 #include "include/sheath_boundary_fci.hxx"
@@ -84,6 +83,7 @@
 #include "include/upstream_density_feedback.hxx"
 #include "include/vorticity.hxx"
 #include "include/zero_current.hxx"
+#include "revision.hxx"
 #include <bout/boundary_factory.hxx>
 #include <bout/boundary_op.hxx>
 #include <bout/constants.hxx>
@@ -216,6 +216,12 @@ int Hermes::init(bool restarting) {
   // This will make it available as an input option
   // e.g. bndry_sol = decaylength(0.003 / rho_s0) sets up a decay length of 3mm
   BoundaryFactory::getInstance()->add(new DecayLengthBoundary(), "decaylength");
+
+  // See https://github.com/boutproject/hermes-3/pull/688 for some issues that should be fixed
+  if (mesh->isFci() and (mesh->ystart > 1)) {
+    throw BoutException(
+        "In Fci, MYG>1 is currently not implemented! Please use nslice=1 in Zoidberg :)");
+  }
 
   /////////////////////////////////////////////////////////
   // Load metric tensor from the mesh, passing length and B

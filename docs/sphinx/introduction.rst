@@ -9,7 +9,7 @@ code is `available on Github
 is multi-species simulation of fusion reactors, where the plasma will
 contain a mixture of deuterium, tritium, helium and other species.
 
-Hermes-3 is multi-fidelity, allowing the simulation of 1D, 2D and 3D 
+Hermes-3 is multi-fidelity, allowing the simulation of 1D, 2D and 3D
 tokamak plasmas both in steady-state and unsteady / turbulent regimes.
 
 It is designed to be modular and organised into reusable
@@ -66,17 +66,17 @@ How do I install Hermes-3?
 
 How do I configure a simulation?
   Hermes-3 uses input files formatted in a Python-like syntax,
-  see :ref:`sec-inputs`. Use the provided 
-  :ref:`sec-examples` cases as a starting point. Check 
+  see :ref:`sec-inputs`. Use the provided
+  :ref:`sec-examples` cases as a starting point. Check
   the ``hermes-3\examples\`` directory for extra examples.
-  Recommended solver settings are in the :ref:`sec-solver_numerics` section.
+  Recommended solver settings are in the :ref:`sec-numerics_performance` section.
 
 How do I run Hermes-3, how do I restart simulations?
   See :ref:`sec-execution`.
 
 How do I post-process a simulation?
   There are two interfaces: the legacy Python package boutdata
-  and the newer, Xarray powered xHermes. xHermes can be a bit 
+  and the newer, Xarray powered xHermes. xHermes can be a bit
   slower but handles normalisation for you and has many quality
   of life features. See section :ref:`sec-postprocessing`.
 
@@ -84,7 +84,7 @@ What equations am I solving?
   Hermes-3 is modular and the solved equations are built from "components".
   Please refer to sections :ref:`sec-equations` and :ref:`sec-closure`.
   There is a separate section on :ref:`sec-reactions`, including impurity
-  radiation, and one on :ref:`sec-boundary_conditions`. 
+  radiation, and one on :ref:`sec-boundary_conditions`.
 
 What about tests?
   See :ref:`sec-tests` for details on the test suite.
@@ -121,6 +121,3 @@ LLNL-CODE-845139
 
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
-
-
-

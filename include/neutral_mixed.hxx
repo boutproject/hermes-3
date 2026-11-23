@@ -64,6 +64,13 @@ private:
   BoutReal viscosity_limit;              ///< Explicit cap on eta_n [Pa s]
   BoutReal neutral_lmax;                 ///< Used for collisionality floor
 
+  bool lag_limiter_gradient;   ///< Lag the limiter gradients?
+  BoutReal limiter_cache_time; ///< Solver time the lagged gradients were computed at
+  bool limiter_cache_valid;    ///< False until the first lagged gradients are computed
+  Field3D grad_reg_adv;        ///< Lagged gradient, Dmax denominator
+  Field3D grad_reg_cond_perp, grad_reg_cond_par; ///< Lagged gradients, conduction caps
+  Field3D grad_reg_visc_perp, grad_reg_visc_par; ///< Lagged gradients, viscosity caps
+
   bool sheath_ydown, sheath_yup;
   bool zero_sheath_conductivity, zero_sheath_viscosity;
 

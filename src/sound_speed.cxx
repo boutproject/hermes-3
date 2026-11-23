@@ -40,7 +40,7 @@ void SoundSpeed::transform_impl(GuardedOptions& state) {
 
       if (species.isSet("temperature")) {
         auto T = GET_NOBOUNDARY(Field3D, species["temperature"]);
-        for (const auto& i : fastest_wave.getRegion("RGN_NOBNDRY")) {
+        for (const auto& i : fastest_wave.getRegion("RGN_NOY")) {
           const BoutReal sound_speed = sqrt(softFloor(T[i], temperature_floor) / AA);
           fastest_wave[i] = BOUTMAX(fastest_wave[i], sound_speed);
         }
@@ -50,13 +50,13 @@ void SoundSpeed::transform_impl(GuardedOptions& state) {
 
   total_density = softFloor(total_density, 1e-10);
   Field3D sound_speed = sqrt(total_pressure / total_density);
-  for (const auto& i : fastest_wave.getRegion("RGN_NOBNDRY")) {
+  for (const auto& i : fastest_wave.getRegion("RGN_NOY")) {
     fastest_wave[i] = BOUTMAX(fastest_wave[i], sound_speed[i]);
   }
 
   if (alfven_wave) {
     auto* coord = fastest_wave.getCoordinates();
-    for (const auto& i : fastest_wave.getRegion("RGN_NOBNDRY")) {
+    for (const auto& i : fastest_wave.getRegion("RGN_NOY")) {
       const BoutReal alfven_speed = beta_norm * coord->Bxy()[i] / sqrt(total_density[i]);
       fastest_wave[i] = BOUTMAX(fastest_wave[i], alfven_speed);
     }
@@ -66,7 +66,9 @@ void SoundSpeed::transform_impl(GuardedOptions& state) {
   fastest_wave.getMesh()->communicate(fastest_wave, sound_speed);
   fastest_wave.resetRegion();
   sound_speed.resetRegion();
+  fastest_wave.applyParallelBoundary("parallel_neumann_o1");
+  sound_speed.applyParallelBoundary("parallel_neumann_o1");
 
   set(state["sound_speed"], sound_speed);
-  set(state["fastest_wave"], fastest_wave * fastest_wave_factor);
+  set(state["fastest_wave"], Field3DParallel{fastest_wave * fastest_wave_factor});
 }

@@ -5,6 +5,7 @@
 #include "component.hxx"
 
 #include <bout/constants.hxx>
+using bout::globals::mesh;
 
 /// Calculate the system sound speed
 ///
@@ -19,9 +20,13 @@ struct SoundSpeed : public NamedComponent<SoundSpeed> {
                         // FIXME: Only read if AA is set
                         readIfSet("species:{sp}:{opt_inputs}", Regions::Interior)}) {
     Options& options = alloptions[name];
+
+    // Don't change the default, but turn off electron dynamics when Fci by default
+    // Fci does not actually penalise jumps in the face reconstruction, but jumps between cells
+    // This is usually more dissipative, so turn of electrons here by default
     electron_dynamics = options["electron_dynamics"]
                             .doc("Include electron sound speed?")
-                            .withDefault<bool>(true);
+                            .withDefault<bool>(!mesh->isFci());
 
     alfven_wave =
         options["alfven_wave"].doc("Include Alfven wave speed?").withDefault<bool>(false);

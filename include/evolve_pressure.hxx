@@ -28,6 +28,7 @@ struct EvolvePressure : public NamedComponent<EvolvePressure> {
   ///                          enabled.
   ///   - p_div_v              Use p * Div(v) form? Default is v * Grad(p) form
   ///   - thermal_conduction   Include parallel heat conduction? Default is true
+  ///   - dissipative          Add dissipation for parallel advection in Fci
   ///
   /// - P<name>  e.g. "Pe", "Pd+"
   ///   - source     Source of pressure [Pa / s].
@@ -69,6 +70,7 @@ private:
   bool neumann_boundary_average_z; ///< Apply neumann boundary with Z average?
   bool poloidal_flows;
   bool thermal_conduction; ///< Include thermal conduction?
+  bool dissipative;        ///< Dissipative Lax-flux for Fci
 
   bool p_div_v; ///< Use p*Div(v) form? False -> v * Grad(p)
 

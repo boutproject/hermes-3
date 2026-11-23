@@ -11,7 +11,7 @@ file = "../../../grids/slab_with_BC/MMS_straight_slab_8_256_4_True.fci.grid.nc"
 
 [solver]
 mxstep = 10000
-type = cvode
+type = pvode
 rtol = 1e-5
 atol = 1e-8
 
@@ -32,7 +32,7 @@ type = evolve_density, evolve_momentum, evolve_pressure
 AA = 1
 charge = 1
 thermal_conduction = true
-
+dissipative = false
 [Nh+]
 function = 1.0
 bndry_all = neumann
@@ -59,7 +59,7 @@ type = quasineutral, zero_current, evolve_pressure
 AA = 1.0 / 1836.0
 charge = -1
 thermal_conduction = true
-
+dissipative = false
 
 [Pe]
 function = 1.0

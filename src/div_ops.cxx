@@ -802,7 +802,7 @@ Field3D Div_a_Grad_perp_flows(const Field3D& a, const Field3D& f, Field3D& flow_
     flow_ylow.setDirectionY(YDirectionType::Aligned);
   }
 
-  if constexpr (bout::build::use_metric_3d) {
+  if (bout::build::use_metric_3d and f.isFci()) {
     // 3D Metric, need yup/ydown fields.
     // Requires previous communication of metrics
     // -- should insert communication here?
@@ -1199,7 +1199,7 @@ Field3D Div_a_Grad_perp_nonorthog(const Field3D& a, const Field3D& f, Field3D& f
     flow_ylow.setDirectionY(YDirectionType::Aligned);
   }
 
-  if constexpr (bout::build::use_metric_3d) {
+  if (bout::build::use_metric_3d and f.isFci()) {
     // 3D Metric, need yup/ydown fields.
     // Requires previous communication of metrics
     // -- should insert communication here?
