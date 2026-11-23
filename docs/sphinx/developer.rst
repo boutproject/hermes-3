@@ -1449,6 +1449,37 @@ solves fluid equations in the pressure form:
    :alt:
    :width: 60%
 
+1D sheath tests
+~~~~~~~~~~~~~~~
+
+- ``tests/integrated/1D-sheath``
+- ``tests/integrated/1D-sheath-insulating``
+- ``tests/integrated/1D-sheath-simple``
+
+This test checks a few properties of the related ``sheath``,
+``sheath-insulating``, and ``sheath-simple`` boundary conditions. The setup is
+the same for all three: a 1D domain with a sheath boundary at one end, and a
+``noflow_boundary`` at the other. While these components are boundary
+conditions, they couple multiple fields, and so we need to evolve the equations
+for a few timesteps to see the trend in behaviour. The temperature, velocity,
+energy flux, and ion source are all compared at the upstream and downstream ends
+to golden answers.
+
+After running a basic regression base case, some or all of the following
+additional cases are also run, depending on the component:
+
+- higher electron heat transmission: should give lower electron temperature and
+  lower velocity,
+- lower ion heat transmission: should give higher ion temperature and higher
+  velocity,
+- higher secondary electron emission: should give higher electron temperature
+  and higher velocity,
+- sheath and no-flow boundaries on opposite ends: should be a mirror of the base
+  case, with the downstream and upstream fields swapping values, with the
+  additional condition that the velocities should be anti-symmetric,
+- linear-free boundary: this has its own golden answer, as it's difficult to
+  predict its physical effect from first principles.
+
 Sod shock
 ~~~~~~~~~~~~~~
 

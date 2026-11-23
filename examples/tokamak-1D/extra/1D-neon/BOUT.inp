@@ -65,36 +65,37 @@ Bnorm = 1
 Tnorm = 100
 
 [solver]
-diagnose = true
 type = snes
-snes_type = newtonls
-ksp_type = preonly    # Direct solver
+diagnose = true
 pc_type = lu
-max_nonlinear_iterations = 16
-atol = 4e-8
-rtol = 1e-6
-stol = 0
+max_nonlinear_iterations = 10
+atol = 1e-3
+rtol = 1e-5
+stol = 1e-12
 maxf = 2000
-maxl = 260
-matrix_free_operator = false
-lag_jacobian = 1
-timestep = 0.001
-
-timestep_control = pid_nonlinear_its # Change timestep
-target_its = 3                       # Target number of nonlinear iterations
-kP = 0.65
+maxl = 20
+matrix_free_operator = true
+lag_jacobian = 15
+timestep = 0.1
+max_snes_failures = 20
+scale_vars = true
+timestep_control = pid_nonlinear_its
+target_its = 7
+kP = 0.7
 kI = 0.3
-kD = 0.15
+kD = 0.0
+max_timestep = 1e4
 
 [petsc]
+snes_type = newtonls
+ksp_type = fgmres
+pc_factor_mat_solver_type = mumps
+mat_mumps_icntl_24 = 1
+snes_linesearch_type = bt
+snes_max_linear_solve_fail = 100
 
-# STRUMPACK as factorization backend for ILU/LU
-pc_factor_mat_solver_type = strumpack
-
-mat_strumpack_reordering = metis  # try amd/rcm if needed
-mat_strumpack_colperm = true      # allow column permutation for nonzero diagonal
-pc_factor_shift_type = NONZERO
-pc_factor_shift_amount = 1e-12
+[solver:predictor]
+type = constant
 
 [sheath_boundary]
 

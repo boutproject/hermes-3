@@ -53,22 +53,22 @@ for var, lab in zip([Pe, Pi, Ni], ["Pe", "Pi", "Ni"]):
         print(f"Asymmetry in {lab}!", var[0], var[-1])
         success = False
 
-    print(f"{lab}: ", var[0])
+    print(f"{lab}val =", var[0])
 
+Peval = 0.2411394050283152
+Pival = 0.22163188251075946
+Nival = 0.3096709732309932
 
-Nival = 0.35237138276962
 if abs(Ni[0] - Nival) > tol:
-    print("Density mismatch. ", abs(Ni[0] - Nival))
+    print("Density mismatch, error is:", abs(Ni[0] - Nival))
     success = False
 
-Pival = 0.2515733527238645
 if abs(Pi[0] - Pival) > tol:
-    print("Pi mismatch. ", abs(Pi[0] - Pival))
+    print("Pi mismatch, error is:", abs(Pi[0] - Pival))
     success = False
 
-Peval = 0.2795029870898116
 if abs(Pe[0] - Peval) > tol:
-    print("Pe mismatch. ", abs(Pe[0] - Peval))
+    print("Pe mismatch, error is:", abs(Pe[0] - Peval))
     success = False
 
 

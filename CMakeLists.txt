@@ -103,6 +103,7 @@ set(HERMES_SOURCES
     src/sound_speed.cxx
     src/zero_current.cxx
     src/anomalous_diffusion.cxx
+    src/selflimiting_source.cxx
     src/binormal_stpm.cxx
     src/recycling.cxx
     src/adas_reaction.cxx
@@ -128,6 +129,7 @@ set(HERMES_SOURCES
     include/adas_neon.hxx
     include/amjuel_data.hxx
     include/anomalous_diffusion.hxx
+    include/selflimiting_source.hxx
     include/classical_diffusion.hxx
     include/cx_reaction.hxx
     include/binormal_stpm.hxx
@@ -307,10 +309,17 @@ if(HERMES_TESTS)
          ${CMAKE_CURRENT_BINARY_DIR}/grids SYMBOLIC)
   endif()
 
-  # Integrated tests
+  # Integrated tests:
+  #
+  # * TEST_EXECUTABLE: name of the test executable, default: `runtest`
+  #
+  # * REQUIRES: list of variables that must be true to enable test (note: use
+  #   `CONFLICTS` to negate the variable, rather than `NOT VARIABLE`)
+  #
+  # * CONFLICTS: list of variables that must be false to enable test
   function(hermes_add_integrated_test TESTNAME)
-    set(oneValueArgs DOWNLOAD DOWNLOAD_NAME)
-    set(multiValueArgs REQUIRES CONFLICTS ARGUMENTS)
+    set(oneValueArgs DOWNLOAD DOWNLOAD_NAME TEST_EXECUTABLE)
+    set(multiValueArgs REQUIRES CONFLICTS)
     cmake_parse_arguments(HERMES_TEST_OPTIONS "${options}" "${oneValueArgs}"
                           "${multiValueArgs}" ${ARGN})
 
@@ -332,13 +341,21 @@ if(HERMES_TESTS)
       endif()
     endforeach()
 
+    if(NOT HERMES_TEST_OPTIONS_TEST_EXECUTABLE)
+      set(HERMES_TEST_OPTIONS_TEST_EXECUTABLE runtest)
+    endif()
+
     if(HERMES_COPY_TESTS_TO_BUILD)
       set(INT_TEST_SRC ${CMAKE_CURRENT_SOURCE_DIR}/tests/integrated/${TESTNAME})
       set(INT_TEST_DEST
           ${CMAKE_CURRENT_BINARY_DIR}/tests/integrated/${TESTNAME})
+
       # Make copies of the test exec and input file in the build directory and
       # keep them up to date
-      configure_file(${INT_TEST_SRC}/runtest ${INT_TEST_DEST}/runtest COPYONLY)
+      configure_file(
+        ${INT_TEST_SRC}/${HERMES_TEST_OPTIONS_TEST_EXECUTABLE}
+        ${INT_TEST_DEST}/${HERMES_TEST_OPTIONS_TEST_EXECUTABLE} COPYONLY)
+
       if(EXISTS ${INT_TEST_SRC}/data/BOUT.inp)
         configure_file(${INT_TEST_SRC}/data/BOUT.inp
                        ${INT_TEST_DEST}/data/BOUT.inp COPYONLY)
@@ -349,10 +366,11 @@ if(HERMES_TESTS)
       set(INT_TEST_DEST
           ${CMAKE_CURRENT_SOURCE_DIR}/tests/integrated/${TESTNAME})
     endif()
+
     add_test(
       NAME ${TESTNAME}
       WORKING_DIRECTORY ${INT_TEST_DEST}
-      COMMAND runtest ${HERMES_TEST_OPTIONS_ARGUMENTS})
+      COMMAND ${HERMES_TEST_OPTIONS_TEST_EXECUTABLE})
     set_tests_properties(${TESTNAME} PROPERTIES LABELS integration)
 
     if(HERMES_TEST_OPTIONS_DOWNLOAD)
@@ -377,16 +395,22 @@ if(HERMES_TESTS)
     endif()
   endfunction()
 
-  hermes_add_integrated_test(1D-density CONFLICTS BOUT_USE_METRIC_3D)
-  hermes_add_integrated_test(1D-fluid CONFLICTS BOUT_USE_METRIC_3D)
+  hermes_add_integrated_test(1D-density)
+  hermes_add_integrated_test(1D-fluid)
   hermes_add_integrated_test(1D-recycling CONFLICTS BOUT_USE_METRIC_3D)
   hermes_add_integrated_test(1D-recycling-dthe CONFLICTS BOUT_USE_METRIC_3D)
-  hermes_add_integrated_test(diffusion CONFLICTS BOUT_USE_METRIC_3D)
-  hermes_add_integrated_test(evolve_density CONFLICTS BOUT_USE_METRIC_3D)
-  hermes_add_integrated_test(neutral_mixed CONFLICTS BOUT_USE_METRIC_3D)
+  hermes_add_integrated_test(1D-sheath-insulating CONFLICTS BOUT_USE_METRIC_3D
+                             TEST_EXECUTABLE test_sheath_insulating.py)
+  hermes_add_integrated_test(1D-sheath-simple CONFLICTS BOUT_USE_METRIC_3D
+                             TEST_EXECUTABLE test_sheath_simple.py)
+  hermes_add_integrated_test(1D-sheath CONFLICTS BOUT_USE_METRIC_3D
+                             TEST_EXECUTABLE test_sheath.py)
+  hermes_add_integrated_test(diffusion)
+  hermes_add_integrated_test(evolve_density)
+  hermes_add_integrated_test(neutral_mixed)
   hermes_add_integrated_test(vorticity CONFLICTS BOUT_USE_METRIC_3D)
-  hermes_add_integrated_test(sod-shock CONFLICTS BOUT_USE_METRIC_3D)
-  hermes_add_integrated_test(sod-shock-energy CONFLICTS BOUT_USE_METRIC_3D)
+  hermes_add_integrated_test(sod-shock)
+  hermes_add_integrated_test(sod-shock-energy)
   hermes_add_integrated_test(drift-wave CONFLICTS BOUT_USE_METRIC_3D)
   hermes_add_integrated_test(alfven-wave CONFLICTS BOUT_USE_METRIC_3D)
   hermes_add_integrated_test(collfreq-braginskii-afn CONFLICTS
@@ -413,6 +437,7 @@ if(HERMES_TESTS)
     ${CMAKE_CURRENT_BINARY_DIR}/tests/integrated/diamagnetic-drift/runs)
   set_tests_properties(diamagnetic-drift PROPERTIES PROCESSORS 12 TIMEOUT 210)
 
+  hermes_add_integrated_test(1D-selflimiting-source)
   hermes_add_integrated_test(1D-density-fci REQUIRES BOUT_USE_METRIC_3D)
   hermes_add_integrated_test(1D-momentum-fci REQUIRES BOUT_USE_METRIC_3D)
   hermes_add_integrated_test(1D-pressure-fci REQUIRES BOUT_USE_METRIC_3D)

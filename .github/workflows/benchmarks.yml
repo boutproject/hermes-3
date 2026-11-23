@@ -42,6 +42,7 @@ jobs:
       OPENBLAS_NUM_THREADS: 1
       PYTHONPATH: ${{ github.workspace }}/tools/pylib
       OMPI_MCA_rmaps_base_oversubscribe: yes
+      PRTE_MCA_rmaps_default_mapping_policy: ":oversubscribe"
       MPIRUN: mpiexec -np
       LD_LIBRARY_PATH: /home/runner/local/lib:$LD_LIBRARY_PATH
       ASV_FACTOR: 1.1

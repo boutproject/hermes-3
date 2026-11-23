@@ -15,7 +15,7 @@
 
 #include <string>
 
-BOUT_ENUM_CLASS(DiamagneticForm, gradient, divergence);
+BOUT_ENUM_CLASS(DiamagneticForm, gradient, divergence, bracket);
 BOUT_ENUM_CLASS(DiamagneticBoundary, open, closed, closed_average);
 
 /// Calculate diamagnetic flows
@@ -39,6 +39,10 @@ private:
   Field3D calculateGradientForm(const Field3D& quantity, const Field3D& temperature,
                                 BoutReal charge, BoutReal factor = 1.0);
 
+  /// Calculate factor * 2 * [log(B), quantity * T / q] using the Arakawa bracket.
+  Field3D calculateBracketForm(const Field3D& quantity, const Field3D& temperature,
+                               BoutReal charge, BoutReal factor = 1.0);
+
   /// Calculate the local volume-weighted sum on the inner core ring.
   BoutReal coreRingSum(const Field3D& f) const;
 
@@ -53,6 +57,8 @@ private:
   DiamagneticForm form;                ///< Form of the diamagnetic sink
   DiamagneticBoundary radial_boundary; ///< Treatment of radial boundary faces
   bool average_core_active;            ///< Average on this processor's core boundary?
+  Field3D bracket_factor;              ///< Metric factor for the bracket form
+  Field3D logB;                        ///< Log of the normalised magnetic field
 
   /// For every species, if it has:
   ///  - temperature

@@ -24,13 +24,6 @@
 using bout::globals::mesh;
 
 namespace {
-
-Ind3D indexAt(const Field3D& f, int x, int y, int z) {
-  const int ny = f.getNy();
-  const int nz = f.getNz();
-  return Ind3D{(((x * ny) + y) * nz) + z, ny, nz};
-}
-
 /// Limited free gradient of log of a quantity
 /// This ensures that the guard cell values remain positive
 /// while also ensuring that the quantity never increases
@@ -57,7 +50,28 @@ BoutReal limitFree(BoutReal fm, BoutReal fc) {
   return fp;
 }
 
+/// Smooth maximum of the sound speed C_i and the end-cell speed u towards the wall,
+/// (C_i + u + sqrt((C_i - u)^2 + w^2)) / 2 with w = smoothing C_i; never below max(C_i, u)
+BoutReal bohmSpeed(BoutReal C_i, BoutReal u, BoutReal smoothing) {
+  const BoutReal w = smoothing * C_i;
+  return 0.5 * (C_i + u + std::sqrt(SQ(C_i - u) + SQ(w)));
+}
+
 } // namespace
+
+BoutReal SheathBoundary::lowerSheathVelocity(BoutReal C_i, BoutReal V) const {
+  if (bohm_smoothing > 0.0) {
+    return -bohmSpeed(C_i, -V, bohm_smoothing);
+  }
+  return std::min(-C_i, V);
+}
+
+BoutReal SheathBoundary::upperSheathVelocity(BoutReal C_i, BoutReal V) const {
+  if (bohm_smoothing > 0.0) {
+    return bohmSpeed(C_i, V, bohm_smoothing);
+  }
+  return std::max(C_i, V);
+}
 
 BoutReal SheathBoundary::ionSecondaryElectronEmissionGamma(BoutReal ion_energy) const {
   if (ion_ee_gamma_max < 0.0) {
@@ -135,6 +149,14 @@ SheathBoundary::SheathBoundary(std::string name, Options& alloptions, Solver*)
       options["always_set_phi"]
           .doc("Always set phi field? Default is to only modify if already set")
           .withDefault<bool>(false);
+
+  bohm_smoothing = options["bohm_smoothing"]
+                       .doc("Smooth the Bohm condition |V_i| >= C_i over a width "
+                            "bohm_smoothing * C_i (0 = sharp)")
+                       .withDefault(0.0);
+  if (bohm_smoothing < 0.0) {
+    throw BoutException("sheath_boundary:bohm_smoothing must not be negative");
+  }
 
   // Read wall voltage, convert to normalised units
   wall_potential = options["wall_potential"]
@@ -288,7 +310,7 @@ void SheathBoundary::transform_impl(GuardedOptions& state) {
 
             // Enable supersonic flow
             const BoutReal visheath =
-                std::min(-sqrt(C_i_sq), Vi[i]); // Negative into lower sheath
+                lowerSheathVelocity(sqrt(C_i_sq), Vi[i]); // Negative into lower sheath
 
             // Note: Vzi = |visheath| * sin(α)
             ion_sum[i] += s_i * Zi * sin_alpha[ip] * (-visheath);
@@ -329,7 +351,7 @@ void SheathBoundary::transform_impl(GuardedOptions& state) {
 
             // Enable supersonic flow
             const BoutReal visheath =
-                std::max(sqrt(C_i_sq), Vi[i]); // Positive into upper sheath
+                upperSheathVelocity(sqrt(C_i_sq), Vi[i]); // Positive into upper sheath
 
             ion_sum[i] += s_i * Zi * sin_alpha[im] * visheath;
           }
@@ -391,7 +413,8 @@ void SheathBoundary::transform_impl(GuardedOptions& state) {
                       (ad * ti + zi * s_i * te * grad_ne / grad_ni) / mi, 0., 100.);
 
                   // Negative velocity is outward through the lower-Y sheath
-                  const BoutReal visheath = std::min(-sqrt(C_i_sq), ion.velocity[i]);
+                  const BoutReal visheath =
+                      lowerSheathVelocity(sqrt(C_i_sq), ion.velocity[i]);
 
                   // Positive magnitude of the outgoing ion particle flux divided by ne
                   const BoutReal ion_flux_over_ne = -s_i * sin_alpha[ip] * visheath;
@@ -483,7 +506,8 @@ void SheathBoundary::transform_impl(GuardedOptions& state) {
                       (ad * ti + zi * s_i * te * grad_ne / grad_ni) / mi, 0., 100.);
 
                   // Positive velocity is outward through the upper-Y sheath
-                  const BoutReal visheath = std::max(sqrt(C_i_sq), ion.velocity[i]);
+                  const BoutReal visheath =
+                      upperSheathVelocity(sqrt(C_i_sq), ion.velocity[i]);
 
                   // Positive magnitude of the outgoing ion particle flux divided by ne
                   const BoutReal ion_flux_over_ne = s_i * sin_alpha[im] * visheath;
@@ -778,8 +802,8 @@ void SheathBoundary::transform_impl(GuardedOptions& state) {
           // Ion sheath heat transmission coefficient
           const BoutReal gamma_i = 2.5 + (0.5 * Mi * C_i_sq / tisheath);
 
-          const BoutReal visheath = std::min(-sqrt(C_i_sq), // Negative -> into sheath
-                                             Vi[i]);        // Allow supersonic flow
+          // Negative -> into sheath; allow supersonic flow
+          const BoutReal visheath = lowerSheathVelocity(sqrt(C_i_sq), Vi[i]);
 
           // Set boundary conditions on flows
           Vi[im] = 2. * visheath - Vi[i];
@@ -878,8 +902,8 @@ void SheathBoundary::transform_impl(GuardedOptions& state) {
 
           const BoutReal gamma_i = 2.5 + (0.5 * Mi * C_i_sq / tisheath); // + Δγ
 
-          const BoutReal visheath = std::max(sqrt(C_i_sq), // Positive -> into sheath
-                                             Vi[i]);       // Allow supersonic flow
+          // Positive -> into sheath; allow supersonic flow
+          const BoutReal visheath = upperSheathVelocity(sqrt(C_i_sq), Vi[i]);
 
           // Set boundary conditions on flows
           Vi[ip] = 2. * visheath - Vi[i];

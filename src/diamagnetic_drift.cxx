@@ -3,6 +3,7 @@
 #include <bout/boutexception.hxx>
 #include <bout/coordinates.hxx>
 #include <bout/derivs.hxx>
+#include <bout/difops.hxx>
 #include <bout/field.hxx>
 #include <bout/field2d.hxx>
 #include <bout/field3d.hxx>
@@ -44,38 +45,33 @@ DiamagneticDrift::DiamagneticDrift(std::string name, Options& alloptions,
   }
 
   if (options.isSet("bndry_flux")) {
-    if (options.isSet("radial_boundary")) {
-      throw BoutException(
-          "Diamagnetic drift: bndry_flux and radial_boundary cannot both be set. "
-          "Use radial_boundary only.");
-    }
-    const auto boundary = options["bndry_flux"].as<bool>() ? DiamagneticBoundary::open
-                                                           : DiamagneticBoundary::closed;
-    options["radial_boundary"].assign(toString(boundary), "bndry_flux");
-    if (BoutComm::rank() == 0) {
-      output_warn.write("Diamagnetic drift: bndry_flux is deprecated; use "
-                        "radial_boundary = {} instead.\n",
-                        toString(boundary));
-    }
+    throw BoutException(
+        "Diamagnetic drift: bndry_flux has been removed. Replace bndry_flux = true "
+        "with radial_boundary = open, or bndry_flux = false with radial_boundary = "
+        "closed.");
   }
 
   form = options["form"]
-             .doc("Form of the diamagnetic sink: divergence or gradient. "
-                  "radial_boundary applies to x boundaries only; sheath (y) "
-                  "faces are always closed.")
-             .withDefault(DiamagneticForm::divergence);
+             .doc("Form of the diamagnetic sink: divergence, gradient, or bracket. "
+                  "Defaults to bracket on FCI meshes and divergence otherwise.")
+             .withDefault(mesh->isFci() ? DiamagneticForm::bracket
+                                        : DiamagneticForm::divergence);
 
   radial_boundary = options["radial_boundary"]
                         .doc("Treatment of x boundaries only: open, closed, or "
                              "closed_average (average the innermost core ring). "
-                             "Sheath (y) faces are always closed.")
+                             "Divergence and gradient forms close sheath (y) faces. "
+                             "Bracket form uses field guard values for radial transport; "
+                             "closed_average still averages the core-ring sources.")
                         .withDefault(DiamagneticBoundary::closed_average);
 
-  if (form == DiamagneticForm::gradient
+  if (form != DiamagneticForm::bracket
       and !mesh->getCoordinates()->getParallelTransform().canToFromFieldAligned()) {
     throw BoutException(
-        "Diamagnetic drift: gradient form is not supported by parallel transforms "
-        "that cannot convert to and from field-aligned coordinates (such as FCI).");
+        "Diamagnetic drift: {} form is not supported by parallel transforms "
+        "that cannot convert to and from field-aligned coordinates (such as FCI). "
+        "Use form = bracket instead.",
+        toString(form));
   }
 
   average_core_active = radial_boundary == DiamagneticBoundary::closed_average
@@ -121,46 +117,54 @@ DiamagneticDrift::DiamagneticDrift(std::string name, Options& alloptions,
                                       MPI_DOUBLE, MPI_SUM, mesh->getYcomm(mesh->xstart));
   }
 
-  // Read curvature vector
-  Curlb_B.covariant = false; // Contravariant
-  if (mesh->get(Curlb_B, "bxcv") != 0) {
-    output_warn.write("Diamagnetic drift: Couldn't read curvature vector 'bxcv'");
-    Curlb_B.x = Curlb_B.y = Curlb_B.z = 0.0;
-  }
-
-  Options& paralleltransform = Options::root()["mesh"]["paralleltransform"];
-  if (paralleltransform.isSet("type")
-      and paralleltransform["type"].as<std::string>() == "shifted") {
-    Coordinates::FieldMetric I;
-    if (mesh->get(I, "sinty") != 0) {
-      I = 0.0;
+  const auto* coord = mesh->getCoordinates();
+  if (form == DiamagneticForm::bracket) {
+    logB = log(coord->Bxy());
+    bracket_factor = mesh->isFci()
+                         ? Field3D{sqrt(coord->g_22()) / (coord->J() * coord->Bxy())}
+                         : Field3D{1.0};
+  } else {
+    // Read curvature vector
+    Curlb_B.covariant = false; // Contravariant
+    if (mesh->get(Curlb_B, "bxcv") != 0) {
+      output_warn.write("Diamagnetic drift: Couldn't read curvature vector 'bxcv'");
+      Curlb_B.x = Curlb_B.y = Curlb_B.z = 0.0;
     }
-    Curlb_B.z += I * Curlb_B.x;
-  }
 
-  // Normalise
-
-  // Get the units
-  const auto& units = alloptions["units"];
-  const BoutReal Bnorm = get<BoutReal>(units["Tesla"]);
-  const BoutReal Lnorm = get<BoutReal>(units["meters"]);
-
-  Curlb_B.x /= Bnorm;
-  Curlb_B.y *= SQ(Lnorm);
-  Curlb_B.z *= SQ(Lnorm);
-
-  Curlb_B *= 2. / mesh->getCoordinates()->Bxy();
-
-  // Set drift to zero through sheath boundaries.
-  // Flux through those cell faces should be set by sheath.
-  for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
-    for (int k = 0; k < Curlb_B.y.getNz(); ++k) {
-      Curlb_B.y(r.ind, mesh->ystart - 1, k) = -Curlb_B.y(r.ind, mesh->ystart, k);
+    Options& paralleltransform = Options::root()["mesh"]["paralleltransform"];
+    if (paralleltransform.isSet("type")
+        and paralleltransform["type"].as<std::string>() == "shifted") {
+      Coordinates::FieldMetric I;
+      if (mesh->get(I, "sinty") != 0) {
+        I = 0.0;
+      }
+      Curlb_B.z += I * Curlb_B.x;
     }
-  }
-  for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
-    for (int k = 0; k < Curlb_B.y.getNz(); ++k) {
-      Curlb_B.y(r.ind, mesh->yend + 1, k) = -Curlb_B.y(r.ind, mesh->yend, k);
+
+    // Normalise
+
+    // Get the units
+    const auto& units = alloptions["units"];
+    const BoutReal Bnorm = get<BoutReal>(units["Tesla"]);
+    const BoutReal Lnorm = get<BoutReal>(units["meters"]);
+
+    Curlb_B.x /= Bnorm;
+    Curlb_B.y *= SQ(Lnorm);
+    Curlb_B.z *= SQ(Lnorm);
+
+    Curlb_B *= 2. / coord->Bxy();
+
+    // Set drift to zero through sheath boundaries.
+    // Flux through those cell faces should be set by sheath.
+    for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
+      for (int k = 0; k < Curlb_B.y.getNz(); ++k) {
+        Curlb_B.y(r.ind, mesh->ystart - 1, k) = -Curlb_B.y(r.ind, mesh->ystart, k);
+      }
+    }
+    for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
+      for (int k = 0; k < Curlb_B.y.getNz(); ++k) {
+        Curlb_B.y(r.ind, mesh->yend + 1, k) = -Curlb_B.y(r.ind, mesh->yend, k);
+      }
     }
   }
 
@@ -285,6 +289,17 @@ Field3D DiamagneticDrift::calculateGradientForm(const Field3D& quantity,
   return sink;
 }
 
+Field3D DiamagneticDrift::calculateBracketForm(const Field3D& quantity,
+                                               const Field3D& temperature,
+                                               BoutReal charge, BoutReal factor) {
+  if (fabs(charge) < 1e-5) {
+    throw BoutException(
+        "DiamagneticDrift::calculateBracketForm requires a non-zero charge");
+  }
+  return (2.0 * factor) * bracket(logB, quantity * temperature / charge, BRACKET_ARAKAWA)
+         * bracket_factor;
+}
+
 BoutReal DiamagneticDrift::coreRingSum(const Field3D& f) const {
   BoutReal local_sum = 0.0;
   for (int jy = mesh->ystart; jy <= mesh->yend; ++jy) {
@@ -331,9 +346,18 @@ void DiamagneticDrift::transform_impl(GuardedOptions& state) {
         return;
       }
       const auto quantity = GET_VALUE(Field3D, species[input]);
-      Field3D sink = form == DiamagneticForm::divergence
-                         ? calculateDivergenceForm(quantity, temperature, charge, factor)
-                         : calculateGradientForm(quantity, temperature, charge, factor);
+      Field3D sink;
+      switch (form) {
+      case DiamagneticForm::divergence:
+        sink = calculateDivergenceForm(quantity, temperature, charge, factor);
+        break;
+      case DiamagneticForm::gradient:
+        sink = calculateGradientForm(quantity, temperature, charge, factor);
+        break;
+      case DiamagneticForm::bracket:
+        sink = calculateBracketForm(quantity, temperature, charge, factor);
+        break;
+      }
       if (average_core_active) {
         ring_sums.push_back(coreRingSum(sink));
       }

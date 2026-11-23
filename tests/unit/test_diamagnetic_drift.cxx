@@ -58,6 +58,8 @@ using RadialDiamagneticDriftTest =
     FakeMeshFixture_tmpl<8, 5, 7, false, 2, DiamagneticFakeMesh>;
 using UnsupportedDiamagneticDriftTest =
     FakeMeshFixture_tmpl<3, 5, 7, true, 1, DiamagneticFakeMesh>;
+using FciDiamagneticDriftTest =
+    FakeMeshFixture_tmpl<8, 5, 7, true, 2, DiamagneticFakeMesh>;
 
 class C4DiamagneticDriftTest : public RadialDiamagneticDriftTest {
 public:
@@ -281,7 +283,8 @@ TEST_F(DiamagneticDriftTest, DefaultOptions) {
 // Every valid form/boundary combination constructs successfully and retains its options.
 TEST_F(DiamagneticDriftTest, AcceptsEveryFormAndRadialBoundary) {
   setCurvature();
-  for (const auto form : {DiamagneticForm::gradient, DiamagneticForm::divergence}) {
+  for (const auto form : {DiamagneticForm::gradient, DiamagneticForm::divergence,
+                          DiamagneticForm::bracket}) {
     for (const auto boundary : {DiamagneticBoundary::open, DiamagneticBoundary::closed,
                                 DiamagneticBoundary::closed_average}) {
       SCOPED_TRACE(toString(form) + ", " + toString(boundary));
@@ -328,23 +331,27 @@ TEST_F(DiamagneticDriftTest, RemovedDiamagFormExplainsMigration) {
   }
 }
 
-// Legacy bndry_flux maps true/false to open/closed without changing the default form.
-TEST_F(DiamagneticDriftTest, DeprecatedBoundaryFluxMapsToRadialBoundary) {
+// Removed bndry_flux reports its replacements rather than acting as an alias.
+TEST_F(DiamagneticDriftTest, RemovedBoundaryFluxExplainsMigration) {
   setCurvature();
   for (const bool allow_flux : {false, true}) {
     SCOPED_TRACE(allow_flux);
     Options options = diamagneticOptions();
     options["test"]["bndry_flux"] = allow_flux;
-    const DiamagneticDrift component("test", options, nullptr);
-
-    EXPECT_EQ(options["test"]["radial_boundary"].as<DiamagneticBoundary>(),
-              allow_flux ? DiamagneticBoundary::open : DiamagneticBoundary::closed);
-    EXPECT_EQ(options["test"]["form"].as<DiamagneticForm>(), DiamagneticForm::divergence);
+    try {
+      const DiamagneticDrift component("test", options, nullptr);
+      FAIL() << "bndry_flux must be rejected";
+    } catch (const BoutException& error) {
+      const std::string message = error.what();
+      EXPECT_NE(message.find("bndry_flux has been removed"), std::string::npos);
+      EXPECT_NE(message.find("radial_boundary = open"), std::string::npos);
+      EXPECT_NE(message.find("radial_boundary = closed"), std::string::npos);
+    }
   }
 }
 
 // Specifying both bndry_flux and radial_boundary is always an error.
-TEST_F(DiamagneticDriftTest, DeprecatedBoundaryFluxConflictsWithRadialBoundary) {
+TEST_F(DiamagneticDriftTest, RemovedBoundaryFluxRejectsEvenWithRadialBoundary) {
   setCurvature();
   for (const bool allow_flux : {false, true}) {
     for (const auto* boundary : {"open", "closed", "closed_average"}) {
@@ -355,6 +362,131 @@ TEST_F(DiamagneticDriftTest, DeprecatedBoundaryFluxConflictsWithRadialBoundary) 
       options["test"]["radial_boundary"] = boundary;
       EXPECT_THROW(DiamagneticDrift("test", options, nullptr), BoutException);
     }
+  }
+}
+
+// FCI meshes default to the bracket form without requiring a curvature vector.
+TEST_F(FciDiamagneticDriftTest, DefaultOptionsSelectBracket) {
+  ASSERT_TRUE(mesh->isFci());
+  Options options = diamagneticOptions();
+  const DiamagneticDrift component("test", options, nullptr);
+  EXPECT_EQ(options["test"]["form"].as<DiamagneticForm>(), DiamagneticForm::bracket);
+  EXPECT_EQ(options["test"]["radial_boundary"].as<DiamagneticBoundary>(),
+            DiamagneticBoundary::closed_average);
+}
+
+// For log(B) linear in x, the bracket differentiates a periodic z profile.
+// Check its sign, metric factor, charge scaling, energy factor and source accumulation.
+TEST_F(FciDiamagneticDriftTest, BracketSourcesUseFciMetricsAndCharge) {
+  const BoutReal wave_number = TWOPI / mesh->LocalNz;
+  const BoutReal slope = 0.2;
+  auto* coords = mesh->getCoordinates();
+  coords->setBxy(makeField<Coordinates::FieldMetric>(
+      [slope](auto& i) { return std::exp(slope * i.x()); }));
+  coords->setMetricTensorJB(
+      ContravariantMetricTensor(1.0, 1.0 / 9.0, 1.0, 0.0, 0.0, 0.0, mesh),
+      CovariantMetricTensor(1.0, 9.0, 1.0, 0.0, 0.0, 0.0, mesh),
+      Coordinates::FieldMetric{2.0}, coords->Bxy());
+  coords->setDx(0.5);
+  coords->setDz(2.0);
+  const auto quantity = makeField<Field3D>(
+      [wave_number](Ind3D& i) { return 2.0 + std::sin(wave_number * i.z()); });
+
+  for (const BoutReal charge : {1.0, -2.0}) {
+    SCOPED_TRACE(charge);
+    Options options = diamagneticOptions();
+    options["test"]["radial_boundary"] = "open";
+    DiamagneticDrift component("test", options, nullptr);
+    component.declareAllSpecies({"d+"});
+    auto state = diamagneticState(quantity, 4.0, charge);
+    for (const auto* output : {"density_source", "energy_source", "momentum_source"}) {
+      state["species"]["d+"][output] = 7.0;
+    }
+    component.transform(state);
+
+    for (const auto* output : {"density_source", "energy_source", "momentum_source"}) {
+      SCOPED_TRACE(output);
+      const auto source = get<Field3D>(state["species"]["d+"][output]);
+      const BoutReal factor = std::string(output) == "energy_source" ? 2.5 : 1.0;
+      BOUT_FOR_SERIAL(i, source.getRegion("RGN_NOBNDRY")) {
+        // [log(B), g] = -d_x log(B) * d_z g, with C2's sin(k) factor.
+        const BoutReal expected =
+            7.0
+            + 2.0 * factor * slope * (4.0 / charge) * std::sin(wave_number)
+                  * std::cos(wave_number * i.z()) * 3.0 / (2.0 * std::exp(slope * i.x()));
+        EXPECT_NEAR(source[i], expected, 1e-12);
+      }
+    }
+  }
+}
+
+// Explicit bracket selection works with an aligned transform and omits the FCI factor.
+TEST_F(RadialDiamagneticDriftTest, ExplicitBracketUsesAlignedMeshNormalisation) {
+  const BoutReal wave_number = TWOPI / mesh->LocalNz;
+  auto* coords = mesh->getCoordinates();
+  coords->setBxy(
+      makeField<Coordinates::FieldMetric>([](auto& i) { return std::exp(0.2 * i.x()); }));
+  coords->setMetricTensorJB(
+      ContravariantMetricTensor(1.0, 1.0 / 9.0, 1.0, 0.0, 0.0, 0.0, mesh),
+      CovariantMetricTensor(1.0, 9.0, 1.0, 0.0, 0.0, 0.0, mesh),
+      Coordinates::FieldMetric{2.0}, coords->Bxy());
+  Options options = diamagneticOptions();
+  options["test"]["form"] = "bracket";
+  options["test"]["radial_boundary"] = "open";
+  DiamagneticDrift component("test", options, nullptr);
+  component.declareAllSpecies({"d+"});
+  auto state = diamagneticState(makeField<Field3D>(
+      [wave_number](Ind3D& i) { return std::sin(wave_number * i.z()); }));
+  component.transform(state);
+  const auto source = get<Field3D>(state["species"]["d+"]["density_source"]);
+  BOUT_FOR_SERIAL(i, source.getRegion("RGN_NOBNDRY")) {
+    EXPECT_NEAR(source[i], 0.4 * std::sin(wave_number) * std::cos(wave_number * i.z()),
+                1e-12);
+  }
+}
+
+// Core averaging remains available for the default FCI bracket form and preserves sums.
+TEST_F(FciDiamagneticDriftTest, BracketCoreAveragingPreservesRingIntegral) {
+  const BoutReal wave_number = TWOPI / mesh->LocalNz;
+  auto* coords = mesh->getCoordinates();
+  coords->setBxy(
+      makeField<Coordinates::FieldMetric>([](auto& i) { return std::exp(0.2 * i.x()); }));
+  coords->setJ(
+      makeField<Coordinates::FieldMetric>([](auto& i) { return 1.0 + 0.2 * i.y(); }));
+  const auto quantity = makeField<Field3D>([wave_number](Ind3D& i) {
+    return (1.0 + 0.1 * i.y()) * std::sin(wave_number * i.z());
+  });
+  Options options = diamagneticOptions();
+  Options closed_options = diamagneticOptions();
+  closed_options["test"]["radial_boundary"] = "closed";
+  DiamagneticDrift averaged("test", options, nullptr);
+  DiamagneticDrift closed("test", closed_options, nullptr);
+  averaged.declareAllSpecies({"d+"});
+  closed.declareAllSpecies({"d+"});
+  auto averaged_state = diamagneticState(quantity);
+  auto closed_state = diamagneticState(quantity);
+  averaged.transform(averaged_state);
+  closed.transform(closed_state);
+
+  for (const auto* output : {"density_source", "energy_source", "momentum_source"}) {
+    SCOPED_TRACE(output);
+    const auto source = get<Field3D>(averaged_state["species"]["d+"][output]);
+    const auto unaveraged = get<Field3D>(closed_state["species"]["d+"][output]);
+    BoutReal ring_sum = 0.0;
+    BoutReal ring_volume = 0.0;
+    for (int jy = mesh->ystart; jy <= mesh->yend; ++jy) {
+      for (int jz = mesh->zstart; jz <= mesh->zend; ++jz) {
+        const BoutReal volume = coords->cell_volume()(mesh->xstart, jy, jz);
+        ring_sum += volume * unaveraged(mesh->xstart, jy, jz);
+        ring_volume += volume;
+      }
+    }
+    EXPECT_GT(std::abs(unaveraged(mesh->xstart, mesh->ystart, mesh->zstart)), 1e-6);
+    BOUT_FOR_SERIAL(i, source.getRegion("RGN_NOBNDRY")) {
+      EXPECT_NEAR(source[i],
+                  i.x() == mesh->xstart ? ring_sum / ring_volume : unaveraged[i], 1e-12);
+    }
+    EXPECT_NEAR(volumeIntegral(source), volumeIntegral(unaveraged), 1e-12);
   }
 }
 
@@ -1146,22 +1278,27 @@ TEST_F(RadialDiamagneticDriftTest, GradientSheathClosureExtrapolatesJacobianCurv
   }
 }
 
-// Gradient form rejects transforms without aligned conversion for every radial mode,
+// Curvature forms reject transforms without aligned conversion for every radial mode,
 // with an error explaining the required capability.
-TEST_F(UnsupportedDiamagneticDriftTest, GradientRejectsUnsupportedParallelTransform) {
+TEST_F(UnsupportedDiamagneticDriftTest,
+       CurvatureFormsRejectUnsupportedParallelTransform) {
   setCurvature(0.0, 1.0, 0.0);
-  for (const auto* boundary : {"open", "closed", "closed_average"}) {
-    SCOPED_TRACE(boundary);
-    Options options = diamagneticOptions();
-    options["diamagnetic_drift"]["form"] = "gradient";
-    options["diamagnetic_drift"]["radial_boundary"] = boundary;
-    try {
-      const DiamagneticDrift component("diamagnetic_drift", options, nullptr);
-      FAIL() << "gradient form must reject a transform without aligned conversion";
-    } catch (const BoutException& error) {
-      const std::string message = error.what();
-      EXPECT_NE(message.find("gradient form is not supported"), std::string::npos);
-      EXPECT_NE(message.find("field-aligned coordinates"), std::string::npos);
+  for (const auto* form : {"gradient", "divergence"}) {
+    for (const auto* boundary : {"open", "closed", "closed_average"}) {
+      SCOPED_TRACE(boundary);
+      Options options = diamagneticOptions();
+      options["diamagnetic_drift"]["form"] = form;
+      options["diamagnetic_drift"]["radial_boundary"] = boundary;
+      try {
+        const DiamagneticDrift component("diamagnetic_drift", options, nullptr);
+        FAIL() << "curvature forms must reject a transform without aligned conversion";
+      } catch (const BoutException& error) {
+        const std::string message = error.what();
+        EXPECT_NE(message.find(std::string(form) + " form is not supported"),
+                  std::string::npos);
+        EXPECT_NE(message.find("field-aligned coordinates"), std::string::npos);
+        EXPECT_NE(message.find("Use form = bracket"), std::string::npos);
+      }
     }
   }
 }

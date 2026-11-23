@@ -1294,14 +1294,22 @@ and the mass factors of :math:`m_i` or :math:`m_e` cancel out.
 Options
 ^^^^^^^
 
-The defaults select the divergence form with closed radial faces and core-ring
-averaging:
+On field-aligned meshes, the defaults select the divergence form with closed
+radial faces and core-ring averaging:
 
 .. code-block:: ini
 
    [diamagnetic_drift]
    form = divergence
    radial_boundary = closed_average
+
+FCI meshes default to ``form = bracket``. This applies
+:math:`2[\log B, fT/q]` using the Arakawa bracket in the :math:`x`--:math:`z`
+plane, multiplied by :math:`\sqrt{g_{22}}/(JB)` on FCI meshes. The energy
+source has the same additional factor of :math:`5/2` as the other forms.
+Bracket form can also be selected explicitly on field-aligned meshes, where
+the additional metric factor is unity. It uses the magnetic field magnitude
+from the coordinates and does not require the ``bxcv`` mesh vector.
 
 .. list-table::
    :header-rows: 1
@@ -1312,23 +1320,23 @@ averaging:
      - Default
      - Meaning
    * - ``form``
-     - ``divergence``, ``gradient``
-     - ``divergence``
-     - Finite-volume flux divergence or C2 gradient form.
+     - ``divergence``, ``gradient``, ``bracket``
+     - ``bracket`` on FCI; ``divergence`` otherwise
+     - Finite-volume flux divergence, C2 gradient or Arakawa bracket form.
    * - ``radial_boundary``
      - ``open``, ``closed``, ``closed_average``
      - ``closed_average``
-     - Treatment of radial (:math:`x`) faces only.
-   * - ``bndry_flux`` (deprecated)
-     - ``true``, ``false``
-     - Unset
-     - Alias for ``radial_boundary``: ``true`` selects ``open`` and
-       ``false`` selects ``closed``. Setting both options is an error.
+     - Treatment of radial (:math:`x`) faces in divergence and gradient forms;
+       core-ring averaging also applies to bracket form.
+
+``bndry_flux`` has been removed. Replace ``bndry_flux = true`` with
+``radial_boundary = open`` or ``bndry_flux = false`` with
+``radial_boundary = closed``.
 
 Boundary treatment
 ^^^^^^^^^^^^^^^^^^
 
-Both forms close the sheath (:math:`y`) faces for every value of
+The divergence and gradient forms close the sheath (:math:`y`) faces for every value of
 ``radial_boundary``. The sheath boundary component supplies the target fluxes.
 The radial treatment is:
 
@@ -1363,7 +1371,14 @@ implied target face flux, using a linear continuation of :math:`J C^y` from the
 interior in the field-aligned frame, where :math:`J` is the coordinate Jacobian
 and :math:`C^y` the contravariant :math:`y` component of the curvature. It requires
 a parallel transform that can convert to and from field-aligned coordinates;
-``form = gradient`` is rejected for FCI transforms.
+Both ``form = gradient`` and ``form = divergence`` require this capability
+and are rejected for FCI transforms; use ``form = bracket`` instead.
+
+Bracket form differentiates only in the :math:`x`--:math:`z` plane. Its
+radial transport depends on the supplied field guard values; ``open`` and
+``closed`` do not modify the Arakawa stencil or enforce a radial face flux.
+``closed_average`` still averages the resulting core-ring sources while
+preserving their volume-weighted sum.
 
 The pressure-gradient diamagnetic flow is tangent to a boundary on which the
 pressure is uniform. The effective curvature-drift velocity can nevertheless
@@ -1452,15 +1467,16 @@ and delete the old option: any remaining ``diamag_form`` setting is an error.
 Spatially varying expressions must be replaced by a single form for the whole
 domain, for the conservation reason given above.
 
-The deprecated ``bndry_flux`` alias emits a warning. Replace
+The ``bndry_flux`` option has been removed. Replace
 ``bndry_flux = true`` with ``radial_boundary = open`` and
-``bndry_flux = false`` with ``radial_boundary = closed``; do not set both
-the alias and ``radial_boundary``. The branch-only switches ``divergence_form``
+``bndry_flux = false`` with ``radial_boundary = closed``; delete the old
+option. The branch-only switches ``divergence_form``
 and ``average_core`` have also been removed; select ``form`` and
 ``radial_boundary`` explicitly instead.
 
 The former master defaults were effectively divergence form with open radial
-faces. The defaults are now ``form = divergence`` and
+faces on field-aligned meshes. The defaults are now ``form = divergence``
+on field-aligned meshes, ``form = bracket`` on FCI meshes, and
 ``radial_boundary = closed_average``. To retain the former open radial
 treatment, set ``radial_boundary = open`` explicitly. The gradient form now
 always uses C2 derivatives, independently of the mesh's default derivative
@@ -1469,6 +1485,18 @@ settings.
 
 .. doxygenstruct:: DiamagneticDrift
    :members:
+
+When simulations are using the Flux-coordinate independent (Fci) approach, Hermes-3 uses the formulation of
+`B Shanahan et al 2019 Plasma Phys. Control. Fusion 61 025007 <https://iopscience.iop.org/article/10.1088/1361-6587/aaed7d>`__.
+
+The curvature operator is written as
+
+.. math::
+   C(f) = \frac{2}{B} \mathbf{b} \times \nabla \log B \cdot \nabla f.
+
+This term is implemented by using the
+`bracket operator <https://bout-dev.readthedocs.io/en/latest/user_docs/differential_operators.html#the-bracket-operators>`__
+of BOUT++.
 
 
 polarisation_drift
