@@ -3,17 +3,21 @@
 #include "reynolds_reference.hxx"
 #include "test_extras.hxx"
 
+#include "../../include/component.hxx"
 #include "../../include/component_scheduler.hxx"
-#include "../../include/div_ops.hxx"
 #include "../../include/evolve_pressure.hxx"
 #include "../../include/evolve_vorticity_ion_energy.hxx"
 #include "../../include/polarisation_drift.hxx"
 #include "../../include/sound_speed.hxx"
 
+#include <bout/bout_types.hxx>
+#include <bout/boutexception.hxx>
 #include <bout/constants.hxx>
+#include <bout/coordinates.hxx>
 #include <bout/derivs.hxx>
 #include <bout/difops.hxx>
 #include <bout/field_factory.hxx>
+#include <bout/globals.hxx>
 #include <gtest/gtest.h>
 
 #include <algorithm>
@@ -217,7 +221,7 @@ TEST_F(EvolveVorticityIonEnergyTest, PotentialRecoverySatisfiesFiniteVolumeVorti
   coord->setNon_uniform(false);
   const BoutReal kz = 2 * PI / nz;
   const Field3D Phi = makeField<Field3D>([&](const Ind3D& i) {
-    return 0.05 * sin(0.4 * (i.x() - mesh->xstart) + 3 * kz * i.z());
+    return 0.05 * sin((0.4 * (i.x() - mesh->xstart)) + (3 * kz * i.z()));
   });
   const Field3D coefficient{Coordinates::FieldMetric{1.5 / SQ(coord->Bxy())}};
   const Field3D vort = bout::ion_energy::Div_a_Grad_perp_XZ(coefficient, Phi);
@@ -258,7 +262,7 @@ TEST_F(EvolveVorticityIonEnergyTest, IntegrationByPartsOnNonuniformCrossMetricMe
   // Profiles, coefficients and guard cells are periodic in X and Z. In a
   // metric-3D build this also exercises metrics varying in Z.
   const auto phase = [&](const auto& i) {
-    BoutReal value = kx * (i.x() - mesh->xstart);
+    const BoutReal value = kx * (i.x() - mesh->xstart);
     if constexpr (bout::build::use_metric_3d) {
       value += kz * i.z();
     }
@@ -307,7 +311,7 @@ TEST_F(EvolveVorticityIonEnergyTest, IntegrationByPartsIncludesRadialBoundaryWor
   coord->setContravariantMetricTensor(
       ContravariantMetricTensor{1.0, 1.0, 1.0, 0.0, 0.3, 0.0});
   const Field3D f = makeField<Field3D>([&](const Ind3D& i) {
-    return 0.2 * i.x() + sin(0.4 * i.x() + 2 * PI * i.z() / nz);
+    return (0.2 * i.x()) + sin((0.4 * i.x()) + (2 * PI * i.z() / nz));
   });
   const Field3D Lf = bout::ion_energy::Div_a_Grad_perp_XZ(Field3D{1.5}, f);
   const Field3D ke = bout::ion_energy::kineticEnergyPerp(Field3D{1.5}, f);
@@ -321,7 +325,7 @@ TEST_F(EvolveVorticityIonEnergyTest, IntegrationByPartsIncludesRadialBoundaryWor
       // On a uniform mesh the normal flux at a radial face uses the
       // centred transverse derivative averaged between its two cells.
       const BoutReal transverse = 0.25 * (f[l.zp()] - f[l.zm()] + f[r.zp()] - f[r.zm()]);
-      const BoutReal flux = 1.5 * (f[r] - f[l] + 0.3 * transverse);
+      const BoutReal flux = 1.5 * (f[r] - f[l] + (0.3 * transverse));
       const BoutReal outward = i.x() == mesh->xend ? 1.0 : -1.0;
       boundary_work += outward * 0.5 * (f[l] + f[r]) * flux;
     }
@@ -352,7 +356,7 @@ TEST_F(EvolveVorticityIonEnergyTest, ParallelFluxCarriesEnthalpyAndKineticEnergy
   // n=p=1+0.1*y, d/dy[(5/2*p + K)*v] = 0.35, including kinetic transport.
   state["species"]["d+"]["velocity"].force(Field3D{1.0});
   const Field3D profile =
-      makeField<Field3D>([](const Ind3D& i) { return 1.0 + 0.1 * i.y(); });
+      makeField<Field3D>([](const Ind3D& i) { return 1.0 + (0.1 * i.y()); });
   state["species"]["d+"]["density"].force(profile);
   state["species"]["d+"]["pressure"].force(profile);
   state["fastest_wave"] = Field3D{1.0};
@@ -366,7 +370,7 @@ TEST_F(EvolveVorticityIonEnergyTest, ParallelFluxCarriesEnthalpyAndKineticEnergy
 }
 
 TEST_F(EvolveVorticityIonEnergyTest, ParticleSourcesCarryTransferredEnergy) {
-  for (bool injection : {false, true}) {
+  for (const bool injection : {false, true}) {
     SCOPED_TRACE(injection);
     FakeSolver solver;
     auto options = makeOptions();
@@ -450,7 +454,7 @@ TEST_F(EvolveVorticityIonEnergyTest, VaryingSpeciesFractionsPreserveChargeCurren
                      {"Eion", Field3D{4.0}}});
     auto state = makeState();
     state["species"]["d+"]["density"].force(makeField<Field3D>([](const Ind3D& i) {
-      return 0.5 + 0.2 * sin(0.6 * i.x() + TWOPI * i.z() / nz);
+      return 0.5 + (0.2 * sin((0.6 * i.x()) + (TWOPI * i.z() / nz)));
     }));
     state["species"]["he++"]["density"].force(makeField<Field3D>([](const Ind3D& i) {
       return 0.25 + 0.1 * cos(0.4 * i.x() - 2 * TWOPI * i.z() / nz);
@@ -605,7 +609,8 @@ TEST_F(IonEnergyParallelDampingTest, DampingChangesOnlyPhysicalVorticityRate) {
       declareSpecies(component);
       sound.declareAllSpecies(SpeciesInformation({"e"}, {}, {"d+", "he++"}, {}));
       const Field3D vort = makeField<Field3D>([](const Ind3D& i) {
-        return 0.001 * (1 + 0.1 * i.x()) * cos(TWOPI * i.z() / 8) * (i.y() % 2 ? -1 : 1);
+        return 0.001 * (1 + (0.1 * i.x())) * cos(TWOPI * i.z() / 8)
+               * (i.y() % 2 ? -1 : 1);
       });
       solver.setState({{"Vort", vort}, {"Eion", Field3D{3.0}}});
       auto state = makeState();
@@ -1019,11 +1024,14 @@ TEST_F(IonEnergyPeriodicCurrentTest, RejectsUnsolvableMeanWithoutDiscardingCurre
 }
 
 // Repeated evaluations and production component scheduling.
+// Note: RHS is only independent of history if phi_reset_initial_guess = true
 TEST_F(EvolveVorticityIonEnergyTest, RHSDoesNotDependOnEvaluationHistory) {
-  for (bool relax : {false, true}) {
+  for (const bool relax : {false, true}) {
     FakeSolver solver;
     auto options = makeOptions();
     options["test"]["radial_boundary"] = relax ? "no_slip" : "fixed";
+    // Reset phi each time rhs is called
+    options["test"]["phi_reset_initial_guess"] = true;
     IonEnergyTestSystem component("test", options, &solver);
     declareSpecies(component);
     const auto evaluate = [&](int phase) {
