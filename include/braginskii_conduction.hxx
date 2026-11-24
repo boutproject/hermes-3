@@ -34,8 +34,8 @@ struct BraginskiiConduction : public NamedComponent<BraginskiiConduction> {
   ///   - kappa_limit_alpha            Flux limiter, off by default.
   ///   - kappa_timescale_limit        Closed field lines: limit kappa_par so that the
   ///                                  two-cell conduction time is at least about this
-  ///                                  many seconds. Default 1e-8 (10 ns) for
-  ///                                  electrons, off for other species.
+  ///                                  many seconds. Off by default; 1e-8 (10 ns) was
+  ///                                  found to work well for electrons in testing.
   ///   - conduction_collisions_mode   Can be multispecies: all collisions, or braginskii:
   ///                                  self collisions and ie
   ///

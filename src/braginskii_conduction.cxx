@@ -88,8 +88,9 @@ BraginskiiConduction::BraginskiiConduction(const std::string& name, Options& all
             .doc("Limit conduction timescale for parallel heat conduction (seconds). "
                  "Helps prevent unphysically fast conduction causing numerical "
                  "'flashes' in the core, especially in small cells. "
-                 "<= 0 means off. Default 1e-8s (10ns) for electrons, off otherwise.")
-            .withDefault(name == "e" ? 1e-8 : -1.0)
+                 "<= 0 means off (default). 1e-8s (10ns) was found to work well "
+                 "for electrons in testing.")
+            .withDefault(-1.0)
         / alloptions["units"]["seconds"].as<BoutReal>();
     all_conduction_collisions_mode[name] =
         options["conduction_collisions_mode"]
@@ -319,8 +320,7 @@ void BraginskiiConduction::transform_impl(GuardedOptions& state) {
       // resulting in an extremely rapid conductive relaxation, which
       // then activates slope limiters and causes significant
       // nonlinearity and solver slowdowns.
-      // The default is 10ns for electrons which should be below
-      // any physical conduction timescale.
+      // 10ns for electrons should be below any physical conduction timescale.
       const Coordinates* coord = mesh->getCoordinates();
       Field3D kappa_max{emptyFrom(kappa_par)};
       kappa_max = BoutNaN;

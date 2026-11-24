@@ -335,7 +335,7 @@ be relaxed by conduction on an extremely fast timescale, causing
 numerical problems. This limiter
 is only implemented on closed field lines, and timescale
 `kappa_timescale_limit` can be set to a time :math:`\tau` in seconds
-(10 ns by default for electrons, off for other species).
+(off by default; 10 ns was found to work well for electrons in testing).
 
 With `diagnose = true`, the conductivity before the limiters is saved as
 `kappa_par_<species>_unlimited`, and the largest conductivity each
