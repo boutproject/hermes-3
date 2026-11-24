@@ -97,6 +97,7 @@ TEST_F(BraginskiiFrictionTest, TwoComovingSpeciesCharged) {
 
 TEST_F(BraginskiiFrictionTest, TwoSpeciesCharged) {
   Options options;
+  options["test"]["diagnose"] = true;
 
   options["units"]["eV"] = 1.0;
   options["units"]["meters"] = 1.0;
@@ -129,6 +130,11 @@ TEST_F(BraginskiiFrictionTest, TwoSpeciesCharged) {
   Field3D es1 = get<Field3D>(state["species"]["s1"]["energy_source"]);
   Field3D es2 = get<Field3D>(state["species"]["s2"]["energy_source"]);
 
+  Options output{{"Nnorm", 1.0}, {"Tnorm", 1.0}, {"Cs0", 1.0}, {"Omega_ci", 1.0}};
+  component.outputVars(output);
+  const Field3D force1 = output["Fs1s2_coll"];
+  const Field3D force2 = output["Fs2s1_coll"];
+
   BOUT_FOR_SERIAL(i, ms1.getRegion("RGN_ALL")) {
     // The species should have opposite momentum sources
     ASSERT_NE(ms1[i], 0.);
@@ -136,6 +142,9 @@ TEST_F(BraginskiiFrictionTest, TwoSpeciesCharged) {
     // The species should have equal frictional heating
     ASSERT_NE(es1[i], 0.);
     ASSERT_DOUBLE_EQ(es1[i], es2[i]);
+    EXPECT_DOUBLE_EQ(es1[i] + es2[i] + ms1[i] + 2 * ms2[i], 0.0);
+    EXPECT_DOUBLE_EQ(force1[i], ms1[i]);
+    EXPECT_DOUBLE_EQ(force2[i], ms2[i]);
   }
 }
 

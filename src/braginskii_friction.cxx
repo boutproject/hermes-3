@@ -201,7 +201,7 @@ void BraginskiiFriction::outputVars(Options& state) {
       if ((momentum_channels.isSection(A)) and (momentum_channels[A].isSet(B))) {
 
         set_with_attrs(state[std::string("F") + AB + std::string("_coll")],
-                       getNonFinal<Field3D>(friction_energy_channels[A][B]),
+                       getNonFinal<Field3D>(momentum_channels[A][B]),
                        {{"time_dimension", "t"},
                         {"units", "kg m^-2 s^-2"},
                         {"conversion", SI::Mp * Nnorm * Cs0 * Omega_ci},
