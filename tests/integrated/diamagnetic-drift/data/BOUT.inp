@@ -1,9 +1,9 @@
-# Axisymmetric evolution driven only by diamagnetic sources on the COMPASS grid.
-nout = 4
-timestep = 1e-6
+# Density-only magnetic drift on the bundled tokamak grid.
 MZ = 1
 MXG = 2
 MYG = 2
+NXPE = 1
+restart = false
 
 [mesh]
 extrapolate_y = false
@@ -14,13 +14,28 @@ type = identity
 [solver]
 type = rk4
 adaptive = false
-timestep = 1e-6
+timestep = 0.5
+nout = 4
+output_step = 5
 
-[N]
+[hermes]
+components = h+, diamagnetic_drift
+Nnorm = 1e19
+Tnorm = 10
+Bnorm = 1
+normalise_metric = true
+
+[h+]
+type = evolve_density, fixed_temperature
+AA = 1
+charge = 1
+temperature = 10 * (1 + 0.2*sin(y))
+
+[Nh+]
+function = 1 + 0.1*x + 0.2*sin(y) + 0.05*cos(z)
+source = 0
 bndry_all = neumann
 
-[P]
-bndry_all = neumann
-
-[M]
-bndry_all = neumann
+[diamagnetic_drift]
+form = divergence
+radial_boundary = closed_average

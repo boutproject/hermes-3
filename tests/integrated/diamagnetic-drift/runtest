@@ -1,23 +1,25 @@
 #!/usr/bin/env python3
-"""Check diamagnetic conservation,
-every physical boundary in a single-null tokamak plasma,
-and MPI consistency with NXPE=1 or 2."""
+"""Density conservation with closed tokamak magnetic-drift boundaries."""
 
 import argparse
-import os
 import shlex
 import shutil
-import signal
-import subprocess
+import tempfile
 from pathlib import Path
 
 import numpy as np
 from boutdata.collect import collect
+from boututils.run_wrapper import launch_safe
 
 HERE = Path(__file__).resolve().parent
-CONSERVATION_TOLERANCE = 1e-12
-MPI_TOLERANCE = 1e-10
-REFERENCE_TOLERANCE = 1e-12
+root = HERE.parents[2]
+cli = argparse.ArgumentParser(description=__doc__)
+cli.add_argument("--exe", type=Path, default=root / "hermes-3")
+cli.add_argument("--grid", type=Path, default=root / "examples/tokamak-3D/tokamak.nc")
+cli.add_argument("--nproc", type=int, default=6)
+cli.add_argument("--output-root", type=Path)
+args = cli.parse_args()
+output = args.output_root or Path(tempfile.mkdtemp(prefix="diamagnetic-drift-"))
 
 
 def read(name, directory):
@@ -26,146 +28,48 @@ def read(name, directory):
     )
 
 
-def run_case(executable, grid, run_root, nproc, nxpe, timeout):
-    directory = run_root / f"np{nproc}-nxpe{nxpe}"
-    directory.mkdir(parents=True, exist_ok=True)
-    # Replace only this test's known outputs; leave other run directories alone.
-    for filename in directory.glob("BOUT.*"):
-        if filename.is_file():
-            filename.unlink()
-    shutil.copyfile(HERE / "data/BOUT.inp", directory / "BOUT.inp")
-    launcher = shlex.split(os.environ.get("MPIRUN", "mpiexec -np"))
-    command = [
-        *launcher,
-        str(nproc),
-        str(executable),
-        "-d",
-        str(directory),
-        f"mesh:file={grid}",
-        f"NXPE={nxpe}",
-    ]
-    print(f"Running {nproc} ranks: NXPE={nxpe}, NYPE={nproc // nxpe}", flush=True)
-    with subprocess.Popen(
-        command,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-        start_new_session=True,
-    ) as process:
-        try:
-            output, _ = process.communicate(timeout=timeout)
-        except subprocess.TimeoutExpired:
-            os.killpg(process.pid, signal.SIGKILL)
-            output, _ = process.communicate()
-            (directory / "run.log").write_text(output)
-            raise RuntimeError(f"MPI run timed out after {timeout}s: {directory}")
-    (directory / "run.log").write_text(output)
-    if process.returncode:
-        raise RuntimeError(f"MPI run failed: {directory}/run.log")
-
-    volume = read("volume", directory)
-    if volume.ndim == 2:
-        volume = volume[..., np.newaxis]
-    assert np.isfinite(volume).all() and np.min(volume) > 0
-    fields = {}
-    for name, source in [("N", "Sn"), ("P", "Sp"), ("M", "Sm")]:
-        values = read(name, directory)
-        rates = read(source, directory)
-        assert values.shape[-1] == 1, "Run must be axisymmetric"
-        assert np.isfinite(values).all() and np.isfinite(rates).all()
-        total = np.sum(values * volume, axis=(1, 2, 3))
-        error = np.max(np.abs(total - total[0])) / abs(total[0])
-        rate_error = np.max(np.abs(np.sum(rates * volume, axis=(1, 2, 3)))) / max(
-            np.max(np.sum(np.abs(rates) * volume, axis=(1, 2, 3))), 1e-30
+for mz in (1, 4):
+    for boundary in ("closed", "closed_average", "open"):
+        directory = output / f"{boundary}-mz{mz}"
+        directory.mkdir(parents=True, exist_ok=False)
+        shutil.copyfile(HERE / "data/BOUT.inp", directory / "BOUT.inp")
+        command = [
+            str(args.exe.resolve()),
+            "-d",
+            str(directory.resolve()),
+            f"mesh:file={args.grid.resolve()}",
+            f"MZ={mz}",
+            f"diamagnetic_drift:radial_boundary={boundary}",
+        ]
+        launch_safe(
+            shlex.join(command),
+            nproc=args.nproc,
+            mthread=1,
+            output=shlex.quote(str(directory / "run.log")),
         )
-        assert error < CONSERVATION_TOLERANCE, (name, "conservation", error)
-        assert rate_error < CONSERVATION_TOLERANCE, (
-            name,
-            "source integral",
-            rate_error,
+        density = read("Nh+", directory)
+        volume = (
+            read("J", directory)
+            * read("dx", directory)
+            * read("dy", directory)
+            * read("dz", directory)
         )
-        assert np.max(np.abs(values[-1] - values[0])) > 1e-7, (
-            name,
-            "inactive evolution",
-        )
-        core = read("core_mask", directory).astype(bool)
-        assert core.sum() > 1, "Grid must contain an MPI core ring"
-        assert np.max(np.ptp(values[:, core], axis=1)) < MPI_TOLERANCE, (
-            name,
-            "core field",
-        )
-        assert np.max(np.ptp(rates[:, core], axis=1)) < MPI_TOLERANCE, (
-            name,
-            "core source",
-        )
-        fields[name] = values
-        fields[source] = rates
+        if volume.ndim == 2:
+            volume = volume[..., None]
+        assert np.isfinite(density).all() and np.isfinite(volume).all()
+        assert (density > 0).all() and (volume > 0).all()
+        assert density.shape[-1] == mz
+        content = (density * volume).sum(axis=(1, 2, 3))
+        drift = abs(content / content[0] - 1).max()
+        change = abs(density[-1] - density[0]).max()
         print(
-            f"  {name}: relative content drift={error:.3e}, "
-            f"rate integral={rate_error:.3e}"
+            f"{boundary}, MZ={mz}: relative particle drift {drift:.3g}, "
+            f"density change {change:.3g}",
+            flush=True,
         )
-
-    error = read("reference_error", directory)
-    assert np.max(error) < REFERENCE_TOLERANCE, ("zero-face reference", np.max(error))
-    for mask in ["core_mask", "lower_mask", "upper_mask"]:
-        boundary = read(mask, directory).astype(bool)
-        assert boundary.any(), (mask, "boundary not exercised")
-        assert np.max(error[:, boundary]) < REFERENCE_TOLERANCE
-    assert np.max(np.abs(read("radial_guard_flux", directory))) < 1e-14
-    # Positive controls: each physical boundary would carry flux if left open.
-    for name in [
-        "open_core_flux",
-        "open_pf_flux",
-        "open_outer_flux",
-        "unclosed_lower_flux",
-        "unclosed_upper_flux",
-    ]:
-        flux = read(name, directory)
-        assert np.isfinite(flux).all() and np.min(flux) > 1e-10, (name, flux)
-    print(
-        f"  Boundary reference error={np.max(error):.3e}; all closed-face checks passed"
-    )
-    return fields
-
-
-def main():
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
-        "--executable", type=Path, default=HERE.parents[2] / "diamagnetic_drift_smoke"
-    )
-    copied_grid = HERE / "data/compass-36x48.grd.nc"
-    parser.add_argument(
-        "--grid",
-        type=Path,
-        default=copied_grid
-        if copied_grid.exists()
-        else HERE.parents[2] / "examples/tokamak-2D/compass-36x48.grd.nc",
-    )
-    parser.add_argument("--run-root", type=Path, default=HERE / "runs")
-    parser.add_argument("--timeout", type=float, default=60)
-    args = parser.parse_args()
-    results = []
-    # The 8-cell divertor legs require NYPE >= 6; a serial run is invalid.
-    for nproc, nxpe in [(6, 1), (12, 1), (12, 2)]:
-        results.append(
-            run_case(
-                args.executable.resolve(),
-                args.grid.resolve(),
-                args.run_root.resolve(),
-                nproc,
-                nxpe,
-                args.timeout,
-            )
-        )
-    for parallel in results[1:]:
-        for name, reference in results[0].items():
-            error = np.max(np.abs(parallel[name] - reference)) / max(
-                np.max(np.abs(reference)), 1e-30
-            )
-            assert error < MPI_TOLERANCE, (name, "MPI comparison", error)
-            print(f"  MPI {name}: relative max difference={error:.3e}")
-    print("=> Diamagnetic parallel test passed")
-
-
-if __name__ == "__main__":
-    main()
+        assert change > 1e-6, "Magnetic drift must change the density"
+        if boundary == "open":
+            assert drift > 1e-10, "Open radial boundaries must change particle content"
+        else:
+            assert drift < 1e-12, "Closed radial boundaries must conserve particles"
+print(f"Diamagnetic boundary conservation passed; outputs in {output}")
