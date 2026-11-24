@@ -3,6 +3,7 @@
 #define EVOLVE_MOMENTUM_H
 
 #include "component.hxx"
+#include "domain_balance.hxx"
 
 /// Evolve parallel momentum
 struct EvolveMomentum : public NamedComponent<EvolveMomentum> {
@@ -36,6 +37,7 @@ private:
   Field3D V;         ///< Species parallel velocity
 
   Field3D momentum_source; ///< From other components. Stored for diagnostic output
+  DomainBalance balance;
 
   bool bndry_flux;     // Allow flows through boundaries?
   bool poloidal_flows; // Include ExB flow in Y direction?

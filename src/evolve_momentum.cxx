@@ -125,6 +125,7 @@ void EvolveMomentum::transform_impl(GuardedOptions& state) {
 }
 
 void EvolveMomentum::finally(const Options& state) {
+  balance.clear();
 
   const auto& species = state["species"][name];
   const BoutReal AA = get<BoutReal>(species["AA"]);
@@ -162,10 +163,17 @@ void EvolveMomentum::finally(const Options& state) {
 
       ddt(NV) = -Div_n_bxGrad_f_B_XPPM(NV, phi, bndry_flux, poloidal_flows,
                                        true); // ExB drift
+      if (name == "e" && diagnose) {
+        balance.set("kinetic_e", "exb_work", V * ddt(NV));
+      }
 
       // Parallel electric field
       // Force density = - Z N ∇ϕ
-      ddt(NV) -= Z * N * Grad_par(phi);
+      const auto electric_force = -Z * N * Grad_par(phi);
+      ddt(NV) += electric_force;
+      if (name == "e" && diagnose) {
+        balance.set("kinetic_e", "electric_work", V * electric_force);
+      }
 
       if (state["fields"].isSet("Apar")) {
         // Include a correction term for electromagnetic simulations
@@ -206,12 +214,14 @@ void EvolveMomentum::finally(const Options& state) {
   //  - Density floor should be consistent with calculation of V
   //    otherwise energy conservation is affected
   //  - using the same operator as in density and pressure equations doesn't work
-  if (use_div_par_fvv) {
-    ddt(NV) -= AA
-               * FV::Div_par_fvv<hermes::Limiter>(Nlim, V, fastest_wave,
-                                                  fix_momentum_boundary_flux);
-  } else {
-    ddt(NV) -= Div_par(NV * V);
+  const Field3D parallel_force =
+      use_div_par_fvv ? -AA
+                            * FV::Div_par_fvv<hermes::Limiter>(Nlim, V, fastest_wave,
+                                                               fix_momentum_boundary_flux)
+                      : -Div_par(NV * V);
+  ddt(NV) += parallel_force;
+  if (name == "e" && diagnose) {
+    balance.set("kinetic_e", "parallel_work", V * parallel_force);
   }
 
   // Parallel pressure gradient
@@ -220,7 +230,11 @@ void EvolveMomentum::finally(const Options& state) {
     if (NV.isFci()) {
       ASSERT2(P.hasParallelSlices());
     }
-    ddt(NV) -= Grad_par(P.asField3DParallel());
+    const auto pressure_force = -Grad_par(P.asField3DParallel());
+    ddt(NV) += pressure_force;
+    if (name == "e" && diagnose) {
+      balance.set("kinetic_e", "pressure_work", V * pressure_force);
+    }
   }
 
   if (state.isSection("fields") and state["fields"].isSet("Apar_flutter")) {
@@ -261,6 +275,9 @@ void EvolveMomentum::finally(const Options& state) {
   if (species.isSet("momentum_source")) {
     momentum_source = get<Field3D>(species["momentum_source"]);
     ddt(NV) += momentum_source;
+    if (name == "e" && diagnose) {
+      balance.set("kinetic_e", "sources_work", V * momentum_source);
+    }
   }
 
   // If N < density_floor then NV and NV_solver may differ
@@ -292,6 +309,10 @@ void EvolveMomentum::finally(const Options& state) {
       flow_ylow = get<Field3D>(species["momentum_flow_ylow"]);
     }
   }
+  if (name == "e") {
+    balance.set("kinetic_e", "content", 0.5 * AA * N * SQ(V));
+    balance.set("kinetic_e", "momentum_work", V * ddt(NV));
+  }
   // Restore NV to the value returned by the solver
   // so that restart files contain the correct values
   // Note: Copy boundary condition so dump file has correct boundary.
@@ -300,6 +321,7 @@ void EvolveMomentum::finally(const Options& state) {
 }
 
 void EvolveMomentum::outputVars(Options& state) {
+  balance.output(state, "momentum_" + name, diagnose);
   // Normalisations
   auto Nnorm = get<BoutReal>(state["Nnorm"]);
   auto Omega_ci = get<BoutReal>(state["Omega_ci"]);

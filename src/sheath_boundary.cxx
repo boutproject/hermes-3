@@ -87,20 +87,22 @@ BoutReal SheathBoundary::ionSecondaryElectronEmissionGamma(BoutReal ion_energy) 
 }
 
 SheathBoundary::SheathBoundary(std::string name, Options& alloptions, Solver*)
-    : NamedComponent(name, {
-                               readIfSet("species:{all_species}:charge"),
-                               readIfSet("species:e:{e_whole_domain}"),
-                               writeBoundaryFinal("species:e:{e_boundary}"),
-                               readWrite("species:e:energy_source"),
-                               writeBoundaryFinalIfSet("species:e:{e_optional}"),
-                               writeBoundaryReadInteriorIfSet("species:e:pressure"),
-                               readIfSet("species:{ions}:adiabatic"),
-                               readOnly("species:{ions}:AA"),
-                               readWrite("species:{ions}:energy_source"),
-                               writeBoundaryFinal("species:{ions}:{ion_boundary}"),
-                               writeBoundaryReadInteriorIfSet("species:{ions}:pressure"),
-                               writeBoundaryFinalIfSet("species:{ions}:{ion_optional}"),
-                           }) {
+    : NamedComponent(name,
+                     {
+                         readIfSet("species:{all_species}:charge"),
+                         readIfSet("species:e:{e_whole_domain}"),
+                         writeBoundaryFinal("species:e:{e_boundary}"),
+                         readWrite("species:e:energy_source"),
+                         writeBoundaryFinalIfSet("species:e:{e_optional}"),
+                         writeBoundaryReadInteriorIfSet("species:e:pressure"),
+                         readIfSet("species:{ions}:adiabatic"),
+                         readOnly("species:{ions}:AA"),
+                         readWrite("species:{ions}:energy_source"),
+                         writeBoundaryFinal("species:{ions}:{ion_boundary}"),
+                         writeBoundaryReadInteriorIfSet("species:{ions}:pressure"),
+                         writeBoundaryFinalIfSet("species:{ions}:{ion_optional}"),
+                     }),
+      component_name(name) {
 
   Options& options = alloptions[name];
   const Options& units = alloptions["units"];
@@ -185,6 +187,7 @@ SheathBoundary::SheathBoundary(std::string name, Options& alloptions, Solver*)
 }
 
 void SheathBoundary::transform_impl(GuardedOptions& state) {
+  balance.clear();
 
   GuardedOptions allspecies = state["species"];
   GuardedOptions electrons = allspecies["e"];
@@ -561,6 +564,7 @@ void SheathBoundary::transform_impl(GuardedOptions& state) {
           ? toFieldAligned(getNonFinal<Field3D>(electrons["energy_source"]))
           : zeroFrom(Ne);
 
+  balance.initTargets("thermal_e", "heat");
   if (lower_y) {
     for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
       for (int jz = 0; jz < mesh->LocalNz; jz++) {
@@ -625,6 +629,8 @@ void SheathBoundary::transform_impl(GuardedOptions& state) {
 #endif
 
         electron_energy_source[i] += power;
+        balance.add("thermal_e", "heat_" + DomainBalance::target(mesh, true),
+                    -flux * coord->dx()[i] * coord->dz()[i]);
       }
     }
   }
@@ -691,6 +697,8 @@ void SheathBoundary::transform_impl(GuardedOptions& state) {
         }
 #endif
         electron_energy_source[i] -= power;
+        balance.add("thermal_e", "heat_" + DomainBalance::target(mesh, false),
+                    flux * coord->dx()[i] * coord->dz()[i]);
       }
     }
   }
@@ -752,6 +760,7 @@ void SheathBoundary::transform_impl(GuardedOptions& state) {
             ? toFieldAligned(getNonFinal<Field3D>(species["energy_source"]))
             : zeroFrom(Ni);
 
+    balance.initTargets("thermal_" + kv.first, "heat");
     if (lower_y) {
       for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
         for (int jz = 0; jz < mesh->LocalNz; jz++) {
@@ -827,6 +836,8 @@ void SheathBoundary::transform_impl(GuardedOptions& state) {
           ASSERT2(power <= 0.0);
 
           energy_source[i] += power;
+          balance.add("thermal_" + kv.first, "heat_" + DomainBalance::target(mesh, true),
+                      -flux * coord->dx()[i] * coord->dz()[i]);
 
           if (ion_ee_gamma_max > 0.0) {
             // Ion-induced secondary electron emission
@@ -928,6 +939,8 @@ void SheathBoundary::transform_impl(GuardedOptions& state) {
           ASSERT2(power >= 0.0);
 
           energy_source[i] -= power; // Note: Sign negative because power > 0
+          balance.add("thermal_" + kv.first, "heat_" + DomainBalance::target(mesh, false),
+                      flux * coord->dx()[i] * coord->dz()[i]);
 
           if (ion_ee_gamma_max > 0.0) {
             // Ion-induced secondary electron emission

@@ -129,7 +129,7 @@ TEST_F(EvolveDensityTest, Output) {
   component.transform(state);
   component.finally(state);
 
-  Options outputs{{"Nnorm", 1.}, {"Omega_ci", 1.}, {"rho_s0", 1.}};
+  Options outputs{{"Nnorm", 1.}, {"Tnorm", 1.}, {"Omega_ci", 1.}, {"rho_s0", 1.}};
   component.outputVars(outputs);
 
   Field3D ddt_Ni = get<Field3D>(outputs["ddt(Ni)"]);

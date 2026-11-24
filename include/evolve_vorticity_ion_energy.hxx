@@ -10,6 +10,7 @@
 #include <bout/vectormetric.hxx>
 
 #include "component.hxx"
+#include "domain_balance.hxx"
 #include "guarded_options.hxx"
 
 #include <array>
@@ -261,6 +262,7 @@ private:
   Field3D DivEelectric; ///< Divergence of ion electrical work Div(phi (Jpar + Jdia))
   Field3D Jpar_i{0.0}, Jpar_e{0.0};        ///< Completed currents including target guards
   Field3D DivEdiamagnetic, phi_Div_Jdia_e; ///< Recovery-stage diamagnetic work
+  BoutReal electron_diamagnetic_power{0.0}; ///< Integral of Div(phi Jdia_e)
   Field3D DivEparallel; ///< Divergence of parallel ion enthalpy and kinetic energy flux
   Field3D DivEviscous{0.0}; ///< Diagnostic Phi stress flux; work is carried by DivEpol
 
@@ -272,6 +274,7 @@ private:
   bool diagnose; ///< Output additional diagnostics?
 
   Field3D external_heating; ///< External heating power
+  DomainBalance balance;
 
   /// Inputs
   /// - species

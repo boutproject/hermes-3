@@ -4,6 +4,7 @@
 
 #include "../include/hermes_utils.hxx"
 #include "component.hxx"
+#include "domain_balance.hxx"
 #include <bout/field3d.hxx>
 
 /// Evolves species pressure in time
@@ -88,6 +89,7 @@ private:
 
   Field3D source, final_source; ///< External pressure source
   Field3D Sp;                   ///< Total pressure source
+  DomainBalance balance;
   FieldGeneratorPtr source_prefactor_function;
 
   BoutReal hyper_z;   ///< Hyper-diffusion

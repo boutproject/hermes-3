@@ -15,6 +15,7 @@
 #endif
 
 #include "component.hxx"
+#include "domain_balance.hxx"
 
 /// Calculates parallel heat conduction due to collisions
 ///
@@ -47,6 +48,7 @@ struct BraginskiiConduction : public NamedComponent<BraginskiiConduction> {
   static constexpr auto type = "braginskii_conduction";
 
 private:
+  DomainBalance balance;
   std::map<std::string, Field3D> all_nu;        ///< Collision frequency for conduction
   std::map<std::string, Field3D> all_kappa_par; ///< Parallel heat conduction coefficient
   std::map<std::string, std::string>

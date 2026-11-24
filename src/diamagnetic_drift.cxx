@@ -35,6 +35,7 @@ DiamagneticDrift::DiamagneticDrift(std::string name, Options& alloptions,
                             readWrite("species:{all_species}:{output}")}) {
 
   // Get options for this component
+  component_name = name;
   auto& options = alloptions[name];
 
   if (options.isSet("diamag_form")) {
@@ -320,9 +321,12 @@ void DiamagneticDrift::setCoreAverage(Field3D& f, BoutReal global_sum) const {
 }
 
 void DiamagneticDrift::transform_impl(GuardedOptions& state) {
+  balance.clear();
   struct Source {
     GuardedOptions output;
     Field3D sink;
+    std::string species;
+    std::string input;
   };
   std::vector<Source> sources;
   std::vector<BoutReal> ring_sums;
@@ -361,7 +365,7 @@ void DiamagneticDrift::transform_impl(GuardedOptions& state) {
       if (average_core_active) {
         ring_sums.push_back(coreRingSum(sink));
       }
-      sources.push_back({species[output], std::move(sink)});
+      sources.push_back({species[output], std::move(sink), kv.first, input});
     };
     collect("density", "density_source", 1.0);
     collect("pressure", "energy_source", 5. / 2);
@@ -381,6 +385,13 @@ void DiamagneticDrift::transform_impl(GuardedOptions& state) {
   for (std::size_t i = 0; i < sources.size(); ++i) {
     if (average_core_active) {
       setCoreAverage(sources[i].sink, ring_sums[i]);
+    }
+    const auto& source = sources[i];
+    if (source.input == "density") {
+      balance.set("particles_" + source.species, "out_diamagnetic", source.sink);
+    } else if (source.input == "pressure") {
+      balance.add(source.species == "e" ? "thermal_e" : "ion_energy", "out_diamagnetic",
+                  DomainBalance::integral(source.sink));
     }
     subtract(sources[i].output.getWritable(), sources[i].sink);
   }

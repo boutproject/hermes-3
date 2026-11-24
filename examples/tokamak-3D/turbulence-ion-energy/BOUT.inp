@@ -1,0 +1,129 @@
+# Turbulence simulation
+# This evolves ion energy rather than pressure.
+# Ion density is evolved, including polarisation drift.
+
+nout = 10     # Number of output steps
+timestep = 1  # Output timestep, normalised ion cyclotron times [1/Omega_ci]
+
+MZ = 1       # Number of points in Z (toroidal) direction
+
+zperiod = 5   # Fraction of a torus to simulate
+
+[mesh]
+
+file = "tokamak.nc"
+
+extrapolate_y = false  # Can result in negative Jacobians in guard cells
+
+[mesh:paralleltransform]
+type = shifted
+
+[solver]
+type=cvode
+cvode_precon_method = user
+mxstep = 100000
+
+[hermes]
+components = (e, d+, sound_speed,
+              evolve_vorticity_ion_energy, polarisation_drift,
+              sheath_boundary, braginskii_collisions, braginskii_friction,
+              braginskii_heat_exchange, diamagnetic_drift, classical_diffusion,
+              braginskii_conduction
+              )
+
+Nnorm = 1e19 # Reference density [m^-3]
+Bnorm = 1    # Reference magnetic field [T]
+Tnorm = 50   # Reference temperature [eV]
+
+normalise_metric = true   # Apply normalisation to metric tensor?
+
+[evolve_vorticity_ion_energy]
+average_atomic_mass = 2   # Boussinesq approximation
+poloidal_flows = false    # Poloidal components of the Reynolds stress?
+
+viscosity = 0.1           # Kinematic viscosity [m^2/s]
+phi_dissipation = true    # Parallel dissipation of phi
+
+radial_boundary = no_slip   # fixed, free_slip or no_slip
+phi_boundary_velocity = 1e3
+
+diagnose = false
+
+density_floor = 1e-7 # Used in Jpol partition between species
+phi_atol = 0.001   # Potential phi absolute tolerance
+phi_rtol = 1e-5   # Potential phi relative tolerance
+vort_atol = 1e-10  # Vorticity FV reconstruction residual
+phi_max_iterations = 400
+
+external_heating = 1.5 * Pe:source # Convert pressure source to energy source
+source_only_in_core = true
+
+[Eion]
+function = 1.5 * Pe:function # Initial condition
+
+[Vort]
+function = 0
+
+[polarisation_drift]
+implementation = conservative
+polarisation_corrections = 2
+
+[diamagnetic_drift]
+form = divergence
+radial_boundary = closed_average  # Average the inner core ring
+
+################################################################
+# Electrons
+
+[e]
+# Set electron density from quasineutrality
+type = quasineutral, evolve_pressure, evolve_momentum
+
+AA = 1 / 1836    # Atomic mass of electrons
+charge = -1      # Charge of electrons
+
+bndry_flux = false
+poloidal_flows = true
+
+low_n_diffuse_perp = false  # Cross-field diffusion at low density?
+numerical_viscous_heating = true  # Return parallel numerical dissipation to heat
+
+diagnose = false # Save additional diagnostics?
+
+[Pe]
+function = 3*(1.0 - 0.9*x)^2
+
+heating = 60e3 # Power input per species [W]
+
+T_source = heating / (`Nd+`:flux * 1.602e-19 * 1.5) # Calculate source temperature from heating power
+
+source = `Nd+`:source * T_source * 1.602e-19  # Electron pressure source
+source_only_in_core = true   # Zero source in open field line regions?
+
+################################################################
+# Deuterium ions
+
+[d+]
+type = evolve_density, evolve_momentum
+# Ion parallel numerical viscous heating is retained by total-energy recovery.
+
+AA = 2       # Ion atomic mass
+charge = 1
+
+poloidal_flows = true
+
+low_n_diffuse_perp = false
+
+[Nd+]
+
+function = 3.0 - 2.7*x + 1e-3*mixmode(x - z)
+
+flux = 3e21 # /s
+
+# Source calibration factor
+# sum( Se_src[x,y] * J*dx*dy*2pi )
+# Note: Depends on source shape and mesh
+shape_factor = 1.0061015504152746
+
+source = flux * shape_factor * exp(-((x - 0.05)/0.05)^2)
+source_only_in_core = true

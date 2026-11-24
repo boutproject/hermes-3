@@ -5,6 +5,7 @@
 #include <bout/vectormetric.hxx>
 
 #include "component.hxx"
+#include "domain_balance.hxx"
 #include "guarded_options.hxx"
 
 #include <bout/bout_enum_class.hxx>
@@ -23,8 +24,11 @@ struct DiamagneticDrift : public NamedComponent<DiamagneticDrift> {
   DiamagneticDrift(std::string name, Options& options, [[maybe_unused]] Solver* solver);
 
   static constexpr auto type = "diamagnetic_drift";
+  void outputVars(Options& state) override { balance.output(state, component_name); }
 
 private:
+  DomainBalance balance;
+  std::string component_name;
   /// Calculate the diamagnetic sink for a single evolved quantity
   /// using divergence form:
   ///

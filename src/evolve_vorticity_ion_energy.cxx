@@ -985,6 +985,19 @@ EvolveVorticityIonEnergy::EvolveVorticityIonEnergy(std::string name, Options& al
                          .doc("Heating source in [W/m^3]")
                          .withDefault(Field3D{0.0})
                      / source_normalisation;
+  if (options["source_only_in_core"]
+          .doc("Zero external_heating outside the closed field-line region?")
+          .withDefault<bool>(false)) {
+    for (int x = mesh->xstart; x <= mesh->xend; ++x) {
+      if (!mesh->periodicY(x)) {
+        for (int y = mesh->ystart; y <= mesh->yend; ++y) {
+          for (int z = mesh->zstart; z <= mesh->zend; ++z) {
+            external_heating(x, y, z) = 0.0;
+          }
+        }
+      }
+    }
+  }
 }
 
 void EvolveVorticityIonEnergy::acceptWarmStart() {
@@ -1201,6 +1214,7 @@ void EvolveVorticityIonEnergy::transform_impl(GuardedOptions& state) {
   // Diamagnetic electrical terms belong to recovery. Parallel electrical
   // terms require boundary-conditioned momentum and potential in finally().
   DivEdiamagnetic = Div(phi * Jdia_i);
+  electron_diamagnetic_power = DomainBalance::integral(Div(phi * Jdia_e));
   DivEelectric = DivEdiamagnetic;
 
   //////////////////////////////////////////////////////////
@@ -1254,6 +1268,7 @@ void EvolveVorticityIonEnergy::transform_impl(GuardedOptions& state) {
 }
 
 void EvolveVorticityIonEnergy::finally(const Options& state) {
+  balance.clear();
   const Field3D DivEpol =
       get<Field3D>(state["fields"]["ion_polarisation_energy_divergence"]);
   const Field3D current_rhs = get<Field3D>(state["fields"]["ion_current_rhs"]);
@@ -1320,12 +1335,29 @@ void EvolveVorticityIonEnergy::finally(const Options& state) {
                                      : sqrt(get<Field3D>(species["temperature"]) / AA);
     Field3D flow_ylow;
     DivEparallel += FV::Div_par_mod<hermes::Limiter>(energy, V, fastest_wave, flow_ylow);
+    balance.addTargets("ion_energy", "target", flow_ylow);
   });
 
   Eion_src = sumIonEnergySources(state["species"]);
 
   ddt(Eion) = -(DivEExB + DivEelectric + DivEparallel + DivEpol) - phi_Div_Je
               - electron_viscous_heating + Eion_src + external_heating;
+  balance.set("ion_energy", "input", external_heating);
+  balance.set("ion_energy", "out_exb", DivEExB);
+  balance.set("ion_energy", "out_electric", DivEelectric);
+  balance.add("thermal_e", "out_electric", electron_diamagnetic_power);
+  balance.set("ion_energy", "out_parallel", DivEparallel);
+  balance.set("ion_energy", "out_polarisation", DivEpol);
+  balance.set("ion_energy", "sources", Eion_src);
+  balance.set("ion_energy", "electron_work", -phi_Div_Je - electron_viscous_heating);
+  if (diagnose) {
+    balance.set("ion_energy", "electron_diamagnetic_work", -phi_Div_Jdia_e);
+    balance.set("ion_energy", "electron_parallel_work", phi_Div_Jdia_e - phi_Div_Je);
+    balance.set("thermal_e", "diamagnetic_electric_work", electron_exb_work);
+    balance.add("thermal_e", "diamagnetic_electric_transport",
+                electron_diamagnetic_power);
+  }
+  balance.set("ion_energy", "rhs", ddt(Eion));
 }
 
 void EvolveVorticityIonEnergy::calculateViscosity() {
@@ -1353,6 +1385,57 @@ void EvolveVorticityIonEnergy::calculateViscosity() {
 }
 
 void EvolveVorticityIonEnergy::outputVars(Options& state) {
+  if (balance.local.count({"thermal_e", "out_electric"})) {
+    // Centred Div(phi*J) uses same-cell products; the force/current pair uses
+    // cross products at sheaths. Its discrete identity should be
+    // sum V [phi Div_par(J) + J Grad_par(phi)] = sum outward face power.
+    const auto* coord = phi.getCoordinates();
+    const Field3D j = Jpar_e / coord->Bxy();
+    const Coordinates::FieldMetric factor =
+        coord->J() * coord->Bxy() * coord->dx() * coord->dz() / sqrt(coord->g_22());
+    const Field3D p_aligned = toFieldAligned(phi, "RGN_NOX");
+    const Field3D j_aligned = toFieldAligned(j, "RGN_NOX");
+    const Field3D weighted_p = toFieldAligned(Field3D{factor * phi}, "RGN_NOX");
+    const Field3D weighted_j = toFieldAligned(Field3D{factor * j}, "RGN_NOX");
+    // Ion electrical transport uses the centred same-cell product in DivEelectric.
+    const Field3D ion_power =
+        toFieldAligned(Field3D{phi * Jpar_i / coord->Bxy()}, "RGN_NOX");
+    const Field3D aligned_factor = toFieldAligned(Field3D{factor}, "RGN_NOX");
+    balance.set("electrical", "perpendicular", DivEdiamagnetic);
+    balance.add("electrical", "perpendicular", electron_diamagnetic_power);
+    for (const auto* side : {"lower_y", "upper_y", "lower_y_inner", "upper_y_inner"}) {
+      balance.local[{"electrical", "target_" + std::string{side}}] = 0.0;
+    }
+    BoutReal power = 0.0;
+    for (bool lower : {true, false}) {
+      const auto side = DomainBalance::target(mesh, lower);
+      const int y = lower ? mesh->ystart : mesh->yend;
+      const int step = lower ? -1 : 1;
+      auto range = lower ? mesh->iterateBndryLowerY() : mesh->iterateBndryUpperY();
+      for (; !range.isDone(); ++range) {
+        const int x = *range;
+        if (x < mesh->xstart || x > mesh->xend || mesh->periodicY(x)) {
+          continue;
+        }
+        for (int z = mesh->zstart; z <= mesh->zend; ++z) {
+          const BoutReal electron_power =
+              0.5 * step
+              * (weighted_p(x, y, z) * j_aligned(x, y + step, z)
+                 + weighted_j(x, y, z) * p_aligned(x, y + step, z));
+          power += electron_power;
+          balance.add("electrical", "target_" + side,
+                      electron_power
+                          + 0.5 * step * aligned_factor(x, y, z)
+                                * (ion_power(x, y, z) + ion_power(x, y + step, z)));
+        }
+      }
+    }
+    balance.local[{"thermal_e", "out_electric"}] = electron_diamagnetic_power + power;
+    if (diagnose) {
+      balance.local[{"thermal_e", "parallel_electric_transport"}] = power;
+    }
+  }
+  balance.output(state, "ion_energy", diagnose);
   // Outputs follow an RHS evaluation at the accepted output state.
   // Update the recovery guess here so it remains fixed between outputs.
   acceptWarmStart();

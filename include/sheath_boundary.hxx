@@ -3,6 +3,7 @@
 #define SHEATH_BOUNDARY_H
 
 #include "component.hxx"
+#include "domain_balance.hxx"
 
 #include <bout/bout_types.hxx>
 #include <bout/field3d.hxx>
@@ -52,8 +53,11 @@ struct SheathBoundary : public NamedComponent<SheathBoundary> {
   BoutReal upperSheathVelocity(BoutReal C_i, BoutReal V) const;
 
   static constexpr auto type = "sheath_boundary";
+  void outputVars(Options& state) override { balance.output(state, component_name); }
 
 private:
+  DomainBalance balance;
+  std::string component_name;
   BoutReal Ge;       // Secondary electron emission coefficient
   Field3D sin_alpha; // sin of angle between magnetic field and wall.
 

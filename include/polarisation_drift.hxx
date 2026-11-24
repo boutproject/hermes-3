@@ -106,6 +106,7 @@ private:
   Field3D DivJ;        ///< Divergence of all other currents
   Field3D phi_pol;     ///< Polarisation drift potential
   Options diagnostics; ///< Other diagnostic outputs
+  DomainBalance balance;
 
   bool boussinesq;               // If true, assume a constant mass density in Jpol
   BoutReal average_atomic_mass;  // If boussinesq=true, mass density to use

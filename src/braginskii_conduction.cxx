@@ -136,6 +136,7 @@ BraginskiiConduction::BraginskiiConduction(const std::string& name, Options& all
 }
 
 void BraginskiiConduction::transform_impl(GuardedOptions& state) {
+  balance.clear();
 
   for (auto& kv : state["species"].getChildren()) {
     const std::string& name = kv.first;
@@ -328,12 +329,17 @@ void BraginskiiConduction::transform_impl(GuardedOptions& state) {
     // Petsc can be used to calculate the divergence of the heat flux
     if (use_petsc_operator) {
 #if BOUT_HAS_PETSC
-      add(species["energy_source"], petsc_parallel.Div_par_K_Grad_par(kappa_par, T));
+      const auto conduction = petsc_parallel.Div_par_K_Grad_par(kappa_par, T);
+      add(species["energy_source"], conduction);
+      balance.add(kv.first == "e" ? "thermal_e" : "ion_energy", "out_conduction",
+                  -DomainBalance::integral(conduction));
 #endif
     } else {
-      add(species["energy_source"],
-          Div_par_K_Grad_par_mod(kappa_par, T, flow_ylow_conduction, false,
-                                 conduction_method));
+      const auto conduction = Div_par_K_Grad_par_mod(kappa_par, T, flow_ylow_conduction,
+                                                     false, conduction_method);
+      add(species["energy_source"], conduction);
+      balance.add(kv.first == "e" ? "thermal_e" : "ion_energy", "out_conduction",
+                  -DomainBalance::integral(conduction));
       add(species["energy_flow_ylow"], flow_ylow_conduction);
     }
     if (state.isSection("fields") and IS_SET(state["fields:Apar_flutter"])) {
@@ -348,14 +354,18 @@ void BraginskiiConduction::transform_impl(GuardedOptions& state) {
       mesh->communicate(db_dot_T, b0_dot_T);
       db_dot_T.applyBoundary("neumann");
       b0_dot_T.applyBoundary("neumann");
-      add(species["energy_source"],
+      const Field3D flutter =
           Div_par(kappa_par * db_dot_T)
-              - Div_n_g_bxGrad_f_B_XZ(kappa_par, db_dot_T + b0_dot_T, Apar_flutter));
+          - Div_n_g_bxGrad_f_B_XZ(kappa_par, db_dot_T + b0_dot_T, Apar_flutter);
+      add(species["energy_source"], flutter);
+      balance.add(kv.first == "e" ? "thermal_e" : "ion_energy", "out_conduction",
+                  -DomainBalance::integral(flutter));
     }
   }
 }
 
 void BraginskiiConduction::outputVars(Options& state) {
+  balance.output(state, "braginskii_conduction");
   // Normalisations
   auto Nnorm = get<BoutReal>(state["Nnorm"]);
   auto Tnorm = get<BoutReal>(state["Tnorm"]);

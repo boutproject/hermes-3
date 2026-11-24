@@ -45,6 +45,7 @@ ClassicalDiffusion::ClassicalDiffusion(std::string name, Options& alloptions, So
 }
 
 void ClassicalDiffusion::transform_impl(GuardedOptions& state) {
+  balance.clear();
   GuardedOptions allspecies = state["species"];
 
   // Particle diffusion coefficient
@@ -86,6 +87,11 @@ void ClassicalDiffusion::transform_impl(GuardedOptions& state) {
 
   for (auto kv : allspecies.getChildren()) {
     GuardedOptions species = allspecies[kv.first]; // Note: Need non-const
+    const auto addEnergy = [&](const Field3D& rhs) {
+      add(species["energy_source"], rhs);
+      balance.add(kv.first == "e" ? "thermal_e" : "ion_energy", "out_classical",
+                  -DomainBalance::integral(rhs));
+    };
     if (!(custom_D > 0)) {
       if (!(species.isSet("charge") and species.isSet("density"))) {
         continue; // Skip, go to next species
@@ -98,8 +104,10 @@ void ClassicalDiffusion::transform_impl(GuardedOptions& state) {
     const auto N = GET_VALUE(Field3D, species["density"]);
 
     // add(species["density_source"], FV::Div_a_Grad_perp(Dn, N));
-    add(species["density_source"],
-        Div_a_Grad_perp_nonorthog(Dn, N, cls_pf_perp_xlow, cls_pf_perp_ylow, false));
+    const auto diffusion =
+        Div_a_Grad_perp_nonorthog(Dn, N, cls_pf_perp_xlow, cls_pf_perp_ylow, false);
+    add(species["density_source"], diffusion);
+    balance.set("particles_" + kv.first, "out_classical", -diffusion);
 
     if (IS_SET(species["velocity"])) {
       const auto V = GET_VALUE(Field3D, species["velocity"]);
@@ -117,15 +125,13 @@ void ClassicalDiffusion::transform_impl(GuardedOptions& state) {
                               ? GET_VALUE(Field3D, species["pressure"])
                               : N * GET_VALUE(Field3D, species["temperature"]);
         // Diffuse thermal energy and particles with the same coefficient.
-        add(species["energy_source"],
-            Div_a_Grad_perp_nonorthog(Dn * (3. / 2), P, cls_nef_perp_xlow,
-                                      cls_nef_perp_ylow, false));
+        addEnergy(Div_a_Grad_perp_nonorthog(Dn * (3. / 2), P, cls_nef_perp_xlow,
+                                            cls_nef_perp_ylow, false));
       }
     } else if (IS_SET(species["temperature"])) {
       const auto T = GET_VALUE(Field3D, species["temperature"]);
-      add(species["energy_source"],
-          Div_a_Grad_perp_nonorthog(Dn * (3. / 2) * T, N, cls_nef_perp_xlow,
-                                    cls_nef_perp_ylow, false));
+      addEnergy(Div_a_Grad_perp_nonorthog(Dn * (3. / 2) * T, N, cls_nef_perp_xlow,
+                                          cls_nef_perp_ylow, false));
 
       if (custom_D < 0) {
         // Cross-field heat conduction
@@ -134,15 +140,15 @@ void ClassicalDiffusion::transform_impl(GuardedOptions& state) {
         const auto AA = GET_VALUE(BoutReal, species["AA"]);
         const Field3D nu =
             floor(GET_VALUE(Field3D, species["collision_frequency"]), 1e-10);
-        add(species["energy_source"],
-            Div_a_Grad_perp_nonorthog(2. * floor(P, 1e-5) * nu * AA / Bsq, T,
-                                      cls_tef_perp_xlow, cls_tef_perp_ylow, false));
+        addEnergy(Div_a_Grad_perp_nonorthog(2. * floor(P, 1e-5) * nu * AA / Bsq, T,
+                                            cls_tef_perp_xlow, cls_tef_perp_ylow, false));
       }
     }
   }
 }
 
 void ClassicalDiffusion::outputVars(Options& state) {
+  balance.output(state, "classical_diffusion", diagnose);
 
   if (diagnose) {
     // Normalisations

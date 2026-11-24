@@ -5,6 +5,7 @@
 #include <bout/coordinates.hxx>
 
 #include "component.hxx"
+#include "domain_balance.hxx"
 
 /// Perpendicular diffusion of particles, carried parallel momentum and energy.
 ///
@@ -30,6 +31,7 @@ struct ClassicalDiffusion : public NamedComponent<ClassicalDiffusion> {
   static constexpr auto type = "classical_diffusion";
 
 private:
+  DomainBalance balance;
   Coordinates::FieldMetric Bsq; // Magnetic field squared
 
   bool diagnose;     ///< Output additional diagnostics?

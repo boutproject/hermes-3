@@ -178,12 +178,10 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
     throw BoutException("Div_par_fvv_heating is not correctly implemented for Fci!");
   }
 
-  if (numerical_viscous_heating) {
-    fix_momentum_boundary_flux =
-        options["fix_momentum_boundary_flux"]
-            .doc("Fix Y boundary momentum flux to boundary midpoint value?")
-            .withDefault<bool>(false);
-  }
+  fix_momentum_boundary_flux =
+      options["fix_momentum_boundary_flux"]
+          .doc("Fix Y boundary momentum flux to boundary midpoint value?")
+          .withDefault<bool>(false);
 
   thermal_conduction = options["thermal_conduction"]
                            .doc("Include parallel heat conduction?")
@@ -259,6 +257,8 @@ void EvolvePressure::transform_impl(GuardedOptions& state) {
 }
 
 void EvolvePressure::finally(const Options& state) {
+  balance.clear();
+  const auto quantity = "thermal_" + name;
 
   // Get the section containing this species
   const auto& species = state["species"][name];
@@ -285,6 +285,10 @@ void EvolvePressure::finally(const Options& state) {
     ddt(P) = 0.0;
   }
 
+  balance.set(quantity, "out_exb", -1.5 * ddt(P));
+  balance.add(quantity, "out_parallel", 0.0);
+  balance.add(quantity, "pressure_work", 0.0);
+  balance.add(quantity, "numerical_heat", 0.0);
   if (species.isSet("velocity")) {
     const Field3D V = get<Field3D>(species["velocity"]);
 
@@ -297,25 +301,27 @@ void EvolvePressure::finally(const Options& state) {
       fastest_wave = sqrt(T / AA);
     }
 
+    const auto parallel = FV::Div_par_mod<hermes::Limiter>(
+        P, V, fastest_wave, flow_ylow_advection, true, dissipative);
+    balance.set(quantity, "out_parallel", (p_div_v ? 1.5 : 2.5) * parallel);
     if (p_div_v) {
       // Use the P * Div(V) form
-      ddt(P) -= FV::Div_par_mod<hermes::Limiter>(P, V, fastest_wave, flow_ylow_advection,
-                                                 true, dissipative);
+      ddt(P) -= parallel;
 
       // Work done. This balances energetically a term in the momentum equation
       E_PdivV = -Pfloor * Div_par(V.asField3DParallel());
       ddt(P) += (2. / 3) * E_PdivV;
+      balance.set(quantity, "pressure_work", E_PdivV);
 
     } else {
       // Use V * Grad(P) form
       // Note: A mixed form has been tried (on 1D neon example)
       //       -(4/3)*FV::Div_par(P,V) + (1/3)*(V * Grad_par(P) - P * Div_par(V))
       //       Caused heating of charged species near sheath like p_div_v
-      ddt(P) -= (5. / 3)
-                * FV::Div_par_mod<hermes::Limiter>(
-                    P, V, fastest_wave, flow_ylow_advection, true, dissipative);
+      ddt(P) -= (5. / 3) * parallel;
       E_VgradP = V * Grad_par(P.asField3DParallel());
       ddt(P) += (2. / 3) * E_VgradP;
+      balance.set(quantity, "pressure_work", E_VgradP);
     }
     flow_ylow_advection *= 5. / 2; // Energy flow
     flow_ylow = flow_ylow_advection;
@@ -327,17 +333,24 @@ void EvolvePressure::finally(const Options& state) {
       ddt(P) += (2. / 3) * V * bracket(P, Apar_flutter, BRACKET_ARAKAWA);
     }
 
-    if (numerical_viscous_heating || diagnose) {
+    if (numerical_viscous_heating || diagnose || name == "e") {
       // Viscous heating coming from numerical viscosity from the Lax flux
       const Field3D Nlim = softFloor(N, density_floor);
       const BoutReal AA = get<BoutReal>(species["AA"]); // Atomic mass
       Sp_nvh = (2. / 3) * AA
                * FV::Div_par_fvv_heating(Nlim, V, fastest_wave, flow_ylow_viscous_heating,
                                          fix_momentum_boundary_flux);
+      if (diagnose) {
+        balance.set(quantity, "numerical_heat_available", 1.5 * Sp_nvh);
+      }
       flow_ylow_viscous_heating *= AA;
+      if (name == "e") {
+        balance.addTargets("kinetic_e", "target", flow_ylow_viscous_heating);
+      }
       flow_ylow += flow_ylow_viscous_heating;
       if (numerical_viscous_heating) {
         ddt(P) += Sp_nvh;
+        balance.set(quantity, "numerical_heat", 1.5 * Sp_nvh);
       }
     }
   } else if (diagnose) {
@@ -428,6 +441,17 @@ void EvolvePressure::finally(const Options& state) {
   }
 #endif
 
+  balance.set(quantity, "input", 1.5 * final_source);
+  balance.set(quantity, "sources", 1.5 * (Sp - final_source));
+  balance.addTargets(quantity, "target", flow_ylow_advection);
+  balance.set(quantity, "rhs", 1.5 * ddt(P));
+  balance.add(quantity, "out_other",
+              -DomainBalance::integral(1.5 * (ddt(P) - Sp))
+                  - balance.local.at({quantity, "out_exb"})
+                  - balance.local.at({quantity, "out_parallel"})
+                  + balance.local.at({quantity, "pressure_work"})
+                  + balance.local.at({quantity, "numerical_heat"}));
+
   if (diagnose) {
     // Save flows of energy if they are set
 
@@ -441,6 +465,7 @@ void EvolvePressure::finally(const Options& state) {
 }
 
 void EvolvePressure::outputVars(Options& state) {
+  balance.output(state, "pressure_" + name, diagnose);
   // Normalisations
   auto Nnorm = get<BoutReal>(state["Nnorm"]);
   auto Tnorm = get<BoutReal>(state["Tnorm"]);

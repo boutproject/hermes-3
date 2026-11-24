@@ -662,6 +662,7 @@ void PolarisationDrift::solveConservativePotential(const Field3D& rhs) {
 }
 
 void PolarisationDrift::transformConservative(GuardedOptions& state) {
+  balance.clear();
   auto allspecies = state["species"];
   auto fields = state["fields"];
   const Field3D phi = GET_VALUE(Field3D, fields["phi"]);
@@ -802,6 +803,7 @@ void PolarisationDrift::transformConservative(GuardedOptions& state) {
     const Field3D P = GET_NOBOUNDARY(Field3D, species["pressure"]);
     const Field3D coefficient = (AA / Z) / mass_density;
     const Field3D density_source = -wallWeighted(coefficient * N);
+    balance.set("particles_" + species.name(), "out_polarisation", -density_source);
     add(species["density_source"], density_source);
     set(species["polarisation_density_source"], density_source);
     if (diagnose) {
@@ -840,6 +842,8 @@ void PolarisationDrift::transformConservative(GuardedOptions& state) {
   });
   // Phi + sum_s[(3/2 p_s + K_parallel_s) A_s/(Z_s rho)].
   DivEpol = divPol(E_adv);
+  balance.add("ion_energy", "radial_polarisation_inner", 0.0);
+  balance.add("ion_energy", "radial_polarisation_outer", 0.0);
   for (int x : {mesh->xstart - 1, mesh->xend}) {
     const bool inner = x == mesh->xstart - 1;
     if (mesh->periodicX || (inner && !mesh->firstX()) || (!inner && !mesh->lastX())) {
@@ -877,6 +881,9 @@ void PolarisationDrift::transformConservative(GuardedOptions& state) {
         const BoutReal pressure_mid = 0.5 * (psi(x, y, z) + psi(x + 1, y, z));
         const BoutReal transported = thermal[index] + kinetic_parallel[index];
         const BoutReal revised = work + transported;
+        balance.add("ion_energy",
+                    inner ? "radial_polarisation_inner" : "radial_polarisation_outer",
+                    (inner ? -1.0 : 1.0) * polarisation_flux.x(x, y, z) * revised);
         const BoutReal volume = coord->J()(cell, y, z) * coord->dx()(cell, y, z)
                                 * coord->dy()(cell, y, z) * coord->dz()(cell, y, z);
         DivEpol(cell, y, z) += (inner ? -1.0 : 1.0) * polarisation_flux.x(x, y, z)
@@ -904,6 +911,7 @@ void PolarisationDrift::transformConservative(GuardedOptions& state) {
 }
 
 void PolarisationDrift::outputConservative(Options& state) {
+  balance.output(state, "polarisation_drift", diagnose);
   const auto Nnorm = get<BoutReal>(state["Nnorm"]);
   const auto Tnorm = get<BoutReal>(state["Tnorm"]);
   const auto Omega_ci = get<BoutReal>(state["Omega_ci"]);

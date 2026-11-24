@@ -153,6 +153,8 @@ EvolveDensity::EvolveDensity(std::string name, Options& alloptions, Solver* solv
     }
   }
 
+  final_source = source;
+
   neumann_boundary_average_z =
       alloptions[std::string("N") + name]["neumann_boundary_average_z"]
           .doc("Apply neumann boundary with Z average?")
@@ -260,6 +262,8 @@ void EvolveDensity::transform_impl(GuardedOptions& state) {
 }
 
 void EvolveDensity::finally(const Options& state) {
+  balance.clear();
+  const auto quantity = "particles_" + name;
 
   const auto& species = state["species"][name];
   N = get<Field3D>(species["density"]);
@@ -276,6 +280,8 @@ void EvolveDensity::finally(const Options& state) {
     ddt(N) = 0.0;
   }
 
+  balance.set(quantity, "out_exb", -ddt(N));
+  BoutReal parallel_integral = 0.0;
   if (species.isSet("velocity")) {
     // Parallel velocity set
     const Field3D V = get<Field3D>(species["velocity"]);
@@ -292,8 +298,11 @@ void EvolveDensity::finally(const Options& state) {
       fastest_wave = sqrt(T / AA);
     }
 
-    ddt(N) -= FV::Div_par_mod<hermes::Limiter>(N, V, fastest_wave, flow_ylow, true,
-                                               dissipative);
+    const auto parallel = FV::Div_par_mod<hermes::Limiter>(N, V, fastest_wave, flow_ylow,
+                                                           true, dissipative);
+    ddt(N) -= parallel;
+    parallel_integral = DomainBalance::integral(parallel);
+    balance.addTargets(quantity, "target", flow_ylow);
 
     if (state.isSection("fields") and state["fields"].isSet("Apar_flutter")) {
       // Magnetic flutter term
@@ -329,6 +338,12 @@ void EvolveDensity::finally(const Options& state) {
   // Collect the external source from above with all the sources from
   // elsewhere (collisions, reactions, etc) for diagnostics
   Sn = get<Field3D>(species["density_source"]);
+  balance.add(quantity, "out_parallel", parallel_integral);
+  balance.add(quantity, "out_other",
+              -DomainBalance::integral(ddt(N)) - parallel_integral
+                  - balance.local.at({quantity, "out_exb"}));
+  balance.set(quantity, "input", final_source);
+  balance.set(quantity, "sources", Sn - final_source);
   ddt(N) += Sn;
 
   // Scale time derivatives
@@ -338,6 +353,27 @@ void EvolveDensity::finally(const Options& state) {
 
   if (evolve_log) {
     ddt(logN) = ddt(N) / N;
+  }
+  balance.set(quantity, "rhs", ddt(N));
+  if (charge != 0.0 && state["species"].isSection("e")) {
+    const auto& e = state["species"]["e"];
+    if (e.isSet("velocity") && e.isSet("AA") && e.isSet("charge")) {
+      // Quasineutral electrons inherit the charge-weighted ion density rate.
+      const BoutReal fraction = name == "e" ? 1.0 : -charge / get<BoutReal>(e["charge"]);
+      balance.set("kinetic_e", "density_work",
+                  -0.5 * get<BoutReal>(e["AA"]) * SQ(get<Field3D>(e["velocity"]))
+                      * fraction * ddt(N));
+      if (diagnose) {
+        const Field3D weight =
+            -0.5 * get<BoutReal>(e["AA"]) * SQ(get<Field3D>(e["velocity"])) * fraction;
+        balance.set("kinetic_e", "sources_density_work", weight * Sn);
+        balance.set("kinetic_e", "input_density_work", weight * final_source);
+        if (species.isSet("polarisation_density_source")) {
+          balance.set("kinetic_e", "polarisation_density_work",
+                      weight * get<Field3D>(species["polarisation_density_source"]));
+        }
+      }
+    }
   }
 
 #if CHECKLEVEL >= 1
@@ -365,6 +401,7 @@ void EvolveDensity::finally(const Options& state) {
 }
 
 void EvolveDensity::outputVars(Options& state) {
+  balance.output(state, "density_" + name, diagnose);
   // Normalisations
   auto Nnorm = get<BoutReal>(state["Nnorm"]);
   auto Omega_ci = get<BoutReal>(state["Omega_ci"]);

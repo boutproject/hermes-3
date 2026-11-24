@@ -116,6 +116,7 @@ protected:
 };
 
 using EvolveVorticityIonEnergyTest = IonEnergyFixture<5>;
+using IonEnergyParallelTest = IonEnergyFixture<7, 2>;
 using IonEnergyParallelDampingTest = IonEnergyFixture<12, 2>;
 
 using IonEnergySingletonYTest = IonEnergyFixture<1, 0>;
@@ -169,7 +170,7 @@ TEST_F(IonEnergyDCWallTest, ZeroDensityGuardsDoNotCreateHotWallEnergyFlux) {
 }
 
 // Recovery and finite-volume energy identities.
-TEST_F(EvolveVorticityIonEnergyTest, UniformStateHasZeroRHS) {
+TEST_F(IonEnergyParallelTest, UniformStateHasZeroRHS) {
   FakeSolver solver;
   auto options = makeOptions();
   options["components"] = "e, d+, he++, test, polarisation_drift";
@@ -209,6 +210,30 @@ TEST_F(EvolveVorticityIonEnergyTest, UniformStateHasZeroRHS) {
             IsFieldEqual(species[source].as<Field3D>(), 0.0, "RGN_NOBNDRY", 1e-13))
             << name << ":" << source;
       }
+    }
+  }
+}
+
+TEST_F(EvolveVorticityIonEnergyTest, ExternalHeatingCanBeConfinedToClosedFieldLines) {
+  static_cast<FakeMesh*>(mesh)->ix_separatrix = 5;
+  for (bool core_only : {false, true}) {
+    FakeSolver solver;
+    auto options = makeOptions();
+    options["test"]["external_heating"] = Field3D{3.0 * SI::qe};
+    options["test"]["source_only_in_core"] = core_only;
+    IonEnergyTestSystem component("test", options, &solver);
+    declareSpecies(component);
+    solver.setState({{"Vort", Field3D{0.0}}, {"Eion", Field3D{3.0}}});
+    auto state = makeState();
+    component.transform(state);
+    component.finally(state);
+    auto output = diagnostics(component);
+    const auto heating = output["ion_external_heating"].as<Field3D>();
+    const auto rate = solver.getTimeDerivs()["Eion"].as<Field3D>();
+    for (const auto& i : heating.getRegion("RGN_NOBNDRY")) {
+      const auto expected = core_only && !mesh->periodicY(i.x()) ? 0.0 : 3.0;
+      EXPECT_DOUBLE_EQ(heating[i], expected);
+      EXPECT_NEAR(rate[i], expected, 1e-12);
     }
   }
 }
@@ -335,6 +360,65 @@ TEST_F(EvolveVorticityIonEnergyTest, IntegrationByPartsIncludesRadialBoundaryWor
 }
 
 // Energy transfers and species transport.
+TEST_F(IonEnergyParallelTest, ElectricalAccountingMatchesForceAndCurrentBoundaryWork) {
+  mesh->getCoordinates()->setNon_uniform(false);
+  // Sheath metric guards need not preserve the interior flux-tube area.
+  mesh->getCoordinates()->setJ(makeField<Coordinates::FieldMetric>(
+      [](auto& i) { return i.y() < mesh->ystart || i.y() > mesh->yend ? 1.7 : 1.0; }));
+  for (bool periodic : {false, true}) {
+    getMesh().ix_separatrix = periodic ? 1000000 : -1;
+    FakeSolver solver;
+    auto options = makeOptions();
+    options["test"]["diagnose"].force(false);
+    IonEnergyTestSystem component("test", options, &solver);
+    declareSpecies(component);
+    solver.setState({{"Vort", Field3D{0.0}}, {"Eion", Field3D{3.0}}});
+    auto state = makeState();
+    component.transform(state);
+    const Field3D current = makeField<Field3D>([&](const Ind3D& i) {
+      const auto y = periodic ? sin(2 * PI * (i.y() - mesh->ystart) / 3) : 0.1 * i.y();
+      return 1.0 + y * y + 0.1 * cos(2 * PI * i.z() / nz);
+    });
+    const Field3D potential = makeField<Field3D>([&](const Ind3D& i) {
+      const auto y = periodic ? cos(2 * PI * (i.y() - mesh->ystart) / 3) : 0.2 * i.y();
+      return y * y + 0.1 * sin(2 * PI * i.z() / nz);
+    });
+    state["species"]["e"]["momentum"] = -current / 1836;
+    state["species"]["d+"]["momentum"] = 0.5 * current; // Ion current = 0.25 * current
+    BoutReal previous_power = 0.0;
+    for (BoutReal shift : {0.0, 2.0}) {
+      const Field3D shifted = potential + shift;
+      state["fields"]["phi"] = shifted;
+      component.finally(state);
+      const auto output = diagnostics(component);
+      const BoutReal power = output["balance_ion_energy_thermal_e_out_electric"];
+      const BoutReal work =
+          integral(shifted * Div_par(current) + current * Grad_par(shifted));
+      EXPECT_NEAR(power, work, 1e-11);
+      const BoutReal ion_power = integral(Div_par(0.25 * shifted * current));
+      BoutReal sheath_power = 0.0;
+      for (const auto* side : {"lower_y", "upper_y", "lower_y_inner", "upper_y_inner"}) {
+        sheath_power +=
+            output["balance_ion_energy_electrical_target_" + std::string{side}]
+                .as<BoutReal>();
+      }
+      EXPECT_NEAR(sheath_power, power + ion_power, 1e-11);
+      if (periodic) {
+        EXPECT_NEAR(power, 0.0, 1e-11);
+      } else if (shift == 0.0) {
+        EXPECT_GT(std::abs(power - integral(Div_par(shifted * current))), 1e-3);
+      }
+      if (shift != 0.0) {
+        EXPECT_NEAR(power - previous_power, shift * integral(Div_par(current)), 1e-11);
+      }
+      previous_power = power;
+      // Accounting must not add the boundary correction to the evolved energy.
+      EXPECT_NEAR(integral(solver.getTimeDerivs()["Eion"].as<Field3D>()),
+                  -integral(shifted * Div_par(current)) - ion_power, 1e-11);
+    }
+  }
+}
+
 TEST_F(EvolveVorticityIonEnergyTest, ParallelFluxCarriesEnthalpyAndKineticEnergy) {
   static_cast<FakeMesh*>(mesh)->ix_separatrix = -1; // Open ends for the linear profile.
   FakeSolver solver;
@@ -917,6 +1001,7 @@ TEST_F(EvolveVorticityIonEnergyTest, WallModelsPairParticleChargeAndEnergyBudget
       const Field3D flux = output["polarisation_flux_x"].as<Field3D>();
       BoutReal wall_power = 0.0, wall_signal = 0.0;
       for (int x : {mesh->xstart - 1, mesh->xend}) {
+        BoutReal boundary_power = 0.0;
         const int cell = x == mesh->xend ? x : x + 1;
         for (int y = mesh->ystart; y <= mesh->yend; ++y) {
           for (int z = 0; z < nz; ++z) {
@@ -935,9 +1020,16 @@ TEST_F(EvolveVorticityIonEnergyTest, WallModelsPairParticleChargeAndEnergyBudget
             }
             const BoutReal outward = x == mesh->xend ? flux(x, y, z) : -flux(x, y, z);
             wall_power += outward * weight;
+            boundary_power += outward * weight;
             wall_signal += std::abs(outward);
           }
         }
+        EXPECT_NEAR(
+            output[std::string{
+                       "balance_polarisation_drift_ion_energy_radial_polarisation_"}
+                   + (x == mesh->xend ? "outer" : "inner")]
+                .as<BoutReal>(),
+            boundary_power, 1e-12);
       }
       EXPECT_GT(wall_signal, 1e-9);
       EXPECT_NEAR(integral(solver.getTimeDerivs()["Eion"].as<Field3D>()), -wall_power,
