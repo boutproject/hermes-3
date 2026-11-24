@@ -36,10 +36,9 @@
 ///     using MyTest = FakeMeshFixture_tmpl<7, 9, 11>;
 /// The MeshType parameter can supply a FakeMesh subclass with boundary
 /// topology or communication behaviour specific to a test.
-/// MpiType can supply a wrapper that records or modifies MPI calls.
 /// Override getCoordinates() to select custom coordinates during SetUp().
 template <int NX, int NY, int NZ, bool FCI = false, int MXG = 1,
-          class MeshType = FakeMesh, class MpiType = MpiWrapper>
+          class MeshType = FakeMesh>
 class FakeMeshFixture_tmpl : public ::testing::Test {
 public:
   FakeMeshFixture_tmpl()
@@ -160,7 +159,6 @@ protected:
   virtual std::shared_ptr<Coordinates> getCoordinates() { return test_coords; }
 
   MeshType& getMesh() { return mesh_m; }
-  MpiType& getMpi() { return mpi; }
 
 private:
   std::shared_ptr<Coordinates> test_coords{nullptr};
@@ -168,7 +166,7 @@ private:
 
   WithQuietOutput quiet_info{output_info};
   WithQuietOutput quiet_warn{output_warn};
-  MpiType mpi;
+  MpiWrapper mpi;
 
   MeshType mesh_m;
   MeshType mesh_staggered_m;
