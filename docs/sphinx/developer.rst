@@ -74,153 +74,41 @@ Editing documentation is much easier if you can compile it locally using the fol
    `Live Preview <https://marketplace.visualstudio.com/items?itemName=ms-vscode.live-server>`__ which
    can stream it to your browser.
 
-Ion-energy radial boundaries and solver state
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Ion-energy state and balance diagnostics
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-``evolve_vorticity_ion_energy`` derives its radial guards, wall evolution,
-finite-volume face closures and inverse flags from one ``RadialBoundaryModel``.
-Ion recovery reads ``radial_boundary``; conservative ``polarisation_drift``
-reads its own ``polarisation_ac_boundary``. Both use the shared boundary enums
-and print the resulting settings. Changes to wall behaviour should
-use this model consistently in recovery, current, transport and energy
-operators. The options and wall equations are described in
-:ref:`sec-evolve_vorticity_ion_energy`.
+``evolve_vorticity_ion_energy`` owns pressure/potential recovery, Reynolds
+current and ion finalisation; conservative ``polarisation_drift`` owns chi
+and species transport. Scheduling must complete recovery and sheath guards
+before drift transport and finalisation. Transport inputs are published on
+every RHS evaluation, independently of ``diagnose``.
 
-For every nonperiodic-X ``evolve_vorticity_ion_energy`` run, the solver
-field ``Vort`` stores physical vorticity in the interior and Z-uniform
-potential midpoints in its physical radial guards. The first guard column
-supplies the midpoint; initialisation duplicates it across radial guard
-columns, and the RHS writes the same rate to each. Ordinary vorticity
-boundary operators belong to the separate physical ``vorticity`` field
-and must not be applied to solver ``Vort``. After solver registration, only
-the ``FieldData`` boundary metadata is swapped between these fields, leaving
-the solver's field and derivative pointers valid. Solver storage receives
-no-op boundary operators; physical vorticity retains the user Y operators
-and receives the model's explicit X guards. Physical Y boundary derivatives
-of solver ``Vort`` remain zero. Wall runs require at least two radial guards
-and complete periodic Z lines on each rank. Periodic X skips wall storage
-and uses the existing potential inverse and gauge.
+For nonperiodic X, solver ``Vort`` stores wall potential midpoints in radial
+guards. Physical vorticity and its boundary operators are separate. Boundary
+hooks must preserve the solver field/derivative pointers and packed state.
+Version-1 restarts preserve wall storage; older restarts initialise it once
+from saved phi. Recovery guesses are promoted at outputs and remain fixed
+between outputs, keeping repeated RHS evaluations independent of history.
 
-The first potential guard is reflected about the stored midpoint. The
-pressure helper imposes mean-Neumann, zero-AC-midpoint guards separately on
-``Pi_sum`` and on ``psi`` after every composition weighting; reconstructing
-psi guards from species pressures would generally violate its wall condition.
-Physical vorticity guards are Neumann for ``fixed`` and ``no_slip`` and have
-zero midpoint for ``free_slip``. These three helpers copy the first guard
-outward. In contrast, the chi helper reflects every guard layer from its
-corresponding interior layer, with even AC reflection for ``neumann`` and
-odd AC reflection for ``dirichlet``. Chi guards are filled at all local Y
-rows, including Y guards; the other three wall helpers use physical Y only.
+Use the shared ``RadialBoundaryModel`` for recovery, inverse flags, current
+and energy faces. Chi potential guards do not close transport faces: full
+Reynolds and chi currents are retained. Viscosity and numerical potential
+damping enter physical vorticity after the selected auxiliary current RHS;
+chi excludes both. Ion sources exclude kinetic conversion of polarisation
+transport that is already included in the energy flux.
 
-The complete X--Z Reynolds and chi faces are retained at physical walls,
-including the central Reynolds remainder, DC chi current and cross-metric
-terms. Reynolds current can have nonzero net wall charge; weighted species, momentum
-and energy exchanges are signed and can enter or leave the domain. Viscous
-current and energy faces remain closed for ``fixed`` and ``no_slip`` and open
-for ``free_slip``, using the same current and an interior viscosity coefficient.
-``polarisation_ac_boundary`` controls chi potential guards and inverse flags;
-it does not mask transport faces after the solve.
+``DomainBalance`` saves MPI-reduced equation-term integrals with
+``balance_quantity`` and ``balance_term`` attributes. Keep scalar outputs
+available without diagnostics; save detailed fields and RHS rates only when
+requested. xhermes uses these attributes for power and particle accounting.
+Boundary terms should come from the production flux or the discrete
+force/current work identity, rather than a separate Python operator.
 
-Conservative drift constructs the selected current RHS from ``DivJReynolds``,
-``DivJdia``, ``DivJpar`` and enabled ``DivJextra``/``DivJcol``. It reads completed
-charged-species momentum, communicates the summed current and solves chi.
-Ion finalisation adds viscosity and optional numerical potential damping to
-this selected RHS. Both rates are excluded from chi. Viscous drift work and
-enthalpy are carried by the common polarisation energy flux, so ``DivEviscous``
-is diagnostic and is not subtracted again from the energy RHS. The electron
-heating share is an internal ion/electron transfer.
-``ion_chi_residual`` measures the selected RHS minus the full FV operator on
-chi; it is not a residual against the completed vorticity derivative. Analysis
-uses the same selected RHS when reconstructing chi. Output versions are
-``evolve_vorticity_ion_energy_version = 1`` and ``polarisation_drift_version = 1``.
-Analysis requires the explicit ion-energy version-1 tag and rejects missing tags
-and unsupported versions. Earlier development versions were not released.
-
-``reynoldsFaceFluxes()`` evaluates :math:`\Omega\mathbf{v}_E+\mathbf{R}`.
-Only full vorticity uses MC donor reconstruction with the face velocity from
-:math:`\phi`. The central remainder uses the original potential samples and
-static metric coefficients, with tangential diagonal FV second derivatives
-of :math:`\Phi=\phi+\psi` and retained physical wall jumps. No reconstructed
-auxiliary scalar or extrapolated derivative guard enters this operator.
-``perpendicularFaces()`` supplies
-the same diagonal and cross-metric faces to the forward operator, kinetic
-energy, viscosity and chi current. These face fields include the transverse
-``dy`` factor and use the index convention in ``XZFaceFluxes``. Mesh-owned
-regions cache the X-face and physical-wall indices.
-
-Recovery, Reynolds evaluation and ion finalisation belong to
-``evolve_vorticity_ion_energy``. Conservative ``polarisation_drift`` owns chi,
-the combined current and species transport; ``implementation = conservative``
-must be selected explicitly, with exactly one ion-energy component. The default
-``legacy`` implementation retains the potential-flow closure for ``vorticity``.
-Recovery publishes its transport inputs independently of ``diagnose``.
-
-Polarisation transport combines minus the full Reynolds and chi faces once,
-then applies arithmetic face averages of species/energy weights in the interior.
-At each radial wall and Y row, it uses local face mass fractions, temperatures
-and parallel velocities. The kinetic weight squares the local face velocity.
-Neumann guards make these traces equal to the adjacent physical state. Work
-uses :math:`\Phi_w=\phi_b+\psi_w(z)`, pairing local pressure work with the
-perpendicular kinetic-energy wall flux. The electrostatic midpoint is
-Z-uniform and pressure potential is Neumann; recovery imposes their sum as
-the inversion boundary. The auxiliary chi closure retains a DC midpoint of
-:math:`\partial_t\phi_b` and default Neumann AC, neglecting
-:math:`\partial_t\psi_w(z)`. Wall transport requires no Z average; conducting
-potential recovery retains its complete-Z-line requirement. ``DivEExB`` advects total
-``Eion`` with the shared XPPM operator and closes normal radial energy flux;
-the perpendicular kinetic-energy work flux is included in this advection.
-``reynolds_work`` is an X--Z diagnostic, rather than a separate energy RHS term.
-With ``poloidal_flows = true``, the differences between poloidal and
-nonpoloidal XPPM calls add the existing X--Y current and weighted transport
-contributions. They are not included in the saved X--Z polarisation faces or
-Reynolds work diagnostic. The separately published polarisation density and
-momentum sources are excluded from ion finalisation's kinetic-source conversion,
-because their energy transport is already carried by ``DivEpol``.
-
-With ``phi_dissipation = true``, ion finalisation reads completed phi and
-communicated collective ``sound_speed``, then evaluates
-``-FV::Div_par(-phi, 0.0, sound_speed)`` with default physical-Y flux treatment.
-Read sound speed only here: its construction depends on ion pressure published
-during recovery. Missing sound speed is a configuration error. Damping is
-added only to physical Vort cells, leaves encoded wall rates intact and has
-no explicit species or total-energy source. ``ion_phi_dissipation`` resets
-each RHS evaluation. Its units/conversion match ``ddt(Vort)``; chi and the
-diagnostic alias ``ddt(Phi)`` exclude viscosity and damping.
-
-After the final pressure/potential recovery and boundary application,
-``computeWallRates()`` resets all rates to zero, then computes the centred
-inward derivative for ``no_slip`` and scales it by the normal metric and
-normalised relaxation velocity.
-The same rates supply the auxiliary chi DC midpoint conditions and are
-copied into ``ddt(Vort)`` by ``writeWallRates()`` during ``finally()``.
-Recomputing them during finalisation would make the two boundary conditions
-inconsistent. Fixed and free-slip modes supply zero rates. When
-``firstX() && periodicY(xstart)`` identifies a closed core surface, the model
-automatically averages the stored midpoint with face ``J dy`` weights over
-``mesh->getYcomm(xstart)``, excluding Y guards. It computes each local inward
-derivative using that averaged midpoint, multiplies by the local normal
-metric, then averages the resulting rates with the same weights.
-
-Version-1 restarts preserve the packed solver boundary state. Restarts
-with version zero or without ``ion_energy_boundary_state_version`` initialise
-it once from the saved potential midpoints. Restart phi is restored only
-on the first restart hook. Normal ``Vort`` output contains physical
-vorticity. Recovery guesses are promoted only by ``outputVars()`` and
-remain fixed between outputs; each recovery applies the current stored
-wall state to that guess. Chi starts with a zero interior on every RHS
-evaluation and uses exactly ``1 + polarisation_corrections`` inverse calls.
-These choices keep repeated and reordered RHS evaluations deterministic
-between outputs.
-
-MMS forcing requires special care: BOUT adds it after ``finally()``,
-including in evolving solver guards. Mask manufactured ``Vort`` sources to
-physical X cells so that they cannot overwrite the prescribed wall rates.
-The committed ``ion-energy-mms`` inputs apply this mask to BOUT++ expression
-sources. Density and pressure components leave MMS source options unread so
-BOUT++ adds each forcing exactly once.
-When checking the full saved vorticity derivative, subtract viscosity,
-numerical damping and this injected continuum source. Auxiliary continuity
-continues to use the selected current RHS without damping or viscosity.
+MMS forcing is added by BOUT after finalisation, including evolving guards.
+The MMS generator masks radial ``Vort`` forcing so it cannot overwrite wall
+rates. Density and pressure components must leave MMS sources to BOUT so
+forcing is added once. See :ref:`sec-evolve_vorticity_ion_energy` for equations,
+wall conditions, options and diagnostic conventions.
 
 Debugging: running for one iteration
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -1537,270 +1425,34 @@ and core/pfr boundaries. If the test fails, it will print the degree of error at
 The test file can be used to generate the test data if `gen_data` is set to `True` in the beginning
 of the script.
 
-.. _subsec-2d-energy-test:
-
-2D-energy (interchange energy and entropy)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-This section records the physics of the former pressure-sign regression,
-which has been removed from the integrated suite.
-
-Evolves vorticity, electron density, and electron and ion pressure in a 2D
-(32 x 32) X-Z box with magnetic curvature. Includes kinematic viscosity and the
-ion polarisation compression term. The input selects ``e, h+, vorticity,
-polarisation_drift``, with ``phi_boundary_relax = true``,
-``diamagnetic_polarisation = true`` and ``viscosity = 1.0`` m²/s.
-There is no parallel dynamics (``ny = 1``,
-``MYG = 0``), no sources, and no sheath: apart from the radial potential boundary
-relaxation, the box is energetically closed.
-
-Mechanism
-`````````
-
-The initial pressure perturbation, ``1 + 0.1 * sin(2*pi*x - z)``, is unstable to
-interchange modes. The curvature (``bxcvz = 1/R^2``) plays the role that gravity
-plays in the Rayleigh-Taylor instability. The instability grows, drives
-perpendicular E x B flows, and saturates. Kinematic viscosity then damps the
-flows and returns their energy to the plasma as heat, so that the system relaxes
-towards a stable state with a flattened pressure profile.
-
-Unlike gravitational Rayleigh-Taylor, there is no separate potential energy
-reservoir. The "potential energy" released by the instability is part of the
-thermal energy itself. Curvature enters the model through two terms that are
-exact energetic partners:
-
-- the divergence of the diamagnetic current in the vorticity equation,
-  :math:`\nabla\cdot\mathbf{J}_d = \nabla\cdot\left[(p_e + p_i)\nabla\times(\mathbf{b}/B)\right]`;
-- the compression of the E x B flow in the pressure equations,
-  :math:`-p_s\nabla\cdot\mathbf{v}_E = -p_s\nabla\phi\cdot\nabla\times(\mathbf{b}/B)`,
-  applied by the ``vorticity`` component as :math:`-\mathbf{J}_{d,s}\cdot\nabla\phi`.
-
-The second term describes adiabatic expansion of flux tubes: in a torus, plasma
-interchanged outward moves into larger flux-tube volume and cools. The constant
-curvature in this slab represents that through :math:`\nabla\cdot\mathbf{v}_E\neq 0`, even
-though the slab metric is uniform. The instability therefore converts thermal
-energy of both species into perpendicular kinetic energy; viscosity converts it
-back into heat.
-
-Conserved energy
-````````````````
-
-For the corresponding closed, continuum Oberbeck-Boussinesq model, the energy
-
-.. math::
-
-   E = \int\left[\frac{3}{2}\left(p_e + p_i\right) + K_\perp\right]dV,
-   \qquad
-   K_\perp = \frac{1}{2}\frac{\bar{A}}{B^2}\left|\nabla_\perp\Phi\right|^2
-
-
-is conserved when the full Reynolds stress and consistent energy exchanges are used, where :math:`\Phi = \phi + \hat{p}` is the generalised potential,
-:math:`\hat{p} = \sum_s A_s p_s/(\bar{A}Z_s)` is the pressure contribution to the
-vorticity (``Pi_hat`` in ``src/vorticity.cxx``), and :math:`\bar{A}` is
-``average_atomic_mass``. The energy exchange channels in this test are:
-
-.. list-table:: Energy exchange channels
-   :header-rows: 1
-   :widths: 22 53 25
-
-   * - Channel
-     - Terms
-     - Pairing
-   * - Curvature (interchange drive)
-     - :math:`\phi\nabla\cdot\mathbf{J}_d` in vorticity; :math:`-p_s\nabla\cdot\mathbf{v}_E` in pressures
-     - :math:`\phi` half of the diamagnetic current work
-   * - Polarisation compression
-     - :math:`\hat{p}\,\nabla\cdot\mathbf{J}_d` in vorticity; :math:`(A_s p_s/\bar{A}Z_s)\nabla\cdot\mathbf{J}_d` in pressures (``polarisation_drift``)
-     - :math:`\hat{p}` half of the diamagnetic current work
-   * - Reynolds stress
-     - Nonlinear E x B advection of vorticity
-     - Redistributes :math:`K_\perp`; no net work in the continuum, *only for the full form* (see below)
-   * - Viscosity
-     - :math:`\nabla\cdot(\nu\nabla_\perp\omega)` in vorticity; ``kinematic_viscous_heating`` :math:`= -\nu\nabla_\perp\omega\cdot\nabla_\perp\Phi` in pressures
-     - Dissipation of :math:`K_\perp` into heat, distributed by mass density (almost all to ions)
-   * - Magnetic drift advection
-     - :math:`\nabla\cdot(\tfrac52 p_s\mathbf{v}_{mag,s})`, :math:`\nabla\cdot(n\mathbf{v}_{mag,e})`
-     - Divergence; periodic in z, so no net contribution
-   * - Radial potential boundary
-     - ``phi_boundary_relax``
-     - Does work through the boundary; not conserved (see below)
-
-In an exactly conserving model, therefore,
-
-.. math::
-
-   \frac{3}{2}\int\left(p_e + p_i\right)dV\Big|_{\rm end}
-   = \frac{3}{2}\int\left(p_e + p_i\right)dV\Big|_{0} + K_\perp(0) - K_\perp(\rm end).
-
-
-The thermal energy first falls as the flows grow, then recovers as viscosity
-heats the plasma. It ends at its initial value plus whatever perpendicular
-kinetic energy has been removed overall. The initial :math:`K_\perp` is not zero: the
-initial vorticity is zero, so :math:`\Phi` is harmonic with boundary values set by
-:math:`\hat{p}`, giving a combined E x B and diamagnetic flow at :math:`t = 0`. It is small,
-of order :math:`(k\rho_s\,\delta p/p)^2\sim 10^{-5}` of the thermal energy for these
-parameters (:math:`\delta p/p = 0.1`, 5 eV, 0.35 T, 5 cm box, :math:`k\rho_s\approx 0.08`).
-
-Entropy
-```````
-
-In the ideal closed model, a relaxed state has the same total energy. What the
-instability releases is the *available* energy: the difference between the
-initial energy and the lowest energy reachable by ideal, entropy-preserving
-rearrangements of the plasma, here flattening the pressure across the curvature
-direction. Viscosity, and the numerical dissipation of the upwind E x B
-advection, then convert this into heat irreversibly. The relaxed state is
-approximately the state of maximum entropy at fixed total energy and particle
-number. With entropy
-
-.. math::
-
-   S = \sum_s\int n_s\ln\left(\frac{p_s^{3/2}}{n_s^{5/2}}\right)dV,
-
-
-the E x B advection and compression preserve the specific entropy
-:math:`p_s/n_s^{5/3}` of each fluid element, so they rearrange entropy without
-producing it. A positive viscous heating rate :math:`Q_\nu` produces entropy at the rate
-:math:`\int Q_\nu/T_i\,dV`. The implemented gradient-product heating need not be positive pointwise. The magnetic drift fluxes are reversible but do not
-preserve specific entropy pointwise, so entropy is not a strict Lyapunov
-function of the discrete model; it is a useful diagnostic rather than an acceptance condition. Electrons
-receive almost none of the viscous heating, so their entropy should change much
-less than that of the ions.
-
-Expected results
-````````````````
-
-- Electron thermal energy falls, because electrons lose energy to the flows by
-  compression but receive almost none of the viscous heating.
-- Ion thermal energy rises, because the ions receive the viscous heating.
-- The total energy :math:`E` is constant, apart from the relaxation work at the radial
-  boundaries and numerical dissipation.
-- The total thermal energy changes by no more than :math:`K_\perp(0) - K_\perp(\rm end)`.
-  A larger rise indicates an energy source in the discrete model.
-- Ion entropy increases.
-
-Known non-conservative terms
-````````````````````````````
-
-The following terms are present in this test as configured and are not expected
-to conserve energy exactly. They explain why quantitative energy diagnostics can differ from the continuum expectation; the runner checks only pressure-change signs.
-
-1. **Simplified Reynolds stress.** ``exb_advection_simplified`` defaults to ``true``,
-   which advects :math:`\omega` with :math:`\mathbf{v}_E` only. With
-   ``diamagnetic_polarisation = true`` the work done by this term is
-   :math:`\int\omega\,\mathbf{v}_E\cdot\nabla\hat{p}\,dV`, which is not a divergence. The full
-   form (``exb_advection_simplified = false``) conserves :math:`K_\perp` in the continuum.
-2. **Potential boundary relaxation.** ``phi_boundary_relax = true`` (default
-   timescale :math:`\tau = 10^{-4}` s) relaxes the boundary potential towards zero radial
-   gradient, doing work :math:`P_{\rm relax}\simeq -(\Delta x/2\tau)\oint(\bar{A}/B^2)\,
-   g^{xx}\partial_x\bar\phi\,\partial_x\bar\Phi\,dS` through the radial boundaries.
-3. **Viscous heating discretisation.** The viscous term in the vorticity equation
-   is a finite-volume flux, while ``kinematic_viscous_heating`` is a cell-centred
-   product of gradients; the two cancel only to the truncation error of the
-   discretisation.
-4. **Upwind E x B advection.** The limited (XPPM) advection of vorticity
-   dissipates :math:`K_\perp` at small scales, and this energy is not returned as heat.
-   The same limited advection of density and pressure is in flux form, so it
-   conserves thermal energy.
-
-What the test checks
-````````````````````
-
-The ``runtest`` script currently checks the signs of the changes in electron,
-ion and total pressure. The total-pressure check (total pressure higher at the
-end than at the start) is consistent with energy conservation only if the rise
-is no larger than :math:`K_\perp(0) - K_\perp(\rm end)`, which is very small here.
-Passing it does not distinguish physical heating from an energy leak.
-
-The runner does not assert quantitative energy or entropy bounds, or check convergence.
-
-See :ref:`subsec-2d-energy-comparison` for the resolution scan, and :ref:`subsec-ion-energy-tests` for the total ion energy tests.
-
 .. _subsec-ion-energy-tests:
 
 Total ion energy tests
 ~~~~~~~~~~~~~~~~~~~~~~
 
-The suite retains two integrated ion-energy scenarios:
+Production C++ properties cover thermodynamic recovery, energy and charge
+conservation, boundary work, sources, dissipation, diagnostics independence
+and component scheduling. The Reynolds reference is independently derived
+from continuum covariant derivatives in
+``tests/unit/generate_reynolds_reference.py``; it does not duplicate a discrete
+operator.
 
-- ``ion-energy-closed`` is the routine CI regression: an 8 x 4 x 8 periodic
-  two-ion curvature/viscosity slab on two MPI ranks. Diagnostics-on/off runs
-  check energy, species particles, charge, energy recovery and nontrivial
-  thermal/kinetic exchange. The fixed roundoff limit remains ``1e-10``.
-  The fields are Y-invariant to eliminate unpaired work from the zero-current
-  electron closure. The measured two-rank elapsed time is 13.2 seconds;
-  CTest reserves two cores and applies a 60-second ceiling.
-- ``ion-energy-mms`` is one optional 3D slab convergence study, extending the
-  former curved-wall current solution with ``g13=1/4``, viscosity ``0.02`` and
-  magnetic curvature ``0.1``. It evolves independent electron momentum and
-  derives periodic parallel current from continuum Reynolds, diamagnetic and
-  auxiliary-current continuity. The pressure potential has nonzero radial
-  wall curvature. The reference and forcing use no discrete RHS or numerical
-  inverse. Viscous stress and numerical potential damping remain outside chi.
-  Final-time spatial acceptance uses the fixed central radial half, with L2
-  and Linfinity order limits 1.4 and 0.9. Absolute field errors and global
-  norms are diagnostic outputs.
-  ``--verify`` adds tighter temporal integration and serial/MPI agreement.
-  The coarsest physical grid is 8 x 16 x 8, doubling in all dimensions.
-  ``--plot`` writes PDF/SVG figures and CSV norms, retaining failed gates.
+Two native integrations supplement these properties:
 
-The MMS is excluded from routine CI and from plain CTest unless configured
-with ``-DHERMES_ION_ENERGY_MMS=ON``. Routine Python analysis checks exclude the
-symbolic MMS module and expensive symbolic Reynolds refinements. The prior
-separate source, wall, sheath and damping integrations
-and the legacy pressure-sign regression have been removed.
-Production component and discrete-operator unit tests remain.
+- ``ion-energy-closed`` checks energy and ion particle conservation and
+  nontrivial thermal/kinetic exchange on a small periodic two-ion slab.
+  Diagnostics-on/off runs must produce the same state.
+- ``ion-energy-mms`` checks evolved and recovered fields against one
+  independent 3D continuum solution with parallel current, skew metric,
+  viscosity and curvature. It is enabled by ``-DHERMES_ION_ENERGY_MMS=ON``;
+  spatial, temporal and MPI checks are described in the test README.
 
-.. code-block:: sh
-
-   ctest --test-dir build -L energy -LE validation --output-on-failure -j 2
-   python tests/integrated/ion-energy-closed/runtest --exe build/hermes-3
-   python tests/integrated/ion-energy-mms/mms.py --check --check-files
-   python -m pytest tests/python/test_ion_energy_mms.py tests/python/test_reynolds_transport.py
-   python tests/integrated/ion-energy-mms/runtest --exe build/hermes-3 --levels 2 --verify --timeout 10800
-
-The runners save input/executable hashes, execution times, effective limits and
-check values in isolated ``result.json`` directories. Python requirements are
-listed in ``tools/energy_analysis/requirements.txt``; the optional generator
-needs ``tests/integrated/ion-energy-mms/requirements.txt``. See the two test
-READMEs for the continuum construction and runtime options.
-
-``energy-analysis-python`` covers synthetic inventories, discrete operators,
-coverage flags and runner failure sequencing. The C++ ion-energy suite checks
-uniform equilibrium, common-temperature recovery, energy and charge conservation,
-boundary work, particle-source conversion and parallel energy transport. It also
-checks viscosity and numerical damping, solver wall-state preservation,
-singleton-Y recovery, diagnostics independence and sheath component scheduling.
-The auxiliary inverse is checked through recovered DC and Nyquist modes.
-Reynolds current tests cover weighted boundary work,
-charge partition, reflection symmetry and continuum convergence in a sheared
-annulus. The continuum reference is generated by
-``tests/unit/generate_reynolds_reference.py`` using covariant derivatives,
-independently of the implemented split current.
-
-.. _subsec-reynolds-wall-convergence:
-
-Reynolds stress wall convergence
-````````````````````````````````
-
-``tests/python/test_reynolds_transport.py`` uses an independently differentiated
-covariant current. It samples Neumann :math:`\psi=1+0.2\cos(\pi x)\sin z`
-and solves the conducting FV phi problem so that :math:`\mathcal{L}(\phi+\psi)`
-equals the prescribed vorticity in physical cells. Pressure has nonzero wall AC.
-Both profiles use :math:`r=x(1-x)` and :math:`\phi=f\cos z`. The profile
-:math:`f=r+r^2+(13/6)r^3` has zero electrostatic wall curvature and checks
-second-order wall maxima and domain mean errors with MC donors. A centred-donor
-control also checks RMS and maximum convergence. The profile
-:math:`f=r-r^2/12` has finite electrostatic wall curvature; domain mean and
-outer-three-cell RMS errors converge near second order, while the interior
-RMS bound allows order 1.5 from MC-limited extrema. Wall maximum errors must
-shrink rather than approach a finite Taylor limit. Both sampled and recovered
-states are checked. Viscosity and density-source coverage remain active.
-
-The legacy pressure-sign integration and long native wall/scan regressions
-have been removed. The refinement scan remains available as an example in
-``examples/tokamak-2D-driftplane/2D-energy``. Its README describes plotting
-requirements and local execution.
+Runners use ``launch_safe`` and retain native inputs, outputs and logs.
+Analysis is separate and uses xhermes on its ``total-energy`` branch.
+See ``tests/integrated/ion-energy-closed/README.md`` and
+``tests/integrated/ion-energy-mms/README.md`` for commands and dependencies.
+The :ref:`2D-energy scan <subsec-2d-energy-comparison>` remains an example;
+:ref:`sec-evolve_vorticity_ion_energy` describes the model and balance outputs.
 
 2D-recycling
 ~~~~~~~~~~~~~~
