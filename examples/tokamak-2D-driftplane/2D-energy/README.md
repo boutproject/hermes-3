@@ -1,40 +1,30 @@
-# Drift-plane energy scan
+# Total-ion-energy resolution scan
 
-The scan compares matched legacy pressure and total ion energy formulations.
-Both include `classical_diffusion`, with a constant normalised diffusivity
-`custom_D=1.19` (17 m²/s for this setup), configurable with `--custom-D`.
-It runs local cases and generates refinement tables and figures. See
-[scan-study.md](scan-study.md) for the full study.
-New studies are saved in `results/interchange-TIMESTAMP` beside the script;
-`--output-root` selects another parent directory.
+Interchange relaxation in a 5 cm X-Z slab with curvature radius 1.5 m,
+magnetic field 0.35 T, and density 2e18 m^-3. Ion total energy and electron
+pressure evolve with conservative polarisation transport, viscosity and
+classical diffusion (`custom_D = 0.1`). There are no prescribed sources or
+sheaths. The radial transport faces are closed.
 
-For weak diffusion and interchange dynamics, use `--custom-D 0.001`
-(0.0143 m²/s); the historical default strongly damps the perturbation. The
-initial pressure now has constant radial wall buffers and a smooth taper,
-removing the pressure-model vorticity sheets caused by the previous profile.
-This changes the initial state: start a new study to compare the formulations.
+The pressure perturbation has constant buffers within 0.1 of either radial
+wall and a quintic taper of width 0.1. These widths stay fixed across grids.
+Native initialization sets `Eion = 1.5 Pe` and zero vorticity. This example
+uses only the total-energy formulation.
 
-`ion-thermal-gain-<boundary>.pdf` plots the signed full-simulation gain
-`U_i(T)-U_i(0)` against mesh spacing on a logarithmic axis. Available pressure
-and ion-energy runs share the plot; with at least three suitable ion-energy
-grids, a power-law fit estimates the zero-spacing gain and convergence order.
-The accompanying JSON retains the values and fit status. `--analyse-only STUDY`
-can regenerate these products from the completed subset while other runs continue.
-
-Install `tools/energy_analysis/requirements.txt` and the extra plotting package
-`matplotlib`. Run from the repository root:
+From the repository root, with boutdata and xhermes (`total-energy` branch)
+installed:
 
 ```sh
-python examples/tokamak-2D-driftplane/2D-energy/run_scan.py --help
-python examples/tokamak-2D-driftplane/2D-energy/run_scan.py --smoke --custom-D 0.001
-python -m pytest examples/tokamak-2D-driftplane/2D-energy
+python examples/tokamak-2D-driftplane/2D-energy/run_scan.py build/energy-scan \
+  --exe build/hermes-3 --levels 3 --base-nx 32 --base-nz 32
+python examples/tokamak-2D-driftplane/2D-energy/analyse_scan.py build/energy-scan
 ```
 
-This example is outside CTest. `ion-energy-closed` is the small two-rank
-conservation gate; `ion-energy-mms` is the optional 3D spatial-accuracy study.
-
-The formulation inputs are [scan-pressure.inp.template](scan-pressure.inp.template)
-and [scan-total-energy.inp.template](scan-total-energy.inp.template). Each contains
-its component and operator settings explicitly. See the
-[Sphinx comparison](https://hermes3.readthedocs.io/en/latest/examples.html#subsec-2d-energy-comparison)
-for the energy definitions and reproduced figures.
+Each level doubles X and Z. `--end-time`, `--outputs`, and `--nproc` control
+launches; `--set SECTION:OPTION=VALUE` overrides input options. Use a fresh
+output directory for each scan. The analysis runs independently and writes
+energy histories, adjacent-grid electron thermal-energy differences, and particle
+inventories to `convergence.pdf` and `convergence.csv`. Energy is `Eion +
+1.5 Pe` integrated over physical cells in SI units; no flux or kinetic-energy
+operator is reproduced in Python. For full power and particle balances,
+see the nearby 3D `turbulence-ion-energy` example.

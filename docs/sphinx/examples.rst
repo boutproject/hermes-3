@@ -821,140 +821,17 @@ located in located in ``examples\tcv-x21``.
 
 .. _subsec-2d-energy-comparison:
 
-2D-energy (energy comparison and resolution scan)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+2D-energy (total-energy resolution scan)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-``examples/tokamak-2D-driftplane/2D-energy/run_scan.py`` compares the ion pressure
-formulation (``vorticity``, ``polarisation_drift`` and ``evolve_pressure``)
-with ``evolve_vorticity_ion_energy``. Both evolve hydrogen density and electron
-pressure with quasineutral electrons and no parallel dynamics. The scan generates
-inputs from ``scan-pressure.inp.template`` and ``scan-total-energy.inp.template``
-in ``examples/tokamak-2D-driftplane/2D-energy``.
+``examples/tokamak-2D-driftplane/2D-energy`` provides an interchange relaxation
+scan using :ref:`sec-evolve_vorticity_ion_energy` and conservative polarisation
+transport. A buffered pressure perturbation relaxes in a 5 cm X-Z slab with
+curvature, viscosity and classical diffusion. Radial transport faces are closed.
 
-The problem is interchange relaxation in a 5 cm by 5 cm X-Z slab, with
-curvature radius :math:`R=1.5` m and magnetic field :math:`B=0.35` T.
-Both species start at density :math:`n=2\times10^{18}` m\ :sup:`-3` with the
-same normalised pressure profile
-:math:`P_i=P_e=1+0.1 S(\xi)\sin(2\pi\xi)\sin(2\pi\xi-\theta)`, where
-:math:`\xi=X/L_X\in[0,1]` and :math:`\theta=2\pi Z/L_Z`.
-The envelope :math:`S` is zero within 0.1 of either radial wall and one at
-distances of 0.2 or greater. Between these distances it uses
-:math:`s^3(10-15s+6s^2)`, with :math:`s=(\min(\xi,1-\xi)-0.1)/0.1`.
-The taper has continuous first and second derivatives and fixed physical
-width across resolutions. Its constant wall buffers satisfy the pressure
-boundary conditions of both formulations. With hydrogen and ``average_atomic_mass = 1``,
-:math:`\psi=P_i`; the initial potential :math:`\phi=1-P_i` therefore gives
-:math:`\Phi=1`, :math:`\Omega=0` and :math:`K_\perp=0` for the total-energy
-formulation. The E×B and diamagnetic drifts initially cancel in its combined
-perpendicular flow. The runner prepares matched physical density, pressures
-and potential in native restarts, using each formulation's own forward
-operator and pressure guards to construct vorticity and kinetic energy.
-
-Curvature converts thermal energy into perpendicular kinetic energy;
-viscosity returns kinetic energy to heat. There are no prescribed sources,
-conduction or sheath losses. The pressure formulation retains its Neumann
-ion-pressure guards and signed electron contribution to the pressure
-potential, so it retains a small, smooth initial bulk vorticity. The previous
-unbuffered profile had a nonzero radial pressure derivative at the wall;
-its Neumann pressure guards and zero-midpoint potential guards created an
-initial first-cell vorticity sheet that grew in proportion to inverse grid
-spacing. The constant buffers remove this initial mismatch.
-
-The figures below were generated with the previous unbuffered profile on
-:math:`16^2` and :math:`32^2` physical cells, fixed
-potential boundaries, viscosity 1 m\ :sup:`2`/s and 100 output intervals to
-normalised time :math:`10^4`. From the repository root, generate a comparison
-with the updated buffered profile using:
-
-.. code-block:: bash
-
-   python examples/tokamak-2D-driftplane/2D-energy/run_scan.py \
-     --exe build/hermes-3 --levels 2 --base-nx 16 --base-nz 16 \
-     --phi-boundary fixed --end-time 10000 --outputs 100
-
-For weakly diffusive interchange dynamics, add ``--custom-D 0.001``
-(0.0143 m\ :sup:`2`/s). The historical default, 1.19 (17 m\ :sup:`2`/s),
-strongly damps the perturbation. Start a fresh study for the updated profile.
-
-The runner also supports resolution scans: its defaults are four grids
-(:math:`32^2`, :math:`64^2`, :math:`128^2`, :math:`256^2`), duration 20000 and
-200 output intervals. ``--levels``, ``--base-nx``, ``--base-nz`` and
-``--refinement`` set the grids; ``--end-time`` and ``--outputs`` set the
-shared time axis. ``--accuracy-pilot`` checks tighter tolerances, smaller
-timesteps and finer output cadence against spatial differences.
-
-``--phi-boundary relax`` selects relaxing potential boundaries and ``both``
-runs both policies. The pressure formulation uses
-``--phi-boundary-timescale`` (default :math:`10^{-4}` s); total ion energy
-uses ``radial_boundary = no_slip`` with ``--phi-boundary-velocity`` (default
-1000 m/s). These parameters stay fixed across resolutions and do not imply
-equal relaxation strength. The total-energy cases use Neumann polarisation
-AC, with closed radial Reynolds, E×B, viscous and polarisation transport faces
-for both fixed and no-slip walls.
-
-Energy is integrated over physical cells in joules for the represented box.
-**Shared FV energy** uses the same ion-only pressure potential and
-finite-volume kinetic-energy estimator in both formulations, plus ion and
-electron thermal energy. **Model energy** uses saved ``Eion`` plus electron
-thermal energy for total ion energy, and the finite-difference-X, spectral-Z
-quadratic energy for pressure evolution. The pressure formulation includes
-its signed electron-pressure contribution to the generalised potential.
-Its polarisation transport and viscous heating also differ, so this comparison
-changes more than the evolved variable. State outputs suffice for the analysis;
-``--diagnose`` enables additional operator checks.
-
-The relative-change panels show :math:`[E(t)-E(0)]/E(0)`. The final panel
-shows :math:`E_{\rm shared}-E_{\rm model}` in joules, measuring the choice of
-kinetic-energy discretisation and pressure potential. The thin **boundary
-balance residual** in the model-energy panel is
-
-.. math::
-
-   \frac{R(t)}{E_{\rm model}(0)}, \qquad
-   R(t) = E_{\rm model}(t)-E_{\rm model}(0)
-          + \int_0^t P_{\rm outward}(t')\,dt'.
-
-Positive outward power removes energy. In these total-energy cases the radial
-transport faces are closed, so the residual equals the raw energy change.
-The pressure formulation retains its raw drift; its boundary balance residual
-is unavailable because the analysis does not cover all polarisation exchanges
-and time-dependent generalised-potential boundary work.
-
-The state figure shows local ion internal energy density :math:`3P_i/2`
-from pressure evolution above :math:`K_\perp` from total ion energy. Both are
-in J/m\ :sup:`3`, with separate linear colour scales held fixed across times.
-The kinetic energy includes the combined E×B and diamagnetic drift, as defined
-in :ref:`sec-evolve_vorticity_ion_energy`. Only physical cells are plotted;
-their kinetic-energy stencil still uses the imposed wall guards. The
-energy-history figure integrates these densities over the physical volume.
-
-Each boundary policy produces state PNG/PDF figures, convergence PDFs, and
-CSV/JSON energy and error tables. Energy histories use one six-panel PNG by
-default; ``--energy-format pdf-panels`` exports six separate PDFs, each with
-its own labels and legend. Inputs, outputs, logs and a manifest are retained
-for ``--resume`` or ``--analyse-only``. See
-``examples/tokamak-2D-driftplane/2D-energy/scan-study.md`` for the full interface.
-
-.. figure:: figs/2D-energy-comparison-state.png
-   :name: energy-comparison-state
-   :alt: Ion internal energy density above perpendicular kinetic energy density at four shared times.
-   :width: 100%
-
-   Ion internal energy density :math:`3P_i/2` from pressure evolution (top)
-   and perpendicular kinetic energy density from total ion energy (bottom),
-   on the :math:`32^2` grid at
-   :math:`t=(0, 2500, 5000, 10000)/\omega_{ci}`, where :math:`\omega_{ci}`
-   is the cyclotron frequency used for time normalisation. The lower row
-   starts with zero kinetic energy; curvature generates the subsequent flow.
-
-.. figure:: figs/2D-energy-comparison-energy.png
-   :name: energy-comparison-energy
-   :alt: Thermal and kinetic energy changes, shared and model energy drift, boundary balance residual and estimator difference on two grids.
-   :width: 100%
-
-   Thermal and perpendicular kinetic energy changes, relative total-energy
-   changes and estimator differences. Solid traces use :math:`32^2` cells;
-   dashed traces use :math:`16^2`. Parallel kinetic energy is zero. The thin
-   boundary balance residual is shown only for total ion energy, which
-   conserves combined total ion energy and electron thermal energy to
-   roundoff in these runs.
+``run_scan.py`` launches successive doubled grids using ``launch_safe``.
+``analyse_scan.py`` independently uses xhermes to write energy histories,
+particle inventories and adjacent-grid electron thermal-energy differences. See the
+example README for commands and options. For radial and sheath power and
+particle balance tables and figures, use
+``examples/tokamak-3D/turbulence-ion-energy/analyse.py``.
