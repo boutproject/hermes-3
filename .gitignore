@@ -17,12 +17,6 @@ __pycache__
 /docs/hermes3.pdf
 /docs/sphinx/_breathe*
 
-# Local working notes
-/*plan*.md
-/docs/*-plan.md
-/docs/*-report.md
-/docs/test-consolidation-validation.md
-
 # IDE config files
 .vscode
 compile_commands.json
@@ -47,6 +41,3 @@ docker/docker-compose.override.yaml
 # Python-related directories
 *venv/
 dist/
-
-# Retained resolution scans (raw data, PDFs, tables and manifests)
-/examples/tokamak-2D-driftplane/2D-energy/results/
