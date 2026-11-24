@@ -332,15 +332,17 @@ unphysically fast conductive heat transfer. This was implemented to mitigate
 a numerical mode caused by very small tolerance-level errors in
 the core electron temperature. The temperature variation would
 be relaxed by conduction on an extremely fast timescale, causing
-numerical problems. This limiter
-is only implemented on closed field lines, and timescale
+numerical problems. The timescale
 `kappa_timescale_limit` can be set to a time :math:`\tau` in seconds
 (off by default; 10 ns was found to work well for electrons in testing).
+By default this limiter acts on closed field lines only.
+It can be enabled on open field lines by setting
+`timescale_limit_closed_only = false`.
 
 With `diagnose = true`, the conductivity before the limiters is saved as
 `kappa_par_<species>_unlimited`, and the largest conductivity each
 limiter allows as `kappa_par_<species>_fluxlim_max` and
-`kappa_par_<species>_timelim_max` (NaN on open field lines).
+`kappa_par_<species>_timelim_max` (NaN where the timescale limiter is off).
 
 .. doxygenstruct:: BraginskiiConduction
    :members:

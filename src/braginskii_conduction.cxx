@@ -92,6 +92,11 @@ BraginskiiConduction::BraginskiiConduction(const std::string& name, Options& all
                  "for electrons in testing.")
             .withDefault(-1.0)
         / alloptions["units"]["seconds"].as<BoutReal>();
+    all_timescale_limit_closed_only[name] =
+        options["timescale_limit_closed_only"]
+            .doc("Apply the conduction timescale limiter only on closed field lines?"
+                 " True by default.")
+            .withDefault<bool>(true);
     all_conduction_collisions_mode[name] =
         options["conduction_collisions_mode"]
             .doc("Can be multispecies: all collisions, or "
@@ -314,18 +319,19 @@ void BraginskiiConduction::transform_impl(GuardedOptions& state) {
 
     const BoutReal kappa_timescale_limit = all_kappa_timescale_limit[name];
     if (kappa_timescale_limit > 0.0) {
-      // Limit conduction timescale on closed field lines.
+      // Limit conduction timescale, by default on closed field lines only.
       // This prevents "core flashes", oscillations due to
       // tiny corrugations in core Te due to solver tolerance
       // resulting in an extremely rapid conductive relaxation, which
       // then activates slope limiters and causes significant
       // nonlinearity and solver slowdowns.
       // 10ns for electrons should be below any physical conduction timescale.
+      const bool timescale_limit_closed_only = all_timescale_limit_closed_only[name];
       const Coordinates* coord = mesh->getCoordinates();
       Field3D kappa_max{emptyFrom(kappa_par)};
       kappa_max = BoutNaN;
       BOUT_FOR(i, kappa_par.getRegion("RGN_NOBNDRY")) {
-        if (!mesh->periodicY(i.x())) {
+        if (timescale_limit_closed_only && !mesh->periodicY(i.x())) {
           continue;
         }
         const BoutReal dl = coord->dy()[i] * sqrt(coord->g_22()[i]);
@@ -468,9 +474,7 @@ void BraginskiiConduction::outputVars(Options& state) {
                      {{"time_dimension", "t"},
                       {"units", "W / m / eV"},
                       {"conversion", (Pnorm * Omega_ci * SQ(rho_s0)) / Tnorm},
-                      {"long_name", name
-                                        + " maximum kappa due to timescale limitation "
-                                          "(closed field lines only)"},
+                      {"long_name", name + " maximum kappa due to timescale limitation"},
                       {"species", name},
                       {"source", "braginskii_conduction"}});
     }
