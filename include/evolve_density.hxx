@@ -74,7 +74,7 @@ private:
   bool dissipative;        ///< Dissipative Lax-flux for Fci
   bool evolve_log;         ///< Evolve logarithm of density?
   Field3D logN;            ///< Logarithm of density (if evolving)
-
+  BoutReal penalisation_time;
   Field3D source, final_source; ///< External input source
   Field3D Sn;                   ///< Total density source
 

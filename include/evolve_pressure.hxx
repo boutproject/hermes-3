@@ -76,6 +76,7 @@ private:
 
   bool evolve_log; ///< Evolve logarithm of P?
   Field3D logP;    ///< Natural logarithm of P
+  BoutReal penalisation_time;
 
   BoutReal density_floor;     ///< Minimum density for calculating T
   bool low_n_diffuse_perp;    ///< Cross-field diffusion at low density?
