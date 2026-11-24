@@ -319,7 +319,7 @@ if(HERMES_TESTS)
   # * CONFLICTS: list of variables that must be false to enable test
   function(hermes_add_integrated_test TESTNAME)
     set(oneValueArgs DOWNLOAD DOWNLOAD_NAME TEST_EXECUTABLE)
-    set(multiValueArgs REQUIRES CONFLICTS)
+    set(multiValueArgs REQUIRES CONFLICTS ARGUMENTS)
     cmake_parse_arguments(HERMES_TEST_OPTIONS "${options}" "${oneValueArgs}"
                           "${multiValueArgs}" ${ARGN})
 
@@ -370,7 +370,8 @@ if(HERMES_TESTS)
     add_test(
       NAME ${TESTNAME}
       WORKING_DIRECTORY ${INT_TEST_DEST}
-      COMMAND ${HERMES_TEST_OPTIONS_TEST_EXECUTABLE})
+      COMMAND ${INT_TEST_DEST}/${HERMES_TEST_OPTIONS_TEST_EXECUTABLE}
+              ${HERMES_TEST_OPTIONS_ARGUMENTS})
     set_tests_properties(${TESTNAME} PROPERTIES LABELS integration)
 
     if(HERMES_TEST_OPTIONS_DOWNLOAD)
@@ -421,6 +422,12 @@ if(HERMES_TESTS)
   hermes_add_integrated_test(2D-recycling CONFLICTS BOUT_USE_METRIC_3D)
   hermes_add_integrated_test(examples CONFLICTS BOUT_USE_METRIC_3D)
   hermes_add_integrated_test(component-order CONFLICTS BOUT_USE_METRIC_3D)
+
+  hermes_add_integrated_test(
+    diamagnetic-drift ARGUMENTS --exe $<TARGET_FILE:${PROJECT_NAME}> --grid
+    ${CMAKE_CURRENT_SOURCE_DIR}/examples/tokamak-3D/tokamak.nc)
+  set_tests_properties(diamagnetic-drift PROPERTIES PROCESSORS 6 TIMEOUT 120)
+
   hermes_add_integrated_test(1D-selflimiting-source)
   hermes_add_integrated_test(1D-density-fci REQUIRES BOUT_USE_METRIC_3D)
   hermes_add_integrated_test(1D-momentum-fci REQUIRES BOUT_USE_METRIC_3D)

@@ -1,0 +1,75 @@
+#!/usr/bin/env python3
+"""Density conservation with closed tokamak magnetic-drift boundaries."""
+
+import argparse
+import shlex
+import shutil
+import tempfile
+from pathlib import Path
+
+import numpy as np
+from boutdata.collect import collect
+from boututils.run_wrapper import launch_safe
+
+HERE = Path(__file__).resolve().parent
+root = HERE.parents[2]
+cli = argparse.ArgumentParser(description=__doc__)
+cli.add_argument("--exe", type=Path, default=root / "hermes-3")
+cli.add_argument("--grid", type=Path, default=root / "examples/tokamak-3D/tokamak.nc")
+cli.add_argument("--nproc", type=int, default=6)
+cli.add_argument("--output-root", type=Path)
+args = cli.parse_args()
+output = args.output_root or Path(tempfile.mkdtemp(prefix="diamagnetic-drift-"))
+
+
+def read(name, directory):
+    return np.asarray(
+        collect(name, path=str(directory), xguards=False, yguards=False, info=False)
+    )
+
+
+for mz in (1, 4):
+    for boundary in ("closed", "closed_average", "open"):
+        directory = output / f"{boundary}-mz{mz}"
+        directory.mkdir(parents=True, exist_ok=False)
+        shutil.copyfile(HERE / "data/BOUT.inp", directory / "BOUT.inp")
+        command = [
+            str(args.exe.resolve()),
+            "-d",
+            str(directory.resolve()),
+            f"mesh:file={args.grid.resolve()}",
+            f"MZ={mz}",
+            f"diamagnetic_drift:radial_boundary={boundary}",
+        ]
+        launch_safe(
+            shlex.join(command),
+            nproc=args.nproc,
+            mthread=1,
+            output=shlex.quote(str(directory / "run.log")),
+        )
+        density = read("Nh+", directory)
+        volume = (
+            read("J", directory)
+            * read("dx", directory)
+            * read("dy", directory)
+            * read("dz", directory)
+        )
+        if volume.ndim == 2:
+            volume = volume[..., None]
+        assert np.isfinite(density).all() and np.isfinite(volume).all()
+        assert (density > 0).all() and (volume > 0).all()
+        assert density.shape[-1] == mz
+        content = (density * volume).sum(axis=(1, 2, 3))
+        drift = abs(content / content[0] - 1).max()
+        change = abs(density[-1] - density[0]).max()
+        print(
+            f"{boundary}, MZ={mz}: relative particle drift {drift:.3g}, "
+            f"density change {change:.3g}",
+            flush=True,
+        )
+        assert change > 1e-6, "Magnetic drift must change the density"
+        if boundary == "open":
+            assert drift > 1e-10, "Open radial boundaries must change particle content"
+        else:
+            assert drift < 1e-12, "Closed radial boundaries must conserve particles"
+print(f"Diamagnetic boundary conservation passed; outputs in {output}")

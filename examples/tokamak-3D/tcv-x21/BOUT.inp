@@ -46,7 +46,8 @@ perpendicular = true
 diagnose = true
 
 [diamagnetic_drift]
-diamag_form = x * (1 - x)  # 0 = gradient; 1 = divergence
+form = divergence                # Conservative diamagnetic transport
+radial_boundary = closed_average # Close radial faces and average the core ring
 
 [vorticity]
 
