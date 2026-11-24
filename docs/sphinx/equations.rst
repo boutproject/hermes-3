@@ -295,6 +295,11 @@ desired for a particular species then it can be turned off by setting
 This component requires a collision time to be calculated
 (i.e., with the :ref:`sec-collisions` component).
 
+The conduction term is
+
+.. math::
+    \nabla\cdot\left(\kappa_{||}\mathbf{b}\mathbf{b}\cdot\nabla T\right)
+
 The choice of collision frequency used for conduction is set by the
 flag `conduction_collisions_mode`: `multispecies` uses all available
 collision frequencies involving the chosen species, while `braginskii`
@@ -303,8 +308,41 @@ recommended for use if solving more than one ion.  If you are solving
 for a single ion and want to recover Braginskii, use the `braginskii`
 mode.
 
+Two flux limiters are available. The free-streaming limiter, enabled by
+setting `kappa_limit_alpha`, limits the heat flux to a fraction
+:math:`\alpha` of the free-streaming flux. This is commonly used to
+represent kinetic electron effects.
+Kinetic simulations give a range of values for
+:math:`\alpha`; see `W. Fundamenski, Plasma Phys. Control. Fusion 47
+(2005) R163 <https://doi.org/10.1088/0741-3335/47/11/R01>`_ for a review.
+The free-streaming flux limiter is applied as follows:
+
 .. math::
-    \nabla\cdot\left(\kappa_{||}\mathbf{b}\mathbf{b}\cdot\nabla T\right)
+    \kappa_{||} \rightarrow \frac{\kappa_{||}}{1 + |q_{SH}| / q_{fl}},
+    \qquad q_{SH} = \kappa_{||}\nabla_{||}T,
+    \qquad q_{fl} = \alpha\, n T \sqrt{\frac{T}{m}}
+
+where :math:`q_{SH}` is the unlimited Spitzer-Härm heat flux and
+:math:`q_{fl}` is the maximum heat flux based on the free-streaming
+fraction :math:`\alpha`.
+
+In addition to the free-streaming flux limiter, the timescale flux
+limiter sets the minimum allowable conduction timescale to prevent
+unphysically fast conductive heat transfer. This was implemented to mitigate
+a numerical mode caused by very small tolerance-level errors in
+the core electron temperature. The temperature variation would
+be relaxed by conduction on an extremely fast timescale, causing
+numerical problems. The timescale
+`kappa_timescale_limit` can be set to a time :math:`\tau` in seconds
+(off by default; 10 ns was found to work well for electrons in testing).
+By default this limiter acts on closed field lines only.
+It can be enabled on open field lines by setting
+`timescale_limit_closed_only = false`.
+
+With `diagnose = true`, the conductivity before the limiters is saved as
+`kappa_par_<species>_unlimited`, and the largest conductivity each
+limiter allows as `kappa_par_<species>_fluxlim_max` and
+`kappa_par_<species>_timelim_max` (NaN where the timescale limiter is off).
 
 .. doxygenstruct:: BraginskiiConduction
    :members:
