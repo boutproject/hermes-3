@@ -30,10 +30,13 @@
 // The unit tests use the global mesh
 using namespace bout::globals;
 
-// A periodic ring has no target faces. Open rings have both targets.
+// Make target queries consistent with periodicY(): core rings have no targets,
+// while open field lines have a target at each end. FakeMesh defaults do not
+// distinguish these cases in their target iterators.
 class DiamagneticFakeMesh : public FakeMesh {
 public:
-  using FakeMesh::FakeMesh;
+  using FakeMesh::FakeMesh; // Inherit the grid-size and guard-cell constructors.
+  // Keep the no-argument overloads visible when overriding firstY(int)/lastY(int).
   using FakeMesh::firstY;
   using FakeMesh::lastY;
 
@@ -47,18 +50,6 @@ public:
   bool firstY(int jx) const override { return !periodicY(jx); }
   bool lastY(int jx) const override { return !periodicY(jx); }
 };
-
-using DiamagneticDriftTest =
-    FakeMeshFixture_tmpl<3, 5, 7, false, 1, 1, DiamagneticFakeMesh>;
-using WideDiamagneticDriftTest =
-    FakeMeshFixture_tmpl<5, 5, 7, false, 1, 1, DiamagneticFakeMesh>;
-// FV::Div_f_v needs two x guards for its reconstruction stencil.
-using RadialDiamagneticDriftTest =
-    FakeMeshFixture_tmpl<8, 5, 7, false, 2, 1, DiamagneticFakeMesh>;
-using UnsupportedDiamagneticDriftTest =
-    FakeMeshFixture_tmpl<3, 5, 7, true, 1, 1, DiamagneticFakeMesh>;
-using FciDiamagneticDriftTest =
-    FakeMeshFixture_tmpl<8, 5, 7, true, 2, 1, DiamagneticFakeMesh>;
 
 namespace {
 
@@ -133,6 +124,39 @@ std::shared_ptr<Coordinates> makeUnitCoordinates(Mesh* target_mesh) {
 
 } // namespace
 
+// Aligned gradient/divergence tests start with B = 1 and radial curvature.
+// Tests needing another direction or a varying B override this default.
+template <class Base>
+class CurvatureDiamagneticFixture : public Base {
+protected:
+  void SetUp() override {
+    Base::SetUp();
+    setCurvature();
+  }
+};
+
+// One physical x cell is sufficient for option and species/source-selection tests.
+using DiamagneticDriftTest = CurvatureDiamagneticFixture<
+    FakeMeshFixture_tmpl<3, 5, 7, false, 1, 1, DiamagneticFakeMesh>>;
+// Three physical x cells leave a nonuniform interior between uniform boundary
+// cells for the open-gradient conservation test.
+using WideDiamagneticDriftTest = CurvatureDiamagneticFixture<
+    FakeMeshFixture_tmpl<5, 5, 7, false, 1, 1, DiamagneticFakeMesh>>;
+// Four physical x cells allow comparison of the averaged and adjacent rings.
+// Two x guards are required by FV::Div_f_v's reconstruction stencil.
+using RadialDiamagneticDriftTest = CurvatureDiamagneticFixture<
+    FakeMeshFixture_tmpl<8, 5, 7, false, 2, 1, DiamagneticFakeMesh>>;
+// The FCI mock cannot convert to/from aligned coordinates, so gradient/divergence
+// construction must fail before reading curvature; a minimal mesh suffices.
+using UnsupportedDiamagneticDriftTest =
+    FakeMeshFixture_tmpl<3, 5, 7, true, 1, 1, DiamagneticFakeMesh>;
+// A wider FCI mesh supports nonuniform bracket profiles and core-ring averaging.
+// Deliberately omit curvature: the bracket uses B and the metrics instead.
+using FciDiamagneticDriftTest =
+    FakeMeshFixture_tmpl<8, 5, 7, true, 2, 1, DiamagneticFakeMesh>;
+
+// Open field lines with two targets, unit metrics and poloidal curvature test
+// divergence conservation without flux through any boundary.
 class DivergenceDiamagneticDriftTest
     : public FakeMeshFixture_tmpl<6, 5, 7, false, 2, 1, DivergenceDiamagneticMesh> {
 protected:
@@ -148,7 +172,6 @@ protected:
 
 // Unspecified options select divergence form and closed_average radial boundaries.
 TEST_F(DiamagneticDriftTest, DefaultOptions) {
-  setCurvature();
   Options options = diamagneticOptions();
   DiamagneticDrift component("test", options, nullptr);
 
@@ -159,7 +182,6 @@ TEST_F(DiamagneticDriftTest, DefaultOptions) {
 
 // Every valid form/boundary combination constructs successfully and retains its options.
 TEST_F(DiamagneticDriftTest, AcceptsEveryFormAndRadialBoundary) {
-  setCurvature();
   for (const auto form : {DiamagneticForm::gradient, DiamagneticForm::divergence,
                           DiamagneticForm::bracket}) {
     for (const auto boundary : {DiamagneticBoundary::open, DiamagneticBoundary::closed,
@@ -178,7 +200,6 @@ TEST_F(DiamagneticDriftTest, AcceptsEveryFormAndRadialBoundary) {
 
 // Unknown form or radial_boundary names are rejected during construction.
 TEST_F(DiamagneticDriftTest, RejectsInvalidOptions) {
-  setCurvature();
   for (const auto* key : {"form", "radial_boundary"}) {
     SCOPED_TRACE(key);
     Options options = diamagneticOptions();
@@ -189,7 +210,6 @@ TEST_F(DiamagneticDriftTest, RejectsInvalidOptions) {
 
 // The removed diamag_form option reports its replacements and why blends were removed.
 TEST_F(DiamagneticDriftTest, RemovedDiamagFormExplainsMigration) {
-  setCurvature();
   for (const BoutReal value : {0.0, 1.0, 0.5}) {
     SCOPED_TRACE(value);
     Options options = diamagneticOptions();
@@ -210,7 +230,6 @@ TEST_F(DiamagneticDriftTest, RemovedDiamagFormExplainsMigration) {
 
 // Removed bndry_flux reports its replacements rather than acting as an alias.
 TEST_F(DiamagneticDriftTest, RemovedBoundaryFluxExplainsMigration) {
-  setCurvature();
   for (const bool allow_flux : {false, true}) {
     SCOPED_TRACE(allow_flux);
     Options options = diamagneticOptions();
@@ -354,7 +373,6 @@ TEST_F(FciDiamagneticDriftTest, BracketCoreAveragingPreservesRingIntegral) {
 
 // Species without charge or temperature, and neutral species, acquire no density source.
 TEST_F(DiamagneticDriftTest, TransformSkipsSpeciesWithoutRequiredInputs) {
-  setCurvature();
   Options options = diamagneticOptions();
   options["diamagnetic_drift"]["radial_boundary"] = "closed";
 
@@ -376,7 +394,6 @@ TEST_F(DiamagneticDriftTest, TransformSkipsSpeciesWithoutRequiredInputs) {
 // Only present density, pressure and momentum inputs produce their corresponding sources;
 // these uniform profiles give zero sources, including for negative charge.
 TEST_F(DiamagneticDriftTest, TransformWritesOnlyPresentOutputs) {
-  setCurvature();
   Options options = diamagneticOptions();
   options["diamagnetic_drift"]["radial_boundary"] = "closed";
   options["diamagnetic_drift"]["form"] = "gradient";
@@ -410,8 +427,6 @@ TEST_F(DiamagneticDriftTest, TransformWritesOnlyPresentOutputs) {
 // Both forms replace core-ring sources with their volume-weighted means, preserving
 // the volume integrals and leaving the adjacent ring unchanged.
 TEST_F(RadialDiamagneticDriftTest, TransformAveragesInnermostCoreRing) {
-  setCurvature();
-
   auto* coords = mesh->getCoordinates();
   Coordinates::FieldMetric J{1.0};
   for (int jz = mesh->zstart; jz <= mesh->zend; ++jz) {
@@ -485,7 +500,6 @@ TEST_F(RadialDiamagneticDriftTest, TransformAveragesInnermostCoreRing) {
 // Core means include z-dependent cell volumes, preserving ring integrals rather than
 // using arithmetic means; the adjacent ring is unchanged and closed sources conserve.
 TEST_F(RadialDiamagneticDriftTest, CoreAveragePreservesRingIntegralWithZVaryingJacobian) {
-  setCurvature();
   const BoutReal wave_number = TWOPI / mesh->LocalNz;
   const auto J = makeField<Field3D>([wave_number](Ind3D& i) {
     return 1.5 + 0.2 * i.y() + 0.3 * std::cos(wave_number * i.z());
@@ -558,7 +572,6 @@ TEST_F(RadialDiamagneticDriftTest, ShiftedCurvatureReadsThreeDimensionalSinty) {
   const auto sinty = makeField<Field3D>([wave_number](Ind3D& i) {
     return 0.2 + 0.05 * i.y() + 0.1 * std::sin(wave_number * i.z());
   });
-  setCurvature();
   static_cast<FakeMesh*>(mesh)->setGridDataSource(new FakeGridDataSource{
       {{"bxcvx", 1.0}, {"bxcvy", 0.0}, {"bxcvz", 0.0}, {"sinty", sinty}}});
   // Select the curvature correction while retaining the identity transform
@@ -646,8 +659,7 @@ TEST_F(WideDiamagneticDriftTest, GradientFormOpenIsConservativeWhenBoundaryValue
 // For divergence-free curvature, both closed modes conserve every source in both forms;
 // open radial faces give a nonzero integral, and interior transport remains nonzero.
 TEST_F(RadialDiamagneticDriftTest, RadialBoundaryModesConserveClosedSources) {
-  // Constant curvature and J give an exactly divergence-free discrete curvature.
-  setCurvature(1.0, 0.0, 0.0);
+  // The fixture's constant curvature and J are discretely divergence-free.
   const auto quantity = makeField<Field3D>([](Ind3D& i) {
     return 1.0 + (0.2 * i.x() * i.x()) + (0.05 * i.y()) + (0.01 * i.z());
   });
@@ -756,7 +768,6 @@ TEST_F(RadialDiamagneticDriftTest, SheathFacesConserveWithNonuniformGuardTempera
 // with an error explaining the required capability.
 TEST_F(UnsupportedDiamagneticDriftTest,
        CurvatureFormsRejectUnsupportedParallelTransform) {
-  setCurvature(0.0, 1.0, 0.0);
   for (const auto* form : {"gradient", "divergence"}) {
     for (const auto* boundary : {"open", "closed", "closed_average"}) {
       SCOPED_TRACE(boundary);
