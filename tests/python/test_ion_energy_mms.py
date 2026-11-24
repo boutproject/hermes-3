@@ -25,7 +25,7 @@ def test_continuum_identities_and_nonzero_terms():
 
 
 def test_periodic_y_and_z_for_evolved_and_recovered_fields():
-    for name in (*exact.evolved("parallel_current_wall"), *exact.RECOVERED):
+    for name in (*exact.EVOLVED, *exact.RECOVERED):
         for axis in (1, 2):
             points = [1.37, 2.91, 4.23, 0.73]
             points[axis] = 0
@@ -37,12 +37,11 @@ def test_periodic_y_and_z_for_evolved_and_recovered_fields():
 def test_generated_input_and_boundary_contract(tmp_path):
     path = tmp_path / "BOUT.inp"
     mms.generate(path)
-    assert path.read_bytes() == mms.input_path("parallel_current_wall").read_bytes()
     options = BoutOptionsFile(str(path))
     assert options["solver"].get_bool("mms")
     assert options["e:type"] == "quasineutral, evolve_pressure, evolve_momentum"
     assert options["Ve:bndry_xin"] == "dirichlet_o2(mms:electron_velocity)"
-    for name in exact.evolved("parallel_current_wall"):
+    for name in exact.EVOLVED:
         assert "source" in options[name] and "solution" in options[name]
     assert float(options["mesh"].evaluate_scalar("g13")) == 0.25
     assert (

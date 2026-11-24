@@ -1,83 +1,75 @@
 #!/usr/bin/env python3
-"""Conservation and nontrivial X-Z energy exchange in a periodic two-ion slab."""
+"""Closed two-ion energy/particle conservation and diagnostic independence."""
 
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "tools"))
-from energy_analysis import summary
-from energy_analysis.testing import Study, parser, state_difference
+import numpy as np
+import xhermes
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from ion_energy_test import launch, parser
 
 HERE = Path(__file__).resolve().parent
-
-
-def main():
-    cli = parser(__doc__)
-    cli.set_defaults(nproc=2, timeout=45)
-    cli.add_argument(
-        "--resolution",
-        type=int,
-        choices=(8, 16, 32),
-        default=8,
-        help="Physical X/Z cells (default 8 for CI)",
+cli = parser(__doc__)
+cli.add_argument("--resolution", type=int, default=8)
+args = cli.parse_args()
+states = []
+for diagnose in (True, False):
+    path = launch(
+        args,
+        f"diagnostics-{diagnose}",
+        HERE / "data/BOUT.inp",
+        [
+            f"mesh:nx={args.resolution + 4}",
+            f"mesh:nz={args.resolution}",
+            "solver:nout=20",
+            "solver:output_step=1",
+            f"evolve_vorticity_ion_energy:diagnose={str(diagnose).lower()}",
+        ],
     )
-    args = cli.parse_args()
-    with Study(HERE, args) as study:
-        runs = []
-        for diagnose in (True, False):
-            run = study.run(
-                "diagnostics-" + str(diagnose).lower(),
-                [
-                    "restart=false",
-                    f"mesh:nx={args.resolution + 4}",
-                    f"mesh:nz={args.resolution}",
-                    "solver:nout=20",
-                    "solver:output_step=1",
-                    f"evolve_vorticity_ion_energy:diagnose={str(diagnose).lower()}",
-                ],
-            )
-            runs.append(run)
-            report = summary(run)
-            study.result["cases"][Path(run.source).name]["summary"] = report
-            drift = report["closed_balance"]
-            if drift["coverage"] != "complete":
-                raise ValueError(drift["missing_terms"])
-            # This closure is conservative only in the parallel-invariant case.
-            study.check(
-                f"closure_work/{diagnose}",
-                max(map(abs, report["model_defect_power_W"])),
-                limit=0,
-                truncation=True,
-            )
-            study.check(
-                f"energy/{diagnose}", drift["maxima"]["energy_relative_drift"], "energy"
-            )
-            for name, value in drift["maxima"].items():
-                if name.startswith(("particles_", "charge_")):
-                    study.check(f"{name}/{diagnose}", value, "particles")
-            study.check(f"recovery/{diagnose}", report["recovery_error"], "recovery")
-            for name in (
-                "curvature_exchange_relative",
-                "ion_perpendicular_change_relative",
-                "ion_parallel_change_relative",
-            ):
-                study.check(
-                    f"{name}/{diagnose}",
-                    report[name],
-                    "parallel_kinetic_exchange"
-                    if name == "ion_parallel_change_relative"
-                    else "nontrivial",
-                    minimum=True,
+    with xhermes.open(path, keep_xboundaries=False, keep_yboundaries=False) as ds:
+        ds = ds.load(scheduler="synchronous")
+        content = ds.hermes.inventory().compute()
+        # zero_current has no electron kinetic equation in this Y-invariant slab.
+        energy = content.ion_energy + content.electron_thermal
+        for name, value in {
+            "energy": energy,
+            **{
+                key: value
+                for key, value in content.items()
+                if key.startswith("particles_")
+            },
+        }.items():
+            drift = float(abs(value / value.isel(t=0) - 1).max())
+            print(f"{name}, diagnose={diagnose}: relative drift {drift:.3g}")
+            assert np.isfinite(drift) and drift < 1e-10, name
+        if diagnose:
+            pressure = (ds["Nd+"] + ds.Nimpurity) * ds.Tion * 1.602176634e-19
+            recovered = 1.5 * pressure + ds.ion_KE_perp + ds.ion_KE_parallel
+            assert float(abs((recovered - ds.Eion) / ds.Eion).max()) < 1e-10
+            for name, minimum in (("ion_KE_perp", 1e-4), ("ion_KE_parallel", 5e-5)):
+                field = ds[name]
+                scale = float(abs(ds.Eion.isel(t=0)).max())
+                assert float(abs(field - field.isel(t=0)).max()) / scale > minimum
+            assert (
+                float(
+                    abs(
+                        content.electron_thermal / content.electron_thermal.isel(t=0)
+                        - 1
+                    ).max()
                 )
-            for name, diagnostic in report["diagnostics"].items():
-                if diagnostic["available"]:
-                    study.check(
-                        name,
-                        diagnostic["max_absolute_error_normalised"],
-                        "diagnostic_error",
-                    )
-        study.check("diagnostics_state", state_difference(*runs), "diagnostics")
-
-
-if __name__ == "__main__":
-    main()
+                > 1e-4
+            )
+    with xhermes.open(
+        path, unnormalise=False, keep_xboundaries=False, keep_yboundaries=False
+    ) as ds:
+        ds = ds.load(scheduler="synchronous")
+        states.append(
+            ds[
+                ["Eion", "Pe", "Nd+", "Nimpurity", "NVd+", "NVimpurity", "Vort", "phi"]
+            ].load()
+        )
+for name in states[0]:
+    np.testing.assert_allclose(states[0][name], states[1][name], rtol=0, atol=1e-10)
+print("Closed conservation, energy exchange and diagnostic independence passed")

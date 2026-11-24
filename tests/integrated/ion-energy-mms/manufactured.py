@@ -5,19 +5,17 @@ The auxiliary chi excludes viscous stress, which has no particle flux,
 before BOUT MMS forcing. Viscosity still diffuses vorticity and exchanges energy.
 """
 
-from functools import cache, lru_cache
+from functools import cache
 
 import numpy as np
 import sympy as s
-from cases import EVOLVED, PARALLEL_VARIANTS, RECOVERED, VARIANTS
+
+EVOLVED = ("Ni", "Nj", "NVi", "NVj", "Pe", "Vort", "Eion", "NVe")
+RECOVERED = ("Pi", "pi", "pj", "Tion", "phi", "psi", "chi")
 
 X, Y, Z, t = s.symbols("X Y Z t", real=True)
 COORDINATES = (X, Y, Z, t)
 LENGTH = s.Integer(10)
-
-
-def evolved(variant):
-    return EVOLVED + (("NVe",) if variant in PARALLEL_VARIANTS else ())
 
 
 def grad(f):
@@ -28,7 +26,7 @@ def div(v):
     return s.diff(v[0], X) + s.diff(v[1], Z)
 
 
-def metric(variant="parallel_current_wall"):
+def metric():
     sigma = s.Rational(1, 4)
     return s.Matrix([[1, sigma], [sigma, 1 + sigma**2]])
 
@@ -49,12 +47,12 @@ def common_temperature(psi, ni, nj):
     return 2 * psi / (2 * ni + s.Rational(3, 2) * nj)
 
 
-def pressure_shape(a, variant):
+def pressure_shape(a):
     return 1 - s.cos(2 * a)
 
 
-@lru_cache(maxsize=len(VARIANTS))
-def model(variant="parallel_current_wall"):
+@cache
+def model():
     """Return exact fields, physical RHS, forcing and separate term coverage."""
     r = s.Rational
     a, b, d, tau = (
@@ -64,9 +62,7 @@ def model(variant="parallel_current_wall"):
         t / 5,
     )
     theta = d - tau
-    if variant not in VARIANTS:
-        raise ValueError(f"Unknown MMS variant: {variant}")
-    H = metric(variant)
+    H = metric()
     nu = r(2, 100)
     # Wall-uniform density and velocity isolate the parallel-current operator
     # comparison; temperature retains the local pressure-potential fluctuation.
@@ -94,7 +90,7 @@ def model(variant="parallel_current_wall"):
     envelope = amplitude * (s.sin(a) - r(5, 39) * s.sin(3 * a))
     fluctuation = envelope * s.cos(b + tau) * s.cos(sheared_phase)
     amp_psi = r(2, 100)
-    shape = pressure_shape(a, variant)
+    shape = pressure_shape(a)
     pressure_fluctuation = amp_psi * shape * s.cos(sheared_phase)
     psi = r(12, 10) + r(4, 100) * s.cos(b - tau) + pressure_fluctuation
     phi = fluctuation - pressure_fluctuation
@@ -230,7 +226,7 @@ def model(variant="parallel_current_wall"):
     )
     for variable in ("Pe", "Eion"):
         rhs[variable] = sum(v for k, v in terms.items() if k.startswith(variable + "."))
-    fields = dict(zip(EVOLVED, (ni, nj, mi, mj, pe, omega, energy)))
+    fields = dict(zip(EVOLVED[:-1], (ni, nj, mi, mj, pe, omega, energy)))
     fields.update(Pi=pressure, pi=pi, pj=pj, Tion=ti, phi=phi, psi=psi, chi=chi)
     me = -je / 1836
     terms.update(
@@ -249,18 +245,18 @@ def model(variant="parallel_current_wall"):
         Jpar=parallel_current,
         DivJpar=s.diff(parallel_current, Y),
     )
-    sources = {name: s.diff(fields[name], t) - rhs[name] for name in evolved(variant)}
+    sources = {name: s.diff(fields[name], t) - rhs[name] for name in EVOLVED}
     return fields, rhs, sources, terms
 
 
 @cache
-def evaluator(name, variant="parallel_current_wall"):
-    return s.lambdify(COORDINATES, model(variant)[0][name], "numpy", cse=True)
+def evaluator(name):
+    return s.lambdify(COORDINATES, model()[0][name], "numpy", cse=True)
 
 
-def evaluate(name, x, y, z, time, variant="parallel_current_wall"):
+def evaluate(name, x, y, z, time):
     """Evaluate on broadcastable physical coordinates, including guards."""
-    result = evaluator(name, variant)(x, y, z, time)
+    result = evaluator(name)(x, y, z, time)
     return np.broadcast_to(
         result,
         np.broadcast_shapes(np.shape(x), np.shape(y), np.shape(z), np.shape(time)),
@@ -272,10 +268,10 @@ def zero(expression):
     return s.simplify(s.expand(s.expand_trig(expression).rewrite(s.exp))) == 0
 
 
-def preflight(variant="parallel_current_wall"):
+def preflight():
     """Verify recovery, physical current continuity, boundaries and term coverage."""
-    fields, rhs, sources, terms = model(variant)
-    H, c = metric(variant), s.Integer(2)
+    fields, rhs, sources, terms = model()
+    H, c = metric(), s.Integer(2)
     Phi = fields["phi"] + fields["psi"]
     assert zero(fields["Vort"] - c * lap(Phi, H))
     assert zero(
@@ -317,7 +313,7 @@ def preflight(variant="parallel_current_wall"):
     assert all(np.isfinite(value) and value > 1e-12 for value in magnitudes.values()), (
         magnitudes
     )
-    assert set(evolved(variant)) <= sources.keys() and set(RECOVERED) <= fields.keys()
+    assert set(EVOLVED) <= sources.keys() and set(RECOVERED) <= fields.keys()
     return {
         "elliptic_and_X_boundaries": "verified symbolically",
         "positive_primitives": True,

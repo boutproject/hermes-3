@@ -1,385 +1,79 @@
 #!/usr/bin/env python3
-"""Continuum 3D slab MMS, spatial convergence and publication plots."""
+"""Optional 3D continuum MMS spatial, temporal and MPI convergence study."""
 
-import hashlib
-import json
 import sys
 from pathlib import Path
 
 import numpy as np
-import xarray as xr
+import xhermes
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "tools"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from cases import EVOLVED, PARALLEL_VARIANTS
-from energy_analysis import open_run
-from energy_analysis.convergence import manufactured_errors
-from energy_analysis.dataset import AuditError
-from energy_analysis.expressions import evaluate
-from energy_analysis.inventory import energy_densities
-from energy_analysis.testing import Study, parser, state_difference
+from analyse import check_recovery, errors, fields, norms, save_convergence
+from ion_energy_test import launch, parser
+from mms import generate
 
-HERE = Path(__file__).resolve().parent
-INTERIOR_FRACTION = 0.25
-
-
-def references(variant):
-    fields = {
-        **{name: name + ":solution" for name in EVOLVED},
-        "phi": "mms:potential",
-        "psi": "mms:pressure_potential",
-        "Tion": "mms:ion_temperature",
-        "Pi": "mms:total_pressure",
-        "pi": "mms:pressure_i",
-        "pj": "mms:pressure_j",
-    }
-    if variant in PARALLEL_VARIANTS:
-        fields.update(
-            NVe="NVe:solution",
-            Te="mms:electron_temperature",
-            ion_chi="mms:current_potential",
-        )
-    return fields
+cli = parser(__doc__)
+cli.add_argument("--levels", type=int, default=2)
+cli.add_argument("--verify", action="store_true")
+args = cli.parse_args()
+if args.levels < 2:
+    cli.error("At least two refinement levels are required")
+template = args.output_root / "generated/BOUT.inp"
+generate(template)
+sizes = [8 * 2**level for level in range(args.levels)]
+reports, runs, failures = {}, {}, []
 
 
-def comparison_fields(run, variant):
-    ds = run.data
-    fields = {name: ds[name] for name in references(variant) if name in ds}
-    recovered = energy_densities(run)
-    fields.update(psi=recovered.pressure_potential, Pi=recovered.ion_thermal / 1.5)
-    for species in run.species:
-        name = "p" + species.name
-        if name in references(variant):
-            fields[name] = ds["N" + species.name] * ds.Tion
-    return fields
-
-
-def vorticity_rate_residual(run):
-    ds = run.data
-    # The saved solver derivative contains one BOUT continuum MMS injection.
-    forcing = xr.concat(
-        [evaluate(run, "Vort:source", float(time)) for time in ds.t.values], dim=ds.t
+def run(size, suffix="", *, tight=False, nproc=None):
+    path = launch(
+        args,
+        f"{size}{suffix}",
+        template,
+        [
+            f"mesh:nx={size + 4}",
+            f"mesh:ny={2 * size}",
+            f"mesh:nz={size}",
+            "solver:atol=" + ("1e-14" if tight else "1e-12"),
+            "solver:rtol=" + ("1e-12" if tight else "1e-10"),
+            "solver:max_timestep=" + ("0.0005" if tight else "0.002"),
+        ],
+        nproc=nproc,
     )
-    return (
-        ds["ddt(Vort)"]
-        - ds.ion_current_rhs
-        - ds.get("DivJviscous", 0)
-        - ds.ion_phi_dissipation
-        - forcing
-    )
+    with xhermes.open(
+        path, unnormalise=False, keep_xboundaries=False, keep_yboundaries=False
+    ) as ds:
+        ds = ds.load(scheduler="synchronous")
+    check_recovery(ds)
+    return ds
 
 
-def diamagnetic_divergence(run):
-    """Independent FFT divergence of the slab's contravariant magnetic current."""
-    ds = run.data
-    curvature = (
-        2
-        * float(ds.options["mesh"].evaluate_scalar("bxcvz"))
-        * run.length_scale**2
-        / float(ds.options["hermes"].evaluate_scalar("Bnorm"))
-    )
-    pressure = ds.Pe + energy_densities(run).ion_thermal / 1.5
-    current = curvature * pressure / ds.Bxy
-    spacing = float(np.asarray(ds.dz).flat[0])
-    wave = 2 * np.pi * np.fft.fftfreq(ds.sizes["z"], d=spacing)
-    return xr.apply_ufunc(
-        lambda values: (
-            np.fft.ifft(1j * wave * np.fft.fft(values, axis=-1), axis=-1).real
-        ),
-        current,
-        input_core_dims=[["z"]],
-        output_core_dims=[["z"]],
-    )
-
-
-def check_physics(study, label, run, variant):
-    ds = run.data
-    errors = manufactured_errors(
-        run, references(variant), interior_fraction=INTERIOR_FRACTION
-    )
-    study.result["cases"][label]["errors"] = errors
-    recovery = energy_densities(run)
-    checks = {"recovery": (recovery.ion_reconstructed - ds.Eion, "recovery")}
-    if variant in PARALLEL_VARIANTS:
-        magnetic = diamagnetic_divergence(run)
-        checks.update(
-            continuity=(
-                ds.DivJpol + ds.DivJpar + magnetic - ds.ion_auxiliary_residual,
-                "continuity",
-            ),
-            magnetic_current=(
-                ds.ion_current_rhs - ds.DivJReynolds - ds.DivJpar - magnetic,
-                "continuity",
-            ),
-            auxiliary_residual=(ds.ion_auxiliary_residual, "auxiliary_residual"),
-            vorticity_rate=(vorticity_rate_residual(run), "continuity"),
-            pressure_source_ownership=(ds.Pe_src, "ownership"),
-            ion_energy_source_ownership=(ds.Eion_src, "ownership"),
-        )
-    for name, (value, criterion) in checks.items():
-        study.check(
-            label + "/" + name,
-            float(abs(run.interior(value)).max()),
-            criterion,
-            truncation=True,
-        )
-    if variant in PARALLEL_VARIANTS:
-        for field, criterion in (
-            ("parallel_current", "nonzero_current"),
-            ("DivJpar", "nonzero_divergence"),
-            ("DivJReynolds", "nonzero_reynolds"),
-            ("DivJdia", "nonzero_curvature"),
-            ("DivJviscous", "nonzero_viscosity"),
-            ("DivJpol", "nonzero_polarisation"),
-        ):
-            value = (
-                ds.ion_current_rhs - ds.DivJpar - ds.DivJReynolds
-                if field == "DivJdia"
-                else ds[field]
+for index, size in enumerate(sizes):
+    runs[size] = run(size)
+    reports[size] = errors(runs[size])
+    if index:
+        for name, fine in reports[size].items():
+            coarse = reports[sizes[index - 1]][name]
+            for norm, minimum in (("l2_interior", 1.4), ("linf_interior", 0.9)):
+                order = np.log2(coarse[norm] / fine[norm])
+                print(f"{size} {name} {norm}: order {order:.3f}")
+                if not np.isfinite(order) or order < minimum:
+                    failures.append(f"{size}/{name}/{norm}: order {order:.3f}")
+save_convergence(args.output_root, reports)
+assert not failures, "Spatial convergence failed: " + ", ".join(failures)
+if args.verify:
+    size = sizes[1]
+    tight = run(size, "-tight", tight=True)
+    for name, field in fields(runs[size]).items():
+        error = (field - fields(tight)[name]).isel(t=-1, drop=True)
+        for norm, value in norms(runs[size].isel(t=-1, drop=True), error).items():
+            assert value < max(1e-11, 0.05 * reports[size][name][norm]), (
+                name,
+                norm,
+                "temporal",
             )
-            study.check(
-                label + "/" + criterion,
-                float(abs(run.interior(value)).max()),
-                criterion,
-                minimum=True,
-            )
-    return errors
-
-
-def stop_on_failed_checks(study, start=0):
-    failed = [c["name"] for c in study.result["checks"][start:] if not c["passed"]]
-    if failed:
-        raise AuditError(
-            "Criteria failed before further validation: " + ", ".join(failed)
-        )
-
-
-def convergence_order(coarse, fine):
-    if not np.isfinite(coarse) or not np.isfinite(fine) or coarse < 0 or fine < 0:
-        raise AuditError("Nonfinite or negative MMS error before further validation")
-    if coarse == fine == 0:
-        return None  # Exact zero has no measurable order.
-    if not coarse or not fine:
-        raise AuditError("Unresolved zero MMS error before further validation")
-    return float(np.log2(coarse / fine))
-
-
-def check_refinement(study, coarse, fine, size, variant):
-    measured = {}
-    for name in references(variant):
-        measured[name] = {
-            norm: convergence_order(coarse[name][norm], fine[name][norm])
-            for norm in ("l2", "linf", "l2_interior", "linf_interior")
-        }
-        for norm, limit in study.criteria["orders"].items():
-            selected = norm + "_interior"
-            order = measured[name][selected]
-            if order is not None:
-                study.check(
-                    f"order/{variant}/{size}/{name}/{selected}",
-                    order,
-                    limit=limit,
-                    minimum=True,
-                )
-    study.result.setdefault("orders", {})[str(size)] = measured
-
-
-def check_temporal(study, base, tight, errors, variant):
-    base_fields = comparison_fields(base, variant)
-    tight_fields = comparison_fields(tight, variant)
-    volume = float(base.integrate(base.data.Pe.isel(t=0) * 0 + 1))
-    for name in references(variant):
-        difference = base_fields[name].isel(t=-1, drop=True) - tight_fields[name].isel(
-            t=-1, drop=True
-        )
-        norms = {
-            "l2": float(np.sqrt(base.integrate(difference**2) / volume)),
-            "linf": float(abs(base.interior(difference)).max()),
-        }
-        for norm, value in norms.items():
-            limit = max(
-                study.criteria["temporal_floor"],
-                study.criteria["temporal_fraction"] * errors[name][norm],
-            )
-            study.check(f"temporal/{name}/{norm}", value, limit=limit, truncation=True)
-
-
-def parse_args():
-    cli = parser(__doc__)
-    cli.set_defaults(timeout=3600)
-    cli.set_defaults(variant="parallel_current_wall", nproc=2)
-    cli.add_argument(
-        "--levels", type=int, help="Refinement levels: default 2, or 4 with --plot"
-    )
-    cli.add_argument(
-        "--plot",
-        action="store_true",
-        help="Save publication PDF/SVG convergence figures",
-    )
-    cli.add_argument(
-        "--verify",
-        action="store_true",
-        help="Also check temporal refinement and serial/MPI agreement",
-    )
-    cli.add_argument(
-        "--internal-progress",
-        action="store_true",
-        help="Enable CVODE timestep hooks in a diagnostic build",
-    )
-    cli.add_argument(
-        "--reuse-root",
-        type=Path,
-        help="Reuse completed, matching variant-resolution runs",
-    )
-    args = cli.parse_args()
-    args.levels = args.levels if args.levels is not None else 4 if args.plot else 2
-    if args.levels < 2:
-        cli.error("--levels must be at least 2")
-    if args.nproc < 1:
-        cli.error("--nproc must be positive")
-    if args.plot:
-        try:
-            import matplotlib
-
-            matplotlib.use("Agg")
-        except ImportError:
-            cli.error("--plot requires matplotlib")
-    return args
-
-
-def main():
-    args = parse_args()
-    variant = args.variant
-    parallel = variant in PARALLEL_VARIANTS
-    template = HERE / "data" / "BOUT.inp"
-    sizes = [8 * 2**i for i in range(args.levels)]
-    with Study(HERE, args) as study:
-        study.result.update(
-            variant=variant,
-            sizes=sizes,
-            model="symbolic continuum " + variant,
-            acceptance_region="interior"
-            if variant == "parallel_current_wall"
-            else "domain",
-            interior_interval=[INTERIOR_FRACTION, 1 - INTERIOR_FRACTION],
-            plot=args.plot,
-        )
-        runs, errors = [], {}
-
-        def launch(size, suffix="", *, tight=False, diagnose=True):
-            label = f"{variant}-{size}{suffix}"
-            overrides = [
-                "restart=false",
-                f"mesh:nx={size + 4}",
-                f"mesh:ny={2 * size}",
-                f"mesh:nz={size}",
-                "solver:nout=" + ("4" if parallel else "20"),
-                "solver:output_step=0.005",
-                f"evolve_vorticity_ion_energy:diagnose={str(diagnose).lower()}",
-                f"polarisation_drift:diagnose={str(diagnose).lower()}",
-            ]
-            if parallel:
-                overrides += [
-                    "polarisation_drift:polarisation_corrections=32",
-                    "solver:atol=" + ("1e-14" if tight else "1e-12"),
-                    "solver:rtol=" + ("1e-12" if tight else "1e-10"),
-                    "solver:max_timestep=" + ("0.0005" if tight else "0.002"),
-                ]
-            if args.internal_progress:
-                overrides.append("solver:monitor_timestep=true")
-            folder = args.reuse_root / label if args.reuse_root else None
-            if folder and folder.exists() and not suffix:
-                execution = json.loads((folder / "execution.json").read_text())
-                expected = dict(v.split("=", 1) for v in overrides)
-                actual = dict(v.split("=", 1) for v in execution["command"] if "=" in v)
-                if (
-                    execution["outcome"] != "completed"
-                    or execution["executable_sha256"]
-                    != hashlib.sha256(args.exe.read_bytes()).hexdigest()
-                    or execution["input_sha256"]
-                    != hashlib.sha256(template.read_bytes()).hexdigest()
-                    or actual != expected
-                ):
-                    raise AuditError(
-                        "Reference reuse requires matching completed build, input and overrides"
-                    )
-                execution["reused_from"] = str(folder.resolve())
-                study.result["cases"][label] = execution
-                study.current_run = open_run(folder)
-                print("Reusing verified reference:", folder, flush=True)
-                return label, study.current_run
-            return label, study.run(
-                label,
-                overrides,
-                template=template,
-                # A long manual study has one explicit per-launch time budget.
-                # Grid/rank-dependent gaps between saved outputs must not impose
-                # an unrelated shorter deadline on a progressing CVODE solve.
-                stall_seconds=args.timeout,
-            )
-
-        try:
-            for index, size in enumerate(sizes):
-                label, run = launch(size)
-                runs.append(run)
-                block_start = len(study.result["checks"])
-                errors[size] = check_physics(study, label, run, variant)
-                # Plot runs retain accuracy failures to collect requested levels.
-                # Execution and physics failures still stop immediately.
-                stop_on_failed_checks(study, block_start)
-                if index:
-                    check_refinement(
-                        study,
-                        errors[sizes[index - 1]],
-                        errors[size],
-                        size,
-                        variant,
-                    )
-                    if not args.plot:
-                        stop_on_failed_checks(study)
-            if args.verify:
-                if any(not c["passed"] for c in study.result["checks"]):
-                    study.result["verification"] = "not run: spatial accuracy failed"
-                    return
-                if parallel:
-                    label, tight = launch(sizes[1], "-tight", tight=True)
-                    check_physics(study, label, tight, variant)
-                    stop_on_failed_checks(study)
-                    check_temporal(study, runs[1], tight, errors[sizes[1]], variant)
-                    stop_on_failed_checks(study)
-                    metadata = runs[0].data.metadata
-                    count = int(metadata["NXPE"]) * int(metadata["NYPE"])
-                    study.args.nproc = max(2, args.nproc) if count == 1 else 1
-                    label, mpi = launch(sizes[0], "-decomposition")
-                    check_physics(study, label, mpi, variant)
-                    stop_on_failed_checks(study)
-                    other = comparison_fields(mpi, variant)
-                    for name, field in comparison_fields(runs[0], variant).items():
-                        study.check(
-                            "decomposition/" + name,
-                            float(abs(runs[0].interior(field - other[name])).max()),
-                            "decomposition",
-                            truncation=True,
-                        )
-                else:
-                    label, plain = launch(sizes[0], "-plain", diagnose=False)
-                    study.check(
-                        "diagnostics_state",
-                        state_difference(runs[0], plain),
-                        "diagnostics",
-                    )
-                stop_on_failed_checks(study)
-                study.result["verification"] = "passed"
-        finally:
-            if args.plot and errors:
-                from plotting import plot_convergence
-
-                study.result["plots"] = plot_convergence(study.output, variant, errors)
-
-
-if __name__ == "__main__":
-    try:
-        main()
-    except AuditError as error:
-        print(error, file=sys.stderr)
-        sys.exit(1)
+    size = sizes[0]
+    other = run(size, "-decomposition", nproc=1 if args.nproc > 1 else 2)
+    for name, field in fields(runs[size]).items():
+        np.testing.assert_allclose(field, fields(other)[name], rtol=0, atol=1e-10)
+print("Continuum MMS convergence passed")

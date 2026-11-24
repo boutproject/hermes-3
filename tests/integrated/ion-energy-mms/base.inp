@@ -1,4 +1,4 @@
-# Template for the single 3D slab; regenerate with python mms.py.
+# Continuum 3D slab; mms.py adds analytic fields and forcing.
 periodicX = false
 MXG = 2
 MYG = 2
@@ -30,19 +30,19 @@ J = 1
 Bxy = 1
 g11 = 1
 g22 = 1
-g33 = 1
+g33 = 17/16
 g12 = 0
-g13 = 0
+g13 = 1/4
 g23 = 0
-g_11 = 1
+g_11 = 17/16
 g_22 = 1
 g_33 = 1
 g_12 = 0
-g_13 = 0
+g_13 = -1/4
 g_23 = 0
 bxcvx = 0
 bxcvy = 0
-bxcvz = 0
+bxcvz = (1/10)*1.602176634e-19/(2*1.672621898e-27)
 
 [mesh:ddz]
 first = FFT
@@ -78,7 +78,7 @@ bndry_flux = false
 poloidal_flows = false
 use_div_par_fvv = true
 density_floor = 1e-10
-diagnose = false
+diagnose = true
 
 [j]
 type = evolve_density, evolve_momentum
@@ -88,10 +88,11 @@ bndry_flux = false
 poloidal_flows = false
 use_div_par_fvv = true
 density_floor = 1e-10
-diagnose = false
+diagnose = true
 
 [e]
-type = quasineutral, evolve_pressure, zero_current
+use_div_par_fvv = true
+type = quasineutral, evolve_pressure, evolve_momentum
 AA = 1/1836
 charge = -1
 bndry_flux = false
@@ -99,7 +100,7 @@ poloidal_flows = false
 thermal_conduction = false
 p_div_v = true
 density_floor = 1e-10
-diagnose = false
+diagnose = true
 
 [Vi]
 bndry_xin = neumann
@@ -109,7 +110,13 @@ bndry_xout = neumann
 bndry_xin = neumann
 bndry_xout = neumann
 
+[Ve]
+bndry_xin = dirichlet_o2(mms:electron_velocity)
+bndry_xout = dirichlet_o2(mms:electron_velocity)
+
 [evolve_vorticity_ion_energy]
+viscosity = 0.02
+phi_dissipation = true
 average_atomic_mass = 2
 poloidal_flows = false
 radial_boundary = fixed
@@ -120,17 +127,16 @@ phi_atol = 1
 phi_rtol = 1e-13
 vort_atol = 1e-12
 phi_max_iterations = 400
-diagnose = false
+diagnose = true
 
 [evolve_vorticity_ion_energy:laplacian]
 type = cyclic
 
 [sound_speed]
-# Electrons have zero-current closure, with no independent electron momentum.
-# Use the collective acoustic speed for numerical Lax fluxes.
-electron_dynamics = false
+electron_dynamics = true
 alfven_wave = false
 
 [polarisation_drift]
+diagnose = true
 implementation = conservative
 polarisation_corrections = 32

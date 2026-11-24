@@ -1,5 +1,4 @@
 sympy
-numpy
 boutdata
-# Optional publication plotting (--plot)
+xhermes
 matplotlib

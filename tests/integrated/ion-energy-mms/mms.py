@@ -3,22 +3,12 @@
 
 import argparse
 import json
-import tempfile
 from pathlib import Path
 
 import sympy as s
 from boutdata.data import BoutOptionsFile
 from boutdata.mms import exprToStr
-from manufactured import (
-    COORDINATES,
-    LENGTH,
-    PARALLEL_VARIANTS,
-    RECOVERED,
-    VARIANTS,
-    evolved,
-    model,
-    preflight,
-)
+from manufactured import COORDINATES, EVOLVED, LENGTH, RECOVERED, model, preflight
 
 HERE = Path(__file__).resolve().parent
 REFERENCE_KEYS = dict(
@@ -37,13 +27,9 @@ REFERENCE_KEYS = dict(
 )
 
 
-def input_path(variant):
-    return HERE / "data" / "BOUT.inp"
-
-
-def generate(destination, variant="parallel_current_wall"):
-    fields, _, sources, _ = model(variant)
-    names = evolved(variant)
+def generate(destination):
+    fields, _, sources, _ = model()
+    names = EVOLVED
     x, y, z, time = s.symbols("x y z t")
     replacement = dict(
         zip(
@@ -57,17 +43,16 @@ def generate(destination, variant="parallel_current_wall"):
     expressions = [fields[name] for name in names]
     expressions += [sources[name] for name in names]
     expressions += [fields[name] for name in RECOVERED]
-    if variant in PARALLEL_VARIANTS:
-        keys += [
-            ("mms", key)
-            for key in (
-                "electron_temperature",
-                "electron_velocity",
-                "parallel_current",
-                "parallel_current_divergence",
-            )
-        ]
-        expressions += [fields[key] for key in ("Te", "Ve", "Jpar", "DivJpar")]
+    keys += [
+        ("mms", key)
+        for key in (
+            "electron_temperature",
+            "electron_velocity",
+            "parallel_current",
+            "parallel_current_divergence",
+        )
+    ]
+    expressions += [fields[key] for key in ("Te", "Ve", "Jpar", "DivJpar")]
     expressions = [e.subs(replacement, simultaneous=True) for e in expressions]
     factors, reduced = s.cse(
         expressions, symbols=s.numbered_symbols("mms:c"), order="canonical"
@@ -84,31 +69,6 @@ def generate(destination, variant="parallel_current_wall"):
     factors = substantial
     reduced = [expression.xreplace(inline) for expression in reduced]
     options = BoutOptionsFile(str(HERE / "base.inp"))
-    options.getSection("mms")["variant"] = variant
-    if variant in PARALLEL_VARIANTS:
-        options["e"]["type"] = "quasineutral, evolve_pressure, evolve_momentum"
-        options["e"]["use_div_par_fvv"] = "true"
-        options["e"]["diagnose"] = "true"
-        options.getSection("Ve")["bndry_xin"] = "neumann"
-        options["Ve"]["bndry_xout"] = "neumann"
-        options["sound_speed"]["electron_dynamics"] = "true"
-        options["sound_speed"].comments.pop("electron_dynamics", None)
-        options["evolve_vorticity_ion_energy"]["diagnose"] = "true"
-        options["evolve_vorticity_ion_energy"]["phi_dissipation"] = "true"
-        options["polarisation_drift"]["diagnose"] = "true"
-    # The single slab exercises every requested continuum term.
-    for key, value in {
-        "g13": "1/4",
-        "g33": "17/16",
-        "g_11": "17/16",
-        "g_13": "-1/4",
-    }.items():
-        options["mesh"][key] = value
-    options["mesh"]["bxcvz"] = "(1/10)*1.602176634e-19/(2*1.672621898e-27)"
-    options["evolve_vorticity_ion_energy"]["viscosity"] = "0.02"
-    # The derived electron current need not have homogeneous normal derivative.
-    for face in ("xin", "xout"):
-        options["Ve"]["bndry_" + face] = "dirichlet_o2(mms:electron_velocity)"
 
     def exported(expression):
         result = exprToStr(expression)
@@ -135,9 +95,7 @@ def generate(destination, variant="parallel_current_wall"):
         if name == "Vort":
             continue  # Physical radial vorticity guards belong to radial_boundary
         boundary = (
-            f"dirichlet_o2({name}:solution)"
-            if name in ("Vort", "Eion", "NVe")
-            else "neumann"
+            f"dirichlet_o2({name}:solution)" if name in ("Eion", "NVe") else "neumann"
         )
         for face in ("xin", "xout"):
             options[name]["bndry_" + face] = boundary
@@ -149,30 +107,14 @@ def generate(destination, variant="parallel_current_wall"):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--output", type=Path)
+    parser.add_argument("--output", type=Path, default=HERE / "data/BOUT.inp")
     parser.add_argument(
-        "--check-files",
-        action="store_true",
-        help="Compare regenerated inputs with committed files",
-    )
-    parser.add_argument(
-        "--check", action="store_true", help="Run analytic preflight checks"
+        "--check", action="store_true", help="Check continuum identities"
     )
     args = parser.parse_args()
-    reports = {}
-    for variant in VARIANTS:
-        report = preflight(variant) if args.check else {}
-        if args.check_files:
-            with tempfile.TemporaryDirectory() as folder:
-                regenerated = Path(folder) / "BOUT.inp"
-                report.update(generate(regenerated, variant))
-                if regenerated.read_text() != input_path(variant).read_text():
-                    raise SystemExit(f"Stale MMS input: {input_path(variant)}")
-                report["committed_input"] = "current"
-        else:
-            report.update(generate(args.output or input_path(variant), variant))
-        reports[variant] = report
-    print(json.dumps(reports, indent=2))
+    report = preflight() if args.check else {}
+    report.update(generate(args.output))
+    print(json.dumps(report, indent=2))
 
 
 if __name__ == "__main__":

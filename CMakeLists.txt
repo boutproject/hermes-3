@@ -322,8 +322,8 @@ if(HERMES_TESTS)
   #
   # * CONFLICTS: list of variables that must be false to enable test
   function(hermes_add_integrated_test TESTNAME)
-    set(oneValueArgs DOWNLOAD DOWNLOAD_NAME TEST_EXECUTABLE)
-    set(multiValueArgs REQUIRES CONFLICTS)
+    set(oneValueArgs DOWNLOAD DOWNLOAD_NAME TEST_EXECUTABLE INTERPRETER)
+    set(multiValueArgs REQUIRES CONFLICTS ARGUMENTS FILES)
     cmake_parse_arguments(HERMES_TEST_OPTIONS "${options}" "${oneValueArgs}"
                           "${multiValueArgs}" ${ARGN})
 
@@ -360,6 +360,11 @@ if(HERMES_TESTS)
         ${INT_TEST_SRC}/${HERMES_TEST_OPTIONS_TEST_EXECUTABLE}
         ${INT_TEST_DEST}/${HERMES_TEST_OPTIONS_TEST_EXECUTABLE} COPYONLY)
 
+      foreach(TEST_FILE IN LISTS HERMES_TEST_OPTIONS_FILES)
+        configure_file(${INT_TEST_SRC}/${TEST_FILE}
+                       ${INT_TEST_DEST}/${TEST_FILE} COPYONLY)
+      endforeach()
+
       if(EXISTS ${INT_TEST_SRC}/data/BOUT.inp)
         configure_file(${INT_TEST_SRC}/data/BOUT.inp
                        ${INT_TEST_DEST}/data/BOUT.inp COPYONLY)
@@ -374,7 +379,10 @@ if(HERMES_TESTS)
     add_test(
       NAME ${TESTNAME}
       WORKING_DIRECTORY ${INT_TEST_DEST}
-      COMMAND ${HERMES_TEST_OPTIONS_TEST_EXECUTABLE})
+      COMMAND
+        ${HERMES_TEST_OPTIONS_INTERPRETER}
+        ${INT_TEST_DEST}/${HERMES_TEST_OPTIONS_TEST_EXECUTABLE}
+        ${HERMES_TEST_OPTIONS_ARGUMENTS})
     set_tests_properties(${TESTNAME} PROPERTIES LABELS integration)
 
     if(HERMES_TEST_OPTIONS_DOWNLOAD)
@@ -424,102 +432,52 @@ if(HERMES_TESTS)
   find_package(Python3 COMPONENTS Interpreter)
   set(HERMES_ENERGY_PYTHON
       "${Python3_EXECUTABLE}"
-      CACHE FILEPATH
-            "Python interpreter for energy analysis and integrated tests")
-  set(HERMES_ENERGY_MODULES_READY FALSE)
+      CACHE FILEPATH "Python interpreter for xhermes integrated tests")
+  option(HERMES_ION_ENERGY_MMS "Register the long 3D ion-energy slab MMS" OFF)
   if(HERMES_ENERGY_PYTHON)
     execute_process(
-      COMMAND "${HERMES_ENERGY_PYTHON}" -c
-              "import numpy, scipy, xarray, netCDF4, boutdata, pytest"
+      COMMAND "${HERMES_ENERGY_PYTHON}" -c "import xhermes.balance, boutdata"
       RESULT_VARIABLE ENERGY_IMPORT_STATUS
-      ERROR_VARIABLE ENERGY_IMPORT_ERROR)
-    if(ENERGY_IMPORT_STATUS EQUAL 0)
-      set(HERMES_ENERGY_MODULES_READY TRUE)
+      ERROR_QUIET)
+    if(ENERGY_IMPORT_STATUS EQUAL 0 AND NOT BOUT_USE_METRIC_3D)
+      hermes_add_integrated_test(
+        ion-energy-closed
+        INTERPRETER
+        ${HERMES_ENERGY_PYTHON}
+        FILES
+        ../ion_energy_test.py
+        ARGUMENTS
+        --exe
+        $<TARGET_FILE:${PROJECT_NAME}>)
+      set_tests_properties(
+        ion-energy-closed PROPERTIES PROCESSORS 2 TIMEOUT 60 LABELS
+                                     "integration;energy;ci")
+      if(HERMES_ION_ENERGY_MMS)
+        hermes_add_integrated_test(
+          ion-energy-mms
+          INTERPRETER
+          ${HERMES_ENERGY_PYTHON}
+          FILES
+          ../ion_energy_test.py
+          base.inp
+          mms.py
+          manufactured.py
+          analyse.py
+          ARGUMENTS
+          --exe
+          $<TARGET_FILE:${PROJECT_NAME}>
+          --levels
+          2
+          --verify)
+        set_tests_properties(
+          ion-energy-mms PROPERTIES PROCESSORS 2 TIMEOUT 36000 LABELS
+                                    "integration;energy;mms;validation")
+      endif()
     else()
       message(
-        WARNING
-          "Energy tests skipped: ${HERMES_ENERGY_PYTHON} needs numpy, scipy, xarray, netCDF4, boutdata and pytest. ${ENERGY_IMPORT_ERROR}"
-      )
+        STATUS
+          "Ion-energy integrated tests require xhermes and standard metrics")
     endif()
-  else()
-    message(WARNING "Energy tests skipped: no Python3 interpreter found")
-  endif()
-  if(HERMES_ENERGY_MODULES_READY AND NOT BOUT_USE_METRIC_3D)
-    function(hermes_add_ion_energy_test TESTNAME DIRECTORY LABELS TIMEOUT)
-      set(ENERGY_TEST_SRC
-          "${CMAKE_CURRENT_SOURCE_DIR}/tests/integrated/${DIRECTORY}")
-      set(ENERGY_TEST_DEST "${ENERGY_TEST_SRC}")
-      if(HERMES_COPY_TESTS_TO_BUILD)
-        set(ENERGY_TEST_DEST
-            "${CMAKE_CURRENT_BINARY_DIR}/tests/integrated/${DIRECTORY}")
-        file(
-          COPY "${ENERGY_TEST_SRC}"
-          DESTINATION "${CMAKE_CURRENT_BINARY_DIR}/tests/integrated"
-          PATTERN "__pycache__" EXCLUDE)
-      endif()
-      add_test(NAME ${TESTNAME}
-               COMMAND "${HERMES_ENERGY_PYTHON}" "${ENERGY_TEST_DEST}/runtest"
-                       --exe $<TARGET_FILE:${PROJECT_NAME}> ${ARGN})
-      set_tests_properties(
-        ${TESTNAME} PROPERTIES LABELS "${LABELS}" TIMEOUT ${TIMEOUT}
-                               WORKING_DIRECTORY "${ENERGY_TEST_DEST}")
-    endfunction()
-    if(HERMES_COPY_TESTS_TO_BUILD)
-      file(
-        COPY "${CMAKE_CURRENT_SOURCE_DIR}/tools/energy_analysis"
-        DESTINATION "${CMAKE_CURRENT_BINARY_DIR}/tools"
-        PATTERN "__pycache__" EXCLUDE)
-    endif()
-    # One inexpensive two-rank integration test is the ion-energy CI gate.
-    hermes_add_ion_energy_test(
-      ion-energy-closed
-      ion-energy-closed
-      "integration;energy;ci"
-      60
-      --nproc
-      2
-      --timeout
-      45)
-    set_tests_properties(ion-energy-closed PROPERTIES PROCESSORS 2)
-
-    # The coupled spatial/temporal study is explicitly opt-in, even for plain
-    # ctest.
-    option(HERMES_ION_ENERGY_MMS "Register the long 3D ion-energy slab MMS" OFF)
-    if(HERMES_ION_ENERGY_MMS)
-      hermes_add_ion_energy_test(
-        ion-energy-mms
-        ion-energy-mms
-        "energy;mms;validation"
-        36000
-        --levels
-        2
-        --verify
-        --nproc
-        2
-        --timeout
-        10800)
-      set_tests_properties(ion-energy-mms PROPERTIES PROCESSORS 2)
-    endif()
-    add_test(
-      NAME energy-analysis-python
-      COMMAND
-        "${HERMES_ENERGY_PYTHON}" -m pytest -q
-        "${CMAKE_CURRENT_SOURCE_DIR}/tests/python" --ignore
-        "${CMAKE_CURRENT_SOURCE_DIR}/tests/python/test_ion_energy_mms.py"
-        --ignore
-        "${CMAKE_CURRENT_SOURCE_DIR}/tests/python/test_reynolds_transport.py")
-    set_tests_properties(
-      energy-analysis-python
-      PROPERTIES LABELS
-                 "unit;energy;ci"
-                 TIMEOUT
-                 45
-                 WORKING_DIRECTORY
-                 "${CMAKE_CURRENT_SOURCE_DIR}"
-                 ENVIRONMENT
-                 "HERMES_EXECUTABLE=$<TARGET_FILE:hermes-3>")
-  elseif(BOUT_USE_METRIC_3D)
-    message(STATUS "Energy analysis tests require standard metrics")
   endif()
   hermes_add_integrated_test(2D-recycling CONFLICTS BOUT_USE_METRIC_3D)
   hermes_add_integrated_test(examples CONFLICTS BOUT_USE_METRIC_3D)
@@ -531,13 +489,13 @@ if(HERMES_TESTS)
                         PRIVATE hermes_warnings bout++::bout++ hermes-3-lib)
   hermes_add_integrated_test(
     diamagnetic-drift
+    FILES
+    ../ion_energy_test.py
     ARGUMENTS
-    --executable
+    --exe
     $<TARGET_FILE:diamagnetic_drift_smoke>
     --grid
-    ${CMAKE_CURRENT_SOURCE_DIR}/examples/tokamak-2D/compass-36x48.grd.nc
-    --run-root
-    ${CMAKE_CURRENT_BINARY_DIR}/tests/integrated/diamagnetic-drift/runs)
+    ${CMAKE_CURRENT_SOURCE_DIR}/examples/tokamak-2D/compass-36x48.grd.nc)
   set_tests_properties(diamagnetic-drift PROPERTIES PROCESSORS 12 TIMEOUT 210)
 
   hermes_add_integrated_test(1D-selflimiting-source)

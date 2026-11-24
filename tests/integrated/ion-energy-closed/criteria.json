@@ -1,9 +1,0 @@
-{
-  "energy": 1e-10,
-  "particles": 1e-10,
-  "recovery": 1e-10,
-  "nontrivial": 0.0001,
-  "parallel_kinetic_exchange": 5e-05,
-  "diagnostics": 1e-10,
-  "diagnostic_error": 1e-10
-}

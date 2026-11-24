@@ -1,6 +1,0 @@
-numpy
-scipy
-xarray
-pytest
-netCDF4
-boutdata
