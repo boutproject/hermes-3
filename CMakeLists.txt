@@ -483,20 +483,10 @@ if(HERMES_TESTS)
   hermes_add_integrated_test(examples CONFLICTS BOUT_USE_METRIC_3D)
   hermes_add_integrated_test(component-order CONFLICTS BOUT_USE_METRIC_3D)
 
-  add_executable(diamagnetic_drift_smoke
-                 tests/integrated/diamagnetic-drift/main.cxx)
-  target_link_libraries(diamagnetic_drift_smoke
-                        PRIVATE hermes_warnings bout++::bout++ hermes-3-lib)
   hermes_add_integrated_test(
-    diamagnetic-drift
-    FILES
-    ../ion_energy_test.py
-    ARGUMENTS
-    --exe
-    $<TARGET_FILE:diamagnetic_drift_smoke>
-    --grid
-    ${CMAKE_CURRENT_SOURCE_DIR}/examples/tokamak-2D/compass-36x48.grd.nc)
-  set_tests_properties(diamagnetic-drift PROPERTIES PROCESSORS 12 TIMEOUT 210)
+    diamagnetic-drift ARGUMENTS --exe $<TARGET_FILE:${PROJECT_NAME}> --grid
+    ${CMAKE_CURRENT_SOURCE_DIR}/examples/tokamak-3D/tokamak.nc)
+  set_tests_properties(diamagnetic-drift PROPERTIES PROCESSORS 6 TIMEOUT 120)
 
   hermes_add_integrated_test(1D-selflimiting-source)
   hermes_add_integrated_test(1D-density-fci REQUIRES BOUT_USE_METRIC_3D)
