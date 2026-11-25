@@ -88,10 +88,10 @@ struct DomainBalance {
     }
     MPI_Allreduce(MPI_IN_PLACE, totals.data(), static_cast<int>(totals.size()),
                   MPI_DOUBLE, MPI_SUM, BoutComm::get());
-    const BoutReal volume = pow(state["rho_s0"].as<BoutReal>(), 3);
-    const BoutReal frequency = state["Omega_ci"];
-    const BoutReal density = state["Nnorm"];
-    const BoutReal pressure = SI::qe * density * state["Tnorm"].as<BoutReal>();
+    const BoutReal volume = pow(get<BoutReal>(state["rho_s0"]), 3);
+    const BoutReal frequency = get<BoutReal>(state["Omega_ci"]);
+    const BoutReal density = get<BoutReal>(state["Nnorm"]);
+    const BoutReal pressure = SI::qe * density * get<BoutReal>(state["Tnorm"]);
     size_t index = 0;
     for (const auto& [key, value] : local) {
       const auto& [quantity, term] = key;
