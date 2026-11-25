@@ -599,7 +599,8 @@ The two types of reflection are as follows:
 
 - Fast reflection, where a neutral atom hits the wall and reflects having lost some energy,
 - Thermal reflection, where a neutral atom hits the wall, recombines into a molecule, and then
-  is assumed to immediately dissociate at the Franck Condon dissociation temperature of 3eV.
+  is assumed to immediately dissociate at the Franck Condon dissociation temperature
+  (3eV by default).
 
 They are both implemented as a neutral energy sink calculated
 from the cooling heat flux :math:`Q_{cool}`:
@@ -615,7 +616,8 @@ from the cooling heat flux :math:`Q_{cool}`:
 
 Where :math:`Q_{incident}` is the neutral heat flux incident on the wall, :math:`Q_{fast}` is the
 returning heat flux from fast reflection, :math:`Q_{thermal}` is the returning heat flux from thermal reflection
-and :math:`T_{FC}` is the Franck-Condon dissociation temperature, currently hardcoded to 3eV.
+and :math:`T_{FC}` is the Franck-Condon dissociation temperature, set in eV with the option
+``thermal_refl_temperature`` (default 3eV). The same value is used at all walls (target, SOL and PFR).
 Note that the fast and incident heat flux are both of a Maxwellian distribution, and so their
 formula corresponds to the 1 dimensional static Maxwellian heat flux and :math:`v_{th}^{x}` the
 corresponding 1D static Maxwellian thermal velocity (Stangeby p.69).
@@ -652,6 +654,8 @@ reflection by default so that it is compatible with a model of any dimensionalit
    target_fast_refl_fraction = 0.80
    sol_fast_refl_fraction = 0.80
    pfr_fast_refl_fraction = 0.80
+
+   thermal_refl_temperature = 3.0  # Franck-Condon temperature [eV]
 
 .. doxygenstruct:: NeutralBoundary
    :members:
