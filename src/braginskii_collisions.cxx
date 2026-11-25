@@ -62,6 +62,17 @@ BraginskiiCollisions::BraginskiiCollisions(const std::string& name, Options& all
                       .doc("User-set arbitrary multiplier on electron-ion collision rate")
                       .withDefault<BoutReal>(1.0);
 
+  // Ion-neutral hard-sphere rate. The defaults reproduce the previous
+  // hard-coded cross-section and relative speed.
+  ion_neutral_sigma = options["ion_neutral_sigma"]
+                          .doc("Ion-neutral hard-sphere cross-section [m^2]")
+                          .withDefault<BoutReal>(5e-19);
+  ion_neutral_vrel_reduced =
+      options["ion_neutral_vrel_reduced"]
+          .doc("Ion-neutral relative speed: if true, the mean relative speed of two "
+               "Maxwellians, sqrt(8/pi (T1/m1 + T2/m2)); if false, sqrt(T1/m1 + T2/m2)")
+          .withDefault<bool>(false);
+
   diagnose =
       options["diagnose"].doc("Output additional diagnostics?").withDefault<bool>(false);
 
@@ -401,12 +412,15 @@ void BraginskiiCollisions::transform_impl(GuardedOptions& state) {
           // Neutral density
           const Field3D Nn = GET_NOBOUNDARY(Field3D, species2["density"]);
 
-          BoutReal a0 = 5e-19; // Cross-section [m^2]
+          const BoutReal a0 = ion_neutral_sigma; // Cross-section [m^2], default 5e-19
+          const bool vrel_reduced = ion_neutral_vrel_reduced;
 
           const Field3D nu_12 = filledFrom(density1, [&](auto& i) {
-            // Relative velocity is sqrt( v1^2 + v2^2 )
-            const BoutReal vrel =
-                sqrt(temperature1[i] / (Tnorm * AA1) + temperature2[i] / (Tnorm * AA2));
+            // Relative velocity is sqrt( v1^2 + v2^2 ). With ion_neutral_vrel_reduced the
+            // mean relative speed of two Maxwellians, sqrt(8/pi (T1/m1 + T2/m2))
+            const BoutReal vrel2 =
+                temperature1[i] / (Tnorm * AA1) + temperature2[i] / (Tnorm * AA2);
+            const BoutReal vrel = vrel_reduced ? sqrt((8. / PI) * vrel2) : sqrt(vrel2);
 
             // Ion-neutral collision rate
             // Units: density [m^-3], a0 [m^2], rho_s0 [m]
@@ -450,12 +464,15 @@ void BraginskiiCollisions::transform_impl(GuardedOptions& state) {
           // Scattering of charged species 2
 
           // This is from NRL. The cross-section can vary significantly
-          BoutReal a0 = 5e-19; // Cross-section [m^2]
+          const BoutReal a0 = ion_neutral_sigma; // Cross-section [m^2], default 5e-19
+          const bool vrel_reduced = ion_neutral_vrel_reduced;
 
           const Field3D nu_12 = filledFrom(density1, [&](auto& i) {
-            // Relative velocity is sqrt( v1^2 + v2^2 )
-            const BoutReal vrel =
-                sqrt(temperature1[i] / (Tnorm * AA1) + temperature2[i] / (Tnorm * AA2));
+            // Relative velocity is sqrt( v1^2 + v2^2 ). With ion_neutral_vrel_reduced the
+            // mean relative speed of two Maxwellians, sqrt(8/pi (T1/m1 + T2/m2))
+            const BoutReal vrel2 =
+                temperature1[i] / (Tnorm * AA1) + temperature2[i] / (Tnorm * AA2);
+            const BoutReal vrel = vrel_reduced ? sqrt((8. / PI) * vrel2) : sqrt(vrel2);
 
             // Ion-neutral collision rate
             // Units: density [m^-3], a0 [m^2], rho_s0 [m]
