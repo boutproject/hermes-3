@@ -58,6 +58,12 @@ NeutralBoundary::NeutralBoundary(std::string name, Options& alloptions,
           .doc("Fraction of neutrals that are undergoing fast reflection at the pfr")
           .withDefault<BoutReal>(0.8);
 
+  thermal_refl_temperature =
+      options["thermal_refl_temperature"]
+          .doc("Temperature of thermally reflected (Franck-Condon) neutrals [eV]")
+          .withDefault<BoutReal>(3.0)
+      / Tnorm;
+
   substitutePermissions("name", {name});
   substitutePermissions("outputs", {"density", "temperature", "pressure"});
   substitutePermissions("conditional_outputs", {"velocity", "momentum"});
@@ -122,7 +128,7 @@ void NeutralBoundary::transform_impl(GuardedOptions& state) {
             0.25 * sqrt(8 * tnsheath / (PI * AA)); // Stangeby p.69 eqns. 2.21, 2.24
 
         // Approach adapted from D. Power thesis 2023
-        BoutReal T_FC = 3 / Tnorm; // Franck-Condon temp (hardcoded for now)
+        const BoutReal T_FC = thermal_refl_temperature; // Franck-Condon temp
 
         // Outgoing neutral heat flux [W/m^2]
         // This is rearranged from Power for clarity - note definition of v_th.
@@ -187,7 +193,7 @@ void NeutralBoundary::transform_impl(GuardedOptions& state) {
             0.25 * sqrt(8 * tnsheath / (PI * AA)); // Stangeby p.69 eqns. 2.21, 2.24
 
         // Approach adapted from D. Power thesis 2023
-        BoutReal T_FC = 3 / Tnorm; // Franck-Condon temp (hardcoded for now)
+        const BoutReal T_FC = thermal_refl_temperature; // Franck-Condon temp
 
         // Outgoing neutral heat flux [W/m^2]
         // This is rearranged from Power for clarity - note definition of v_th.
@@ -235,7 +241,7 @@ void NeutralBoundary::transform_impl(GuardedOptions& state) {
               0.25 * sqrt(8 * tnsheath / (PI * AA)); // Stangeby p.69 eqns. 2.21, 2.24
 
           // Approach adapted from D. Power thesis 2023
-          BoutReal T_FC = 3 / Tnorm; // Franck-Condon temp (hardcoded for now)
+          const BoutReal T_FC = thermal_refl_temperature; // Franck-Condon temp
 
           // Outgoing neutral heat flux [W/m^2]
           // This is rearranged from Power for clarity - note definition of v_th.
@@ -294,7 +300,7 @@ void NeutralBoundary::transform_impl(GuardedOptions& state) {
               0.25 * sqrt(8 * tnsheath / (PI * AA)); // Stangeby p.69 eqns. 2.21, 2.24
 
           // Approach adapted from D. Power thesis 2023
-          BoutReal T_FC = 3 / Tnorm; // Franck-Condon temp (hardcoded for now)
+          const BoutReal T_FC = thermal_refl_temperature; // Franck-Condon temp
 
           // Outgoing neutral heat flux [W/m^2]
           // This is rearranged from Power for clarity - note definition of v_th.
