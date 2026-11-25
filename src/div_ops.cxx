@@ -487,7 +487,9 @@ IndexDiffusionFaces indexDiffusionFaces(const Field2D& rate_x, const Field2D& ra
                           i);
     }
   }
-  m->communicate(volume, rx, rz, weight);
+  // This stencil needs radial neighbours only. Full communication also
+  // exchanges Y guards and builds shifted parallel slices for every temporary.
+  m->communicateXZ(volume, rx, rz, weight);
   IndexDiffusionFaces faces{zeroFrom(activation), zeroFrom(activation)};
   const auto conductance = [&](const Ind3D& i, const Ind3D& j, const Field3D& rate) {
     const BoutReal small = std::min(volume[i], volume[j]);
@@ -516,7 +518,7 @@ Field3D applyIndexDiffusion(const IndexDiffusionFaces& faces, const Field3D& f) 
   const auto& c = *f.getCoordinates();
   Field3D value = zeroFrom(f), result = zeroFrom(f);
   BOUT_FOR(i, f.getRegion("RGN_NOBNDRY")) { value[i] = f[i]; }
-  m->communicate(value);
+  m->communicateXZ(value);
   BOUT_FOR(i, f.getRegion("RGN_NOBNDRY")) {
     BoutReal flux = 0.0;
     if (faces.x[i] != 0.0) {

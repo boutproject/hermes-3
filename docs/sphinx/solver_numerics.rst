@@ -34,6 +34,9 @@ for the simulation. The rate ceilings are ``Field2D`` expressions that can
 vary in X and Y. Dynamic activation can vary in X, Y and Z. Omitting a
 threshold disables its trigger; at least one trigger is required for a
 nonzero rate. Omitting both rates gives zero numerical diffusion.
+When both rates are zero, the component adds no dependencies, solver-moment
+snapshots, RHS communications, or equation increments. The physical component
+ordering is the same as when adaptive diffusion is omitted.
 
 The common density indicator is the positive-ion charge density
 :math:`n=\sum_s Z_s n_s`. For a singly charged quasineutral plasma it is the
@@ -68,6 +71,8 @@ constant activation, an alternating mode damps at :math:`r_d w` in each
 direction. More generally, the outgoing cell rate is at most
 :math:`r_{i,x}+r_{i,z}`. Physical X walls are closed; processor faces and
 periodic X are open. No Y diffusion or target flux is added.
+Only radial guards are communicated for this operator; no Y exchange,
+twist-shift operation or parallel-slice interpolation is needed.
 
 The same conductances diffuse evolved charged-species density, parallel
 momentum and total energy. Ion total-energy diffusion enters ``Eion``

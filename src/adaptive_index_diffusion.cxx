@@ -26,17 +26,19 @@ std::vector<std::string> enabledSections(const Options& options) {
   return sections;
 }
 
-int countAdaptiveComponents(const Options& options) {
-  int count = 0;
+std::vector<std::string> adaptiveSections(const Options& options) {
+  std::vector<std::string> sections;
   for (const auto& name : enabledSections(options)) {
     const auto types = options.getChildren().count(name) && options[name].isSet("type")
                            ? options[name]["type"].as<std::string>()
                            : name;
     for (const auto& type : strsplit(types, ',')) {
-      count += trim(type, " \t\r\n()") == AdaptiveIndexDiffusion::type;
+      if (trim(type, " \t\r\n()") == AdaptiveIndexDiffusion::type) {
+        sections.push_back(name);
+      }
     }
   }
-  return count;
+  return sections;
 }
 
 BoutReal activationWeight(BoutReal value, BoutReal threshold) {
@@ -54,30 +56,26 @@ BoutReal activationWeight(BoutReal value, BoutReal threshold) {
 } // namespace
 
 bool usesAdaptiveIndexDiffusion(const Options& options) {
-  return countAdaptiveComponents(options) != 0;
+  for (const auto& name : adaptiveSections(options)) {
+    if (options.getChildren().count(name) == 0) {
+      continue;
+    }
+    const auto& section = options[name];
+    const auto rx =
+        section.isSet("rate_x") ? section["rate_x"].as<Field2D>() : Field2D{0.0};
+    const auto rz =
+        section.isSet("rate_z") ? section["rate_z"].as<Field2D>() : Field2D{0.0};
+    if (max(rx, true, "RGN_NOBNDRY") > 0.0 || max(rz, true, "RGN_NOBNDRY") > 0.0) {
+      return true;
+    }
+  }
+  return false;
 }
 
 AdaptiveIndexDiffusion::AdaptiveIndexDiffusion(std::string name, Options& options,
                                                Solver*)
-    : NamedComponent(
-          name,
-          {readIfSet("species:{all_species}:charge"),
-           readOnly("species:{positive_ions}:density", Regions::Interior),
-           readIfSet("species:{charged}:density", Regions::Interior),
-           readIfSet("species:{charged}:AA"),
-           readIfSet("species:{charged}:velocity", Regions::Interior),
-           readIfSet("species:{charged}:index_diffusion_density", Regions::Interior),
-           readIfSet("species:{charged}:index_diffusion_momentum", Regions::Interior),
-           readIfSet("species:{charged}:index_diffusion_density_floor"),
-           readWrite("species:{charged}:index_diffusion_density_rhs"),
-           readWrite("species:{charged}:index_diffusion_momentum_rhs"),
-           readWrite("species:{charged}:index_diffusion_kinetic_energy"),
-           readWrite("species:{charged}:index_diffusion_kinetic_rhs"),
-           readWrite("fields:index_diffusion_conductance_x"),
-           readWrite("fields:index_diffusion_conductance_z"),
-           readIfSet("fields:Apar", Regions::Interior),
-           readIfSet("fields:Apar_flutter", Regions::Interior)}) {
-  if (countAdaptiveComponents(options) > 1) {
+    : NamedComponent(name, {}) {
+  if (adaptiveSections(options).size() > 1) {
     throw BoutException("Enable only one adaptive_index_diffusion component");
   }
   auto& opts = options[name];
@@ -122,7 +120,6 @@ AdaptiveIndexDiffusion::AdaptiveIndexDiffusion(std::string name, Options& option
         opts["temperature_species"]
             .doc("Ion used for temperature activation; omit for one ion")
             .withDefault(std::string{});
-    setPermissions(readIfSet("species:{positive_ions}:temperature", Regions::Interior));
   }
   if ((density_trigger && !(std::isfinite(density_threshold) && density_threshold > 0.0))
       || (temperature_trigger
@@ -130,10 +127,41 @@ AdaptiveIndexDiffusion::AdaptiveIndexDiffusion(std::string name, Options& option
     throw BoutException(
         "Adaptive index diffusion thresholds must be positive and finite");
   }
-  if (!density_trigger && !temperature_trigger
-      && (max(rate_x, true, "RGN_NOBNDRY") > 0.0
-          || max(rate_z, true, "RGN_NOBNDRY") > 0.0)) {
+  enabled =
+      max(rate_x, true, "RGN_NOBNDRY") > 0.0 || max(rate_z, true, "RGN_NOBNDRY") > 0.0;
+  if (!density_trigger && !temperature_trigger && enabled) {
     throw BoutException("Supply a density or temperature threshold for index diffusion");
+  }
+  diagnose = opts["diagnose"]
+                 .doc("Save adaptive diffusion rates and increments")
+                 .withDefault<bool>(false);
+  // Zero rates must not introduce dependencies, snapshots, communication or
+  // equation increments. In particular, they must preserve the physical
+  // components' scheduling and preconditioning order.
+  if (!enabled) {
+    return;
+  }
+  for (const auto& permission :
+       {readIfSet("species:{all_species}:charge"),
+        readOnly("species:{positive_ions}:density", Regions::Interior),
+        readIfSet("species:{charged}:density", Regions::Interior),
+        readIfSet("species:{charged}:AA"),
+        readIfSet("species:{charged}:velocity", Regions::Interior),
+        readIfSet("species:{charged}:index_diffusion_density", Regions::Interior),
+        readIfSet("species:{charged}:index_diffusion_momentum", Regions::Interior),
+        readIfSet("species:{charged}:index_diffusion_density_floor"),
+        readWrite("species:{charged}:index_diffusion_density_rhs"),
+        readWrite("species:{charged}:index_diffusion_momentum_rhs"),
+        readWrite("species:{charged}:index_diffusion_kinetic_energy"),
+        readWrite("species:{charged}:index_diffusion_kinetic_rhs"),
+        readWrite("fields:index_diffusion_conductance_x"),
+        readWrite("fields:index_diffusion_conductance_z"),
+        readIfSet("fields:Apar", Regions::Interior),
+        readIfSet("fields:Apar_flutter", Regions::Interior)}) {
+    setPermissions(permission);
+  }
+  if (temperature_trigger) {
+    setPermissions(readIfSet("species:{positive_ions}:temperature", Regions::Interior));
   }
   for (const auto& section_name : enabledSections(options)) {
     if (options.getChildren().count(section_name) == 0) {
@@ -151,12 +179,12 @@ AdaptiveIndexDiffusion::AdaptiveIndexDiffusion(std::string name, Options& option
       }
     }
   }
-  diagnose = opts["diagnose"]
-                 .doc("Save adaptive diffusion rates and increments")
-                 .withDefault<bool>(false);
 }
 
 void AdaptiveIndexDiffusion::transform_impl(GuardedOptions& state) {
+  if (!enabled) {
+    return;
+  }
   balance.clear();
   density_rates.clear();
   momentum_rates.clear();

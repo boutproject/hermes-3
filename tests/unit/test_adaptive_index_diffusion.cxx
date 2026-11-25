@@ -13,7 +13,22 @@
 
 using bout::globals::mesh;
 
-class IndexDiffusionTest : public FakeMeshFixture_tmpl<9, 7, 8, false, 2, 2> {};
+class IndexDiffusionMesh : public FakeMesh {
+public:
+  using FakeMesh::FakeMesh;
+  int x_calls{0}, y_calls{0};
+  comm_handle sendX(FieldGroup& group, comm_handle = nullptr, bool = false) override {
+    ++x_calls;
+    return FakeMesh::send(group);
+  }
+  comm_handle sendY(FieldGroup&, comm_handle = nullptr) override {
+    ++y_calls;
+    return nullptr;
+  }
+};
+
+class IndexDiffusionTest
+    : public FakeMeshFixture_tmpl<9, 7, 8, false, 2, 2, IndexDiffusionMesh> {};
 
 TEST_F(IndexDiffusionTest, ConservesUnequalVolumesAndBoundsLocalRates) {
   const auto volumes = makeField<Field2D>(
@@ -30,9 +45,13 @@ TEST_F(IndexDiffusionTest, ConservesUnequalVolumesAndBoundsLocalRates) {
     f[i] = std::numeric_limits<BoutReal>::quiet_NaN();
     weight[i] = std::numeric_limits<BoutReal>::quiet_NaN();
   }
+  getMesh().x_calls = 0;
+  getMesh().y_calls = 0;
   const auto faces = indexDiffusionFaces(rx, rz, weight);
   const auto rhs = applyIndexDiffusion(faces, f);
   const auto loss = indexDiffusionLossRate(faces);
+  EXPECT_EQ(getMesh().x_calls, 2);
+  EXPECT_EQ(getMesh().y_calls, 0);
   BoutReal dissipation = 0.0, absolute_flux = 0.0;
   for (const auto& i : rhs.getRegion("RGN_NOBNDRY")) {
     const auto v = volumes[i];
@@ -127,9 +146,36 @@ TEST_F(AdaptiveIndexDiffusionTest, DetectsEnabledAliasesWithoutCreatingMissingSe
   const Options scheduled{{"hermes", {{"components", "e, sheath_boundary"}}}};
   EXPECT_FALSE(usesAdaptiveIndexDiffusion(scheduled));
   EXPECT_EQ(scheduled.getChildren().count("sheath_boundary"), 0);
-  const Options aliased{{"components", "transport, e"},
-                        {"transport", {{"type", "adaptive_index_diffusion"}}}};
+  const Options aliased{
+      {"components", "transport, e"},
+      {"transport", {{"type", "adaptive_index_diffusion"}, {"rate_x", 1.0}}}};
   EXPECT_TRUE(usesAdaptiveIndexDiffusion(aliased));
+  const Options omitted{{"components", "adaptive_index_diffusion, e"}};
+  EXPECT_FALSE(usesAdaptiveIndexDiffusion(omitted));
+  EXPECT_EQ(omitted.getChildren().count("adaptive_index_diffusion"), 0);
+}
+
+TEST_F(AdaptiveIndexDiffusionTest, ZeroRatesHaveNoDependenciesOrStateEffects) {
+  auto opts = options();
+  // Only physical cells determine whether the component is enabled.
+  auto rx = Field2D{1.0};
+  for (const auto& i : rx.getRegion("RGN_NOBNDRY")) {
+    rx[i] = 0.0;
+  }
+  opts["adaptive_index_diffusion"]["rate_x"].force(rx);
+  opts["adaptive_index_diffusion"]["rate_z"].force(0.0);
+  opts["adaptive_index_diffusion"]["temperature_threshold"] = 1.0;
+  EXPECT_FALSE(usesAdaptiveIndexDiffusion(opts));
+  AdaptiveIndexDiffusion component("adaptive_index_diffusion", opts, nullptr);
+  component.declareAllSpecies({"e", "d+"});
+  EXPECT_TRUE(component.getPermissions()
+                  .getVariablesWithMinimumPermission(PermissionTypes::ReadIfSet)
+                  .empty());
+  // No species, temperature, or geometry is needed by a disabled component.
+  Options empty;
+  component.transform(empty);
+  EXPECT_TRUE(empty.getChildren().empty());
+  EXPECT_EQ(diagnostics(component).getChildren().count("index_diffusion_activation"), 0);
 }
 
 TEST_F(AdaptiveIndexDiffusionTest, SIUnitsAndEitherTriggerActivateSharedFaces) {
@@ -322,7 +368,7 @@ protected:
                  {"adaptive_index_diffusion",
                   {{"rate_x", rate}, {"rate_z", rate}, {"density_threshold", 2.0}}},
                  {"e",
-                  {{"type", "quasineutral, evolve_momentum, evolve_pressure"},
+                  {{"type", "quasineutral, evolve_pressure, evolve_momentum"},
                    {"charge", -1.0},
                    {"AA", 0.1},
                    {"density_floor", 0.01},
@@ -398,10 +444,19 @@ TEST_F(AdaptiveIndexDiffusionEquationsTest,
   for (const bool logs : {false, true}) {
     const auto off = evaluate(false, false, false, logs);
     const auto zero = evaluate(true, false, false, logs, 0.0);
+    EXPECT_FALSE(zero.state.isSection("fields"));
+    for (const auto* name : {"d+", "e"}) {
+      const auto& sp = zero.state["species"][name];
+      EXPECT_FALSE(sp.isSet("index_diffusion_density"));
+      EXPECT_FALSE(sp.isSet("index_diffusion_momentum"));
+      EXPECT_FALSE(sp.isSet("index_diffusion_kinetic_rhs"));
+    }
     for (const auto& [name, value] : off.rhs.getChildren()) {
-      EXPECT_TRUE(IsFieldEqual(value.as<Field3D>(), zero.rhs[name].as<Field3D>(),
-                               "RGN_NOBNDRY", 1e-13))
-          << name;
+      const auto expected = value.as<Field3D>();
+      const auto actual = zero.rhs[name].as<Field3D>();
+      for (const auto& i : expected.getRegion("RGN_NOBNDRY")) {
+        EXPECT_DOUBLE_EQ(actual[i], expected[i]) << name << " at " << i;
+      }
     }
     const auto on = evaluate(true, false, false, logs);
     const auto& ion = on.state["species"]["d+"];

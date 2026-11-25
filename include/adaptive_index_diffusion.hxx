@@ -7,7 +7,7 @@
 #include <map>
 #include <string>
 
-/// Whether the global adaptive diffusion component is in the enabled schedule.
+/// Whether a scheduled adaptive diffusion component has nonzero rate ceilings.
 bool usesAdaptiveIndexDiffusion(const Options& options);
 
 /// Bounded numerical mixing in perpendicular mesh-index space. The component
@@ -20,7 +20,7 @@ struct AdaptiveIndexDiffusion : public NamedComponent<AdaptiveIndexDiffusion> {
 
 private:
   void transform_impl(GuardedOptions& state) override;
-  bool density_trigger, temperature_trigger, diagnose;
+  bool enabled, density_trigger, temperature_trigger, diagnose;
   BoutReal density_threshold{0.0}, temperature_threshold{0.0};
   BoutReal frequency, norm_density, norm_temperature;
   std::string temperature_species;
