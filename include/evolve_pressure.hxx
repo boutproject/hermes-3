@@ -5,6 +5,7 @@
 #include "../include/hermes_utils.hxx"
 #include "component.hxx"
 #include "domain_balance.hxx"
+#include <bout/field2d.hxx>
 #include <bout/field3d.hxx>
 
 /// Evolves species pressure in time
@@ -23,7 +24,7 @@ struct EvolvePressure : public NamedComponent<EvolvePressure> {
   ///   - density_floor        Minimum density floor. Default 1e-5 normalised units.
   ///   - diagnose             Output additional diagnostic fields?
   ///   - evolve_log           Evolve logarithm of pressure? Default is false
-  ///   - hyper_z              Hyper-diffusion in Z
+  ///   - hyper_z              Hyper-diffusion in Z; coefficient varies in X and Y.
   ///   - poloidal_flows       Include poloidal ExB flows? Default is true
   ///   - precon               Enable preconditioner? Note: solver may not use it even if
   ///                          enabled.
@@ -92,8 +93,9 @@ private:
   DomainBalance balance;
   FieldGeneratorPtr source_prefactor_function;
 
-  BoutReal hyper_z;   ///< Hyper-diffusion
-  BoutReal hyper_z_T; ///< 4th-order dissipation in T
+  bool include_hyper_z; ///< Has a hyper-diffusion coefficient been supplied?
+  Field2D hyper_z;      ///< Hyper-diffusion in Z, varying in X and Y
+  BoutReal hyper_z_T;   ///< 4th-order dissipation in T
 
   bool diagnose;                 ///< Output additional diagnostics?
   bool enable_precon;            ///< Enable preconditioner?

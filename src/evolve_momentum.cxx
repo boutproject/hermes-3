@@ -61,7 +61,11 @@ EvolveMomentum::EvolveMomentum(std::string name, Options& alloptions, Solver* so
   poloidal_flows =
       options["poloidal_flows"].doc("Include poloidal ExB flow").withDefault<bool>(true);
 
-  hyper_z = options["hyper_z"].doc("Hyper-diffusion in Z").withDefault(-1.0);
+  include_hyper_z = options.isSet("hyper_z");
+  hyper_z =
+      options["hyper_z"]
+          .doc("Hyper-diffusion in Z. Coefficient may vary in X and Y; omit to disable.")
+          .withDefault<Field2D>(Field2D{0.0});
 
   V.setBoundary(std::string("V") + name);
 
@@ -266,7 +270,7 @@ void EvolveMomentum::finally(const Options& state) {
     ddt(NV) += Div_Perp_Lap_FV_Index(pressure_floor / Plim, NV);
   }
 
-  if (hyper_z > 0.) {
+  if (include_hyper_z) {
     auto* coord = N.getCoordinates();
     ddt(NV) -= hyper_z * SQ(SQ(coord->dz())) * D4DZ4(NV);
   }

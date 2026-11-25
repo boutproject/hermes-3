@@ -2,6 +2,7 @@
 #ifndef EVOLVE_ENERGY_H
 #define EVOLVE_ENERGY_H
 
+#include <bout/field2d.hxx>
 #include <bout/field3d.hxx>
 
 #include "component.hxx"
@@ -22,7 +23,7 @@ struct EvolveEnergy : public NamedComponent<EvolveEnergy> {
   ///   - density_floor        Minimum density floor. Default 1e-5 normalised units.
   ///   - diagnose             Output additional diagnostic fields?
   ///   - evolve_log           Evolve logarithm of pressure? Default is false
-  ///   - hyper_z              Hyper-diffusion in Z
+  ///   - hyper_z              Hyper-diffusion in Z; coefficient varies in X and Y.
   ///   - poloidal_flows       Include poloidal ExB flows? Default is true
   ///   - precon               Enable preconditioner? Note: solver may not use it even if
   ///   enabled.
@@ -80,7 +81,8 @@ private:
   Field3D source; ///< External power source
   Field3D Se;     ///< Total energy source
 
-  BoutReal hyper_z; ///< Hyper-diffusion
+  bool include_hyper_z; ///< Has a hyper-diffusion coefficient been supplied?
+  Field2D hyper_z;      ///< Hyper-diffusion in Z, varying in X and Y
 
   bool diagnose;                ///< Output additional diagnostics?
   bool enable_precon;           ///< Enable preconditioner?

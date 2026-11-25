@@ -5,6 +5,8 @@
 #include "component.hxx"
 #include "domain_balance.hxx"
 
+#include <bout/field2d.hxx>
+
 /// Evolve species density in time
 ///
 /// # Mesh inputs
@@ -21,7 +23,7 @@ struct EvolveDensity : public NamedComponent<EvolveDensity> {
   ///   - poloidal_flows Include poloidal ExB flows? Default is true.
   ///   - density_floor  Minimum density floor. Default is 1e-5 normalised units
   ///   - low_n_diffuse  Enhance parallel diffusion at low density? Default false
-  ///   - hyper_z        Hyper-diffusion in Z. Default off.
+  ///   - hyper_z        Hyper-diffusion in Z; coefficient varies in X and Y. Default off.
   ///   - evolve_log     Evolve logarithm of density? Default false.
   ///   - diagnose       Output additional diagnostics?
   ///   - dissipative    Add dissipation for parallel advection in Fci
@@ -71,7 +73,8 @@ private:
   bool low_n_diffuse_perp; ///< Perpendicular diffusion at low density
   BoutReal pressure_floor; ///< When non-zero pressure is needed
   bool low_p_diffuse_perp; ///< Add artificial cross-field diffusion at low pressure?
-  BoutReal hyper_z;        ///< Hyper-diffusion in Z
+  bool include_hyper_z;    ///< Has a hyper-diffusion coefficient been supplied?
+  Field2D hyper_z;         ///< Hyper-diffusion in Z, varying in X and Y
   bool dissipative;        ///< Dissipative Lax-flux for Fci
   bool evolve_log;         ///< Evolve logarithm of density?
   Field3D logN;            ///< Logarithm of density (if evolving)

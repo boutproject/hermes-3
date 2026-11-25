@@ -5,6 +5,8 @@
 #include "component.hxx"
 #include "domain_balance.hxx"
 
+#include <bout/field2d.hxx>
+
 /// Evolve parallel momentum
 struct EvolveMomentum : public NamedComponent<EvolveMomentum> {
   EvolveMomentum(std::string name, Options& options, Solver* solver);
@@ -48,7 +50,8 @@ private:
   bool low_p_diffuse_perp;    ///< Cross-field diffusion at low pressure?
   bool use_div_par_fvv{true}; ///< Use Div_par_fvv instead of Div_par
 
-  BoutReal hyper_z; ///< Hyper-diffusion
+  bool include_hyper_z; ///< Has a hyper-diffusion coefficient been supplied?
+  Field2D hyper_z;      ///< Hyper-diffusion in Z, varying in X and Y
 
   bool diagnose;                   ///< Output additional diagnostics?
   bool fix_momentum_boundary_flux; ///< Fix momentum flux to boundary condition?

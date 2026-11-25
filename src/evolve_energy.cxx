@@ -75,7 +75,11 @@ EvolveEnergy::EvolveEnergy(std::string name, Options& alloptions, Solver* solver
   poloidal_flows =
       options["poloidal_flows"].doc("Include poloidal ExB flow").withDefault<bool>(true);
 
-  hyper_z = options["hyper_z"].doc("Hyper-diffusion in Z").withDefault(-1.0);
+  include_hyper_z = options.isSet("hyper_z");
+  hyper_z =
+      options["hyper_z"]
+          .doc("Hyper-diffusion in Z. Coefficient may vary in X and Y; omit to disable.")
+          .withDefault<Field2D>(Field2D{0.0});
 
   diagnose = options["diagnose"]
                  .doc("Save additional output diagnostics")
@@ -278,7 +282,7 @@ void EvolveEnergy::finally(const Options& state) {
               + FV::Div_par_K_Grad_par(low_n_coeff, P);
   }
 
-  if (hyper_z > 0.) {
+  if (include_hyper_z) {
     auto* coord = N.getCoordinates();
     ddt(E) -= hyper_z * SQ(SQ(coord->dz())) * D4DZ4(E);
   }

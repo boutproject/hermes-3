@@ -78,7 +78,6 @@ low_p_diffuse_perp = false
 low_T_diffuse_perp = false
 damp_p_nt = false
 p_div_v = false
-hyper_z = -1
 evolve_log = false
 diagnose = false
 
@@ -91,7 +90,6 @@ poloidal_flows = false
 density_floor = 1e-7
 low_n_diffuse = false
 low_n_diffuse_perp = false
-hyper_z = -1
 evolve_log = false
 diagnose = false
 

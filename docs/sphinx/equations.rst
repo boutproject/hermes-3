@@ -22,6 +22,14 @@ Terms
 
 Please refer to the examples for common component configurations.
 
+The ``evolve_density``, ``evolve_momentum``, ``evolve_pressure`` and
+``evolve_energy`` components accept a species option ``hyper_z`` for
+fourth-order diffusion in Z. The coefficient is read as a ``Field2D``:
+it may be a constant or an expression in ``x`` and ``y``, and is uniform
+in Z. Any supplied value is applied; omit the option to disable this term.
+For example, ``hyper_z = 0.01 + 0.1*(x-0.5)^2`` increases damping towards
+the radial boundaries.
+
 
 Species density
 ---------------

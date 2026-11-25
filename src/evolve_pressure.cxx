@@ -99,7 +99,11 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
                 .doc("Use p*Div(v) form? Default, false => v * Grad(p) form")
                 .withDefault<bool>(false);
 
-  hyper_z = options["hyper_z"].doc("Hyper-diffusion in Z").withDefault(-1.0);
+  include_hyper_z = options.isSet("hyper_z");
+  hyper_z =
+      options["hyper_z"]
+          .doc("Hyper-diffusion in Z. Coefficient may vary in X and Y; omit to disable.")
+          .withDefault<Field2D>(Field2D{0.0});
 
   hyper_z_T = options["hyper_z_T"]
                   .doc("4th-order dissipation of temperature")
@@ -383,7 +387,7 @@ void EvolvePressure::finally(const Options& state) {
     ddt(P) += Div_Perp_Lap_FV_Index(pressure_floor / Plim, P);
   }
 
-  if (hyper_z > 0.) {
+  if (include_hyper_z) {
     ddt(P) -= hyper_z * D4DZ4_Index(P);
   }
 

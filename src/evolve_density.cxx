@@ -62,7 +62,11 @@ EvolveDensity::EvolveDensity(std::string name, Options& alloptions, Solver* solv
                            .doc("Perpendicular diffusion at low pressure")
                            .withDefault<bool>(false);
 
-  hyper_z = options["hyper_z"].doc("Hyper-diffusion in Z").withDefault(-1.0);
+  include_hyper_z = options.isSet("hyper_z");
+  hyper_z =
+      options["hyper_z"]
+          .doc("Hyper-diffusion in Z. Coefficient may vary in X and Y; omit to disable.")
+          .withDefault<Field2D>(Field2D{0.0});
 
   evolve_log = options["evolve_log"]
                    .doc("Evolve the logarithm of density?")
@@ -330,7 +334,7 @@ void EvolveDensity::finally(const Options& state) {
     ddt(N) += Div_Perp_Lap_FV_Index(pressure_floor / Plim, N);
   }
 
-  if (hyper_z > 0.) {
+  if (include_hyper_z) {
     auto* coord = N.getCoordinates();
     ddt(N) -= hyper_z * SQ(SQ(coord->dz())) * D4DZ4(N);
   }
