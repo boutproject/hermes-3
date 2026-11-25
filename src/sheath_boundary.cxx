@@ -2,7 +2,6 @@
 #include "../include/component.hxx"
 #include "../include/guarded_options.hxx"
 #include "../include/permissions.hxx"
-#include "../include/viscosity_precon.hxx"
 
 #include <bout/assert.hxx>
 #include <bout/bout_types.hxx>
@@ -163,6 +162,10 @@ SheathBoundary::SheathBoundary(std::string name, Options& alloptions, Solver*)
                        .withDefault(0.0);
   if (bohm_smoothing < 0.0) {
     throw BoutException("sheath_boundary:bohm_smoothing must not be negative");
+  }
+  if (bohm_smoothing > 0.0) {
+    // d(guard velocity) / d(end-cell velocity), for the viscosity preconditioner
+    setPermissions(readWrite("species:{ions}:sheath_velocity_closure"));
   }
 
   // Read wall voltage, convert to normalised units
@@ -976,9 +979,7 @@ void SheathBoundary::transform_impl(GuardedOptions& state) {
     }
 
     if (bohm_smoothing > 0.0) {
-      hermes::viscosity_precon::sheath_closure[kv.first] = bohm_closure;
-    } else {
-      hermes::viscosity_precon::sheath_closure.erase(kv.first);
+      set(species["sheath_velocity_closure"], bohm_closure);
     }
 
     // Finished boundary conditions for this species

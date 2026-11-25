@@ -30,9 +30,10 @@ struct EvolveMomentum : public NamedComponent<EvolveMomentum> {
   void outputVars(Options& state) override;
 
   /// Parallel viscosity preconditioner, used when braginskii_ion_viscosity or
-  /// braginskii_electron_viscosity sets `precondition` for this species. Inverts the
-  /// viscous force linearised at frozen eta and density, with the sheath-face
-  /// closure at the targets.
+  /// braginskii_electron_viscosity sets `precondition` for this species, which then
+  /// set species:<name>:eta_par in the state. Inverts the viscous force linearised at
+  /// frozen eta and density, with the sheath-face closure at the targets
+  /// (species:<name>:sheath_velocity_closure if set by sheath_boundary).
   void precon(const Options& state, BoutReal gamma) override;
 
   static constexpr auto type = "evolve_momentum";
@@ -63,9 +64,11 @@ private:
 
   std::unique_ptr<InvertParDiv> viscosity_inverse;
 
-  /// Per target guard cell (field-aligned): -1 where the RHS fixes V at the sheath face
+  /// Per target guard cell (field-aligned): d(V_guard) / d(V_end). Uses
+  /// species:<name>:sheath_velocity_closure if set by sheath_boundary (smooth Bohm
+  /// condition); otherwise -1 where the RHS fixes V at the sheath face
   /// (V_guard = 2 v_sheath - V), +1 where it extrapolates with zero gradient
-  Field3D sheathClosure(const Field3D& V) const;
+  Field3D sheathClosure(const Options& species, const Field3D& V) const;
   Field3D flow_xlow, flow_ylow; ///< Momentum flow diagnostics
 
   /// This takes as inputs

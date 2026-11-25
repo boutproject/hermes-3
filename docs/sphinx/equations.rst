@@ -445,6 +445,8 @@ A preconditioner is available for the parallel viscosity, enabled using:
    [braginskii_electron_viscosity]
    precondition = true
 
+Note that this must be used with the CVODE solver and with ``cvode_precon_method = user``.
+Currently it is not available for 3D metrics and is incompatible with the ``scale_timederivs`` option.
 
 .. doxygenstruct:: BraginskiiElectronViscosity
    :members:
@@ -488,6 +490,7 @@ A preconditioner is available for the parallel viscosity, enabled using:
    [braginskii_ion_viscosity]
    precondition = true
 
+The same caveats as for the preconditioner on ``braginskii_electron_viscosity`` also apply here.
 
 If the `perpendicular` option is set:
 

@@ -20,7 +20,6 @@
 #include "../include/hermes_build_config.hxx"
 #include "../include/hermes_utils.hxx"
 #include "../include/permissions.hxx"
-#include "../include/viscosity_precon.hxx"
 
 #include <algorithm>
 #include <cmath>
@@ -303,14 +302,15 @@ void EvolveMomentum::finally(const Options& state) {
 }
 
 void EvolveMomentum::precon(const Options& state, BoutReal gamma) {
-  namespace pc = hermes::viscosity_precon;
-  // First, check whether the relevant viscosity component's eta has been set.
+  // First, check whether the relevant viscosity component has set eta_par.
   // If it hasn't (i.e. if the input file does not include viscosity in the model,
   // or it does but precondition=false), this precon function will exit immediately.
   // This is how the preconditioner for momentum is controlled by options in the
   // braginskii_ion/electron_viscosity section in the input file.
-  const auto frozen = pc::frozen.find(name);
-  if (frozen == pc::frozen.end()) {
+  // Note: like the conduction preconditioner in EvolvePressure, this reads a
+  // coefficient set by another component in the state from the last RHS evaluation.
+  const auto& species = state["species"][name];
+  if (!species.isSet("eta_par")) {
     return;
   }
 
@@ -324,7 +324,6 @@ void EvolveMomentum::precon(const Options& state, BoutReal gamma) {
   if (!viscosity_inverse) {
     viscosity_inverse = InvertParDiv::create();
   }
-  const auto& species = state["species"][name];
   const auto* coord = NV.getCoordinates();
 
   const BoutReal AA = get<BoutReal>(species["AA"]);
@@ -337,7 +336,7 @@ void EvolveMomentum::precon(const Options& state, BoutReal gamma) {
   //   (AA N / B) g - gamma Div_par((eta / B) Grad_par g) = r / sqrtB.
   // Coefficients are toroidal averages, as in the conduction preconditioner.
   const Field2D A = AA * DC(N) / B;
-  const Field2D Bcoef = -gamma * DC(frozen->second.eta) / B;
+  const Field2D Bcoef = -gamma * DC(get<Field3D>(species["eta_par"])) / B;
 
   // Sheath-face closure. The sheath boundary sets V in the target guard cells, so
   // the face flux b (g_guard - g), with g = sqrtB dV and g_guard = closure rho g
@@ -345,7 +344,7 @@ void EvolveMomentum::precon(const Options& state, BoutReal gamma) {
   // -b (1 - closure rho), averaged over z; InvertParDiv's own boundary rows keep zero
   // flux. The recovered dNV still uses the mass term A.
   const Field3D V = get<Field3D>(species["velocity"]);
-  const Field3D closure = sheathClosure(V);
+  const Field3D closure = sheathClosure(species, V);
   Field2D A_sh{0.0, mesh};
   A_sh.allocate();
   const Field2D J = DC(coord->J());
@@ -381,11 +380,11 @@ void EvolveMomentum::precon(const Options& state, BoutReal gamma) {
   ddt(NV) = (AA * N / sqrtB) * viscosity_inverse->solve(rhs);
 }
 
-Field3D EvolveMomentum::sheathClosure(const Field3D& V) const {
-  // Account for the smooth Bohm boundary condition in the viscsotiy preconditioner
-  const auto smooth = hermes::viscosity_precon::sheath_closure.find(name);
-  if (smooth != hermes::viscosity_precon::sheath_closure.end()) {
-    return smooth->second;
+Field3D EvolveMomentum::sheathClosure(const Options& species, const Field3D& V) const {
+  // Account for the smooth Bohm boundary condition in the viscosity preconditioner:
+  // sheath_boundary sets the closure (field-aligned) when bohm_smoothing > 0
+  if (species.isSet("sheath_velocity_closure")) {
+    return get<Field3D>(species["sheath_velocity_closure"]);
   }
   // The sheath boundary sets V_guard = 2 v_sheath - V in field-aligned coordinates,
   // with v_sheath independent of V, so dV_guard = -dV; ions leaving supersonically

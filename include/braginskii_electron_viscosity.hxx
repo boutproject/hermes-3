@@ -56,6 +56,8 @@ private:
   /// - species
   ///   - e
   ///     - momentum_source
+  ///     - eta_par  Only if precondition. Parallel viscosity coefficient after the
+  ///                flux limiter, used by the preconditioner in evolve_momentum
   ///
   void transform_impl(GuardedOptions& state) override;
 };

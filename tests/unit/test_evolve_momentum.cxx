@@ -5,7 +5,6 @@
 #include "test_extras.hxx" // FakeMesh
 
 #include "../../include/evolve_momentum.hxx"
-#include "../../include/viscosity_precon.hxx"
 
 /// Global mesh
 namespace bout {
@@ -78,7 +77,6 @@ TEST_F(EvolveMomentumTest, Finally) {
 }
 
 TEST_F(EvolveMomentumTest, ViscosityPrecon) {
-  namespace pc = hermes::viscosity_precon;
   // Y must not be periodic: Div_par_fvv then reads two guard cells, and FakeMesh has one
   static_cast<FakeMesh*>(mesh)->ix_separatrix = 0;
   FakeSolver solver;
@@ -97,8 +95,7 @@ TEST_F(EvolveMomentumTest, ViscosityPrecon) {
                        {"momentum_source", 0.5}}}}}};
   component.finally(state);
 
-  // Nothing published: precon leaves ddt unchanged
-  pc::frozen.clear();
+  // No eta_par in the state: precon leaves ddt unchanged
   component.precon(state, 1.0);
   Field3D ddt_NVi = solver.getTimeDerivs()["NVi"].as<Field3D>();
   BOUT_FOR_SERIAL(i, ddt_NVi.getRegion("RGN_NOBNDRY")) {
@@ -106,7 +103,7 @@ TEST_F(EvolveMomentumTest, ViscosityPrecon) {
   }
 
   // Zero viscosity: the inversion reduces to the identity
-  pc::frozen["i"] = {Field3D(0.0)};
+  state["species"]["i"]["eta_par"] = Field3D(0.0);
   component.precon(state, 1.0);
   ddt_NVi = solver.getTimeDerivs()["NVi"].as<Field3D>();
   BOUT_FOR_SERIAL(i, ddt_NVi.getRegion("RGN_NOBNDRY")) {
@@ -116,5 +113,4 @@ TEST_F(EvolveMomentumTest, ViscosityPrecon) {
   // Unsupported option
   state["scale_timederivs"] = 1.0;
   EXPECT_THROW(component.precon(state, 1.0), BoutException);
-  pc::frozen.clear();
 }

@@ -17,7 +17,6 @@
 
 #include "../include/braginskii_electron_viscosity.hxx"
 #include "../include/component.hxx"
-#include "../include/viscosity_precon.hxx"
 
 BraginskiiElectronViscosity::BraginskiiElectronViscosity(const std::string& name,
                                                          Options& alloptions, Solver*)
@@ -36,12 +35,12 @@ BraginskiiElectronViscosity::BraginskiiElectronViscosity(const std::string& name
   precondition = options["precondition"]
                      .doc("Apply parallel viscosity preconditioner")
                      .withDefault<bool>(false);
+  if (precondition) {
+    setPermissions(readWrite("species:e:eta_par"));
+  }
 }
 
 void BraginskiiElectronViscosity::transform_impl(GuardedOptions& state) {
-  // Preconditioner coefficients are refreshed by every RHS evaluation
-  hermes::viscosity_precon::frozen.erase("e");
-
   GuardedOptions species = state["species"]["e"];
 
   if (!isSetFinal(species["pressure"], "electron_viscosity")) {
@@ -96,8 +95,8 @@ void BraginskiiElectronViscosity::transform_impl(GuardedOptions& state) {
 
   add(species["momentum_source"], viscosity);
   if (precondition) {
-    // Frozen coefficient for EvolveMomentum::precon (same field-line form as the ions)
-    hermes::viscosity_precon::frozen["e"] = {copy(eta)};
+    // Coefficient for EvolveMomentum::precon (same field-line form as the ions)
+    set(species["eta_par"], eta);
   }
 }
 

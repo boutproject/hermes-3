@@ -97,6 +97,8 @@ private:
   ///   - <name>
   ///     - momentum_source
   ///     - energy_source
+  ///     - eta_par  Only if precondition. Parallel viscosity coefficient after the
+  ///                flux limiter, used by the preconditioner in evolve_momentum
   ///   - fields
   ///     - DivJextra
   ///

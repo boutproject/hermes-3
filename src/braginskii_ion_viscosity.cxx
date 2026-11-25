@@ -27,7 +27,6 @@
 #include "../include/component.hxx"
 #include "../include/div_ops.hxx"
 #include "../include/hermes_utils.hxx"
-#include "../include/viscosity_precon.hxx"
 
 using bout::globals::mesh;
 
@@ -148,6 +147,9 @@ BraginskiiIonViscosity::BraginskiiIonViscosity(const std::string& name,
   if (perpendicular) {
     setPermissions(readOnly("fields:phi"));
   }
+  if (precondition) {
+    setPermissions(readWrite("species:{non_electrons}:eta_par"));
+  }
   substitutePermissions("coll_type", coll_types);
 
   Bxy = coord->Bxy();
@@ -165,9 +167,6 @@ void BraginskiiIonViscosity::transform_impl(GuardedOptions& state) {
       continue; // Skip electrons -> only ions
     }
     const auto& species_name = kv.first;
-    // Preconditioner coefficients are refreshed by every RHS evaluation
-    hermes::viscosity_precon::frozen.erase(species_name);
-
     GuardedOptions species = allspecies[species_name];
 
     if (!(isSetFinal(species["pressure"], "ion_viscosity")
@@ -309,8 +308,8 @@ void BraginskiiIonViscosity::transform_impl(GuardedOptions& state) {
 
       add(species["momentum_source"], div_Pi_cipar);
       if (precondition) {
-        // Frozen coefficient for EvolveMomentum::precon
-        hermes::viscosity_precon::frozen[species_name] = {copy(eta)};
+        // Coefficient for EvolveMomentum::precon
+        set(species["eta_par"], eta);
       }
 
       if (viscous_heating) {

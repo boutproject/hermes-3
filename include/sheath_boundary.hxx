@@ -110,6 +110,10 @@ private:
   ///     - velocity     Sets boundary
   ///     - momentum     Sets boundary
   ///     - energy_source
+  ///     - sheath_velocity_closure  Only if bohm_smoothing > 0. Field-aligned
+  ///                                d(guard velocity) / d(end-cell velocity) in the
+  ///                                target guard cells, used by the viscosity
+  ///                                preconditioner in evolve_momentum
   /// - fields
   ///   - phi   Sets boundary
   ///
