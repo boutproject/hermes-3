@@ -40,6 +40,9 @@ struct BraginskiiCollisions : public NamedComponent<BraginskiiCollisions> {
   /// The user can also set
   ///
   ///   - ei_multiplier   arbitrary multiplier on electron-ion collision rate
+  ///   - ion_neutral_sigma          ion-neutral cross-section [m^2], default 5e-19
+  ///   - ion_neutral_vrel_reduced   use the mean relative speed of two Maxwellians
+  ///                                in the ion-neutral rate, default false
   ///
   BraginskiiCollisions(const std::string& name, Options& alloptions, Solver*);
 
@@ -59,6 +62,14 @@ private:
       neutral_neutral;
 
   BoutReal ei_multiplier; // Arbitrary user-set multiplier on electron-ion collisions
+
+  /// Ion-neutral hard-sphere rate: cross-section [m^2] (default 5e-19, the value
+  /// used before) and choice of the relative speed. If ion_neutral_vrel_reduced is
+  /// false (default), v_rel = sqrt(T1/m1 + T2/m2) as before; if true, the mean
+  /// relative speed of two Maxwellians, v_rel = sqrt(8/pi (T1/m1 + T2/m2))
+  /// = sqrt(8 T / (pi mu)) with mu = m1 m2 / (m1 + m2), T = (m2 T1 + m1 T2) / (m1 + m2).
+  BoutReal ion_neutral_sigma;
+  bool ion_neutral_vrel_reduced;
 
   /// Calculated collision rates saved for post-processing and use by other components
   /// Saved in options, the BOUT++ dictionary-like object
