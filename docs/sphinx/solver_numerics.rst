@@ -4,6 +4,123 @@ Solvers, performance and numerical methods
 ==========================================
 
 
+.. _sec-adaptive-index-diffusion:
+
+Adaptive index-space diffusion
+-----------------------------
+
+The optional ``adaptive_index_diffusion`` component supplies conservative
+numerical smoothing in X and periodic Z. It increases smoothing at low
+density, low ion temperature, or both. Its damping rate is bounded in mesh
+index space, so a compressed radial grid does not acquire the larger
+``D / delta_x**2`` damping rate associated with a fixed physical diffusivity.
+``classical_diffusion:custom_D`` remains a separate physical transport term
+in m²/s and may be used together with this component.
+
+Add ``adaptive_index_diffusion`` to ``hermes:components``. For example:
+
+.. code-block:: ini
+
+   [adaptive_index_diffusion]
+   rate_x = 1e6                 # Cell loss rate ceiling [s^-1]
+   rate_z = 0                   # Disable Z diffusion
+   density_threshold = 1e16     # Half-activation density [m^-3]
+   temperature_threshold = 1   # Half-activation ion temperature [eV]
+   temperature_species = d+    # Required when multiple ions are present
+   diagnose = true
+
+These values illustrate the input units; rates and thresholds need tuning
+for the simulation. The rate ceilings are ``Field2D`` expressions that can
+vary in X and Y. Dynamic activation can vary in X, Y and Z. Omitting a
+threshold disables its trigger; at least one trigger is required for a
+nonzero rate. Omitting both rates gives zero numerical diffusion.
+
+The common density indicator is the positive-ion charge density
+:math:`n=\sum_s Z_s n_s`. For a singly charged quasineutral plasma it is the
+electron density. With half-activation scales :math:`n_c` and :math:`T_c`,
+
+.. math::
+
+   w_n=\frac{n_c^2}{n_c^2+\max(n,0)^2},\qquad
+   w_T=\frac{T_c^2}{T_c^2+\max(T_i,0)^2},\qquad
+   w=w_n+(1-w_n)w_T.
+
+An omitted trigger has zero weight. The diffusion therefore activates when
+either criterion is met, without dividing by a density or temperature floor.
+Low temperature is a simple indicator of reduced local gyroradius; this
+version does not calculate the gyroradius-to-mesh-spacing ratio.
+
+Each pair of neighbouring cells exchanges equal and opposite integrated
+fluxes. For cell volumes :math:`V_i=J_i\Delta x_i\Delta y_i\Delta z_i`,
+directional ceilings :math:`r_{i,d}` and shared conductances :math:`C_{ij,d}`,
+
+.. math::
+
+   H_{ij}=\frac{2V_iV_j}{V_i+V_j},\qquad
+   C_{ij,d}=\frac{H_{ij}}4\min(r_{i,d},r_{j,d})\frac{w_i+w_j}{2},\qquad
+   L(U)_i=\frac1{V_i}\sum_j C_{ij,d}(U_j-U_i).
+
+The harmonic volume bounds the outgoing cell rate even between very
+different cell volumes. The minimum ceiling closes transport into an
+explicitly zero-ceiling region, while averaging activation lets a
+low-density cell exchange with a denser neighbour. On a uniform mesh with
+constant activation, an alternating mode damps at :math:`r_d w` in each
+direction. More generally, the outgoing cell rate is at most
+:math:`r_{i,x}+r_{i,z}`. Physical X walls are closed; processor faces and
+periodic X are open. No Y diffusion or target flux is added.
+
+The same conductances diffuse evolved charged-species density, parallel
+momentum and total energy. Ion total-energy diffusion enters ``Eion``
+directly, outside ordinary thermal ``energy_source`` conversion. When
+pressure is evolved, its numerical thermal-energy increment is
+
+.. math::
+
+   S_U=L(U+K_\parallel)-\dot K_\parallel\big|_{S_n,S_M},
+
+so the density and momentum mixing does not lose kinetic energy. The
+kinetic derivative uses the momentum component's soft density floor;
+quasineutral electrons inherit the ion density increments. Solver-moment
+snapshots are retained for these terms, rather than diffusing momentum
+already reduced by the limiter. Existing clipping and momentum relaxation
+are separate operations and are not made conservative by this component.
+
+This implementation supports electrostatic field-aligned meshes with
+complete periodic Z lines and evolved positive-ion densities. Neutrals are
+unaffected. Species with a parallel velocity must use ``evolve_momentum``;
+dependent velocity closures such as ``zero_current`` are not supported.
+FCI, negative-ion and electromagnetic configurations are
+rejected. Enable only one instance, and disable the legacy
+``low_n_diffuse_perp``, ``low_p_diffuse_perp`` and ``low_T_diffuse_perp``
+options on participating charged species. Existing ``hyper_z`` settings
+can still be used.
+
+With ``diagnose=true``, the component outputs
+``index_diffusion_activation``, ``index_diffusion_loss_rate``, and per-species
+density, momentum and kinetic-energy increments. Enable the equation
+components' ``diagnose`` options for their energy-increment fields.
+``DomainBalance`` integrals record the numerical contributions separately
+from physical sources. Ion-energy diagnostics also include
+``ion_thermal_energy_unfloored``, the difference between total energy and
+parallel and perpendicular kinetic energies before pressure clipping.
+
+The diffusion operator conserves volume integrals and has nonnegative
+neighbour weights. These properties do not guarantee positivity of the
+complete plasma time step or admissibility of the coupled potential and
+pressure reconstruction. It adds no vorticity damping and does not change
+the physical-current or auxiliary-potential equations. Check unclipped
+thermal energy and reconstruction residuals alongside solver progress
+when tuning the rates. Nonuniform ``scale_timederivs`` changes the
+volume-integrated conservation of the complete RHS.
+
+No dedicated implicit preconditioner is added for this term. In a short
+cold, low-density tokamak check, combined density/temperature activation
+advanced with ``solver:cvode_precon_method=none`` but did not reach its
+first output with ``user``. Compare these settings if solver progress
+stalls; this check does not establish stability of a longer turbulence
+transient.
+
+
 Solvers
 ------------------------------
 

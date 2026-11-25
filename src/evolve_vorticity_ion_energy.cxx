@@ -1274,6 +1274,7 @@ void EvolveVorticityIonEnergy::transform_impl(GuardedOptions& state) {
 
 void EvolveVorticityIonEnergy::finally(const Options& state) {
   balance.clear();
+  index_diffusion_energy_rhs = zeroFrom(Eion);
   const Field3D DivEpol =
       get<Field3D>(state["fields"]["ion_polarisation_energy_divergence"]);
   const Field3D current_rhs = get<Field3D>(state["fields"]["ion_current_rhs"]);
@@ -1365,6 +1366,14 @@ void EvolveVorticityIonEnergy::finally(const Options& state) {
     balance.set("ion_energy", "hyper_z", damping);
   }
   balance.set("ion_energy", "input", external_heating);
+  if (state["fields"].isSet("index_diffusion_conductance_x")) {
+    const IndexDiffusionFaces faces{
+        get<Field3D>(state["fields"]["index_diffusion_conductance_x"]),
+        get<Field3D>(state["fields"]["index_diffusion_conductance_z"])};
+    index_diffusion_energy_rhs = applyIndexDiffusion(faces, Eion);
+    ddt(Eion) += index_diffusion_energy_rhs;
+    balance.set("ion_energy", "index_diffusion", index_diffusion_energy_rhs);
+  }
   balance.set("ion_energy", "out_exb", DivEExB);
   balance.set("ion_energy", "out_electric", DivEelectric);
   balance.add("thermal_e", "out_electric", electron_diamagnetic_power);
@@ -1609,6 +1618,17 @@ void EvolveVorticityIonEnergy::outputVars(Options& state) {
                    {{"time_dimension", "t"}, {"units", "J m^-3"}, {"conversion", Pnorm}});
     set_with_attrs(state["ion_KE_perp"], ion_KE_perp,
                    {{"time_dimension", "t"}, {"units", "J m^-3"}, {"conversion", Pnorm}});
+    set_with_attrs(state["ion_thermal_energy_unfloored"],
+                   Field3D{Eion - ion_KE_parallel - ion_KE_perp},
+                   {{"time_dimension", "t"},
+                    {"units", "J m^-3"},
+                    {"conversion", Pnorm},
+                    {"long_name", "Ion thermal energy before pressure clipping"}});
+    set_with_attrs(state["index_diffusion_ion_energy_rhs"], index_diffusion_energy_rhs,
+                   {{"time_dimension", "t"},
+                    {"units", "W m^-3"},
+                    {"conversion", Pnorm * Omega_ci},
+                    {"source", "evolve_vorticity_ion_energy"}});
     set_with_attrs(
         state["ddt(Eion)"], ddt(Eion),
         {{"time_dimension", "t"}, {"units", "W m^-3"}, {"conversion", Pnorm * Omega_ci}});

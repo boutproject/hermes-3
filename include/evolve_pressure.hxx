@@ -63,6 +63,9 @@ struct EvolvePressure : public NamedComponent<EvolvePressure> {
   static constexpr auto type = "evolve_pressure";
 
 private:
+  bool index_diffusion; ///< Retain solver pressure for conservative numerical mixing
+  Field3D P_index_diffusion;
+  Field3D index_diffusion_energy_rhs;
   std::string name; ///< Short name of the species e.g. h+
 
   Field3DParallel P;    ///< Pressure (normalised)

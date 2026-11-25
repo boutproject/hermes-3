@@ -3,6 +3,7 @@
 #include "reynolds_reference.hxx"
 #include "test_extras.hxx"
 
+#include "../../include/adaptive_index_diffusion.hxx"
 #include "../../include/component.hxx"
 #include "../../include/component_scheduler.hxx"
 #include "../../include/evolve_pressure.hxx"
@@ -668,6 +669,73 @@ TEST_F(IonEnergyHyperZTest, SuppliedFieldAndScalarValuesAreApplied) {
       makeField<Field2D>([](const Ind2D& i) { return 0.01 * (i.x() - 4) * (i.y() - 2); });
   options["test"]["hyper_z"] = coefficient;
   expectDamping(evaluate(options.copy()), baseline, coefficient);
+}
+
+TEST_F(IonEnergyHyperZTest, IndexDiffusionConservesEnergyAndPreservesPhysicalCurrents) {
+  mesh->getCoordinates()->setNon_uniform(false);
+  for (const auto* wall : {"fixed", "free_slip", "no_slip"}) {
+    auto options = makeOptions();
+    options["test"]["radial_boundary"] = std::string{wall};
+    options["adaptive_index_diffusion"]["rate_x"] = 0.4;
+    options["adaptive_index_diffusion"]["rate_z"] = 0.8;
+    options["adaptive_index_diffusion"]["density_threshold"] = 1.0;
+    FakeSolver solver;
+    IonEnergyTestSystem component("test", options, &solver);
+    declareSpecies(component);
+    const auto initial_vort = mode(0.0, 0.001), initial_energy = mode(10.0, 0.01);
+    solver.setState({{"Vort", initial_vort}, {"Eion", initial_energy}});
+    auto state = makeState();
+    state["species"]["e"]["density"] = Field3D{1.0};
+    for (const auto* ion : {"d+", "he++"}) {
+      state["species"][ion]["index_diffusion_density"] =
+          copy(state["species"][ion]["density"].as<Field3D>());
+    }
+    component.transform(state);
+    component.finally(state);
+    const auto baseline_vort = copy(solver.getTimeDerivs()["Vort"].as<Field3D>());
+    const auto baseline_energy = copy(solver.getTimeDerivs()["Eion"].as<Field3D>());
+    const auto before = diagnostics(component);
+    EXPECT_GT(max(before["ion_KE_perp"].as<Field3D>(), false, "RGN_NOBNDRY"), 0.0);
+    AdaptiveIndexDiffusion diffusion("adaptive_index_diffusion", options, nullptr);
+    diffusion.declareAllSpecies({"e", "d+", "he++"});
+    diffusion.transform(state);
+    const IndexDiffusionFaces faces{
+        state["fields"]["index_diffusion_conductance_x"].as<Field3D>(),
+        state["fields"]["index_diffusion_conductance_z"].as<Field3D>()};
+    const auto expected = applyIndexDiffusion(faces, initial_energy);
+    component.finally(state);
+    const auto after = diagnostics(component);
+    const Field3D energy_difference =
+        solver.getTimeDerivs()["Eion"].as<Field3D>() - baseline_energy;
+    EXPECT_TRUE(IsFieldEqual(energy_difference, expected, "RGN_NOBNDRY", 1e-12));
+    EXPECT_TRUE(IsFieldEqual(after["index_diffusion_ion_energy_rhs"].as<Field3D>(),
+                             expected, "RGN_NOBNDRY", 1e-12));
+    EXPECT_NEAR(integral(energy_difference), 0.0, 1e-12);
+    const auto vort_rhs = solver.getTimeDerivs()["Vort"].as<Field3D>();
+    EXPECT_TRUE(IsFieldEqual(vort_rhs, baseline_vort, "RGN_NOBNDRY", 0.0));
+    for (const auto& i : vort_rhs.getRegion("RGN_GUARDS")) {
+      if ((i.x() < mesh->xstart || i.x() > mesh->xend) && i.y() >= mesh->ystart
+          && i.y() <= mesh->yend) {
+        EXPECT_EQ(vort_rhs[i], baseline_vort[i]);
+      }
+    }
+    for (const auto* field : {"phi", "ion_chi", "DivJpol", "Tion"}) {
+      EXPECT_TRUE(IsFieldEqual(before[field].as<Field3D>(), after[field].as<Field3D>(),
+                               "RGN_NOBNDRY", 0.0))
+          << field;
+    }
+    // Isolate a numerical substep with nonzero perpendicular kinetic energy,
+    // then exercise the actual coupled phi/pressure reconstruction again.
+    solver.setState(
+        {{"Vort", initial_vort}, {"Eion", Field3D{initial_energy + 0.01 * expected}}});
+    auto advanced = makeState();
+    component.transform(advanced);
+    component.finally(advanced);
+    const auto recovered = diagnostics(component);
+    EXPECT_GT(min(recovered["ion_thermal_energy_unfloored"].as<Field3D>(), false,
+                  "RGN_NOBNDRY"),
+              0.0);
+  }
 }
 
 TEST_F(EvolveVorticityIonEnergyTest, KinematicViscosityDampsZModeInPhysicalUnits) {

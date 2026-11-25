@@ -71,6 +71,7 @@ private:
   BoutReal density_floor;
   bool low_n_diffuse;      ///< Parallel diffusion at low density
   bool low_n_diffuse_perp; ///< Perpendicular diffusion at low density
+  bool index_diffusion;    ///< Publish solver density for adaptive index diffusion
   BoutReal pressure_floor; ///< When non-zero pressure is needed
   bool low_p_diffuse_perp; ///< Add artificial cross-field diffusion at low pressure?
   bool include_hyper_z;    ///< Has a hyper-diffusion coefficient been supplied?

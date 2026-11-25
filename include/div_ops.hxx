@@ -63,6 +63,22 @@ Field3D Div_n_g_bxGrad_f_B_XZ(const Field3D& n, const Field3D& g, const Field3D&
 
 Field3D Div_Perp_Lap_FV_Index(const Field3D& a, const Field3D& f);
 
+/// Symmetric index-space conductances, indexed by the left/lower cell of each
+/// face. Physical X walls are closed; Z is periodic; unused entries are zero.
+struct IndexDiffusionFaces {
+  Field3D x, z;
+};
+/// Build conductances with harmonic cell volumes, shared face activation and
+/// nonnegative directional rate ceilings. Communicates X neighbours; reads no
+/// physical wall or Y guards. The outgoing rate is bounded by rate_x + rate_z.
+IndexDiffusionFaces indexDiffusionFaces(const Field2D& rate_x, const Field2D& rate_z,
+                                        const Field3D& activation);
+/// Conservative diffusion of f using precomputed conductances. Communicates a
+/// copy of f; modifies physical cells only and preserves inputs and guards.
+Field3D applyIndexDiffusion(const IndexDiffusionFaces& faces, const Field3D& f);
+/// Sum of outgoing conductances divided by cell volume, on physical cells only.
+Field3D indexDiffusionLossRate(const IndexDiffusionFaces& faces);
+
 Field3D Div_Z_FV_Index(const Field3D& a, const Field3D& f);
 
 // 4th-order flux conserving term, in index space

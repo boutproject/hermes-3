@@ -16,6 +16,7 @@
 #include <bout/output_bout_types.hxx>
 #include <bout/solver.hxx>
 
+#include "../include/adaptive_index_diffusion.hxx"
 #include "../include/component.hxx"
 #include "../include/div_ops.hxx"
 #include "../include/evolve_pressure.hxx"
@@ -34,6 +35,8 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
       name(name) {
 
   auto& options = alloptions[name];
+  index_diffusion = options.isSet("charge") && options["charge"].as<BoutReal>() != 0.0
+                    && usesAdaptiveIndexDiffusion(alloptions);
 
   evolve_log = options["evolve_log"]
                    .doc("Evolve the logarithm of pressure?")
@@ -247,6 +250,9 @@ void EvolvePressure::transform_impl(GuardedOptions& state) {
   }
 
   auto species = state["species"][name];
+  if (index_diffusion) {
+    P_index_diffusion = copy(P);
+  }
 
   // Calculate temperature
   // Not using density boundary condition
@@ -263,6 +269,10 @@ void EvolvePressure::transform_impl(GuardedOptions& state) {
 void EvolvePressure::finally(const Options& state) {
   balance.clear();
   const auto quantity = "thermal_" + name;
+  BoutReal index_diffusion_integral = 0.0;
+  if (index_diffusion) {
+    index_diffusion_energy_rhs = zeroFrom(P_index_diffusion);
+  }
 
   // Get the section containing this species
   const auto& species = state["species"][name];
@@ -395,6 +405,22 @@ void EvolvePressure::finally(const Options& state) {
     ddt(P) -= hyper_z_T * D4DZ4_Index(T);
   }
 
+  if (species.isSet("index_diffusion_kinetic_rhs")) {
+    const IndexDiffusionFaces faces{
+        get<Field3D>(state["fields"]["index_diffusion_conductance_x"]),
+        get<Field3D>(state["fields"]["index_diffusion_conductance_z"])};
+    const auto kinetic = get<Field3D>(species["index_diffusion_kinetic_energy"]);
+    // Diffuse parallel total energy; subtract exactly the kinetic increment
+    // from the shared solver-moment rates, including the soft density floor.
+    const auto energy =
+        applyIndexDiffusion(faces, Field3D{1.5 * P_index_diffusion + kinetic})
+        - get<Field3D>(species["index_diffusion_kinetic_rhs"]);
+    ddt(P) += (2.0 / 3.0) * energy;
+    index_diffusion_energy_rhs = energy;
+    index_diffusion_integral = DomainBalance::integral(energy);
+    balance.set(quantity, "index_diffusion", energy);
+  }
+
   //////////////////////
   // Other sources
 
@@ -454,7 +480,8 @@ void EvolvePressure::finally(const Options& state) {
                   - balance.local.at({quantity, "out_exb"})
                   - balance.local.at({quantity, "out_parallel"})
                   + balance.local.at({quantity, "pressure_work"})
-                  + balance.local.at({quantity, "numerical_heat"}));
+                  + balance.local.at({quantity, "numerical_heat"})
+                  + index_diffusion_integral);
 
   if (diagnose) {
     // Save flows of energy if they are set
@@ -491,6 +518,15 @@ void EvolvePressure::outputVars(Options& state) {
                                                 {"source", "evolve_pressure"}});
 
   if (diagnose) {
+    if (index_diffusion_energy_rhs.isAllocated()) {
+      set_with_attrs(state["index_diffusion_energy_rhs_" + name],
+                     index_diffusion_energy_rhs,
+                     {{"time_dimension", "t"},
+                      {"units", "W m^-3"},
+                      {"conversion", Pnorm * Omega_ci},
+                      {"species", name},
+                      {"source", "evolve_pressure"}});
+    }
     set_with_attrs(state[std::string("T") + name], T,
                    {{"time_dimension", "t"},
                     {"units", "eV"},

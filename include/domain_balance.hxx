@@ -100,15 +100,26 @@ struct DomainBalance {
         continue;
       }
       const bool particles = quantity.find("particles_") == 0;
+      const bool momentum = quantity.find("momentum_") == 0;
       const bool content = term == "content";
       const bool present = term.find("present_") == 0;
       set_with_attrs(
           state["balance_" + component + "_" + quantity + "_" + term], total,
           {{"time_dimension", "t"},
-           {"units", present ? "1" : (particles ? "s^-1" : (content ? "J" : "W"))},
-           {"conversion", present ? 1.0
-                                  : (particles ? density : pressure) * volume
-                                        * (content ? 1.0 : frequency)},
+           {"units", present ? "1"
+                             : (particles ? "s^-1"
+                                          : (momentum ? (content ? "kg m s^-1" : "N")
+                                                      : (content ? "J" : "W")))},
+           {"conversion",
+            present ? 1.0
+                    : (particles
+                           ? density
+                           : (momentum
+                                  ? SI::Mp * density
+                                        * std::sqrt(SI::qe * get<BoutReal>(state["Tnorm"])
+                                                    / SI::Mp)
+                                  : pressure))
+                          * volume * (content ? 1.0 : frequency)},
            {"balance_quantity", quantity},
            {"balance_term", term},
            {"source", component},

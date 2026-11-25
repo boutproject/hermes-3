@@ -65,6 +65,7 @@ endif()
 include("./cmake/Sanitizers.cmake")
 
 set(HERMES_SOURCES
+    src/adaptive_index_diffusion.cxx
     src/amjuel_data.cxx
     src/braginskii_collisions.cxx
     src/braginskii_conduction.cxx
@@ -128,6 +129,7 @@ set(HERMES_SOURCES
     src/transform.cxx
     src/vorticity.cxx
     include/adas_reaction.hxx
+    include/adaptive_index_diffusion.hxx
     include/adas_carbon.hxx
     include/adas_neon.hxx
     include/amjuel_data.hxx

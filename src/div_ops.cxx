@@ -23,6 +23,7 @@
 
 #include "../include/div_ops.hxx"
 #include "../include/hermes_build_config.hxx"
+#include "../include/hermes_utils.hxx"
 
 #include <bout/assert.hxx>
 #include <bout/bout_types.hxx>
@@ -455,6 +456,99 @@ Field3D Div_n_bxGrad_f_B_XPPM(const Field3D& n, const Field3D& f, bool bndry_flu
     result += fromFieldAligned(yresult);
   }
 
+  return result;
+}
+
+namespace {
+BoutReal indexCellVolume(const Coordinates& c, const Ind3D& i) {
+  return c.J()[i] * c.dx()[i] * c.dy()[i] * c.dz()[i];
+}
+} // namespace
+
+IndexDiffusionFaces indexDiffusionFaces(const Field2D& rate_x, const Field2D& rate_z,
+                                        const Field3D& activation) {
+  auto* m = activation.getMesh();
+  if (m->isFci() || m->xstart < 1 || m->LocalNz != m->GlobalNzNoBoundaries) {
+    throw BoutException("Index diffusion requires a field-aligned mesh with X guards "
+                        "and complete periodic Z lines");
+  }
+  const auto& c = *activation.getCoordinates();
+  Field3D volume = zeroFrom(activation), rx = zeroFrom(activation),
+          rz = zeroFrom(activation), weight = zeroFrom(activation);
+  BOUT_FOR(i, activation.getRegion("RGN_NOBNDRY")) {
+    volume[i] = indexCellVolume(c, i);
+    rx[i] = rate_x[i];
+    rz[i] = rate_z[i];
+    weight[i] = activation[i];
+    if (!(std::isfinite(volume[i]) && volume[i] > 0.0 && std::isfinite(rx[i])
+          && rx[i] >= 0.0 && std::isfinite(rz[i]) && rz[i] >= 0.0
+          && std::isfinite(weight[i]) && weight[i] >= 0.0 && weight[i] <= 1.0)) {
+      throw BoutException("Invalid index-diffusion geometry, rate or activation at {}",
+                          i);
+    }
+  }
+  m->communicate(volume, rx, rz, weight);
+  IndexDiffusionFaces faces{zeroFrom(activation), zeroFrom(activation)};
+  const auto conductance = [&](const Ind3D& i, const Ind3D& j, const Field3D& rate) {
+    const BoutReal small = std::min(volume[i], volume[j]);
+    const BoutReal large = std::max(volume[i], volume[j]);
+    const BoutReal harmonic = small / (0.5 + 0.5 * small / large);
+    return 0.25 * harmonic * std::min(rate[i], rate[j])
+           * (0.5 * weight[i] + 0.5 * weight[j]);
+  };
+  BOUT_FOR(i, activation.getRegion("RGN_NOBNDRY")) {
+    if (i.x() < m->xend || !m->lastX() || m->periodicX) {
+      faces.x[i] = conductance(i, i.xp(), rx);
+    }
+    if (i.x() == m->xstart && (!m->firstX() || m->periodicX)) {
+      faces.x[i.xm()] = conductance(i.xm(), i, rx);
+    }
+    if (m->LocalNz > 1) {
+      const auto next = indexAt(activation, i.x(), i.y(), (i.z() + 1) % m->LocalNz);
+      faces.z[i] = conductance(i, next, rz);
+    }
+  }
+  return faces;
+}
+
+Field3D applyIndexDiffusion(const IndexDiffusionFaces& faces, const Field3D& f) {
+  auto* m = f.getMesh();
+  const auto& c = *f.getCoordinates();
+  Field3D value = zeroFrom(f), result = zeroFrom(f);
+  BOUT_FOR(i, f.getRegion("RGN_NOBNDRY")) { value[i] = f[i]; }
+  m->communicate(value);
+  BOUT_FOR(i, f.getRegion("RGN_NOBNDRY")) {
+    BoutReal flux = 0.0;
+    if (faces.x[i] != 0.0) {
+      flux += faces.x[i] * (value[i.xp()] - value[i]);
+    }
+    if (faces.x[i.xm()] != 0.0) {
+      flux += faces.x[i.xm()] * (value[i.xm()] - value[i]);
+    }
+    if (m->LocalNz > 1) {
+      const auto next = indexAt(f, i.x(), i.y(), (i.z() + 1) % m->LocalNz);
+      const auto prev = indexAt(f, i.x(), i.y(), (i.z() + m->LocalNz - 1) % m->LocalNz);
+      flux += faces.z[i] * (value[next] - value[i])
+              + faces.z[prev] * (value[prev] - value[i]);
+    }
+    result[i] = flux / indexCellVolume(c, i);
+  }
+  return result;
+}
+
+Field3D indexDiffusionLossRate(const IndexDiffusionFaces& faces) {
+  auto* m = faces.x.getMesh();
+  const auto& c = *faces.x.getCoordinates();
+  Field3D result = zeroFrom(faces.x);
+  BOUT_FOR(i, result.getRegion("RGN_NOBNDRY")) {
+    BoutReal sum = faces.x[i] + faces.x[i.xm()];
+    if (m->LocalNz > 1) {
+      const auto prev =
+          indexAt(result, i.x(), i.y(), (i.z() + m->LocalNz - 1) % m->LocalNz);
+      sum += faces.z[i] + faces.z[prev];
+    }
+    result[i] = sum / indexCellVolume(c, i);
+  }
   return result;
 }
 

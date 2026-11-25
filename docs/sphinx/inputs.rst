@@ -26,6 +26,14 @@ before they are used. This can be turned off by setting the option
 components will be executed in the order listed. This should only be
 necessary if a bug is encountered when using the sorting algorithm.
 
+For bounded numerical smoothing at low density or ion temperature, add
+``adaptive_index_diffusion`` to this component list and configure its own
+section. Its ``rate_x`` and ``rate_z`` ceilings are in s^-1 and may vary in
+X and Y; density and temperature thresholds are in m^-3 and eV. See
+:ref:`sec-adaptive-index-diffusion` for the activation, conservation and
+energy treatment. These numerical rates are separate from the physical
+``classical_diffusion:custom_D`` diffusivity in m²/s.
+
 .. code-block:: ini
 
     nout = 200

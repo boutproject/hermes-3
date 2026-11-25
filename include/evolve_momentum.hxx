@@ -46,6 +46,7 @@ private:
 
   BoutReal density_floor;
   bool low_n_diffuse_perp; ///< Cross-field diffusion at low density?
+  bool index_diffusion;    ///< Publish solver momentum for adaptive index diffusion
   BoutReal pressure_floor;
   bool low_p_diffuse_perp;    ///< Cross-field diffusion at low pressure?
   bool use_div_par_fvv{true}; ///< Use Div_par_fvv instead of Div_par

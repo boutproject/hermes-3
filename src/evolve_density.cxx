@@ -15,6 +15,7 @@
 #include <bout/output_bout_types.hxx>
 #include <bout/solver.hxx>
 
+#include "../include/adaptive_index_diffusion.hxx"
 #include "../include/component.hxx"
 #include "../include/div_ops.hxx"
 #include "../include/evolve_density.hxx"
@@ -165,6 +166,10 @@ EvolveDensity::EvolveDensity(std::string name, Options& alloptions, Solver* solv
           .withDefault<bool>(false);
 
   std::vector<std::string> outputs = {"AA", "density", "density_source"};
+  index_diffusion = charge != 0.0 && usesAdaptiveIndexDiffusion(alloptions);
+  if (index_diffusion) {
+    outputs.push_back("index_diffusion_density");
+  }
   if (charge != 0.) {
     outputs.push_back("charge");
   }
@@ -229,6 +234,9 @@ void EvolveDensity::transform_impl(GuardedOptions& state) {
     ASSERT2(N.hasParallelSlices());
   }
   auto species = state["species"][name];
+  if (index_diffusion) {
+    set(species["index_diffusion_density"], copy(N));
+  }
   Field3DParallel floored_N = floor(N, 0.0);
   set(species["density"], floored_N); // Density in state always >= 0
   set(species["AA"], AA);             // Atomic mass
@@ -337,6 +345,12 @@ void EvolveDensity::finally(const Options& state) {
   if (include_hyper_z) {
     auto* coord = N.getCoordinates();
     ddt(N) -= hyper_z * SQ(SQ(coord->dz())) * D4DZ4(N);
+  }
+
+  if (species.isSet("index_diffusion_density_rhs")) {
+    const auto diffusion = get<Field3D>(species["index_diffusion_density_rhs"]);
+    ddt(N) += diffusion;
+    balance.set(quantity, "index_diffusion", diffusion);
   }
 
   // Collect the external source from above with all the sources from

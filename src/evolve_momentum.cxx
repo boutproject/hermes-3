@@ -13,6 +13,7 @@
 #include <bout/output_bout_types.hxx>
 #include <bout/solver.hxx>
 
+#include "../include/adaptive_index_diffusion.hxx"
 #include "../include/component.hxx"
 #include "../include/div_ops.hxx"
 #include "../include/evolve_momentum.hxx"
@@ -89,7 +90,17 @@ EvolveMomentum::EvolveMomentum(std::string name, Options& alloptions, Solver* so
   NV_err = 0.0;
 
   substitutePermissions("name", {name});
-  substitutePermissions("outputs", {"velocity", "momentum"});
+  std::vector<std::string> outputs = {"velocity", "momentum"};
+  index_diffusion = options.isSet("charge") && options["charge"].as<BoutReal>() != 0.0
+                    && usesAdaptiveIndexDiffusion(alloptions);
+  if (index_diffusion) {
+    if (!(std::isfinite(density_floor) && density_floor > 0.0)) {
+      throw BoutException("Adaptive index diffusion requires a positive density_floor");
+    }
+    outputs.insert(outputs.end(),
+                   {"index_diffusion_momentum", "index_diffusion_density_floor"});
+  }
+  substitutePermissions("outputs", outputs);
 }
 
 void EvolveMomentum::transform_impl(GuardedOptions& state) {
@@ -116,7 +127,11 @@ void EvolveMomentum::transform_impl(GuardedOptions& state) {
   }
   set(species["velocity"], V);
 
-  NV_solver = NV;                   // Save the momentum as calculated by the solver
+  NV_solver = NV; // Save the momentum as calculated by the solver
+  if (index_diffusion) {
+    set(species["index_diffusion_momentum"], copy(NV_solver));
+    set(species["index_diffusion_density_floor"], density_floor);
+  }
   NV = Field3DParallel(AA * N * V); // Re-calculate consistent with V and N
   // Note: Now NV and NV_solver will differ when N < density_floor
   NV_err = NV - NV_solver; // This is used in the finally() function
@@ -273,6 +288,16 @@ void EvolveMomentum::finally(const Options& state) {
   if (include_hyper_z) {
     auto* coord = N.getCoordinates();
     ddt(NV) -= hyper_z * SQ(SQ(coord->dz())) * D4DZ4(NV);
+  }
+
+  if (species.isSet("index_diffusion_momentum_rhs")) {
+    const auto diffusion = get<Field3D>(species["index_diffusion_momentum_rhs"]);
+    ddt(NV) += diffusion;
+    balance.set("momentum_" + name, "index_diffusion", diffusion);
+    if (name == "e") {
+      balance.set("kinetic_e", "index_diffusion",
+                  get<Field3D>(species["index_diffusion_kinetic_rhs"]));
+    }
   }
 
   // Other sources/sinks

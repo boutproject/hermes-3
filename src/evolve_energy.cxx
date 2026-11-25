@@ -200,6 +200,8 @@ void EvolveEnergy::transform_impl(GuardedOptions& state) {
 }
 
 void EvolveEnergy::finally(const Options& state) {
+  balance.clear();
+  index_diffusion_energy_rhs = zeroFrom(E);
 
   // Get the section containing this species
   const auto& species = state["species"][name];
@@ -287,6 +289,15 @@ void EvolveEnergy::finally(const Options& state) {
     ddt(E) -= hyper_z * SQ(SQ(coord->dz())) * D4DZ4(E);
   }
 
+  if (species.isSet("index_diffusion_density_rhs")) {
+    const IndexDiffusionFaces faces{
+        get<Field3D>(state["fields"]["index_diffusion_conductance_x"]),
+        get<Field3D>(state["fields"]["index_diffusion_conductance_z"])};
+    index_diffusion_energy_rhs = applyIndexDiffusion(faces, E);
+    ddt(E) += index_diffusion_energy_rhs;
+    balance.set("total_" + name, "index_diffusion", index_diffusion_energy_rhs);
+  }
+
   //////////////////////
   // Other sources
 
@@ -335,6 +346,7 @@ void EvolveEnergy::finally(const Options& state) {
 }
 
 void EvolveEnergy::outputVars(Options& state) {
+  balance.output(state, "energy_" + name, diagnose);
   // Normalisations
   auto Nnorm = get<BoutReal>(state["Nnorm"]);
   auto Tnorm = get<BoutReal>(state["Tnorm"]);
@@ -365,6 +377,15 @@ void EvolveEnergy::outputVars(Options& state) {
                   {"source", "evolve_energy"}});
 
   if (diagnose) {
+    if (!balance.local.empty()) {
+      set_with_attrs(state["index_diffusion_energy_rhs_" + name],
+                     index_diffusion_energy_rhs,
+                     {{"time_dimension", "t"},
+                      {"units", "W m^-3"},
+                      {"conversion", Pnorm * Omega_ci},
+                      {"species", name},
+                      {"source", "evolve_energy"}});
+    }
     set_with_attrs(state[std::string("T") + name], T,
                    {{"time_dimension", "t"},
                     {"units", "eV"},

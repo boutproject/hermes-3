@@ -6,6 +6,7 @@
 #include <bout/field3d.hxx>
 
 #include "component.hxx"
+#include "domain_balance.hxx"
 
 /// Evolves species internal energy in time
 ///
@@ -80,6 +81,8 @@ private:
 
   Field3D source; ///< External power source
   Field3D Se;     ///< Total energy source
+  Field3D index_diffusion_energy_rhs;
+  DomainBalance balance;
 
   bool include_hyper_z; ///< Has a hyper-diffusion coefficient been supplied?
   Field2D hyper_z;      ///< Hyper-diffusion in Z, varying in X and Y
