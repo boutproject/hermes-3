@@ -85,6 +85,7 @@ private:
   bool
       low_p_diffuse_perp; ///< Add artificial cross-field diffusion at low electron pressure?
   bool damp_p_nt;         ///< Damp P - N*T. Active when P < 0 or N < density_floor
+  bool keep_solver_pressure; ///< Do not overwrite the evolving P with N*T in finally()
 
   Field3D source, final_source; ///< External pressure source
   Field3D Sp;                   ///< Total pressure source

@@ -64,6 +64,13 @@ EvolvePressure::EvolvePressure(std::string name, Options& alloptions, Solver* so
                   .doc("Damp P - N*T? Active when P < 0 or N < density_floor")
                   .withDefault<bool>(false);
 
+  keep_solver_pressure =
+      options["keep_solver_pressure"]
+          .doc("Do not overwrite the evolving pressure P with N*T in finally(). N*T (the "
+               "pressure in the state, with boundary conditions) is used only inside the "
+               "RHS; the solver state and dump/restart files keep the solver pressure")
+          .withDefault<bool>(false);
+
   dissipative = options["dissipative"]
                     .doc("Lax flux in the parallel advection in Fci?")
                     .withDefault<bool>(mesh->isFci());
@@ -259,13 +266,25 @@ void EvolvePressure::finally(const Options& state) {
   // Get the section containing this species
   const auto& species = state["species"][name];
 
-  // Get updated pressure and temperature with boundary conditions
-  P = get<Field3D>(species["pressure"]);
-  if (!P.isFci()) {
-    P.clearParallelSlices();
+  // Get updated pressure and temperature with boundary conditions.
+  // In cells with N < density_floor this is N * T != P (see transform_impl). By default
+  // it replaces the evolving field P. Since the solver copies the evolving fields back
+  // into its state vector after each RHS call, that changes the solver state. With
+  // keep_solver_pressure the pressure of the state is used only inside this RHS
+  // evaluation (Prhs), and P keeps the solver value.
+  const bool keep_P = keep_solver_pressure and not evolve_log;
+  Field3D P_state;
+  if (keep_P) {
+    P_state = get<Field3D>(species["pressure"]);
+  } else {
+    P = get<Field3D>(species["pressure"]);
+  }
+  Field3D& Prhs = keep_P ? P_state : P;
+  if (!Prhs.isFci()) {
+    Prhs.clearParallelSlices();
   }
 
-  const Field3DParallel Pfloor = floor(P, 0.0); // Restricted to never go below zero
+  const Field3DParallel Pfloor = floor(Prhs, 0.0); // Restricted to never go below zero
 
   T = get<Field3D>(species["temperature"]);
   N = get<Field3D>(species["density"]);
@@ -276,7 +295,7 @@ void EvolvePressure::finally(const Options& state) {
 
     const Field3D phi = get<Field3D>(state["fields"]["phi"]);
 
-    ddt(P) = -Div_n_bxGrad_f_B_XPPM(P, phi, bndry_flux, poloidal_flows, true);
+    ddt(P) = -Div_n_bxGrad_f_B_XPPM(Prhs, phi, bndry_flux, poloidal_flows, true);
   } else {
     ddt(P) = 0.0;
   }
@@ -295,8 +314,8 @@ void EvolvePressure::finally(const Options& state) {
 
     if (p_div_v) {
       // Use the P * Div(V) form
-      ddt(P) -= FV::Div_par_mod<hermes::Limiter>(P, V, fastest_wave, flow_ylow_advection,
-                                                 true, dissipative);
+      ddt(P) -= FV::Div_par_mod<hermes::Limiter>(Prhs, V, fastest_wave,
+                                                 flow_ylow_advection, true, dissipative);
 
       // Work done. This balances energetically a term in the momentum equation
       E_PdivV = -Pfloor * Div_par(V.asField3DParallel());
@@ -309,8 +328,8 @@ void EvolvePressure::finally(const Options& state) {
       //       Caused heating of charged species near sheath like p_div_v
       ddt(P) -= (5. / 3)
                 * FV::Div_par_mod<hermes::Limiter>(
-                    P, V, fastest_wave, flow_ylow_advection, true, dissipative);
-      E_VgradP = V * Grad_par(P.asField3DParallel());
+                    Prhs, V, fastest_wave, flow_ylow_advection, true, dissipative);
+      E_VgradP = V * Grad_par(Prhs.asField3DParallel());
       ddt(P) += (2. / 3) * E_VgradP;
     }
     flow_ylow_advection *= 5. / 2; // Energy flow
@@ -319,8 +338,8 @@ void EvolvePressure::finally(const Options& state) {
     if (state.isSection("fields") and state["fields"].isSet("Apar_flutter")) {
       // Magnetic flutter term
       const Field3D Apar_flutter = get<Field3D>(state["fields"]["Apar_flutter"]);
-      ddt(P) -= (5. / 3) * Div_n_g_bxGrad_f_B_XZ(P, V, -Apar_flutter);
-      ddt(P) += (2. / 3) * V * bracket(P, Apar_flutter, BRACKET_ARAKAWA);
+      ddt(P) -= (5. / 3) * Div_n_g_bxGrad_f_B_XZ(Prhs, V, -Apar_flutter);
+      ddt(P) += (2. / 3) * V * bracket(Prhs, Apar_flutter, BRACKET_ARAKAWA);
     }
 
     if (numerical_viscous_heating || diagnose) {
@@ -344,12 +363,12 @@ void EvolvePressure::finally(const Options& state) {
     // Low density parallel diffusion
     const Field3D low_n_coeff = get<Field3D>(species["low_n_coeff"]);
     ddt(P) += FV::Div_par_K_Grad_par(low_n_coeff * T, N)
-              + FV::Div_par_K_Grad_par(low_n_coeff, P);
+              + FV::Div_par_K_Grad_par(low_n_coeff, Prhs);
   }
 
   if (low_n_diffuse_perp) {
     ddt(P) +=
-        Div_Perp_Lap_FV_Index(density_floor / softFloor(N, 1e-3 * density_floor), P);
+        Div_Perp_Lap_FV_Index(density_floor / softFloor(N, 1e-3 * density_floor), Prhs);
   }
 
   if (low_T_diffuse_perp) {
@@ -362,12 +381,12 @@ void EvolvePressure::finally(const Options& state) {
   }
 
   if (low_p_diffuse_perp) {
-    const Field3D Plim = softFloor(P, 1e-3 * pressure_floor);
-    ddt(P) += Div_Perp_Lap_FV_Index(pressure_floor / Plim, P);
+    const Field3D Plim = softFloor(Prhs, 1e-3 * pressure_floor);
+    ddt(P) += Div_Perp_Lap_FV_Index(pressure_floor / Plim, Prhs);
   }
 
   if (hyper_z > 0.) {
-    ddt(P) -= hyper_z * D4DZ4_Index(P);
+    ddt(P) -= hyper_z * D4DZ4_Index(Prhs);
   }
 
   if (hyper_z_T > 0.) {
@@ -404,7 +423,7 @@ void EvolvePressure::finally(const Options& state) {
   if (damp_p_nt) {
     // Term to force evolved P towards N * T
     // This is active when P < 0 or when N < density_floor
-    ddt(P) += N * T - P;
+    ddt(P) += N * T - Prhs;
   }
 
   // Scale time derivatives
@@ -413,7 +432,7 @@ void EvolvePressure::finally(const Options& state) {
   }
 
   if (evolve_log) {
-    ddt(logP) = ddt(P) / P;
+    ddt(logP) = ddt(P) / Prhs;
   }
 
 #if CHECKLEVEL >= 1
@@ -433,6 +452,13 @@ void EvolvePressure::finally(const Options& state) {
     if (species.isSet("energy_flow_ylow")) {
       flow_ylow += get<Field3D>(species["energy_flow_ylow"]);
     }
+  }
+
+  if (keep_P) {
+    // As EvolveMomentum (NV_solver.setBoundaryTo(NV)): only the boundary cells of P,
+    // which are not part of the solver state, take the boundary values of the state
+    // pressure; the interior keeps the solver value.
+    P.setBoundaryTo(P_state);
   }
 }
 
