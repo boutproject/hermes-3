@@ -16,7 +16,14 @@ using bout::globals::mesh;
 class IndexDiffusionMesh : public FakeMesh {
 public:
   using FakeMesh::FakeMesh;
-  int x_calls{0}, y_calls{0};
+  int x_calls{0}, y_calls{0}, all_calls{0};
+  bool first_x{true}, last_x{true};
+  bool firstX() const override { return first_x; }
+  bool lastX() const override { return last_x; }
+  comm_handle send(FieldGroup& group) override {
+    ++all_calls;
+    return FakeMesh::send(group);
+  }
   comm_handle sendX(FieldGroup& group, comm_handle = nullptr, bool = false) override {
     ++x_calls;
     return FakeMesh::send(group);
@@ -47,11 +54,13 @@ TEST_F(IndexDiffusionTest, ConservesUnequalVolumesAndBoundsLocalRates) {
   }
   getMesh().x_calls = 0;
   getMesh().y_calls = 0;
+  getMesh().all_calls = 0;
   const auto faces = indexDiffusionFaces(rx, rz, weight);
   const auto rhs = applyIndexDiffusion(faces, f);
   const auto loss = indexDiffusionLossRate(faces);
-  EXPECT_EQ(getMesh().x_calls, 2);
+  EXPECT_EQ(getMesh().x_calls, 0);
   EXPECT_EQ(getMesh().y_calls, 0);
+  EXPECT_EQ(getMesh().all_calls, 0);
   BoutReal dissipation = 0.0, absolute_flux = 0.0;
   for (const auto& i : rhs.getRegion("RGN_NOBNDRY")) {
     const auto v = volumes[i];
@@ -82,9 +91,11 @@ TEST_F(IndexDiffusionTest, PeriodicXAndZFourierModesHaveIndexRates) {
   getMesh().copy_periodic_halos = true;
   mesh->getCoordinates()->setDx(0.01);
   mesh->getCoordinates()->setDz(3.0);
-  const auto f = makeField<Field3D>([](Ind3D& i) {
+  auto f = makeField<Field3D>([](Ind3D& i) {
     return std::cos(2.0 * PI * (i.x() - 2) / 5.0) + std::cos(2.0 * PI * i.z() / 8.0);
   });
+  // The caller supplies valid periodic guards, just as equation owners do.
+  mesh->communicateXZ(f);
   const auto faces = indexDiffusionFaces(Field2D{2.0}, Field2D{3.0}, Field3D{1.0});
   const auto rhs = applyIndexDiffusion(faces, f);
   for (const auto& i : rhs.getRegion("RGN_NOBNDRY")) {
@@ -94,6 +105,31 @@ TEST_F(IndexDiffusionTest, PeriodicXAndZFourierModesHaveIndexRates) {
     EXPECT_NEAR(rhs[i], expected, 1e-12);
   }
   EXPECT_NEAR(DomainBalance::integral(rhs), 0.0, 1e-12);
+}
+
+TEST_F(IndexDiffusionTest, ReadsExistingProcessorGuardsWithoutCommunication) {
+  getMesh().first_x = false;
+  getMesh().last_x = false;
+  const auto nan = std::numeric_limits<BoutReal>::quiet_NaN();
+  Field3D f{nan}, activation{nan};
+  for (const auto& i : indexDiffusionInputRegion(f)) {
+    activation[i] = 1.0;
+    f[i] = i.x() < mesh->xstart ? 2.0 : (i.x() > mesh->xend ? 3.0 : 0.0);
+  }
+  getMesh().x_calls = getMesh().y_calls = getMesh().all_calls = 0;
+  const auto faces = indexDiffusionFaces(Field2D{4.0}, Field2D{0.0}, activation);
+  const auto rhs = applyIndexDiffusion(faces, f);
+  for (const auto& i : rhs.getRegion("RGN_NOBNDRY")) {
+    const auto expected = i.x() == mesh->xstart ? 2.0 : (i.x() == mesh->xend ? 3.0 : 0.0);
+    EXPECT_DOUBLE_EQ(rhs[i], expected);
+  }
+  EXPECT_EQ(f(mesh->xstart - 1, mesh->ystart, 0), 2.0);
+  EXPECT_EQ(f(mesh->xend + 1, mesh->ystart, 0), 3.0);
+  EXPECT_TRUE(std::isnan(f(0, mesh->ystart, 0)));
+  EXPECT_TRUE(std::isnan(f(mesh->xstart, 0, 0)));
+  EXPECT_EQ(getMesh().x_calls, 0);
+  EXPECT_EQ(getMesh().y_calls, 0);
+  EXPECT_EQ(getMesh().all_calls, 0);
 }
 
 template <class Size>
@@ -176,6 +212,62 @@ TEST_F(AdaptiveIndexDiffusionTest, ZeroRatesHaveNoDependenciesOrStateEffects) {
   component.transform(empty);
   EXPECT_TRUE(empty.getChildren().empty());
   EXPECT_EQ(diagnostics(component).getChildren().count("index_diffusion_activation"), 0);
+}
+
+TEST_F(AdaptiveIndexDiffusionTest, DerivedFieldsUseExistingProcessorGuards) {
+  getMesh().first_x = false;
+  getMesh().last_x = false;
+  auto opts = options();
+  opts["adaptive_index_diffusion"]["rate_z"].force(0.0);
+  opts["adaptive_index_diffusion"]["temperature_threshold"] = 4.0;
+  AdaptiveIndexDiffusion component("adaptive_index_diffusion", opts, nullptr);
+  component.declareAllSpecies({"e", "d+"});
+  auto s = state();
+  const auto n = makeField<Field3D>([](Ind3D& i) {
+    return i.x() < mesh->xstart ? 1.0 : (i.x() > mesh->xend ? 4.0 : 2.0);
+  });
+  const auto temperature = makeField<Field3D>([](Ind3D& i) {
+    return i.x() < mesh->xstart ? 0.5 : (i.x() > mesh->xend ? 4.0 : 2.0);
+  });
+  for (const auto* name : {"e", "d+"}) {
+    auto& sp = s["species"][name];
+    const BoutReal mass = std::string{name} == "e" ? 0.1 : 2.0;
+    sp["density"].force(n);
+    if (std::string{name} != "e") {
+      sp["index_diffusion_density"].force(n);
+      sp["temperature"] = temperature;
+    }
+    sp["AA"] = mass;
+    sp["index_diffusion_density_floor"] = 0.01;
+    sp["index_diffusion_momentum"] = Field3D{0.02};
+    sp["velocity"] = Field3D{0.02 / (mass * softFloor(n, 0.01))};
+  }
+  getMesh().x_calls = getMesh().y_calls = getMesh().all_calls = 0;
+  component.transform(s);
+  const auto activation =
+      diagnostics(component)["index_diffusion_activation"].as<Field3D>();
+  for (int x : {mesh->xstart - 1, mesh->xend + 1}) {
+    const auto i = indexAt(n, x, mesh->ystart, 0);
+    const auto wn = 4.0 / (4.0 + n[i] * n[i]);
+    const auto wt = 4.0 / (4.0 + temperature[i] * temperature[i]);
+    EXPECT_NEAR(activation[i], wn + (1.0 - wn) * wt, 1e-14);
+    for (const auto* name : {"e", "d+"}) {
+      const auto& sp = s["species"][name];
+      const auto v = sp["velocity"].as<Field3D>()[i];
+      const auto mass = sp["AA"].as<BoutReal>();
+      EXPECT_NEAR(sp["index_diffusion_kinetic_energy"].as<Field3D>()[i],
+                  0.5 * mass * n[i] * v * v, 1e-14);
+    }
+  }
+  const auto sn = s["species"]["d+"]["index_diffusion_density_rhs"].as<Field3D>();
+  EXPECT_LT(sn(mesh->xstart, mesh->ystart, 0), 0.0);
+  EXPECT_GT(sn(mesh->xend, mesh->ystart, 0), 0.0);
+  EXPECT_TRUE(IsFieldEqual(sn,
+                           s["species"]["e"]["index_diffusion_density_rhs"].as<Field3D>(),
+                           "RGN_NOBNDRY", 1e-14));
+  EXPECT_EQ(getMesh().x_calls, 0);
+  EXPECT_EQ(getMesh().y_calls, 0);
+  EXPECT_EQ(getMesh().all_calls, 0);
 }
 
 TEST_F(AdaptiveIndexDiffusionTest, SIUnitsAndEitherTriggerActivateSharedFaces) {

@@ -465,49 +465,51 @@ BoutReal indexCellVolume(const Coordinates& c, const Ind3D& i) {
 }
 } // namespace
 
-IndexDiffusionFaces indexDiffusionFaces(const Field2D& rate_x, const Field2D& rate_z,
-                                        const Field3D& activation) {
-  auto* m = activation.getMesh();
+Region<Ind3D> indexDiffusionInputRegion(const Field3D& f) {
+  const auto* m = f.getMesh();
   if (m->isFci() || m->xstart < 1 || m->LocalNz != m->GlobalNzNoBoundaries) {
     throw BoutException("Index diffusion requires a field-aligned mesh with X guards "
                         "and complete periodic Z lines");
   }
+  const int low = m->xstart - (!m->firstX() || m->periodicX ? 1 : 0);
+  const int high = m->xend + (!m->lastX() || m->periodicX ? 1 : 0);
+  return {low, high, m->ystart, m->yend, 0, m->LocalNz - 1, m->LocalNy, m->LocalNz};
+}
+
+IndexDiffusionFaces indexDiffusionFaces(const Field2D& rate_x, const Field2D& rate_z,
+                                        const Field3D& activation) {
+  auto* m = activation.getMesh();
   const auto& c = *activation.getCoordinates();
-  Field3D volume = zeroFrom(activation), rx = zeroFrom(activation),
-          rz = zeroFrom(activation), weight = zeroFrom(activation);
-  BOUT_FOR(i, activation.getRegion("RGN_NOBNDRY")) {
-    volume[i] = indexCellVolume(c, i);
-    rx[i] = rate_x[i];
-    rz[i] = rate_z[i];
-    weight[i] = activation[i];
-    if (!(std::isfinite(volume[i]) && volume[i] > 0.0 && std::isfinite(rx[i])
-          && rx[i] >= 0.0 && std::isfinite(rz[i]) && rz[i] >= 0.0
-          && std::isfinite(weight[i]) && weight[i] >= 0.0 && weight[i] <= 1.0)) {
+  const auto inputs = indexDiffusionInputRegion(activation);
+  BOUT_FOR(i, inputs) {
+    const auto volume = indexCellVolume(c, i);
+    if (!(std::isfinite(volume) && volume > 0.0 && std::isfinite(rate_x[i])
+          && rate_x[i] >= 0.0 && std::isfinite(rate_z[i]) && rate_z[i] >= 0.0
+          && std::isfinite(activation[i]) && activation[i] >= 0.0
+          && activation[i] <= 1.0)) {
       throw BoutException("Invalid index-diffusion geometry, rate or activation at {}",
                           i);
     }
   }
-  // This stencil needs radial neighbours only. Full communication also
-  // exchanges Y guards and builds shifted parallel slices for every temporary.
-  m->communicateXZ(volume, rx, rz, weight);
   IndexDiffusionFaces faces{zeroFrom(activation), zeroFrom(activation)};
-  const auto conductance = [&](const Ind3D& i, const Ind3D& j, const Field3D& rate) {
-    const BoutReal small = std::min(volume[i], volume[j]);
-    const BoutReal large = std::max(volume[i], volume[j]);
+  const auto conductance = [&](const Ind3D& i, const Ind3D& j, const Field2D& rate) {
+    const auto vi = indexCellVolume(c, i), vj = indexCellVolume(c, j);
+    const BoutReal small = std::min(vi, vj);
+    const BoutReal large = std::max(vi, vj);
     const BoutReal harmonic = small / (0.5 + 0.5 * small / large);
     return 0.25 * harmonic * std::min(rate[i], rate[j])
-           * (0.5 * weight[i] + 0.5 * weight[j]);
+           * (0.5 * activation[i] + 0.5 * activation[j]);
   };
   BOUT_FOR(i, activation.getRegion("RGN_NOBNDRY")) {
     if (i.x() < m->xend || !m->lastX() || m->periodicX) {
-      faces.x[i] = conductance(i, i.xp(), rx);
+      faces.x[i] = conductance(i, i.xp(), rate_x);
     }
     if (i.x() == m->xstart && (!m->firstX() || m->periodicX)) {
-      faces.x[i.xm()] = conductance(i.xm(), i, rx);
+      faces.x[i.xm()] = conductance(i.xm(), i, rate_x);
     }
     if (m->LocalNz > 1) {
       const auto next = indexAt(activation, i.x(), i.y(), (i.z() + 1) % m->LocalNz);
-      faces.z[i] = conductance(i, next, rz);
+      faces.z[i] = conductance(i, next, rate_z);
     }
   }
   return faces;
@@ -516,22 +518,19 @@ IndexDiffusionFaces indexDiffusionFaces(const Field2D& rate_x, const Field2D& ra
 Field3D applyIndexDiffusion(const IndexDiffusionFaces& faces, const Field3D& f) {
   auto* m = f.getMesh();
   const auto& c = *f.getCoordinates();
-  Field3D value = zeroFrom(f), result = zeroFrom(f);
-  BOUT_FOR(i, f.getRegion("RGN_NOBNDRY")) { value[i] = f[i]; }
-  m->communicateXZ(value);
+  Field3D result = zeroFrom(f);
   BOUT_FOR(i, f.getRegion("RGN_NOBNDRY")) {
     BoutReal flux = 0.0;
     if (faces.x[i] != 0.0) {
-      flux += faces.x[i] * (value[i.xp()] - value[i]);
+      flux += faces.x[i] * (f[i.xp()] - f[i]);
     }
     if (faces.x[i.xm()] != 0.0) {
-      flux += faces.x[i.xm()] * (value[i.xm()] - value[i]);
+      flux += faces.x[i.xm()] * (f[i.xm()] - f[i]);
     }
     if (m->LocalNz > 1) {
       const auto next = indexAt(f, i.x(), i.y(), (i.z() + 1) % m->LocalNz);
       const auto prev = indexAt(f, i.x(), i.y(), (i.z() + m->LocalNz - 1) % m->LocalNz);
-      flux += faces.z[i] * (value[next] - value[i])
-              + faces.z[prev] * (value[prev] - value[i]);
+      flux += faces.z[i] * (f[next] - f[i]) + faces.z[prev] * (f[prev] - f[i]);
     }
     result[i] = flux / indexCellVolume(c, i);
   }

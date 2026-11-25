@@ -71,8 +71,11 @@ constant activation, an alternating mode damps at :math:`r_d w` in each
 direction. More generally, the outgoing cell rate is at most
 :math:`r_{i,x}+r_{i,z}`. Physical X walls are closed; processor faces and
 periodic X are open. No Y diffusion or target flux is added.
-Only radial guards are communicated for this operator; no Y exchange,
-twist-shift operation or parallel-slice interpolation is needed.
+The operator uses the radial guards already populated by the equation
+components and performs no communication. Activation and kinetic energy
+are also calculated on the required processor or periodic radial guards.
+The fixed rate fields are communicated in X once during initialization;
+no Y exchange, twist-shift operation or parallel-slice interpolation is needed.
 
 The same conductances diffuse evolved charged-species density, parallel
 momentum and total energy. Ion total-energy diffusion enters ``Eion``

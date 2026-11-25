@@ -141,6 +141,9 @@ AdaptiveIndexDiffusion::AdaptiveIndexDiffusion(std::string name, Options& option
   if (!enabled) {
     return;
   }
+  // Fixed input coefficients need valid processor/periodic radial guards once.
+  // Evolved fields and their solver snapshots are communicated by their owners.
+  rate_x.getMesh()->communicateXZ(rate_x, rate_z);
   for (const auto& permission :
        {readIfSet("species:{all_species}:charge"),
         readOnly("species:{positive_ions}:density", Regions::Interior),
@@ -196,6 +199,7 @@ void AdaptiveIndexDiffusion::transform_impl(GuardedOptions& state) {
   auto allspecies = state["species"];
   std::vector<std::string> ions, charged;
   Field3D charge_density{0.0}, electron_solver_density{0.0};
+  const auto inputs = indexDiffusionInputRegion(charge_density);
   for (const auto& [name, sp] : allspecies.getChildren()) {
     if (!sp.isSet("charge") || get<BoutReal>(sp["charge"]) == 0.0) {
       continue;
@@ -214,7 +218,7 @@ void AdaptiveIndexDiffusion::transform_impl(GuardedOptions& state) {
                             name);
       }
       const auto raw = getNoBoundary<Field3D>(sp["index_diffusion_density"]);
-      BOUT_FOR(i, charge_density.getRegion("RGN_NOBNDRY")) {
+      BOUT_FOR(i, inputs) {
         charge_density[i] += charge * density[i];
         electron_solver_density[i] += charge * raw[i];
       }
@@ -236,7 +240,7 @@ void AdaptiveIndexDiffusion::transform_impl(GuardedOptions& state) {
     temperature = getNoBoundary<Field3D>(allspecies[selected]["temperature"]);
   }
   activation = Field3D{0.0};
-  BOUT_FOR(i, activation.getRegion("RGN_NOBNDRY")) {
+  BOUT_FOR(i, inputs) {
     const auto wn =
         density_trigger ? activationWeight(charge_density[i], density_threshold) : 0.0;
     const auto wt = temperature_trigger
@@ -260,9 +264,7 @@ void AdaptiveIndexDiffusion::transform_impl(GuardedOptions& state) {
     } else if (name == "e") {
       Field3D raw = zeroFrom(electron_solver_density);
       const auto charge = get<BoutReal>(sp["charge"]);
-      BOUT_FOR(i, raw.getRegion("RGN_NOBNDRY")) {
-        raw[i] = -electron_solver_density[i] / charge;
-      }
+      BOUT_FOR(i, inputs) { raw[i] = -electron_solver_density[i] / charge; }
       density_rates[name] = applyIndexDiffusion(faces, raw);
     }
     if (sp.isSet("index_diffusion_momentum")) {
@@ -290,9 +292,7 @@ void AdaptiveIndexDiffusion::transform_impl(GuardedOptions& state) {
                       : zeroFrom(density);
     if (name == "e" && !sp.isSet("index_diffusion_density")) {
       const auto charge = get<BoutReal>(sp["charge"]);
-      BOUT_FOR(i, raw.getRegion("RGN_NOBNDRY")) {
-        raw[i] = -electron_solver_density[i] / charge;
-      }
+      BOUT_FOR(i, inputs) { raw[i] = -electron_solver_density[i] / charge; }
     }
     const auto& sn = density_rates.at(name);
     const auto& sm = momentum_rates.at(name);
@@ -310,10 +310,14 @@ void AdaptiveIndexDiffusion::transform_impl(GuardedOptions& state) {
                             name);
       }
       const BoutReal density_floor = get<BoutReal>(sp["index_diffusion_density_floor"]);
+      // Pressure diffusion needs neighbouring total energies, so build K on
+      // the same radial guards as the already communicated pressure snapshot.
+      BOUT_FOR(i, inputs) {
+        kinetic[i] = 0.5 * mass * std::max(density[i], 0.0) * velocity[i] * velocity[i];
+      }
       BOUT_FOR(i, kinetic.getRegion("RGN_NOBNDRY")) {
         const auto n = std::max(density[i], 0.0);
         const auto v = velocity[i];
-        kinetic[i] = 0.5 * mass * n * v * v;
         // Hard density clipping has zero derivative on its negative branch.
         const auto physical_sn =
             quasineutral_electron ? electron_fraction * electron_physical_density_rate[i]

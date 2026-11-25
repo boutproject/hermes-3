@@ -68,13 +68,18 @@ Field3D Div_Perp_Lap_FV_Index(const Field3D& a, const Field3D& f);
 struct IndexDiffusionFaces {
   Field3D x, z;
 };
+/// Physical cells plus one radial processor/periodic guard on either open
+/// side. Physical wall and Y guards are excluded. No communication occurs.
+Region<Ind3D> indexDiffusionInputRegion(const Field3D& f);
 /// Build conductances with harmonic cell volumes, shared face activation and
-/// nonnegative directional rate ceilings. Communicates X neighbours; reads no
-/// physical wall or Y guards. The outgoing rate is bounded by rate_x + rate_z.
+/// nonnegative directional rate ceilings. Inputs and geometry must have valid
+/// radial processor/periodic guards. Reads no physical wall or Y guards and
+/// performs no communication. The outgoing rate is bounded by rate_x + rate_z.
 IndexDiffusionFaces indexDiffusionFaces(const Field2D& rate_x, const Field2D& rate_z,
                                         const Field3D& activation);
-/// Conservative diffusion of f using precomputed conductances. Communicates a
-/// copy of f; modifies physical cells only and preserves inputs and guards.
+/// Conservative diffusion using precomputed conductances and valid radial
+/// processor/periodic guards of f. No communication occurs; inputs are preserved
+/// and the output's unused guards are zero.
 Field3D applyIndexDiffusion(const IndexDiffusionFaces& faces, const Field3D& f);
 /// Sum of outgoing conductances divided by cell volume, on physical cells only.
 Field3D indexDiffusionLossRate(const IndexDiffusionFaces& faces);
