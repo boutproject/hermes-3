@@ -3,7 +3,8 @@
 Interchange relaxation in a 5 cm X-Z slab with curvature radius 1.5 m,
 magnetic field 0.35 T, and density 2e18 m^-3. Ion total energy and electron
 pressure evolve with conservative polarisation transport, viscosity and
-classical diffusion (`custom_D = 0.1`). There are no prescribed sources or
+classical diffusion (`custom_D = 0.1 * hermes:Tnorm / hermes:Bnorm` in m^2/s,
+equivalent to 0.1 in normalised units). There are no prescribed sources or
 sheaths. The radial transport faces are closed.
 
 The pressure perturbation has constant buffers within 0.1 of either radial

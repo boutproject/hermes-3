@@ -9,15 +9,15 @@
 
 /// Perpendicular diffusion of particles, carried parallel momentum and energy.
 ///
-/// A positive custom_D sets the normalised particle and thermal-energy
-/// diffusivity. The energy source is Div(1.5 D Grad_perp P), using the species
-/// pressure or N*T when only temperature is supplied. No collision frequencies
+/// Setting custom_D supplies a spatially varying particle and thermal-energy
+/// diffusivity in m^2/s, converted to normalised units. The energy source is
+/// Div(1.5 D Grad_perp P), using the species pressure or N*T when only
+/// temperature is supplied. No collision frequencies
 /// are required in this mode.
 ///
-/// Negative custom_D (default -1) calculates the ambipolar particle diffusivity
+/// Omitting custom_D calculates the ambipolar particle diffusivity
 /// from electron collisions, transports 1.5 T with the particles, and adds
-/// perpendicular temperature conduction for each charged species. A value of
-/// zero calculates the same particle diffusivity but omits conduction.
+/// perpendicular temperature conduction for each charged species.
 ///
 /// All physical X and Y boundary face fluxes are closed, including mixed-metric
 /// contributions. Periodic and inter-processor faces are retained.
@@ -34,9 +34,10 @@ private:
   DomainBalance balance;
   Coordinates::FieldMetric Bsq; // Magnetic field squared
 
-  bool diagnose;     ///< Output additional diagnostics?
-  Field3D Dn;        ///< Realised normalised perpendicular particle diffusivity
-  BoutReal custom_D; ///< Normalised diffusivity override; positive selects custom mode
+  bool diagnose;         ///< Output additional diagnostics?
+  bool include_custom_D; ///< Has a custom diffusivity been supplied?
+  Field3D Dn;            ///< Realised normalised perpendicular particle diffusivity
+  Field3D custom_D;      ///< Spatially varying diffusivity override, normalised
 
   // Flow diagnostics
   Field3D cls_pf_perp_xlow, cls_pf_perp_ylow;

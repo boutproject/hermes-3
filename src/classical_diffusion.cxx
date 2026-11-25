@@ -19,18 +19,22 @@ ClassicalDiffusion::ClassicalDiffusion(std::string name, Options& alloptions, So
                       "D_classical with conversion metadata for m^2/s, including "
                       "any custom override?")
                  .withDefault<bool>(false);
+  include_custom_D = options.isSet("custom_D");
   custom_D = options["custom_D"]
-                 .doc("Normalised particle and thermal-energy diffusivity override. "
-                      ">0: constant diffusion; <0: classical diffusion and conduction "
-                      "(default -1); 0: collision-derived particle and carried-energy "
-                      "diffusion without conduction. Multiply positive values by "
-                      "rho_s0^2 * Omega_ci to obtain m^2/s.")
-                 .withDefault<BoutReal>(-1);
+                 .doc("Particle and thermal-energy diffusivity override [m^2/s]. "
+                      "May vary in space. Omit for classical diffusion and conduction.")
+                 .withDefault<Field3D>(Field3D{0.0});
+  if (include_custom_D) {
+    const Options& units = alloptions["units"];
+    const BoutReal rho_s0 = units["meters"];
+    const BoutReal Omega_ci = 1. / units["seconds"].as<BoutReal>();
+    custom_D /= rho_s0 * rho_s0 * Omega_ci;
+  }
 
   substitutePermissions("optional",
                         {"charge", "pressure", "density", "velocity", "temperature"});
   std::vector<std::string> e_vals = {"AA", "density"};
-  if (custom_D <= 0.) {
+  if (!include_custom_D) {
     e_vals.push_back("collision_frequency");
   }
   substitutePermissions("e_vals", e_vals);
@@ -39,7 +43,7 @@ ClassicalDiffusion::ClassicalDiffusion(std::string name, Options& alloptions, So
   // and collision frequency. Nothing happens in classical mode if charge or
   // density are unset.
   substitutePermissions("output", {"density_source", "momentum_source", "energy_source"});
-  if (custom_D < 0.) {
+  if (!include_custom_D) {
     setPermissions(readOnly("species:{all_species}:collision_frequency"));
   }
 }
@@ -52,7 +56,7 @@ void ClassicalDiffusion::transform_impl(GuardedOptions& state) {
   // The only term here comes from the resistive drift
 
   Field3D Ptotal = 0.0;
-  if (!(custom_D > 0)) {
+  if (!include_custom_D) {
     for (auto& kv : allspecies.getChildren()) {
       const auto species = kv.second;
 
@@ -70,7 +74,7 @@ void ClassicalDiffusion::transform_impl(GuardedOptions& state) {
   // Particle diffusion coefficient. Applied to all charged species
   // so that net transport is ambipolar
 
-  if (custom_D > 0) { // User-set
+  if (include_custom_D) { // User-set
     Dn = custom_D;
   } else { // Calculated from collisions
     auto electrons = allspecies["e"];
@@ -83,6 +87,7 @@ void ClassicalDiffusion::transform_impl(GuardedOptions& state) {
 
   // Retain the coefficient treatment at inter-processor faces. Physical wall
   // fluxes are closed explicitly, including the cross-metric contributions.
+  Dn.allocate(); // Detach from custom_D before modifying guard cells.
   BOUT_FOR(i, Dn.getRegion("RGN_GUARDS")) { Dn[i] = 0.0; }
 
   for (auto kv : allspecies.getChildren()) {
@@ -92,7 +97,7 @@ void ClassicalDiffusion::transform_impl(GuardedOptions& state) {
       balance.add(kv.first == "e" ? "thermal_e" : "ion_energy", "out_classical",
                   -DomainBalance::integral(rhs));
     };
-    if (!(custom_D > 0)) {
+    if (!include_custom_D) {
       if (!(species.isSet("charge") and species.isSet("density"))) {
         continue; // Skip, go to next species
       }
@@ -119,7 +124,7 @@ void ClassicalDiffusion::transform_impl(GuardedOptions& state) {
                                     false));
     }
 
-    if (custom_D > 0) {
+    if (include_custom_D) {
       if (IS_SET(species["pressure"]) || IS_SET(species["temperature"])) {
         const Field3D P = IS_SET(species["pressure"])
                               ? GET_VALUE(Field3D, species["pressure"])
@@ -133,16 +138,13 @@ void ClassicalDiffusion::transform_impl(GuardedOptions& state) {
       addEnergy(Div_a_Grad_perp_nonorthog(Dn * (3. / 2) * T, N, cls_nef_perp_xlow,
                                           cls_nef_perp_ylow, false));
 
-      if (custom_D < 0) {
-        // Cross-field heat conduction
-        // kappa_perp = 2 * n * nu_ii * rho_i^2
-        const auto P = GET_VALUE(Field3D, species["pressure"]);
-        const auto AA = GET_VALUE(BoutReal, species["AA"]);
-        const Field3D nu =
-            floor(GET_VALUE(Field3D, species["collision_frequency"]), 1e-10);
-        addEnergy(Div_a_Grad_perp_nonorthog(2. * floor(P, 1e-5) * nu * AA / Bsq, T,
-                                            cls_tef_perp_xlow, cls_tef_perp_ylow, false));
-      }
+      // Cross-field heat conduction
+      // kappa_perp = 2 * n * nu_ii * rho_i^2
+      const auto P = GET_VALUE(Field3D, species["pressure"]);
+      const auto AA = GET_VALUE(BoutReal, species["AA"]);
+      const Field3D nu = floor(GET_VALUE(Field3D, species["collision_frequency"]), 1e-10);
+      addEnergy(Div_a_Grad_perp_nonorthog(2. * floor(P, 1e-5) * nu * AA / Bsq, T,
+                                          cls_tef_perp_xlow, cls_tef_perp_ylow, false));
     }
   }
 }

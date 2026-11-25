@@ -1451,7 +1451,7 @@ in the state, including neutrals; each species must supply density.
    components = ... , braginskii_collisions, classical_diffusion
 
    [classical_diffusion]
-   custom_D = -1  # Classical particle diffusion and temperature conduction
+   # Omit custom_D for classical particle diffusion and temperature conduction.
    diagnose = true
 
 The particle source :math:`S_s` and parallel momentum source :math:`F_s`
@@ -1474,7 +1474,7 @@ and source expressions are normalised.
 Classical mode
 ^^^^^^^^^^^^^^
 
-For ``custom_D < 0`` (the default is -1), the common particle diffusivity is
+When ``custom_D`` is omitted (the default), the common particle diffusivity is
 
 .. math::
 
@@ -1501,17 +1501,13 @@ conducting species also needs pressure and collision frequency. Positive
 floors are applied to pressures, electron density and collision frequencies
 when calculating the transport coefficients.
 
-Setting ``custom_D = 0`` also calculates :math:`D_n` from electron collisions,
-but includes only particle diffusion, carried momentum and carried thermal
-energy; the temperature-conduction term is omitted. Zero does not disable
-particle diffusion.
-
 Custom mode
 ^^^^^^^^^^^
 
-For ``custom_D > 0``, :math:`D_n=\mathtt{custom\_D}` is a constant normalised
-diffusivity. No collision-frequency provider is required. The thermal-energy
-source is a single pressure-diffusion term,
+Setting ``custom_D`` supplies a diffusivity in :math:`\mathrm{m^2\,s^{-1}}`,
+which may be a constant or a spatial expression. A value of zero gives zero
+custom diffusion. No collision-frequency provider is required. The
+thermal-energy source is a single pressure-diffusion term,
 
 .. math::
 
@@ -1524,17 +1520,24 @@ receives :math:`(2/3)Q_s`, this term diffuses pressure with the same coefficient
 as density. The custom energy source replaces the classical carried-energy
 and temperature-conduction terms.
 
-``custom_D`` is entered in normalised units. Its physical value is
+``custom_D`` is converted to the normalised coefficient after reading:
 
 .. math::
 
-   D_{\mathrm{physical}}
-   = \mathtt{custom\_D}\,\rho_{s0}^2\Omega_{ci}
-   \quad [\mathrm{m^2\,s^{-1}}],
+   D_n = \frac{\mathtt{custom\_D}}{\rho_{s0}^2\Omega_{ci}},
 
 where :math:`\rho_{s0}` and :math:`\Omega_{ci}` are the simulation's reference
-length and ion cyclotron frequency. For example, ``custom_D = 0.01`` sets
-:math:`D_{\mathrm{physical}}=0.01\rho_{s0}^2\Omega_{ci}`.
+length and ion cyclotron frequency. For example, ``custom_D = 0.01`` sets a
+physical diffusivity of :math:`0.01\,\mathrm{m^2\,s^{-1}}`. To increase diffusion
+near both radial boundaries, a spatial expression can be used:
+
+.. code-block:: ini
+
+   [classical_diffusion]
+   custom_D = 0.01 + 0.1*(exp(-(x/0.05)^2) + exp(-((1-x)/0.05)^2))
+
+Here ``x`` is the normalised radial coordinate, and the diffusivity is in
+:math:`\mathrm{m^2\,s^{-1}}` throughout the domain.
 
 Boundaries and diagnostics
 ^^^^^^^^^^^^^^^^^^^^^^^^^^

@@ -63,7 +63,7 @@ Bnorm = mesh:Bxy
 Tnorm = 5
 
 [classical_diffusion]
-custom_D = 0.1
+custom_D = 0.1 * hermes:Tnorm / hermes:Bnorm  # [m^2/s], 0.1 in normalised units
 diagnose = false
 
 [e]
