@@ -57,6 +57,12 @@ BoutReal bohmSpeed(BoutReal C_i, BoutReal u, BoutReal smoothing) {
   return 0.5 * (C_i + u + std::sqrt(SQ(C_i - u) + SQ(w)));
 }
 
+/// d(guard velocity)/d(end-cell velocity) for V_guard = 2 v_sheath - V at frozen C_i:
+/// -1 well below the sound speed, +1 well above
+BoutReal bohmClosure(BoutReal C_i, BoutReal u, BoutReal smoothing) {
+  const BoutReal d = std::sqrt(SQ(C_i - u) + SQ(smoothing * C_i));
+  return d > 0.0 ? (u - C_i) / d : 0.0;
+}
 } // namespace
 
 BoutReal SheathBoundary::lowerSheathVelocity(BoutReal C_i, BoutReal V) const {
@@ -156,6 +162,10 @@ SheathBoundary::SheathBoundary(std::string name, Options& alloptions, Solver*)
                        .withDefault(0.0);
   if (bohm_smoothing < 0.0) {
     throw BoutException("sheath_boundary:bohm_smoothing must not be negative");
+  }
+  if (bohm_smoothing > 0.0) {
+    // d(guard velocity) / d(end-cell velocity), for the viscosity preconditioner
+    setPermissions(readWrite("species:{ions}:sheath_velocity_closure"));
   }
 
   // Read wall voltage, convert to normalised units
@@ -746,6 +756,10 @@ void SheathBoundary::transform_impl(GuardedOptions& state) {
                       ? toFieldAligned(getNoBoundary<Field3D>(species["momentum"]))
                       : Mi * Ni * Vi;
 
+    // Smooth Bohm condition: d(guard velocity)/d(end-cell velocity) in the guard cells,
+    // for the viscosity preconditioner (field-aligned)
+    Field3D bohm_closure = bohm_smoothing > 0.0 ? zeroFrom(Ni) : Field3D{};
+
     // Energy source will be modified in the domain
     Field3D energy_source =
         species.isSet("energy_source")
@@ -804,6 +818,10 @@ void SheathBoundary::transform_impl(GuardedOptions& state) {
 
           // Negative -> into sheath; allow supersonic flow
           const BoutReal visheath = lowerSheathVelocity(sqrt(C_i_sq), Vi[i]);
+
+          if (bohm_smoothing > 0.0) {
+            bohm_closure[im] = bohmClosure(sqrt(C_i_sq), -Vi[i], bohm_smoothing);
+          }
 
           // Set boundary conditions on flows
           Vi[im] = 2. * visheath - Vi[i];
@@ -905,6 +923,10 @@ void SheathBoundary::transform_impl(GuardedOptions& state) {
           // Positive -> into sheath; allow supersonic flow
           const BoutReal visheath = upperSheathVelocity(sqrt(C_i_sq), Vi[i]);
 
+          if (bohm_smoothing > 0.0) {
+            bohm_closure[ip] = bohmClosure(sqrt(C_i_sq), Vi[i], bohm_smoothing);
+          }
+
           // Set boundary conditions on flows
           Vi[ip] = 2. * visheath - Vi[i];
           NVi[ip] = 2. * Mi * nisheath * visheath - NVi[i];
@@ -954,6 +976,10 @@ void SheathBoundary::transform_impl(GuardedOptions& state) {
           }
         }
       }
+    }
+
+    if (bohm_smoothing > 0.0) {
+      set(species["sheath_velocity_closure"], bohm_closure);
     }
 
     // Finished boundary conditions for this species

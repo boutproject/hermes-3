@@ -415,3 +415,27 @@ TEST_F(SheathBoundaryTest, NegativeBohmSmoothingThrows) {
 
   EXPECT_THROW(SheathBoundary("test", options, nullptr), BoutException);
 }
+
+TEST_F(SheathBoundaryTest, SmoothBohmSetsVelocityClosure) {
+  for (const BoutReal smoothing : {0.0, 0.1}) {
+    Options options{{"test", {{"bohm_smoothing", smoothing}}}};
+    options["units"]["eV"] = 1.0;
+    SheathBoundary component("test", options, nullptr);
+    component.declareAllSpecies({"e", "h+"});
+
+    Field3D N = FieldFactory::get()->create3D("1 + y", &options, mesh);
+    Options state{{"species",
+                   {{"e", {{"density", N}, {"temperature", 2.0}, {"velocity", 0.0}}},
+                    {"h+",
+                     {{"density", N},
+                      {"temperature", 3.0},
+                      {"AA", 1.0},
+                      {"charge", 1.0},
+                      {"velocity", 0.0}}}}}};
+    component.transform(state);
+    // Only the smooth Bohm condition publishes the closure for the preconditioner
+    EXPECT_EQ(state["species"]["h+"].isSet("sheath_velocity_closure"), smoothing > 0.0)
+        << "bohm_smoothing = " << smoothing;
+    EXPECT_FALSE(state["species"]["e"].isSet("sheath_velocity_closure"));
+  }
+}

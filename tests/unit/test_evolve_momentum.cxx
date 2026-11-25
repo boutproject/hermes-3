@@ -75,3 +75,42 @@ TEST_F(EvolveMomentumTest, Finally) {
     ASSERT_DOUBLE_EQ(0.5, ddt_NVi[i]);
   }
 }
+
+TEST_F(EvolveMomentumTest, ViscosityPrecon) {
+  // Y must not be periodic: Div_par_fvv then reads two guard cells, and FakeMesh has one
+  static_cast<FakeMesh*>(mesh)->ix_separatrix = 0;
+  FakeSolver solver;
+
+  Options options{{"units", {{"eV", 1.0}, {"inv_meters_cubed", 1.0}, {"seconds", 1.0}}},
+                  {"i", {{"AA", 2.0}, {"charge", 1.0}}}};
+  EvolveMomentum component("i", options, &solver);
+
+  Options state = {{"fastest_wave", 0.0},
+                   {"species",
+                    {{"i",
+                      {{"AA", 1.0},
+                       {"density", 1.0},
+                       {"momentum", 0.0},
+                       {"velocity", 0.0},
+                       {"momentum_source", 0.5}}}}}};
+  component.finally(state);
+
+  // No eta_par in the state: precon leaves ddt unchanged
+  component.precon(state, 1.0);
+  Field3D ddt_NVi = solver.getTimeDerivs()["NVi"].as<Field3D>();
+  BOUT_FOR_SERIAL(i, ddt_NVi.getRegion("RGN_NOBNDRY")) {
+    ASSERT_DOUBLE_EQ(0.5, ddt_NVi[i]);
+  }
+
+  // Zero viscosity: the inversion reduces to the identity
+  state["species"]["i"]["eta_par"] = Field3D(0.0);
+  component.precon(state, 1.0);
+  ddt_NVi = solver.getTimeDerivs()["NVi"].as<Field3D>();
+  BOUT_FOR_SERIAL(i, ddt_NVi.getRegion("RGN_NOBNDRY")) {
+    ASSERT_DOUBLE_EQ(0.5, ddt_NVi[i]);
+  }
+
+  // Unsupported option
+  state["scale_timederivs"] = 1.0;
+  EXPECT_THROW(component.precon(state, 1.0), BoutException);
+}

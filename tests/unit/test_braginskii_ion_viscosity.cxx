@@ -183,6 +183,29 @@ TEST_F(BraginskiiIonViscosityTest, ViscosityCollisionMode) {
   }
 }
 
+TEST_F(BraginskiiIonViscosityTest, PreconditionPublishesEta) {
+  Options state;
+  state["species"]["d+"]["density"] = 1;
+  state["species"]["d+"]["temperature"] = 1;
+  state["species"]["d+"]["charge"] = 1;
+  state["species"]["d+"]["AA"] = 2.;
+  state["species"]["d+"]["velocity"] = linearGradient(1., 0., 1., 1., 1., 0., 0.);
+  state["species"]["d+"]["collision_frequencies"]["d+_d+_coll"] = 1.0;
+  state["species"]["d+"]["pressure"] = constantGradient(0, 0., 1., 0.);
+
+  // Off by default: nothing is published
+  component.declareAllSpecies({"d+"});
+  component.transform(state);
+  EXPECT_FALSE(state["species"]["d+"].isSet("eta_par"));
+
+  options["test2"]["precondition"] = true;
+  BraginskiiIonViscosity component2("test2", options, nullptr);
+  component2.declareAllSpecies({"d+"});
+  component2.transform(state);
+  ASSERT_TRUE(state["species"]["d+"].isSet("eta_par"));
+  EXPECT_TRUE(state["species"]["d+"]["eta_par"].as<Field3D>().isAllocated());
+}
+
 // TODO: Add tests for more types of collisions (e.g., electron-ion, charge-exchante, ion
 // neutral...)
 

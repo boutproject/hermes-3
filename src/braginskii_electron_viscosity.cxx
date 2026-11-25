@@ -31,10 +31,16 @@ BraginskiiElectronViscosity::BraginskiiElectronViscosity(const std::string& name
                         .withDefault(-1.0);
 
   diagnose = options["diagnose"].doc("Output diagnostics?").withDefault<bool>(false);
+
+  precondition = options["precondition"]
+                     .doc("Apply parallel viscosity preconditioner")
+                     .withDefault<bool>(false);
+  if (precondition) {
+    setPermissions(readWrite("species:e:eta_par"));
+  }
 }
 
 void BraginskiiElectronViscosity::transform_impl(GuardedOptions& state) {
-
   GuardedOptions species = state["species"]["e"];
 
   if (!isSetFinal(species["pressure"], "electron_viscosity")) {
@@ -88,6 +94,10 @@ void BraginskiiElectronViscosity::transform_impl(GuardedOptions& state) {
   }
 
   add(species["momentum_source"], viscosity);
+  if (precondition) {
+    // Coefficient for EvolveMomentum::precon (same field-line form as the ions)
+    set(species["eta_par"], eta);
+  }
 }
 
 void BraginskiiElectronViscosity::outputVars(Options& state) {

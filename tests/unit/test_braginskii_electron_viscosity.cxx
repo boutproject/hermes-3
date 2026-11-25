@@ -140,3 +140,24 @@ TEST_F(BraginskiiElectronViscosityTest, ViscosityVelocityScaling) {
     ASSERT_DOUBLE_EQ(2 * visc1[i], visc2[i]);
   }
 }
+
+TEST_F(BraginskiiElectronViscosityTest, PreconditionPublishesEta) {
+  Options state;
+  state["species"]["e"]["velocity"] = linearGradient(1., 0., 1., 1., 1., 0., 0.);
+  state["species"]["e"]["collision_frequency"] = 1.;
+  state["species"]["e"]["pressure"] = constantGradient(0, 0., 1., 0.);
+
+  // Off by default: nothing is published
+  component.transform(state);
+  EXPECT_FALSE(state["species"]["e"].isSet("eta_par"));
+
+  options["test2"]["precondition"] = true;
+  BraginskiiElectronViscosity component2("test2", options, nullptr);
+  component2.transform(state);
+  ASSERT_TRUE(state["species"]["e"].isSet("eta_par"));
+  const Field3D P = state["species"]["e"]["pressure"];
+  const Field3D eta = state["species"]["e"]["eta_par"];
+  BOUT_FOR_SERIAL(i, P.getRegion("RGN_NOBNDRY")) {
+    EXPECT_DOUBLE_EQ(eta[i], (4. / 3) * 0.73 * P[i]);
+  }
+}

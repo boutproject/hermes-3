@@ -78,6 +78,10 @@ BraginskiiIonViscosity::BraginskiiIonViscosity(const std::string& name,
                                   "modification to viscosity")
                              .withDefault(4.0);
 
+  precondition = options["precondition"]
+                     .doc("Apply parallel viscosity preconditioner")
+                     .withDefault<bool>(false);
+
   bounce_frequency_epsilon =
       options["bounce_frequency_epsilon"]
           .doc("Include input for inverse aspect ratio epsilon when using bounce "
@@ -143,6 +147,9 @@ BraginskiiIonViscosity::BraginskiiIonViscosity(const std::string& name,
   if (perpendicular) {
     setPermissions(readOnly("fields:phi"));
   }
+  if (precondition) {
+    setPermissions(readWrite("species:{non_electrons}:eta_par"));
+  }
   substitutePermissions("coll_type", coll_types);
 
   Bxy = coord->Bxy();
@@ -160,7 +167,6 @@ void BraginskiiIonViscosity::transform_impl(GuardedOptions& state) {
       continue; // Skip electrons -> only ions
     }
     const auto& species_name = kv.first;
-
     GuardedOptions species = allspecies[species_name];
 
     if (!(isSetFinal(species["pressure"], "ion_viscosity")
@@ -301,6 +307,10 @@ void BraginskiiIonViscosity::transform_impl(GuardedOptions& state) {
       }
 
       add(species["momentum_source"], div_Pi_cipar);
+      if (precondition) {
+        // Coefficient for EvolveMomentum::precon
+        set(species["eta_par"], eta);
+      }
 
       if (viscous_heating) {
         subtract(species["energy_source"], V * div_Pi_cipar); // Internal energy
