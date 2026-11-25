@@ -31,7 +31,7 @@ struct OpenADASRateCoefficient {
   /// @param  n  Electron density in m^-3
   /// @param  T  Electron temperature in eV
   ///
-  /// @returns rate in units of m^3/s or eV m^3/s
+  /// @returns rate in units of m^3/s (rate coefficients) or W m^3 (radiation)
   BoutReal evaluate(BoutReal T, BoutReal n);
 };
 
