@@ -577,6 +577,99 @@ TEST_F(EvolveVorticityIonEnergyTest, VaryingSpeciesFractionsPreserveChargeCurren
 }
 
 // Dissipation changes the thermal/kinetic partition and preserves energy.
+class IonEnergyHyperZTest : public IonEnergyFixture<5> {
+protected:
+  Field3D mode(BoutReal offset, BoutReal amplitude) {
+    return makeField<Field3D>(
+        [=](const Ind3D& i) { return offset + amplitude * cos(TWOPI * i.z() / nz); });
+  }
+
+  Options evaluate(Options options) {
+    FakeSolver solver;
+    IonEnergyTestSystem component("test", options, &solver);
+    declareSpecies(component);
+    solver.setState({{"Vort", mode(0.0, 0.001)}, {"Eion", mode(10.0, 0.01)}});
+    auto state = makeState();
+    component.transform(state);
+    component.finally(state);
+    auto output = diagnostics(component);
+    // These completed-state fields are available with either diagnose setting.
+    output["DivJpol"].force(state["fields"]["DivJpol"].as<Field3D>());
+    output["DivEpol"].force(
+        state["fields"]["ion_polarisation_energy_divergence"].as<Field3D>());
+    output["vorticity_rhs"] = copy(solver.getTimeDerivs()["Vort"].as<Field3D>());
+    output["energy_rhs"] = copy(solver.getTimeDerivs()["Eion"].as<Field3D>());
+    return output;
+  }
+
+  void expectDamping(const Options& on, const Options& off, const Field2D& coefficient) {
+    const BoutReal eigenvalue = 16.0 * pow(sin(PI / nz), 4);
+    for (const auto* field : {"vorticity_rhs", "energy_rhs"}) {
+      const Field3D difference = on[field].as<Field3D>() - off[field].as<Field3D>();
+      const BoutReal amplitude = std::string{field} == "vorticity_rhs" ? 0.001 : 0.01;
+      for (const auto& i : difference.getRegion("RGN_NOBNDRY")) {
+        EXPECT_NEAR(difference[i],
+                    -coefficient[i] * eigenvalue * amplitude * cos(TWOPI * i.z() / nz),
+                    1e-12)
+            << field << " at " << i.x() << ", " << i.y() << ", " << i.z();
+      }
+      if (std::string{field} == "vorticity_rhs") {
+        // Only these radial guards hold evolved wall state. Other guard rates
+        // are unused and need not be initialised by the physical operators.
+        for (const auto& i : difference.getRegion("RGN_GUARDS")) {
+          if ((i.x() < mesh->xstart || i.x() > mesh->xend) && i.y() >= mesh->ystart
+              && i.y() <= mesh->yend) {
+            EXPECT_EQ(difference[i], 0.0);
+          }
+        }
+      }
+      EXPECT_NEAR(integral(difference), 0.0, 1e-12);
+    }
+    EXPECT_NEAR(on["balance_ion_energy_ion_energy_hyper_z"].as<BoutReal>(), 0.0, 1e-12);
+  }
+};
+
+TEST_F(IonEnergyHyperZTest, SpatialCoefficientDampsBothEquationsAndPreservesWalls) {
+  mesh->getCoordinates()->setNon_uniform(false);
+  mesh->getCoordinates()->setDz(2.0);
+  for (const auto* wall : {"fixed", "free_slip", "no_slip"}) {
+    for (const bool diagnose : {false, true}) {
+      auto options = makeOptions();
+      options["units"]["meters"].force(2.0);
+      options["units"]["seconds"].force(0.5);
+      options["test"]["radial_boundary"] = std::string{wall};
+      options["test"]["diagnose"].force(diagnose);
+      const auto baseline = evaluate(options.copy());
+      options["test"]["hyper_z"] = "0.01 + 0.001*x + 0.002*y";
+      const Field2D coefficient =
+          FieldFactory::get()->create2D("0.01 + 0.001*x + 0.002*y", &options, mesh);
+      const auto damped = evaluate(options.copy());
+      expectDamping(damped, baseline, coefficient);
+      // This numerical term is applied after physical-current and chi recovery.
+      for (const auto* field : {"phi", "Tion", "ion_chi", "DivJpol", "DivEpol"}) {
+        EXPECT_TRUE(IsFieldEqual(damped[field].as<Field3D>(),
+                                 baseline[field].as<Field3D>(), "RGN_NOBNDRY", 0.0))
+            << field;
+      }
+    }
+  }
+}
+
+TEST_F(IonEnergyHyperZTest, SuppliedFieldAndScalarValuesAreApplied) {
+  mesh->getCoordinates()->setNon_uniform(false);
+  auto options = makeOptions();
+  const auto baseline = evaluate(options.copy());
+  for (const BoutReal coefficient : {0.0, 0.03, -0.03}) {
+    auto scalar_options = options.copy();
+    scalar_options["test"]["hyper_z"] = coefficient;
+    expectDamping(evaluate(scalar_options.copy()), baseline, Field2D{coefficient});
+  }
+  const Field2D coefficient =
+      makeField<Field2D>([](const Ind2D& i) { return 0.01 * (i.x() - 4) * (i.y() - 2); });
+  options["test"]["hyper_z"] = coefficient;
+  expectDamping(evaluate(options.copy()), baseline, coefficient);
+}
+
 TEST_F(EvolveVorticityIonEnergyTest, KinematicViscosityDampsZModeInPhysicalUnits) {
   const Field3D vort = makeField<Field3D>(
       [&](const Ind3D& i) { return 0.001 * cos(2 * PI * i.z() / nz); });

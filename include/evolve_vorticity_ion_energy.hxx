@@ -5,6 +5,7 @@
 #include <bout/bout_enum_class.hxx>
 #include <bout/bout_types.hxx>
 #include <bout/coordinates.hxx>
+#include <bout/field2d.hxx>
 #include <bout/field3d.hxx>
 #include <bout/invert_laplace.hxx>
 #include <bout/vectormetric.hxx>
@@ -172,6 +173,8 @@ struct EvolveVorticityIonEnergy : public NamedComponent<EvolveVorticityIonEnergy
   ///   - diagnose             Output additional diagnostic fields? Default false
   ///   - poloidal_flows       Include poloidal ExB flows? Default false
   ///   - viscosity            Kinematic viscosity [m^2/s], default 0.0
+  ///   - hyper_z              Hyper-viscosity of vorticity and ion energy in Z;
+  ///                          coefficient varies in X and Y. Default off.
   ///   - phi_max_iterations   Recovery iteration limit, default 100
   ///   - phi_atol             Potential convergence scale [eV], default 1.0
   ///   - phi_rtol             Recovery relative tolerance, default 1e-3
@@ -222,6 +225,9 @@ private:
   Coordinates::FieldMetric viscosity;    ///< Normalised kinematic viscosity
   Field3D viscous_heating{0.0};          ///< Discrete Phi DivJviscous - DivEviscous
   Field3D electron_viscous_heating{0.0}; ///< Electron mass fraction of viscous heating
+
+  bool include_hyper_z; ///< Has a Z hyper-viscosity coefficient been supplied?
+  Field2D hyper_z;      ///< Normalised Z hyper-viscosity, varying in X and Y
 
   Field3D phi{0.0}; ///< Electrostatic potential ϕ
   Field3D Pi_sum;   ///< Total ion pressure

@@ -889,6 +889,11 @@ EvolveVorticityIonEnergy::EvolveVorticityIonEnergy(std::string name, Options& al
                         .doc("Numerically damp parallel potential variations using "
                              "the completed collective sound_speed")
                         .withDefault<bool>(false);
+  include_hyper_z = options.isSet("hyper_z");
+  hyper_z = options["hyper_z"]
+                .doc("Hyper-viscosity of vorticity and ion energy in Z. Coefficient may "
+                     "vary in X and Y; omit to disable.")
+                .withDefault<Field2D>(Field2D{0.0});
 
   density_floor = options["density_floor"].doc("Minimum density floor").withDefault(1e-7);
   ASSERT0(density_floor > 1e-16); // Needs to be non-zero
@@ -1311,6 +1316,14 @@ void EvolveVorticityIonEnergy::finally(const Options& state) {
   // is set in polarisation_drift.
   ddt(Vort) = current_rhs + DivJviscous + ion_phi_dissipation;
 
+  if (include_hyper_z) {
+    const Field3D fourth_derivative = D4DZ4_Index(vorticity);
+    // Radial Vort guards encode wall potential, so damp physical cells only.
+    BOUT_FOR(i, Vort.getRegion("RGN_NOBNDRY")) {
+      ddt(Vort)[i] -= hyper_z[i] * fourth_derivative[i];
+    }
+  }
+
   if (radial_model.walls) {
     writeWallRates();
   }
@@ -1342,6 +1355,15 @@ void EvolveVorticityIonEnergy::finally(const Options& state) {
 
   ddt(Eion) = -(DivEExB + DivEelectric + DivEparallel + DivEpol) - phi_Div_Je
               - electron_viscous_heating + Eion_src + external_heating;
+  if (include_hyper_z) {
+    const Field3D fourth_derivative = D4DZ4_Index(Eion);
+    Field3D damping = zeroFrom(Eion);
+    BOUT_FOR(i, Eion.getRegion("RGN_NOBNDRY")) {
+      damping[i] = -hyper_z[i] * fourth_derivative[i];
+      ddt(Eion)[i] += damping[i];
+    }
+    balance.set("ion_energy", "hyper_z", damping);
+  }
   balance.set("ion_energy", "input", external_heating);
   balance.set("ion_energy", "out_exb", DivEExB);
   balance.set("ion_energy", "out_electric", DivEelectric);

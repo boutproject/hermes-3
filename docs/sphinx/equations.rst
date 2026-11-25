@@ -1918,6 +1918,25 @@ same amount subtracted from Eion. Current, work and heating share faces.
 physical vorticity, with no explicit total-energy source; recovery changes
 the thermal/kinetic partition. Both viscosity and damping remain outside chi.
 
+Setting ``hyper_z`` adds numerical fourth-order damping to both physical
+vorticity and total ion energy:
+
+.. math::
+
+   \left.\frac{\partial\Omega}{\partial t}\right|_{\mathrm{hyper}}
+     = -h(x,y)\,\delta_z^4\Omega, \qquad
+   \left.\frac{\partial E_{\mathrm{ion}}}{\partial t}\right|_{\mathrm{hyper}}
+     = -h(x,y)\,\delta_z^4 E_{\mathrm{ion}}.
+
+Here :math:`\delta_z^4` is the fourth difference in Z index space, with the
+same coefficient scaling as ``hyper_z`` in the species evolution components.
+The coefficient is a ``Field2D`` and may be a constant or an expression in
+``x`` and ``y``; it is uniform in Z. Any supplied value is applied. Omit the
+option to disable it. This term preserves the radial wall-state rates and
+remains outside the chi solve. Its ion-energy integral is recorded as
+``balance_ion_energy_ion_energy_hyper_z``. The fourth difference preserves
+the sum over each complete periodic Z line.
+
 Radial boundaries
 ^^^^^^^^^^^^^^^^^
 
@@ -1970,8 +1989,9 @@ Options and outputs
 ^^^^^^^^^^^^^^^^^^^
 
 Ion-energy options include ``average_atomic_mass`` (2), ``density_floor``
-(1e-7), ``viscosity`` (0 m²/s), ``poloidal_flows`` and ``phi_dissipation``
-(both false), ``phi_max_iterations`` (100), ``phi_atol`` (1 eV),
+(1e-7), ``viscosity`` (0 m²/s), ``hyper_z`` (omitted by default),
+``poloidal_flows`` and ``phi_dissipation`` (both false),
+``phi_max_iterations`` (100), ``phi_atol`` (1 eV),
 ``phi_rtol`` (1e-3), ``vort_atol`` (1e-10), and ``laplacian`` solver options.
 ``external_heating`` is an expression in W/m³; ``source_only_in_core``
 restricts it to closed field lines, like electron pressure sources.
