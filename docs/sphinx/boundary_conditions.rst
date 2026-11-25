@@ -77,6 +77,60 @@ in the ``hermes`` component which can be accessed by using the ``hermes:`` prefi
    bndry_pf = decaylength(0.003 / hermes:rho_s0)
    bndry_all = neumann()
 
+.. _sec-radial_boundary_fluxes:
+
+Radial boundaries and ExB advection
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The radial boundary conditions on the density set the diffusive flux
+through the radial (X) boundaries, for example in ``anomalous_diffusion``
+(see :ref:`sec-anomalous_diffusion`). The :math:`E\times B` advection
+of density, momentum and energy through these boundaries also depends
+on the boundary condition on the potential.
+
+The radial :math:`E\times B` velocity on an X cell face is calculated
+from the difference in Z of the potential at the two corners of the
+face, where each corner value is the average over the four cells that
+share that corner. On a radial boundary face these are the last cells
+inside the domain and the guard cells. If the potential on the boundary
+face (the average of the guard cell and the last interior cell) is the
+same at all Z, the radial :math:`E\times B` velocity on that face is
+zero to rounding error: the Z component of the electric field vanishes
+on the boundary, as at a conducting wall. The X-Z part of the
+:math:`E\times B` advection then carries no particles, momentum or
+energy through the boundary, whatever boundary condition is set on the
+density.
+
+This is the case with ``vorticity:phi_boundary_relax = true``, which at
+each Y sets the boundary value of the potential to the same value at all
+Z, relaxing towards the Z average of the potential in the cells next to
+the boundary, and with any other boundary condition that fixes the
+potential on the boundary face to a value that does not depend on Z.
+When ``diamagnetic_polarisation`` is enabled (the default), the
+``vorticity`` component solves for :math:`\phi + \hat{p}/\overline{n}`
+(see :ref:`sec-vorticity`), so a Dirichlet boundary condition of its
+Laplacian solver applies to this sum, not to :math:`\phi` alone.
+
+If ``poloidal_flows`` is enabled (the default), the X-Y part of the
+:math:`E\times B` advection also has a radial component. It is
+proportional to the Y derivative of the potential and to
+:math:`g^{xx}g^{yz}`, so it is zero where :math:`g^{yz} = 0`.
+
+With such a potential boundary condition, radial particle losses must
+come from other cross-field fluxes, for example the diffusive flux of
+``anomalous_diffusion``, set on each species that should be lost,
+together with a density boundary condition that gives a density
+gradient across the boundary face (for example ``dirichlet`` or
+``decaylength``; ``neumann`` gives zero diffusive flux). The sheath
+boundary components (``sheath_boundary``, ``sheath_boundary_simple``,
+``sheath_boundary_insulating``) only set the Y boundaries.
+
+Recycling at the SOL and PFR edges (``sol_recycle`` and ``pfr_recycle``
+of the ``recycling`` component, see :ref:`sec-recycling`) is calculated
+from ``particle_flow_xlow`` of the recycled species. This flow is
+currently set only by ``anomalous_diffusion``; it does not include the
+:math:`E\times B` flux.
+
 
 Sheath
 ~~~~~~~~~~~~~~~
@@ -341,6 +395,9 @@ assigned a separate recycle multiplier and recycle energy.
    For recycling and pumping to work, there must be some incident particle flow on the wall.
    Example setups where there is no flow to the boundary include the use of `noflow_boundary` for the
    targets, and `Neumann` boundary conditions for the radial boundaries.
+   At the SOL and PFR edges, the incident flow is taken from
+   ``particle_flow_xlow``, which does not include the :math:`E\times B`
+   flux (see :ref:`sec-radial_boundary_fluxes`).
 
 
 Configuring thermal recycling
