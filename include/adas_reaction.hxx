@@ -18,7 +18,13 @@ struct OpenADASRateCoefficient {
   /// @param filename   The file to read. Path relative to json_folder
   /// @param level      The first index in the log coefficient array
   ///                   (ionisation level)
-  OpenADASRateCoefficient(const std::string& filename, std::size_t level);
+  /// @param extrapolate_below_tmin  If true, continue the coefficient below
+  ///                   the table's Tmin with an Arrhenius form fitted to the
+  ///                   lowest two temperature points, so that it vanishes for
+  ///                   T -> 0. Only applied if the fitted activation energy
+  ///                   is positive. Default false: T is clamped to Tmin.
+  OpenADASRateCoefficient(const std::string& filename, std::size_t level,
+                          bool extrapolate_below_tmin = false);
 
   std::vector<std::vector<BoutReal>> log_coeff;
   std::vector<BoutReal> log_temperature;
@@ -27,6 +33,12 @@ struct OpenADASRateCoefficient {
   BoutReal Tmin, Tmax; ///< Range of T  [eV]
   BoutReal nmin, nmax; ///< Range of density [m^-3]
 
+  bool extrapolate_below_tmin; ///< Arrhenius continuation below Tmin?
+  /// Effective activation energy [eV], fitted to the lowest two temperature
+  /// points at the lowest tabulated density. Used below Tmin if
+  /// extrapolate_below_tmin is true and E_eff > 0.
+  BoutReal E_eff;
+
   /// Inputs:
   /// @param  n  Electron density in m^-3
   /// @param  T  Electron temperature in eV
@@ -34,6 +46,13 @@ struct OpenADASRateCoefficient {
   /// @returns rate in units of m^3/s or eV m^3/s
   BoutReal evaluate(BoutReal T, BoutReal n);
 };
+
+/// Read the switch [reactions] extrapolate_below_tmin, which applies to the
+/// rate and radiation coefficients of the OpenADAS ionisation and
+/// recombination reactions (OpenADAS), not to charge exchange
+/// (OpenADASChargeExchange), whose coefficients always stay clamped.
+/// Default false: T is clamped to the table's Tmin.
+bool adas_extrapolate_below_tmin(Options& options);
 
 /// Read in and perform calculations with OpenADAS data
 /// https://open.adas.ac.uk/
@@ -65,8 +84,10 @@ struct OpenADAS : public hermes::ReactionBase {
             {readIfSet("species:{sp}:charge"), readOnly("species:{sp}:AA"),
              readOnly("species:{from_ion}:{val}"), readOnly("species:e:{e_val}"),
              readWrite("species:{sp}:{w_val}"), readWrite("species:e:{ew_val}")}),
-        json_db_dir(get_json_db_dir(options)), rate_coef(json_db_dir / rate_file, level),
-        radiation_coef(json_db_dir / radiation_file, level),
+        json_db_dir(get_json_db_dir(options)),
+        rate_coef(json_db_dir / rate_file, level, adas_extrapolate_below_tmin(options)),
+        radiation_coef(json_db_dir / radiation_file, level,
+                       adas_extrapolate_below_tmin(options)),
         electron_heating(electron_heating) {
     // Get the units
     auto& units = options["units"];

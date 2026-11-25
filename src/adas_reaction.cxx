@@ -19,12 +19,15 @@
 #include "../external/json.hxx"
 
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <fstream>
 #include <iterator>
 
 OpenADASRateCoefficient::OpenADASRateCoefficient(const std::string& filename,
-                                                 std::size_t level) {
+                                                 std::size_t level,
+                                                 bool extrapolate_below_tmin)
+    : extrapolate_below_tmin(extrapolate_below_tmin) {
 
   // Read the rate file
   std::ifstream json_file(filename);
@@ -51,6 +54,26 @@ OpenADASRateCoefficient::OpenADASRateCoefficient(const std::string& filename,
 
   nmin = pow(10, log_density.front());
   nmax = pow(10, log_density.back());
+
+  // Effective activation energy [eV] for the optional Arrhenius continuation
+  // below Tmin, fitted to the lowest two temperature points at the lowest
+  // tabulated density:  ln(k1 / k0) = E_eff * (1 / T0 - 1 / T1)
+  if (log_temperature.size() > 1) {
+    const BoutReal T1 = pow(10, log_temperature[1]);
+    E_eff = std::log(10.) * (log_coeff[1][0] - log_coeff[0][0]) / (1. / Tmin - 1. / T1);
+  } else {
+    E_eff = 0.0; // Degenerate table: no continuation, T is clamped
+  }
+}
+
+bool adas_extrapolate_below_tmin(Options& options) {
+  return options["reactions"]["extrapolate_below_tmin"]
+      .doc("Continue ADAS ionisation and recombination rate and radiation "
+           "coefficients below the table's Tmin with an Arrhenius form fitted "
+           "to the lowest two temperature points, if the fitted activation "
+           "energy is positive. Charge exchange coefficients are not continued. "
+           "If false, T is clamped to Tmin.")
+      .withDefault<bool>(false);
 }
 
 namespace {
@@ -74,6 +97,18 @@ auto get_high_index(const std::vector<BoutReal>& vec, BoutReal value) {
 } // namespace
 
 BoutReal OpenADASRateCoefficient::evaluate(BoutReal T, BoutReal n) {
+
+  if (extrapolate_below_tmin and (E_eff > 0.0) and (T < Tmin)) {
+    // Arrhenius continuation below the table edge, so that coefficients of
+    // processes with a threshold (excitation, ionisation) go to zero for
+    // T -> 0 instead of keeping their value at Tmin:
+    //   k(T, n) = k(Tmin, n) * exp(-E_eff * (1 / T - 1 / Tmin))
+    // with E_eff fitted in the constructor. The density is still clamped.
+    if (T <= 0.0) {
+      return 0.0; // Limit of the Arrhenius form for T -> 0+
+    }
+    return evaluate(Tmin, n) * std::exp(-E_eff * (1. / T - 1. / Tmin));
+  }
 
   // Ensure that the inputs are in range
   BoutReal log10T = log10(std::clamp(T, Tmin, Tmax));
