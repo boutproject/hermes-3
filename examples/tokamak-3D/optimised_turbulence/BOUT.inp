@@ -39,7 +39,7 @@ use_vector_abstol = true
 [Vort]
 atol = 1e-6
  
-[NVi]       # or [NVd+]
+[NVd+]
 atol = 1e-6
  
 [NVe]
