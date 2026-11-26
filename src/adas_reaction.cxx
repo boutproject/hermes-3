@@ -20,6 +20,7 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <filesystem>
 #include <fstream>
 #include <iterator>
 
@@ -30,7 +31,18 @@ OpenADASRateCoefficient::OpenADASRateCoefficient(const std::string& filename,
   std::ifstream json_file(filename);
 
   if (!json_file.good()) {
-    throw BoutException("Could not read ADAS file '{}'", filename);
+    // Some OpenADAS files (e.g. argon) are not included in Hermes-3, and have to be
+    // downloaded and converted with json_database/download_openadas.py
+    const std::filesystem::path path(filename);
+    const auto dir =
+        path.has_parent_path() ? path.parent_path() : std::filesystem::path(".");
+    const auto script = std::filesystem::path(__FILE__).parent_path().parent_path()
+                        / "json_database" / "download_openadas.py";
+    throw BoutException(
+        "Could not read ADAS file '{}'. OpenADAS files that are not included in "
+        "Hermes-3 (e.g. argon) can be downloaded and converted with:\n"
+        "    python3 {} --output-dir {} {}",
+        filename, script.string(), dir.string(), path.stem().string());
   }
 
   nlohmann::json data;

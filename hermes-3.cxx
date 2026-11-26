@@ -21,6 +21,7 @@
 */
 
 #include "hermes-3.hxx"
+#include "include/adas_argon.hxx"
 #include "include/adas_carbon.hxx"
 #include "include/adas_lithium.hxx"
 #include "include/adas_neon.hxx"

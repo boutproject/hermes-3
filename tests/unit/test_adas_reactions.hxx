@@ -4,10 +4,23 @@
 #include "test_cx_reactions.hxx"
 #include "test_izn_rec_reactions.hxx"
 
+#include "../../include/adas_argon.hxx"
 #include "../../include/adas_carbon.hxx"
 #include "../../include/adas_lithium.hxx"
 #include "../../include/adas_neon.hxx"
+#include "../../include/reaction_data.hxx"
+
+#include "../../external/json.hxx"
+
+#include <algorithm>
+#include <cmath>
 #include <cstddef>
+#include <filesystem>
+#include <fstream>
+#include <initializer_list>
+#include <iterator>
+#include <string>
+#include <vector>
 
 /**
  * @brief Base fixture for tests of OpenADAS subclasses.
@@ -144,6 +157,155 @@ public:
   ADASNe9pRecTest()
       : ADASIznRecReactionTest<ADASNeonRecombination<9>>("Ne9pRec", "ne+10 + e -> ne+9") {
   }
+};
+
+/**
+ * @brief Base fixture for argon tests. The argon OpenADAS files are not included
+ * in Hermes-3, so the tests are skipped if they have not been created with
+ * json_database/download_openadas.py. For the same reason there are no reference
+ * data files for argon: the tests compare with the JSON files instead.
+ */
+template <typename RTYPE>
+class ADASArgonReactionTest : public ADASIznRecReactionTest<RTYPE> {
+public:
+  using ADASIznRecReactionTest<RTYPE>::ADASIznRecReactionTest;
+
+  void SetUp() override {
+    Options options;
+    const auto json_db_dir = get_json_db_dir(options);
+    for (const auto* name :
+         {"scd89_ar.json", "plt89_ar.json", "acd89_ar.json", "prb89_ar.json"}) {
+      if (!std::filesystem::exists(json_db_dir / name)) {
+        GTEST_SKIP() << (json_db_dir / name).string()
+                     << " not found; create it with "
+                        "'python3 json_database/download_openadas.py ar'";
+      }
+    }
+  }
+
+  /// Run the reaction with the input state of the regression tests (wide ranges
+  /// of density and temperature): all sources must be finite, and the reaction
+  /// rate (the density source of the product) must be positive.
+  void sources_finite_test() {
+    Options state = this->generate_state();
+    hermes::ReactionBase::reset_instance_counter();
+    RTYPE component("test" + this->lbl, state, nullptr);
+    component.transform(state);
+
+    for (const auto& species :
+         {std::string("e"), this->heavy_reactant, this->heavy_product}) {
+      for (const auto* source : {"density_source", "momentum_source", "energy_source"}) {
+        if (!state["species"][species].isSet(source)) {
+          continue;
+        }
+        const auto field = get<Field3D>(state["species"][species][source]);
+        BOUT_FOR_SERIAL(i, field.getRegion("RGN_NOBNDRY")) {
+          ASSERT_TRUE(std::isfinite(field[i])) << species << ":" << source;
+        }
+      }
+    }
+    const auto rate =
+        get<Field3D>(state["species"][this->heavy_product]["density_source"]);
+    BOUT_FOR_SERIAL(i, rate.getRegion("RGN_NOBNDRY")) { ASSERT_GT(rate[i], 0.0); }
+  }
+
+  /// At the node of the rate table closest to Te = 10 eV, ne = 1e19 m^-3, the
+  /// reaction rate must be ne * n0 * <sigma v>, with <sigma v> read directly from
+  /// the JSON file.
+  ///
+  /// @param rate_file  The JSON file with the rate coefficients (e.g. scd89_ar.json)
+  /// @param level      The ionisation level used by the reaction
+  void rate_at_table_node_test(const std::string& rate_file, std::size_t level) {
+    // Non-trivial normalisations, so that the unit conversion is tested
+    const BoutReal Tnorm = 5.0;  // eV
+    const BoutReal Nnorm = 1e18; // m^-3
+    const BoutReal tnorm = 1e-6; // s
+
+    Options state = this->generate_state();
+    state["units"]["eV"].force(Tnorm);
+    state["units"]["inv_meters_cubed"].force(Nnorm);
+    state["units"]["seconds"].force(tnorm);
+
+    // Read the table from the JSON file
+    const auto path = get_json_db_dir(state) / rate_file;
+    std::ifstream json_file(path);
+    ASSERT_TRUE(json_file.good()) << path.string();
+    const auto data = nlohmann::json::parse(json_file);
+    const auto log_temperature = data["log_temperature"].get<std::vector<BoutReal>>();
+    const auto log_density = data["log_density"].get<std::vector<BoutReal>>();
+    const auto closest = [](const std::vector<BoutReal>& v, BoutReal x) {
+      return static_cast<std::size_t>(std::distance(
+          v.begin(), std::min_element(v.begin(), v.end(), [x](BoutReal a, BoutReal b) {
+            return std::abs(a - x) < std::abs(b - x);
+          })));
+    };
+    const std::size_t iT = closest(log_temperature, 1.0);
+    const std::size_t in = closest(log_density, 19.0);
+    const auto log_coeff = data["log_coeff"][level][iT][in].get<BoutReal>();
+
+    // The coefficient read by OpenADASRateCoefficient is the one in the file
+    const OpenADASRateCoefficient coefficient(path.string(), level);
+    EXPECT_EQ(coefficient.log_coeff[iT][in], log_coeff);
+
+    const BoutReal Te_SI = std::pow(10., log_temperature[iT]); // eV
+    const BoutReal ne_SI = std::pow(10., log_density[in]);     // m^-3
+    const BoutReal n0_SI = 1e17;                               // m^-3
+    state["species"]["e"]["density"].force(Field3D(ne_SI / Nnorm));
+    state["species"]["e"]["temperature"].force(Field3D(Te_SI / Tnorm));
+    state["species"][this->heavy_reactant]["density"].force(Field3D(n0_SI / Nnorm));
+
+    hermes::ReactionBase::reset_instance_counter();
+    RTYPE component("test" + this->lbl, state, nullptr);
+    component.transform(state);
+
+    // Density source of the product, in m^-3 s^-1
+    const auto rate =
+        get<Field3D>(state["species"][this->heavy_product]["density_source"]);
+    const BoutReal expected = ne_SI * n0_SI * std::pow(10., log_coeff);
+    BOUT_FOR_SERIAL(i, rate.getRegion("RGN_NOBNDRY")) {
+      ASSERT_NEAR(rate[i] * Nnorm / tnorm, expected, 1e-8 * expected);
+    }
+  }
+};
+
+// Ar izn
+class ADASArIznTest : public ADASArgonReactionTest<ADASArgonIonisation<0>> {
+public:
+  ADASArIznTest()
+      : ADASArgonReactionTest<ADASArgonIonisation<0>>("ArIzn", "ar + e -> ar+ + 2e") {}
+};
+
+class ADASArpIznTest : public ADASArgonReactionTest<ADASArgonIonisation<1>> {
+public:
+  ADASArpIznTest()
+      : ADASArgonReactionTest<ADASArgonIonisation<1>>("ArpIzn", "ar+ + e -> ar+2 + 2e") {}
+};
+
+class ADASAr17pIznTest : public ADASArgonReactionTest<ADASArgonIonisation<17>> {
+public:
+  ADASAr17pIznTest()
+      : ADASArgonReactionTest<ADASArgonIonisation<17>>("Ar17pIzn",
+                                                       "ar+17 + e -> ar+18 + 2e") {}
+};
+
+// Ar rec
+class ADASArRecTest : public ADASArgonReactionTest<ADASArgonRecombination<0>> {
+public:
+  ADASArRecTest()
+      : ADASArgonReactionTest<ADASArgonRecombination<0>>("ArRec", "ar+ + e -> ar") {}
+};
+
+class ADASArpRecTest : public ADASArgonReactionTest<ADASArgonRecombination<1>> {
+public:
+  ADASArpRecTest()
+      : ADASArgonReactionTest<ADASArgonRecombination<1>>("ArpRec", "ar+2 + e -> ar+") {}
+};
+
+class ADASAr17pRecTest : public ADASArgonReactionTest<ADASArgonRecombination<17>> {
+public:
+  ADASAr17pRecTest()
+      : ADASArgonReactionTest<ADASArgonRecombination<17>>("Ar17pRec",
+                                                          "ar+18 + e -> ar+17") {}
 };
 
 /**
