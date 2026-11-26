@@ -6,9 +6,9 @@
 #include <memory>
 #include <string>
 
-#include <bout/invert_laplace.hxx>
-
+#include "../include/div_ops.hxx"
 #include "component.hxx"
+#include <bout/invert_laplace.hxx>
 
 /// Evolve density, parallel momentum and pressure
 /// for a neutral gas species with cross-field diffusion
@@ -113,6 +113,8 @@ private:
 
   bool output_ddt; ///< Save time derivatives?
   bool diagnose;   ///< Save additional diagnostics?
+
+  std::shared_ptr<FCI::dagp_fv> dagp_op; ///< Perp. diffusion operator for Fci
 
   bout::ConductionMethod conduction_method{bout::ConductionMethod::Original};
 

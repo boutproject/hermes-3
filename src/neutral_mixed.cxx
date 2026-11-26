@@ -424,6 +424,10 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
     setPermissions(readOnly("time"));
   }
 
+  if (mesh->isFci()) {
+    dagp_op = FCI::getDagp_fv(mesh, meters);
+  }
+
   substitutePermissions("name", {name});
   substitutePermissions(
       "outputs", {"AA", "density", "pressure", "temperature", "momentum", "velocity"});
@@ -467,7 +471,7 @@ void NeutralMixed::transform_impl(GuardedOptions& state) {
   if (mesh->isFci()) {
     // Translate FA one-to-one to Fci
     mesh->getCoordinates()->getYBoundary().iter([&](auto& pnt) {
-      const BoutReal nnwall = srd::max(0.5 * (3.0 * pnt.current(Nn) - pnt.prev(Nn)), 0.0);
+      const BoutReal nnwall = std::max(0.5 * (3.0 * pnt.current(Nn) - pnt.prev(Nn)), 0.0);
       const BoutReal tnwall = pnt.current(Tn);
 
       pnt.next(Nn) = 2.0 * nnwall - pnt.current(Nn);
