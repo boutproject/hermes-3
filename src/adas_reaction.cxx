@@ -18,7 +18,10 @@
 
 #include "../external/json.hxx"
 
+#include <bout/constants.hxx>
+
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <fstream>
 #include <iterator>
@@ -53,6 +56,7 @@ OpenADASRateCoefficient::OpenADASRateCoefficient(const std::string& filename,
   nmax = pow(10, log_density.back());
 }
 
+// ======== Helper functions to find indices/nodes in a coeff table =========
 namespace {
 
 auto get_high_index(const std::vector<BoutReal>& vec, BoutReal value) {
@@ -71,7 +75,42 @@ auto get_high_index(const std::vector<BoutReal>& vec, BoutReal value) {
   return static_cast<std::size_t>(high_index);
 }
 
+/**
+ * @brief Find the nearest index in a grid for a given value, choosing the lower
+ * index if two grid points are equally close
+ *
+ * @param grid The grid of values to search
+ * @param value The value to find the nearest index for
+ * @return std::size_t The index of the nearest grid point
+ */
+std::size_t get_nearest_index(const std::vector<BoutReal>& grid, BoutReal value) {
+  if (grid.size() == 1) {
+    return 0;
+  }
+  const auto high = get_high_index(grid, value);
+  const auto low = high - 1;
+  return std::abs(grid[high] - value) < std::abs(grid[low] - value) ? high : low;
+}
+
 } // namespace
+
+/**
+ * @brief Return the table node (T,n,coeff) that is closest to the input values in log space.
+ * If two grid points are equally close, return the lower index.
+ *
+ * @param T Electron temperature [eV]
+ * @param n Electron density [m^-3]
+ * @return OpenADASRateCoefficient::Node (T,n,coeff) at the nearest grid point
+ */
+OpenADASRateCoefficient::Node OpenADASRateCoefficient::nearest_node(BoutReal T,
+                                                                    BoutReal n) const {
+  const auto T_idx =
+      get_nearest_index(log_temperature, std::log10(std::clamp(T, Tmin, Tmax)));
+  const auto n_idx =
+      get_nearest_index(log_density, std::log10(std::clamp(n, nmin, nmax)));
+  return {std::pow(10., log_temperature[T_idx]), std::pow(10., log_density[n_idx]),
+          std::pow(10., log_coeff[T_idx][n_idx])};
+}
 
 BoutReal OpenADASRateCoefficient::evaluate(BoutReal T, BoutReal n) {
 
@@ -110,6 +149,19 @@ BoutReal OpenADASRateCoefficient::evaluate(BoutReal T, BoutReal n) {
                                  * x;
   return pow(10., eval_log_coef);
 }
+
+/**
+ * @brief Return the (T,n,coeff) from the reaction's radiation table that are closest to the requested values.
+ */
+OpenADASRateCoefficient::Node OpenADAS::nearest_radiation_coef_node(BoutReal T,
+                                                                    BoutReal n) const {
+  return radiation_coef.nearest_node(T, n);
+}
+
+/**
+ * @brief Getter for the signed energy transferred to the electrons per reaction [eV]
+ */
+BoutReal OpenADAS::get_electron_heating() const { return electron_heating; }
 
 void OpenADAS::calculate_rates(GuardedOptions&& electron, GuardedOptions&& from_ion,
                                GuardedOptions&& to_ion) {
@@ -158,11 +210,12 @@ void OpenADAS::calculate_rates(GuardedOptions&& electron, GuardedOptions&& from_
   add(to_ion["energy_source"], energy_exchange);
 
   // Electron energy loss (radiation, ionisation potential)
+  // Radiation coefficients (PLT, PRB) are in W m^3, so divide by qe to convert to eV
   Field3D energy_loss = cellAverage(
       [&](BoutReal ne, BoutReal n1, BoutReal te) {
         return floor(ne, 0.0) * floor(n1, 0.0)
                * radiation_coef.evaluate(te * Tnorm, ne * Nnorm) * Nnorm
-               / (Tnorm * FreqNorm);
+               / (SI::qe * Tnorm * FreqNorm);
       },
       Ne.getRegion("RGN_NOBNDRY"))(Ne, N1, Te);
 

@@ -189,3 +189,8 @@ TEST_F(ADASNe9pRecTest, SourcesRegression) { sources_regression_test(); }
 TEST_F(ADASNepHCXTest, SourcesRegression) { sources_regression_test(); }
 TEST_F(ADASNep5DCXTest, SourcesRegression) { sources_regression_test(); }
 TEST_F(ADASNep9TCXTest, SourcesRegression) { sources_regression_test(); }
+
+// =========================== Radiated power tests ===========================
+
+// Ne ionisation: radiated power in SI units at a node of the PLT table (W m^3)
+TEST_F(ADASNeIznTest, RadiatedPowerSI) { radiated_power_si_test(); }
