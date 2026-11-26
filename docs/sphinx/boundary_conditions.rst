@@ -87,6 +87,13 @@ through the radial (X) boundaries, for example in ``anomalous_diffusion``
 (see :ref:`sec-anomalous_diffusion`). The :math:`E\times B` advection
 of density, momentum and energy through these boundaries also depends
 on the boundary condition on the potential.
+This applies with the default ``bndry_flux = true``. The components
+that include :math:`E\times B` advection (``evolve_density``,
+``evolve_momentum``, ``evolve_pressure``, ``evolve_energy``,
+``vorticity`` and ``relax_potential``) each have this option; with
+``bndry_flux = false`` the component omits the :math:`E\times B` flux
+through the X boundaries, regardless of the boundary condition on the
+potential.
 
 The radial :math:`E\times B` velocity on an X cell face is calculated
 from the difference in Z of the potential at the two corners of the
