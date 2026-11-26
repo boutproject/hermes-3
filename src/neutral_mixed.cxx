@@ -64,6 +64,15 @@ BoutReal apply_limiter(BoutReal unlimited, BoutReal max,
                  -1.0 / flux_limiter_sharpness);
   }
 }
+
+Field3D Div_a_Grad_perp_all(Field3D& a, Field3D& f, Field3D& flow_xlow,
+                            Field3D& flow_ylow, std::shared_ptr<FCI::dagp_fv> dagpop) {
+
+  if (a.isFci()) {
+    return (*dagpop)(a, f, flow_xlow, flow_ylow, false);
+  }
+  return Div_a_Grad_perp_upwind_flows(a, f, flow_xlow, flow_ylow);
+}
 } // namespace
 
 NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver* solver)
@@ -933,7 +942,8 @@ void NeutralMixed::finally(const Options& state) {
     ddt(Nn) +=
         Div_a_Grad_perp_nonorthog(DnnNn, logPnlim, pf_adv_perp_xlow, pf_adv_perp_ylow);
   } else {
-    ddt(Nn) += Div_a_Grad_perp_flows(DnnNn, logPnlim, pf_adv_perp_xlow, pf_adv_perp_ylow);
+    ddt(Nn) +=
+        Div_a_Grad_perp_all(DnnNn, logPnlim, pf_adv_perp_xlow, pf_adv_perp_ylow, dagp_op);
   }
 
   Sn = density_source; // Save for possible output
@@ -957,9 +967,9 @@ void NeutralMixed::finally(const Options& state) {
         (5. / 3)
         * Div_a_Grad_perp_nonorthog(DnnPn, logPnlim, ef_adv_perp_xlow, ef_adv_perp_ylow);
   } else {
-    ddt(Pn) +=
-        (5. / 3)
-        * Div_a_Grad_perp_flows(DnnPn, logPnlim, ef_adv_perp_xlow, ef_adv_perp_ylow);
+    ddt(Pn) += (5. / 3)
+               * Div_a_Grad_perp_all(DnnPn, logPnlim, ef_adv_perp_xlow, ef_adv_perp_ylow,
+                                     dagp_op);
   }
 
   // The factor here is 5/2 as we're advecting internal energy and pressure.
@@ -980,9 +990,9 @@ void NeutralMixed::finally(const Options& state) {
                  * Div_a_Grad_perp_nonorthog(kappa_n_perp, Tn, ef_cond_perp_xlow,
                                              ef_cond_perp_ylow);
     } else {
-      ddt(Pn) +=
-          (2. / 3)
-          * Div_a_Grad_perp_flows(kappa_n_perp, Tn, ef_cond_perp_xlow, ef_cond_perp_ylow);
+      ddt(Pn) += (2. / 3)
+                 * Div_a_Grad_perp_all(kappa_n_perp, Tn, ef_cond_perp_xlow,
+                                       ef_cond_perp_ylow, dagp_op);
     }
 
     // The factor here is likely 3/2 as this is pure energy flow, but needs checking.
@@ -1014,8 +1024,8 @@ void NeutralMixed::finally(const Options& state) {
       ddt(NVn) +=
           Div_a_Grad_perp_nonorthog(DnnNVn, logPnlim, mf_adv_perp_xlow, mf_adv_perp_ylow);
     } else {
-      ddt(NVn) +=
-          Div_a_Grad_perp_flows(DnnNVn, logPnlim, mf_adv_perp_xlow, mf_adv_perp_ylow);
+      ddt(NVn) += Div_a_Grad_perp_all(DnnNVn, logPnlim, mf_adv_perp_xlow,
+                                      mf_adv_perp_ylow, dagp_op);
     }
 
     if (neutral_viscosity) {
@@ -1037,8 +1047,8 @@ void NeutralMixed::finally(const Options& state) {
         viscosity_source += Div_a_Grad_perp_nonorthog(eta_n_perp, Vn, mf_visc_perp_xlow,
                                                       mf_visc_perp_ylow);
       } else {
-        viscosity_source +=
-            Div_a_Grad_perp_flows(eta_n_perp, Vn, mf_visc_perp_xlow, mf_visc_perp_ylow);
+        viscosity_source += Div_a_Grad_perp_all(eta_n_perp, Vn, mf_visc_perp_xlow,
+                                                mf_visc_perp_ylow, dagp_op);
       }
 
       ddt(NVn) += viscosity_source;
