@@ -14,6 +14,14 @@
 /// Represent a 2D rate coefficient table (T,n)
 /// Reads data from a file, then interpolates at required values.
 struct OpenADASRateCoefficient {
+
+  /// (T,n,coeff) triple associated with a single point in the coeff table.
+  struct Node {
+    BoutReal temperature; ///< Electron temperature [eV]
+    BoutReal density;     ///< Electron density [m^-3]
+    BoutReal coefficient; ///< Rate coefficient [m^3/s] or radiation coefficient [W m^3]
+  };
+
   /// Read the file, extracting data for the given ionisation level
   /// @param filename   The file to read. Path relative to json_folder
   /// @param level      The first index in the log coefficient array
@@ -33,6 +41,9 @@ struct OpenADASRateCoefficient {
   ///
   /// @returns rate in units of m^3/s (rate coefficients) or W m^3 (radiation)
   BoutReal evaluate(BoutReal T, BoutReal n);
+
+  /// Return the tabulated node nearest to the requested temperature and density
+  Node nearest_node(BoutReal T, BoutReal n) const;
 };
 
 /// Read in and perform calculations with OpenADAS data
@@ -91,6 +102,12 @@ struct OpenADAS : public hermes::ReactionBase {
   /// @param to_ion    The ion on the right of the reaction
   void calculate_rates(GuardedOptions&& electron, GuardedOptions&& from_ion,
                        GuardedOptions&& to_ion);
+
+  ///
+  OpenADASRateCoefficient::Node nearest_radiation_coef_node(BoutReal T, BoutReal n) const;
+
+  ///
+  BoutReal get_electron_heating() const;
 
 private:
   std::filesystem::path json_db_dir;
