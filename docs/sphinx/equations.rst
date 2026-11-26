@@ -1422,6 +1422,173 @@ with velocity :math:`v_D = -D \nabla_\perp N / N`.
    :members:
 
 
+.. _sec-classical_diffusion:
+
+Cross-field transport: classical_diffusion
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Adds perpendicular particle, momentum and thermal-energy sources to species.
+Classical mode acts on charged species and calculates transport coefficients
+from collisions. Custom mode applies a prescribed diffusivity to all species
+in the state, including neutrals; each species must supply density.
+
+.. code-block:: ini
+
+   [hermes]
+   components = ... , braginskii_collisions, classical_diffusion
+
+   [classical_diffusion]
+   custom_D = -1  # Classical particle diffusion and temperature conduction
+   diagnose = true
+
+The particle source :math:`S_s` and parallel momentum source :math:`F_s`
+for species :math:`s` are
+
+.. math::
+
+   \begin{aligned}
+   S_s &= \nabla\cdot\left(D_n\nabla_\perp N_s\right), \\
+   F_s &= \nabla\cdot\left(A_s V_s D_n\nabla_\perp N_s\right).
+   \end{aligned}
+
+Here :math:`N_s`, :math:`V_s`, :math:`P_s` and :math:`T_s` are the species
+density, parallel velocity, pressure and temperature, and :math:`A_s` is the
+species mass in units of the proton mass. Momentum transport is added when
+velocity is available. It carries momentum with diffusing particles and does
+not add a separate viscosity term. All quantities in the following coefficient
+and source expressions are normalised.
+
+Classical mode
+^^^^^^^^^^^^^^
+
+For ``custom_D < 0`` (the default is -1), the common particle diffusivity is
+
+.. math::
+
+   D_n = \frac{A_e\nu_e}{N_e B^2}
+         \sum_{r\,\mathrm{charged}} P_r.
+
+The same :math:`D_n` is applied to each charged species so that particle
+transport is ambipolar for a quasineutral state. When temperature is available,
+the thermal-energy source is
+
+.. math::
+
+   Q_s = \nabla\cdot\left(\frac{3}{2}T_s D_n\nabla_\perp N_s\right)
+       + \nabla\cdot\left(\kappa_{\perp s}\nabla_\perp T_s\right),
+   \qquad
+   \kappa_{\perp s} = \frac{2P_s\nu_s A_s}{B^2}.
+
+The first term carries thermal energy with diffusing particles; the second is
+perpendicular temperature conduction. The collision frequencies :math:`\nu_e`
+and :math:`\nu_s` come from the species ``collision_frequency`` fields. A
+provider such as ``braginskii_collisions`` must be included. Electron mass,
+density and collision frequency are required to calculate :math:`D_n`. Each
+conducting species also needs pressure and collision frequency. Positive
+floors are applied to pressures, electron density and collision frequencies
+when calculating the transport coefficients.
+
+Setting ``custom_D = 0`` also calculates :math:`D_n` from electron collisions,
+but includes only particle diffusion, carried momentum and carried thermal
+energy; the temperature-conduction term is omitted. Zero does not disable
+particle diffusion.
+
+Custom mode
+^^^^^^^^^^^
+
+For ``custom_D > 0``, a constant scalar diffusivity is entered in
+:math:`\mathrm{m^2\,s^{-1}}` and converted to normalised units. No
+collision-frequency provider is required. The thermal-energy
+source is a single pressure-diffusion term,
+
+.. math::
+
+   Q_s = \nabla\cdot\left(\frac{3}{2}D_n\nabla_\perp P_s\right).
+
+The supplied pressure is used when available; otherwise :math:`P_s=N_sT_s`
+is calculated from density and temperature. No energy source is added if
+neither pressure nor temperature is supplied. Since the pressure equation
+receives :math:`(2/3)Q_s`, this term diffuses pressure with the same coefficient
+as density. The custom energy source replaces the classical carried-energy
+and temperature-conduction terms.
+
+The normalised coefficient is
+
+.. math::
+
+   D_n = \frac{\mathtt{custom\_D}}{\rho_{s0}^2\Omega_{ci}},
+
+where :math:`\rho_{s0}` and :math:`\Omega_{ci}` are the simulation's reference
+length and ion cyclotron frequency. For example, ``custom_D = 0.01`` sets
+a physical diffusivity of :math:`0.01\,\mathrm{m^2\,s^{-1}}`.
+
+Low-density enhancement
+^^^^^^^^^^^^^^^^^^^^^^^
+
+``low_density_enhance = true`` enhances the common :math:`D_n` after it has
+been assigned from ``custom_D`` or calculated from collisions. The default is
+false. The electron density controls the enhancement for every transported
+species, retaining a common coefficient for ambipolar particle transport.
+
+.. code-block:: ini
+
+   [classical_diffusion]
+   custom_D = 0.01                 # Scalar diffusivity [m^2/s]
+   low_density_enhance = true
+   low_density_floor = 1e14        # Enhancement onset density [m^-3]
+   low_density_max_multiplier = 1000
+
+The density floor is converted to normalised units using ``Nnorm``. Densities
+at or above this floor leave :math:`D_n` unchanged. Below it, the multiplier
+increases continuously to ``low_density_max_multiplier`` at zero density;
+negative trial densities receive the same finite maximum. The multiplier has
+zero slope at both endpoints, so the transitions are continuously
+differentiable. Setting the maximum to 1 leaves :math:`D_n` unchanged.
+
+Specifically, for a maximum :math:`M>1`, define
+
+.. math::
+
+   r = \min\left(1,\max\left(0,\frac{N_e}{N_{\mathrm{floor}}}\right)\right),
+   \qquad a=(1-r)^2, \qquad b=\frac{1}{M-1}.
+
+The enhancement is
+
+.. math::
+
+   D_n \leftarrow D_n\left(1+\frac{a}{ab+r^2/(r+b)}\right).
+
+This gives approximately inverse-density enhancement well below the floor
+and above the saturation region. It bounds the multiplier rather than the
+final diffusivity or cell loss rate. Damping therefore still depends on the
+physical mesh spacing. The enhanced coefficient enters particle transport,
+carried momentum and the thermal-energy terms containing :math:`D_n`;
+classical temperature conduction through :math:`\kappa_{\perp s}` is unchanged.
+No additional communication is needed to calculate the enhancement from
+valid electron-density guards.
+
+Boundaries and diagnostics
+^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Both modes close the physical X wall and Y target face fluxes of particles,
+momentum and energy, including nonorthogonal cross-metric contributions.
+Closure is applied to the complete face flux and therefore holds even with
+nonzero wall gradients. Coefficients retain the guard values calculated from
+the communicated state, so periodic and processor faces use the same
+coefficient average as interior faces. Periodic faces remain open to transport.
+The particle, momentum and energy sources from this component each have zero
+volume integral on a closed domain.
+
+With ``diagnose = true``, ``D_classical`` records the realised normalised
+particle diffusivity, including a custom override. Its ``conversion``
+attribute is :math:`\rho_{s0}^2\Omega_{ci}`; multiplying the stored values by
+this factor gives :math:`\mathrm{m^2\,s^{-1}}`. The output name is the same in
+both modes.
+
+.. doxygenstruct:: ClassicalDiffusion
+   :members:
+
+
 Electromagnetic fields
 ----------------------
 

@@ -105,10 +105,28 @@ public:
         bout::boundary::NewBoundaryRegionYDown("lower_target", xstart, xend, this));
   }
 
-  comm_handle send(FieldGroup& UNUSED(g)) override { return nullptr; }
-  comm_handle sendX(FieldGroup& UNUSED(g), comm_handle UNUSED(handle) = nullptr,
-                    bool UNUSED(disable_corners) = false) override {
+  // Opt in for tests that need communication across a periodic X boundary.
+  bool copy_periodic_halos{false};
+  comm_handle send(FieldGroup& group) override {
+    if (copy_periodic_halos && periodicX) {
+      for (auto* field : group.get()) {
+        if (auto* value = dynamic_cast<Field3D*>(field)) {
+          for (int x = 0; x < xstart; ++x) {
+            for (int y = 0; y < LocalNy; ++y) {
+              for (int z = 0; z < LocalNz; ++z) {
+                (*value)(x, y, z) = (*value)(xend - xstart + 1 + x, y, z);
+                (*value)(xend + 1 + x, y, z) = (*value)(xstart + x, y, z);
+              }
+            }
+          }
+        }
+      }
+    }
     return nullptr;
+  }
+  comm_handle sendX(FieldGroup& g, comm_handle UNUSED(handle) = nullptr,
+                    bool UNUSED(disable_corners) = false) override {
+    return send(g);
   }
   comm_handle sendY(FieldGroup& UNUSED(g),
                     comm_handle UNUSED(handle) = nullptr) override {
