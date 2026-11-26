@@ -12,6 +12,7 @@ twistshift = true # Improves accuracy of vorticity preconditioner on closed fiel
 
 [mesh]
 
+# TODO: Should include a high-res grid here that shows off the performance improvements
 file = "tokamak.nc"
 
 extrapolate_y = false  # Can result in negative Jacobians in guard cells
