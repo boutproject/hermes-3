@@ -142,10 +142,10 @@ void NeutralBoundary::transform_impl(GuardedOptions& state) {
           : zeroFrom(Nn);
 
   Coordinates* coord = mesh->getCoordinates();
-  // const Field2D& J = coord->J();
-  // const Field2D& dy = coord->dy();
-  // const Field2D& dx = coord->dx();
-  // const Field2D& dz = coord->dz();
+  const Field2D& J = coord->J();
+  const Field2D& dy = coord->dy();
+  const Field2D& dx = coord->dx();
+  const Field2D& dz = coord->dz();
   target_energy_source = 0;
   wall_energy_source = 0;
 
