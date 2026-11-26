@@ -489,8 +489,7 @@ void NeutralMixed::transform_impl(GuardedOptions& state) {
       // No flow into wall
       pnt.next(Vn) = -pnt.current(Vn);
       pnt.next(NVn) = -pnt.current(NVn);
-
-    }
+    });
   } else { // Non-Fci version
     if (sheath_ydown) {
       for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
