@@ -7,11 +7,10 @@ using bout::globals::mesh;
 
 NeutralBoundary::NeutralBoundary(std::string name, Options& alloptions,
                                  [[maybe_unused]] Solver* solver)
-    : NamedComponent(name,
-                     {writeBoundaryFinal("species:{name}:{outputs}"),
-                      writeBoundaryFinalIfSet("species:{name}:{conditional_outputs}"),
-                      readWrite("species:{name}:energy_source"),
-                      readOnly("species:{name}:AA"),
+    : NamedComponent(name, {writeBoundary("species:{name}:{outputs}"),
+                            writeBoundaryIfSet("species:{name}:{conditional_outputs}"),
+                            readWrite("species:{name}:energy_source"),
+                            readOnly("species:{name}:AA"),
                             readOnly("species:{from}:{from_inputs}"),
                             readOnly("species:{to}:{to_inputs}"),
                             readWrite("species:{to}:{outputs}"),
