@@ -1375,6 +1375,7 @@ The diffusion coefficients `D`, `\chi` and `\nu` and field line pitch `\Theta` a
 .. doxygenstruct:: BinormalSTPM
    :members:
 
+.. _sec-anomalous_diffusion:
 
 Tokamak cross-field transport: anomalous_diffusion
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -1417,6 +1418,8 @@ coefficients :math:`D`, :math:`\chi` and :math:`\nu` as follows:
 
 Note that particle diffusion is treated as a density gradient-driven flow
 with velocity :math:`v_D = -D \nabla_\perp N / N`.
+The flux through the radial boundaries is set by the radial boundary
+conditions; see :ref:`sec-radial_boundary_fluxes`.
 
 .. doxygenstruct:: AnomalousDiffusion
    :members:
@@ -1560,6 +1563,10 @@ to write:
 
 The last term is not in general positive definite, so this simple form
 of viscosity could in some cases lead to cooling.
+
+For the effect of the radial boundary condition on the potential
+(e.g. ``phi_boundary_relax``) on :math:`E\times B` fluxes through the
+radial boundaries, see :ref:`sec-radial_boundary_fluxes`.
 
 .. doxygenstruct:: Vorticity
    :members:
