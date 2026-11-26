@@ -34,21 +34,21 @@ struct NeutralMixed : public NamedComponent<NeutralMixed> {
 private:
   std::string name; ///< Species name
 
-  Field3D Nn, Pn, NVn;            // Density, pressure and parallel momentum
-  Field3D Vn;                     ///< Neutral parallel velocity
-  Field3D Tn;                     ///< Neutral temperature
-  Field3D Nnlim, Pnlim, logPnlim; // Limited in regions of low density
+  Field3D Nn, Pn, NVn;                    // Density, pressure and parallel momentum
+  Field3DParallel Vn;                     ///< Neutral parallel velocity
+  Field3DParallel Tn;                     ///< Neutral temperature
+  Field3DParallel Nnlim, Pnlim, logPnlim; // Limited in regions of low density
 
   BoutReal AA; ///< Atomic mass (proton = 1)
 
   std::vector<std::string> collision_names; ///< Collisions used for collisionality
   std::string
       diffusion_collisions_mode; ///< Collision selection, either afn or multispecies
-  Field3D nu;                    ///< Collisionality to use for diffusion
-  Field3D Dnn;                   ///< Diffusion coefficient
-  Field3D Dnn_unlimited, Dmax;   ///< Unlimited and max Dnn
-  Field3D DnnNn, DnnPn, DnnTn, DnnNVn; ///< Used for operators
-  bool combined_limiters;              ///< Derive kappa, eta limiters from Dnn
+  Field3DParallel nu;            ///< Collisionality to use for diffusion
+  Field3DParallel Dnn;           ///< Diffusion coefficient
+  Field3DParallel Dnn_unlimited, Dmax;         ///< Unlimited and max Dnn
+  Field3DParallel DnnNn, DnnPn, DnnTn, DnnNVn; ///< Used for operators
+  bool combined_limiters;                      ///< Derive kappa, eta limiters from Dnn
   BoutReal flux_limit_adv;         ///< Advective flux limit, fraction of free streaming
   BoutReal flux_limit_cond_perp;   ///< Perpendicular conductive flux limit
   BoutReal flux_limit_cond_par;    ///< Parallel conductive flux limit
@@ -92,10 +92,14 @@ private:
   /// the limited ones are not, because the parallel and perpendicular limiters
   /// use different gradients and may use different flux limit fractions.
   Field3D kappa_n_unlimited, eta_n_unlimited;
-  Field3D kappa_n_perp, kappa_n_par;         ///< Limited neutral conduction
-  Field3D eta_n_perp, eta_n_par;             ///< Limited neutral viscosity
-  Field3D kappa_n_max_perp, kappa_n_max_par; ///< Free-streaming conduction caps
-  Field3D eta_n_max_perp, eta_n_max_par;     ///< Free-streaming viscosity caps
+  Field3D kappa_n_perp;            ///< Limited neutral perpendicular conduction
+  Field3DParallel kappa_n_par;     ///< Limited neutral parallel conduction
+  Field3D eta_n_perp;              ///< Limited neutral perpendicular viscosity
+  Field3DParallel eta_n_par;       ///< Limited neutral parallel viscosity
+  Field3D kappa_n_max_perp;        ///< Free-streaming perpendicular conduction caps
+  Field3DParallel kappa_n_max_par; ///< Free-streaming parallel conduction caps
+  Field3D eta_n_max_perp;          ///< Free-streaming perpendicular viscosity caps
+  Field3DParallel eta_n_max_par;   ///< Free-streaming parallel viscosity caps
 
   bool nonorthogonal_operators;   ///< Use nonorthogonal operators for radial transport?
   bool precondition{true};        ///< Enable preconditioner?
