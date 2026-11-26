@@ -623,6 +623,11 @@ ComponentScheduler::ComponentScheduler(Options& scheduler_options,
   if (autosort) {
     ::sortComponents(components);
   }
+  for (auto& component : components) {
+    if (auto correction = component->makePreconCorrection(components)) {
+      precon_corrections.push_back(std::move(correction));
+    }
+  }
   printComponents(components);
 }
 
@@ -661,5 +666,8 @@ void ComponentScheduler::restartVars(Options& state) {
 void ComponentScheduler::precon(const Options& state, BoutReal gamma) {
   for (auto& component : components) {
     component->precon(state, gamma);
+  }
+  for (const auto& correct : precon_corrections) {
+    correct(state, gamma);
   }
 }

@@ -3,6 +3,7 @@
 #define SHEATH_BOUNDARY_H
 
 #include "component.hxx"
+#include "sheath_current_response.hxx"
 
 #include <bout/bout_types.hxx>
 #include <bout/field3d.hxx>
@@ -24,7 +25,8 @@
 ///   - Boundary conditions are applied to field-aligned fields
 ///     using to/fromFieldAligned
 ///
-struct SheathBoundary : public NamedComponent<SheathBoundary> {
+struct SheathBoundary : public NamedComponent<SheathBoundary>,
+                        public SheathCurrentResponse {
   /// # Input options
   /// - <name>  e.g. "sheath_boundary"
   ///   - lower_y                  Boundary on lower y?
@@ -54,6 +56,7 @@ struct SheathBoundary : public NamedComponent<SheathBoundary> {
   static constexpr auto type = "sheath_boundary";
 
 private:
+  BoutReal ionEmissionSlope(BoutReal energy, BoutReal yield) const;
   BoutReal Ge;       // Secondary electron emission coefficient
   Field3D sin_alpha; // sin of angle between magnetic field and wall.
 

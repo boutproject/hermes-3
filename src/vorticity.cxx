@@ -1,12 +1,22 @@
 
-#include "../include/vorticity.hxx"
+#include <bout/build_defines.hxx>
+#if BOUT_HAS_PETSC && !BOUT_USE_METRIC_3D
+// Must precede any other header that includes PETSc
+#include <bout/petsclib.hxx>
+#endif
+
 #include "../include/component.hxx"
 #include "../include/div_ops.hxx"
+#include "../include/electromagnetic.hxx"
+#include "../include/evolve_momentum.hxx"
 #include "../include/guarded_options.hxx"
 #include "../include/hermes_utils.hxx"
 #include "../include/permissions.hxx"
+#include "../include/sheath_current_response.hxx"
+#include "../include/vorticity.hxx"
 
 #include <bout/bout_types.hxx>
+#include <bout/boutcomm.hxx>
 #include <bout/boutexception.hxx>
 #include <bout/constants.hxx>
 #include <bout/derivs.hxx>
@@ -14,6 +24,7 @@
 #include <bout/field.hxx>
 #include <bout/field3d.hxx>
 #include <bout/fv_ops.hxx>
+#include <bout/globalindexer.hxx>
 #include <bout/globals.hxx>
 #include <bout/invert/laplacexy.hxx>
 #include <bout/invert_laplace.hxx>
@@ -24,7 +35,11 @@
 #include <bout/vecops.hxx>
 #include <bout/vector3d.hxx>
 
+#include <algorithm>
+#include <map>
 #include <string>
+#include <utility>
+#include <vector>
 
 using bout::globals::mesh;
 
@@ -176,6 +191,48 @@ Vorticity::Vorticity(std::string name, Options& alloptions, Solver* solver)
   damp_core_vorticity = options["damp_core_vorticity"]
                             .doc("Damp vorticity at the core boundary?")
                             .withDefault<bool>(false);
+
+  precondition_n0 =
+      options["precondition_n0"]
+          .doc("Solve the axisymmetric (n=0) vorticity / parallel momentum / potential "
+               "block exactly in X-Y with PETSc (opt-in, electrostatic and "
+               "electromagnetic)")
+          .withDefault<bool>(false);
+  if (precondition_n0) {
+#if not BOUT_HAS_PETSC
+    throw BoutException("precondition_n0 requires BOUT++ built with PETSc");
+#elif BOUT_USE_METRIC_3D
+    throw BoutException("precondition_n0 requires two-dimensional metrics");
+#endif
+    if (mesh->periodicX) {
+      throw BoutException(
+          "precondition_n0 requires nonperiodic X (radial potential gauge)");
+    }
+    precondition_n0_sheath =
+        options["precondition_n0_sheath"]
+            .doc("Include the linearised electron sheath current in the n=0 solve")
+            .withDefault<bool>(true);
+    precondition_n0_dissipation =
+        options["precondition_n0_dissipation"]
+            .doc("Factor on the first-order linearisation of phi_dissipation")
+            .withDefault<BoutReal>(1.0);
+    precondition_n0_check =
+        options["precondition_n0_check"]
+            .doc("Check the n=0 operator against BOUT++ operators in every call")
+            .withDefault<bool>(false);
+    wave_species = options["precondition_wave_species"]
+                       .doc("Species whose parallel momentum carries the current in the "
+                            "n=0 block")
+                       .withDefault<std::string>("e");
+    precondition_n0_reuse_steps =
+        options["precondition_n0_reuse_steps"]
+            .doc("Keep the n=0 factorisation for up to this many further steps while "
+                 "gamma is unchanged (0: refactorise every step)")
+            .withDefault<int>(20);
+    if (precondition_n0_reuse_steps < 0) {
+      throw BoutException("precondition_n0_reuse_steps must be >= 0");
+    }
+  }
 
   // Add phi to restart files so that the value in the boundaries
   // is restored on restart. This is done even when phi is not evolving,
@@ -924,6 +981,683 @@ void Vorticity::finally(const Options& state) {
       }
     }
   }
+}
+
+Component::PreconCorrection Vorticity::makePreconCorrection(
+    const std::vector<std::unique_ptr<Component>>& components) {
+  if (!precondition_n0) {
+    return {};
+  }
+  for (const auto& component : components) {
+    if (auto* momentum = dynamic_cast<EvolveMomentum*>(component.get());
+        momentum && momentum->objectName() == wave_species) {
+      wave_momentum = momentum;
+    }
+    if (auto* em = dynamic_cast<Electromagnetic*>(component.get())) {
+      electromagnetic = em;
+    }
+    if (precondition_n0_sheath && wave_species == "e") {
+      if (auto* sheath = dynamic_cast<SheathCurrentResponse*>(component.get())) {
+        sheath_responses.push_back(&sheath->enableCurrentResponse());
+      }
+    }
+  }
+  if (!wave_momentum) {
+    throw BoutException("precondition_n0 needs the evolved momentum of species {}",
+                        wave_species);
+  }
+  return [this](const Options& state, BoutReal gamma) {
+    if (gamma != 0.0) {
+      preconN0(state, gamma);
+    }
+  };
+}
+
+#if BOUT_HAS_PETSC && !BOUT_USE_METRIC_3D
+/// PETSc objects for the n=0 block solve. nf unknowns per X-Y point, interleaved:
+/// q (momentum, row nf g), dphi (potential, row nf g + 1) and, electromagnetic (nf = 3),
+/// dA (Apar, row nf g + 2).
+struct Vorticity::N0Solver {
+  N0Solver(Mesh* mesh, int nf)
+      : indexer(std::make_shared<GlobalIndexer<Field2D>>(mesh)), nf(nf) {
+    const PetscInt local_size = nf * indexer->size();
+    const PetscInt per_row = (nf == 2) ? 12 : 16;
+    BOUT_DO_PETSC(MatCreateAIJ(BoutComm::get(), local_size, local_size, PETSC_DETERMINE,
+                               PETSC_DETERMINE, per_row, nullptr, per_row, nullptr,
+                               &matrix));
+    BOUT_DO_PETSC(MatSetOption(matrix, MAT_NEW_NONZERO_ALLOCATION_ERR, PETSC_FALSE));
+    BOUT_DO_PETSC(MatCreateVecs(matrix, &solution, &rhs));
+    BOUT_DO_PETSC(KSPCreate(BoutComm::get(), &ksp));
+    BOUT_DO_PETSC(KSPSetType(ksp, KSPPREONLY));
+    PC pc{nullptr};
+    BOUT_DO_PETSC(KSPGetPC(ksp, &pc));
+    // Gather the (small) 2D system onto one rank and factorise there with PETSc's LU
+    int size = 1;
+    MPI_Comm_size(BoutComm::get(), &size);
+    if (size > 1) {
+      BOUT_DO_PETSC(PCSetType(pc, PCTELESCOPE));
+      BOUT_DO_PETSC(PCTelescopeSetReductionFactor(pc, size));
+      BOUT_DO_PETSC(
+          PetscOptionsSetValue(nullptr, "-vorticity_n0_telescope_ksp_type", KSPPREONLY));
+      BOUT_DO_PETSC(
+          PetscOptionsSetValue(nullptr, "-vorticity_n0_telescope_pc_type", PCLU));
+    } else {
+      BOUT_DO_PETSC(PCSetType(pc, PCLU));
+    }
+    BOUT_DO_PETSC(KSPSetOptionsPrefix(ksp, "vorticity_n0_"));
+    BOUT_DO_PETSC(KSPSetFromOptions(ksp));
+  }
+  ~N0Solver() {
+    KSPDestroy(&ksp);
+    VecDestroy(&rhs);
+    VecDestroy(&solution);
+    MatDestroy(&matrix);
+  }
+  N0Solver(const N0Solver&) = delete;
+  N0Solver& operator=(const N0Solver&) = delete;
+
+  PetscLib lib; ///< Keeps PETSc initialised, so must be constructed first
+  IndexerPtr<Field2D> indexer;
+  int nf; ///< Unknowns per point: 2, or 3 with Apar
+  Mat matrix{nullptr};
+  Vec rhs{nullptr}, solution{nullptr};
+  KSP ksp{nullptr};
+  BoutReal time{-1.}, gamma{0.}; ///< Latest time; gamma of the factorisation
+  bool viscous{false};           ///< Did the factorisation include parallel viscosity?
+  int age{0};                    ///< Steps (new times) since the factorisation
+  Field2D w_factor;              ///< Momentum correction per unit q, A sqrt(B)
+  Field2D La, Lb, Lc;            ///< n=0 polarisation: radial (x-1, x, x+1) stencil
+  Field2D Lym, Lyp; ///< n=0 polarisation: poloidal (y-1, y+1) stencil when split_n0=true
+  std::unique_ptr<Laplacian> apar_radial;
+  Field2D LaA, LbA, LcA; ///< Electromagnetic: n=0 Laplace_perp of Apar, same form
+  BoutReal beta_em{0.0}; ///< Electromagnetic: Helmholtz parameter of Ampere's law
+  Field2D N_e;           ///< Electromagnetic: density of the factorisation
+};
+#else
+struct Vorticity::N0Solver {};
+#endif
+
+Vorticity::~Vorticity() = default;
+
+void Vorticity::preconN0(const Options& state, BoutReal gamma) {
+#if !BOUT_HAS_PETSC || BOUT_USE_METRIC_3D
+  (void)state;
+  (void)gamma;
+  throw BoutException("precondition_n0 requires PETSc and two-dimensional metrics");
+#else
+  if (state.isSet("scale_timederivs")) {
+    throw BoutException("precondition_n0 does not support scale_timederivs");
+  }
+  // Electromagnetic: the n=0 part of Apar is a third unknown (Ampere's law)
+  const bool em = state.isSection("fields") and state["fields"].isSet("Apar");
+  if (em && !electromagnetic) {
+    throw BoutException("precondition_n0 requires the configured Apar operator");
+  }
+  const auto& momentum_viscosity = wave_momentum->viscosityOperator();
+  const Options& species = state["species"][wave_species];
+  const BoutReal Z = get<BoutReal>(species["charge"]);
+  const BoutReal AA = get<BoutReal>(species["AA"]);
+  const BoutReal time = get<BoutReal>(state["time"]);
+  auto* coord = Vort.getCoordinates();
+  const Field2D dy = coord->dy();
+  const Field2D g_22 = coord->g_22();
+  const Field2D J = coord->J();
+  const Field2D B = coord->Bxy();
+  const Field2D sqrtB = sqrt(B);
+
+  // Linearised axisymmetric block, densities, temperatures and other species frozen,
+  // with w = A sqrt(B) q and dNV = s - gamma Z w, s = H_m^-1 r_NV:
+  //   H_m w - N Grad_par(dphi) = 0     (momentum row, divided by sqrt(B): P q)
+  //   (1 + d) L dphi + gamma^2 (Z^2/AA) Div_par(w) - gamma (dissipation and sheath
+  //     terms in dphi) = r_Vort + gamma (Z/AA) Div_par(s)
+  // L is the n=0 polarisation operator of phiSolver (radial, with its boundary
+  // conditions) and d the core vorticity damping. At the targets the RHS
+  // extrapolates phi linearly into the sheath and fixes the momentum flux at the
+  // sheath face, where it depends on phi only through the electron sheath velocity.
+  // The potential rows are negated so that LU without pivoting is stable.
+  if (!n0_solver) {
+    n0_solver = std::make_unique<N0Solver>(mesh, em ? 3 : 2);
+    auto& n0 = *n0_solver;
+    // Separate fields: Field2D copies share data
+    n0.La = Field2D{0.0, mesh};
+    n0.Lb = Field2D{0.0, mesh};
+    n0.Lc = Field2D{0.0, mesh};
+    n0.Lym = Field2D{0.0, mesh};
+    n0.Lyp = Field2D{0.0, mesh};
+    auto radial = [](int flags) {
+      if ((flags
+           & (INVERT_DC_GRADPAR | INVERT_DC_GRADPARINV | INVERT_DC_LAP
+              | INVERT_IN_CYLINDER))
+          || ((flags & INVERT_BNDRY_ONE) && mesh->xstart > 1)) {
+        throw BoutException("precondition_n0: unsupported laplacian boundary flags {}",
+                            flags);
+      }
+      return (flags & INVERT_DC_GRAD) ? 1.0 : -1.0;
+    };
+    auto check_flags = [](const Laplacian& solver) {
+      const int flags = solver.getGlobalFlags();
+      if ((flags & (INVERT_ZERO_DC | INVERT_KX_ZERO | INVERT_4TH_ORDER))
+          || ((flags & INVERT_BOTH_BNDRY_ONE) && mesh->xstart > 1)) {
+        throw BoutException("precondition_n0: unsupported laplacian global flags {}",
+                            flags);
+      }
+    };
+    if (split_n0) {
+      // Match LaplaceXY's 5-point finite-volume operator and [laplacexy] boundary flags
+      Options& xyopt = Options::root()["laplacexy"];
+      const std::string xy_type = xyopt["type"].withDefault<std::string>("petsc");
+      bool y_dirichlet = false;
+      if (xy_type == "petsc") {
+        if (!xyopt["finite_volume"].withDefault<bool>(true)) {
+          throw BoutException(
+              "precondition_n0 with split_n0 requires laplacexy:finite_volume=true");
+        }
+        const std::string yb = xyopt["y_bndry"].withDefault<std::string>("neumann");
+        if (yb != "neumann" and yb != "dirichlet") {
+          throw BoutException(
+              "precondition_n0 with split_n0: unsupported laplacexy:y_bndry={}", yb);
+        }
+        y_dirichlet = (yb == "dirichlet");
+      } else {
+        y_dirichlet = xyopt["y_bndry_dirichlet"].withDefault<bool>(false);
+      }
+      const bool include_y = xyopt["include_y_derivs"].withDefault<bool>(true);
+      const bool x_in_dir = mesh->periodicY(mesh->xstart)
+                                ? xyopt["core_bndry_dirichlet"].withDefault<bool>(false)
+                                : xyopt["pf_bndry_dirichlet"].withDefault<bool>(true);
+      const BoutReal inner_xy = x_in_dir ? -1.0 : 1.0;
+      const BoutReal outer_xy = -1.0;
+      const BoutReal yb_sign = y_dirichlet ? -1.0 : 1.0;
+
+      const Field2D A_xy = average_atomic_mass / SQ(DC(coord->Bxy()));
+      const Field2D J_dc = DC(coord->J());
+      const Field2D g11_dc = DC(coord->g11());
+      const Field2D dx_dc = DC(coord->dx());
+      const Field2D dy_dc = DC(coord->dy());
+      const Field2D g_22_dc = DC(coord->g_22());
+      const Field2D g23_dc = DC(coord->g23());
+      const Field2D g_23_dc = DC(coord->g_23());
+      auto avg = [](BoutReal u, BoutReal v) { return 0.5 * (u + v); };
+
+      BOUT_FOR_SERIAL(i, n0.indexer->getRegionNobndry()) {
+        BoutReal xp = avg(A_xy[i], A_xy[i.xp()]) * avg(J_dc[i], J_dc[i.xp()])
+                      * avg(g11_dc[i], g11_dc[i.xp()])
+                      / (J_dc[i] * avg(dx_dc[i], dx_dc[i.xp()]) * dx_dc[i]);
+        BoutReal xm = avg(A_xy[i], A_xy[i.xm()]) * avg(J_dc[i], J_dc[i.xm()])
+                      * avg(g11_dc[i], g11_dc[i.xm()])
+                      / (J_dc[i] * avg(dx_dc[i], dx_dc[i.xm()]) * dx_dc[i]);
+        BoutReal c = -(xp + xm);
+        BoutReal yp = 0.0;
+        BoutReal ym = 0.0;
+        if (include_y) {
+          yp = -avg(A_xy[i], A_xy[i.yp()]) * avg(J_dc[i], J_dc[i.yp()])
+               * avg(g23_dc[i], g23_dc[i.yp()]) * avg(g_23_dc[i], g_23_dc[i.yp()])
+               / (avg(g_22_dc[i], g_22_dc[i.yp()]) * J_dc[i]
+                  * avg(dy_dc[i], dy_dc[i.yp()]) * dy_dc[i]);
+          ym = -avg(A_xy[i], A_xy[i.ym()]) * avg(J_dc[i], J_dc[i.ym()])
+               * avg(g23_dc[i], g23_dc[i.ym()]) * avg(g_23_dc[i], g_23_dc[i.ym()])
+               / (avg(g_22_dc[i], g_22_dc[i.ym()]) * J_dc[i]
+                  * avg(dy_dc[i], dy_dc[i.ym()]) * dy_dc[i]);
+          c -= (yp + ym);
+        }
+        if (n0.indexer->getGlobal(i.xm()) < 0) {
+          c += inner_xy * xm;
+          xm = 0.0;
+        }
+        if (n0.indexer->getGlobal(i.xp()) < 0) {
+          c += outer_xy * xp;
+          xp = 0.0;
+        }
+        if (n0.indexer->getGlobal(i.ym()) < 0) {
+          c += yb_sign * ym;
+          ym = 0.0;
+        }
+        if (n0.indexer->getGlobal(i.yp()) < 0) {
+          c += yb_sign * yp;
+          yp = 0.0;
+        }
+        n0.La[i] = xm;
+        n0.Lb[i] = c;
+        n0.Lc[i] = xp;
+        n0.Lym[i] = ym;
+        n0.Lyp[i] = yp;
+      }
+    } else {
+      check_flags(*phiSolver);
+      const BoutReal inner = radial(phiSolver->getInnerBoundaryFlags());
+      const BoutReal outer = radial(phiSolver->getOuterBoundaryFlags());
+      if (inner == 1.0 && outer == 1.0) {
+        throw BoutException("precondition_n0 requires a radial potential reference");
+      }
+      const Field2D C_B = average_atomic_mass / Bsq;
+      BOUT_FOR_SERIAL(i, n0.indexer->getRegionNobndry()) {
+        dcomplex a, b, c;
+        phiSolver->tridagCoefs(i.x(), i.y(), 0, a, b, c, &C_B);
+        n0.La[i] = C_B[i] * a.real();
+        n0.Lb[i] = C_B[i] * b.real();
+        n0.Lc[i] = C_B[i] * c.real();
+        if (n0.indexer->getGlobal(i.xm()) < 0) {
+          n0.Lb[i] += inner * n0.La[i];
+          n0.La[i] = 0.0;
+        }
+        if (n0.indexer->getGlobal(i.xp()) < 0) {
+          n0.Lb[i] += outer * n0.Lc[i];
+          n0.Lc[i] = 0.0;
+        }
+      }
+    }
+    if (em) {
+      n0.apar_radial = electromagnetic->makeAxisymmetricLaplacian();
+      check_flags(*n0.apar_radial);
+      n0.beta_em = electromagnetic->beta();
+      const BoutReal inner_A = radial(n0.apar_radial->getInnerBoundaryFlags());
+      const BoutReal outer_A = radial(n0.apar_radial->getOuterBoundaryFlags());
+      n0.LaA = Field2D{0.0, mesh};
+      n0.LbA = Field2D{0.0, mesh};
+      n0.LcA = Field2D{0.0, mesh};
+      BOUT_FOR_SERIAL(i, n0.indexer->getRegionNobndry()) {
+        dcomplex a, b, c;
+        n0.apar_radial->tridagCoefs(i.x(), i.y(), 0, a, b, c);
+        n0.LaA[i] = a.real();
+        n0.LbA[i] = b.real();
+        n0.LcA[i] = c.real();
+        if (n0.indexer->getGlobal(i.xm()) < 0) {
+          n0.LbA[i] += inner_A * n0.LaA[i];
+          n0.LaA[i] = 0.0;
+        }
+        if (n0.indexer->getGlobal(i.xp()) < 0) {
+          n0.LbA[i] += outer_A * n0.LcA[i];
+          n0.LcA[i] = 0.0;
+        }
+      }
+    }
+  }
+  auto& n0 = *n0_solver;
+  const auto& index = *n0.indexer;
+  const int nf = n0.nf;
+  const PetscInt start = index.getGlobalStart();
+
+  /// Parallel stencils at offsets -1, 0, +1 along y, with the RHS target closures
+  struct Parallel {
+    bool lower, upper; ///< Is the neighbour below / above a target?
+    int gm, g, gp;     ///< Global point indices of the neighbours
+    BoutReal grad[3];  ///< Grad_par, phi extrapolated into the sheath
+    BoutReal div[3];   ///< Div_par, zero momentum at the sheath face
+    BoutReal sheath;   ///< Div_par weight of the sheath-face momentum
+  };
+  auto parallel = [&](const Ind2D& i) {
+    Parallel s{};
+    s.g = index.getGlobal(i);
+    s.gm = index.getGlobal(i.ym());
+    s.gp = index.getGlobal(i.yp());
+    s.lower = s.gm < 0;
+    s.upper = s.gp < 0;
+    if (s.lower and s.upper) {
+      throw BoutException("precondition_n0 needs two cells along each field line");
+    }
+    const BoutReal gfac = 1. / (2. * dy[i] * sqrt(g_22[i]));
+    const BoutReal dfac = B[i] * gfac;
+    s.grad[0] = -gfac;
+    s.grad[2] = gfac;
+    s.div[0] = -dfac / B[i.ym()];
+    s.div[2] = dfac / B[i.yp()];
+    if (s.lower) {
+      s.grad[0] = 0.0;
+      s.grad[1] = -2. * gfac;
+      s.grad[2] = 2. * gfac;
+      s.div[1] = -s.div[0];
+      s.sheath = 2. * s.div[0];
+      s.div[0] = 0.0;
+    }
+    if (s.upper) {
+      s.grad[0] = -2. * gfac;
+      s.grad[1] = 2. * gfac;
+      s.grad[2] = 0.0;
+      s.div[1] = -s.div[2];
+      s.sheath = 2. * s.div[2];
+      s.div[2] = 0.0;
+    }
+    return s;
+  };
+
+  Field3D& dNV = wave_momentum->momentumResidual();
+  Field2D s0 = DC(dNV, "RGN_NOBNDRY");
+  mesh->communicate(s0);
+  const Field2D rVort = DC(ddt(Vort), "RGN_NOBNDRY");
+
+  // Refactorise for a new gamma, and for a new time unless precondition_n0_reuse_steps
+  // keeps the factorisation (as CVODE lags its own preconditioner setup)
+  if (time != n0.time) {
+    n0.time = time;
+    n0.age++;
+  }
+  if (gamma != n0.gamma or n0.viscous != momentum_viscosity.has_value()
+      or n0.age > precondition_n0_reuse_steps) {
+    n0.viscous = momentum_viscosity.has_value();
+    n0.gamma = gamma;
+    n0.age = 0;
+    const Field2D A = momentum_viscosity ? momentum_viscosity->mass : Field2D{1.0};
+    const Field2D Bc = momentum_viscosity ? momentum_viscosity->diffusion : Field2D{0.0};
+    n0.w_factor = A * sqrtB;
+    mesh->communicate(n0.w_factor);
+    const Field2D N = DC(get<Field3D>(species["density"]));
+    // Electromagnetic: the other species keep their canonical momenta, so their current
+    // responds to dA through K_ions = sum Z^2 N / A (the electrons' response is in q)
+    Field2D K_ions{0.0};
+    Field2D ampere_mass;
+    if (em) {
+      for (const auto& kv : state["species"].getChildren()) {
+        const Options& other = kv.second;
+        if (kv.first == wave_species or !other.isSet("charge")
+            or !other.isSet("momentum")) {
+          continue;
+        }
+        const BoutReal Zs = get<BoutReal>(other["charge"]);
+        if (std::abs(Zs) < 1e-5) {
+          continue;
+        }
+        K_ions +=
+            DC(get<Field3D>(other["density"])) * (SQ(Zs) / get<BoutReal>(other["AA"]));
+      }
+      mesh->communicate(K_ions);
+      // Ampère uses floored densities, while canonical momentum uses raw density.
+      ampere_mass = DC(electromagnetic->helmholtzDensity()) - (SQ(Z) / AA) * N;
+      n0.N_e = N;
+    }
+
+    Field2D cs{0.0};
+    const BoutReal dissipation = phi_dissipation ? precondition_n0_dissipation : 0.0;
+    if (dissipation != 0.0) {
+      cs = DC(get<Field3D>(state["sound_speed"]));
+      mesh->communicate(cs);
+    }
+
+    Field2D kappa{0.0};
+    for (const Field2D* response : sheath_responses) {
+      kappa += *response;
+    }
+    Field2D sheath_dissipation{0.0};
+    if (phi_sheath_dissipation) {
+      const Field3D phi_fa = toFieldAligned(get<Field3D>(state["fields"]["phi"]));
+      auto face = [&](int x, int y, int yg) {
+        BoutReal d = 0.0;
+        for (int z = 0; z < mesh->LocalNz; z++) {
+          const BoutReal phis = 0.5 * (phi_fa(x, y, z) + phi_fa(x, yg, z));
+          if (phis < 0.0) {
+            d += 1.0;
+          }
+        }
+        sheath_dissipation(x, y) = d / mesh->LocalNz;
+      };
+      for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
+        face(r.ind, mesh->ystart, mesh->ystart - 1);
+      }
+      for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
+        face(r.ind, mesh->yend, mesh->yend + 1);
+      }
+    }
+
+    const bool core_damping =
+        damp_core_vorticity and mesh->firstX() and mesh->periodicY(mesh->xstart);
+    const Field2D& area_l = coord->cell_area_ylow();
+    const Field2D& area_h = coord->cell_area_yhigh();
+    const Field2D& volume = coord->cell_volume();
+    const BoutReal current = SQ(gamma) * SQ(Z) / AA;
+
+    BOUT_DO_PETSC(MatZeroEntries(n0.matrix));
+    std::map<PetscInt, PetscScalar> row;
+    std::vector<PetscInt> cols;
+    std::vector<PetscScalar> vals;
+    auto set_row = [&](PetscInt r, BoutReal sign) {
+      cols.clear();
+      vals.clear();
+      for (const auto& [col, val] : row) {
+        cols.push_back(col);
+        vals.push_back(sign * val);
+      }
+      BOUT_DO_PETSC(MatSetValues(n0.matrix, 1, &r, static_cast<PetscInt>(cols.size()),
+                                 cols.data(), vals.data(), INSERT_VALUES));
+      row.clear();
+    };
+    BOUT_FOR_SERIAL(i, index.getRegionNobndry()) {
+      const Parallel s = parallel(i);
+      const int gs[3] = {s.gm, s.g, s.gp};
+      const Ind2D is[3] = {i.ym(), i, i.yp()};
+      const int interior = s.lower ? s.gp : s.gm; // Neighbour of a target cell
+
+      // Momentum row: InvertParDiv operator, zero flux at the targets
+      auto left = [&](const Field2D& f) { return 0.5 * (f[i] + f[i.ym()]); };
+      auto right = [&](const Field2D& f) { return 0.5 * (f[i] + f[i.yp()]); };
+      const BoutReal bL = left(Bc) * left(J) / (left(dy) * left(g_22) * J[i] * dy[i]);
+      const BoutReal bR = right(Bc) * right(J) / (right(dy) * right(g_22) * J[i] * dy[i]);
+      row[nf * s.g] += A[i] - (s.lower ? 0.0 : bL) - (s.upper ? 0.0 : bR);
+      if (momentum_viscosity) {
+        row[nf * s.g] += momentum_viscosity->sheath_diagonal[i];
+      }
+      if (!s.lower) {
+        row[nf * s.gm] += bL;
+      }
+      if (!s.upper) {
+        row[nf * s.gp] += bR;
+      }
+      for (int k = 0; k < 3; k++) {
+        if (s.grad[k] != 0.0) {
+          row[nf * gs[k] + 1] -= N[i] / sqrtB[i] * s.grad[k];
+        }
+      }
+      if (em) {
+        // Canonical momentum dNV = A sqrt(B) g + Z N dA: dA in the row of q
+        row[nf * s.g + 2] -= N[i] / (gamma * sqrtB[i]);
+      }
+      set_row(nf * s.g, 1.0);
+
+      // Potential row
+      const BoutReal damp =
+          (core_damping and i.x() == mesh->xstart) ? 1. + 0.01 * gamma : 1.;
+      row[nf * s.g + 1] += damp * n0.Lb[i];
+      if (n0.La[i] != 0.0) {
+        row[nf * index.getGlobal(i.xm()) + 1] += damp * n0.La[i];
+      }
+      if (n0.Lc[i] != 0.0) {
+        row[nf * index.getGlobal(i.xp()) + 1] += damp * n0.Lc[i];
+      }
+      if (n0.Lym[i] != 0.0) {
+        row[nf * s.gm + 1] += damp * n0.Lym[i];
+      }
+      if (n0.Lyp[i] != 0.0) {
+        row[nf * s.gp + 1] += damp * n0.Lyp[i];
+      }
+      for (int k = 0; k < 3; k++) {
+        if (s.div[k] != 0.0) {
+          // At a target the face value folds onto this cell: w_g = -w
+          row[nf * gs[k]] += current * s.div[k] * n0.w_factor[(k == 1) ? i : is[k]];
+          if (em) {
+            // The ions' current -K_ions dA, also zero at the sheath face
+            row[nf * gs[k] + 2] += gamma * s.div[k] * K_ions[(k == 1) ? i : is[k]];
+          }
+        }
+      }
+      if (s.lower or s.upper) {
+        // phi_sheath = 1.5 dphi - 0.5 dphi(interior)
+        const BoutReal coef =
+            -gamma * (Z / AA) * s.sheath * kappa[i] - gamma * sheath_dissipation[i];
+        row[nf * s.g + 1] += 1.5 * coef;
+        row[nf * interior + 1] -= 0.5 * coef;
+      }
+      if (dissipation != 0.0) {
+        // First-order -FV::Div_par(-phi, 0, c_s): no flux through the targets
+        if (!s.upper) {
+          const BoutReal k = gamma * dissipation * 0.5 * std::max(cs[i], cs[i.yp()])
+                             * area_h[i] / volume[i];
+          row[nf * s.g + 1] -= k;
+          row[nf * s.gp + 1] += k;
+        }
+        if (!s.lower) {
+          const BoutReal k = gamma * dissipation * 0.5 * std::max(cs[i], cs[i.ym()])
+                             * area_l[i] / volume[i];
+          row[nf * s.g + 1] -= k;
+          row[nf * s.gm + 1] += k;
+        }
+      }
+      set_row(nf * s.g + 1, -1.0);
+
+      if (em) {
+        // Ampere, n=0 part:
+        //   (-Laplace_perp + beta ampere_mass) dA + beta gamma (Z^2/AA) w = beta (Z/AA) s
+        row[nf * s.g + 2] += -n0.LbA[i] + n0.beta_em * ampere_mass[i];
+        if (n0.LaA[i] != 0.0) {
+          row[nf * index.getGlobal(i.xm()) + 2] -= n0.LaA[i];
+        }
+        if (n0.LcA[i] != 0.0) {
+          row[nf * index.getGlobal(i.xp()) + 2] -= n0.LcA[i];
+        }
+        row[nf * s.g] += n0.beta_em * gamma * (SQ(Z) / AA) * n0.w_factor[i];
+        set_row(nf * s.g + 2, 1.0);
+      }
+    }
+    BOUT_DO_PETSC(MatAssemblyBegin(n0.matrix, MAT_FINAL_ASSEMBLY));
+    BOUT_DO_PETSC(MatAssemblyEnd(n0.matrix, MAT_FINAL_ASSEMBLY));
+    BOUT_DO_PETSC(KSPSetOperators(n0.ksp, n0.matrix, n0.matrix));
+  }
+
+  // Right-hand side, using the same Grad_par and Div_par stencils
+  PetscScalar* b = nullptr;
+  BOUT_DO_PETSC(VecGetArray(n0.rhs, &b));
+  BOUT_FOR_SERIAL(i, index.getRegionNobndry()) {
+    const Parallel s = parallel(i);
+    const BoutReal div_s = (s.lower ? 0.0 : s.div[0] * s0[i.ym()]) + s.div[1] * s0[i]
+                           + (s.upper ? 0.0 : s.div[2] * s0[i.yp()]);
+    b[nf * (s.g - start)] = 0.0;
+    b[nf * (s.g - start) + 1] = -(rVort[i] + gamma * (Z / AA) * div_s);
+    if (em) {
+      b[nf * (s.g - start) + 2] = n0.beta_em * (Z / AA) * s0[i];
+    }
+  }
+  BOUT_DO_PETSC(VecRestoreArray(n0.rhs, &b));
+  BOUT_DO_PETSC(KSPSolve(n0.ksp, n0.rhs, n0.solution));
+
+  KSPConvergedReason reason;
+  BOUT_DO_PETSC(KSPGetConvergedReason(n0.ksp, &reason));
+  if (reason <= 0) {
+    throw BoutException("precondition_n0 solve failed: {}", KSPConvergedReasons[reason]);
+  }
+
+  Field2D q0{0.0};
+  Field2D dphi0{0.0};
+  Field2D dA0{0.0};
+  const PetscScalar* x = nullptr;
+  BOUT_DO_PETSC(VecGetArrayRead(n0.solution, &x));
+  BOUT_FOR_SERIAL(i, index.getRegionNobndry()) {
+    const PetscInt local = nf * (index.getGlobal(i) - start);
+    q0[i] = x[local];
+    dphi0[i] = x[local + 1];
+    if (em) {
+      dA0[i] = x[local + 2];
+    }
+  }
+  BOUT_DO_PETSC(VecRestoreArrayRead(n0.solution, &x));
+  mesh->communicate(dphi0);
+  // Only interior unknowns belong to the block. Keep evolved boundary residuals.
+  Field3D& dVort = ddt(Vort);
+  dNV.allocate();
+  dVort.allocate();
+  BOUT_FOR_SERIAL(i, index.getRegionNobndry()) {
+    const BoutReal dvort = n0.La[i] * dphi0[i.xm()] + n0.Lb[i] * dphi0[i]
+                           + n0.Lc[i] * dphi0[i.xp()] + n0.Lym[i] * dphi0[i.ym()]
+                           + n0.Lyp[i] * dphi0[i.yp()];
+    const BoutReal dmomentum =
+        -gamma * Z * n0.w_factor[i] * q0[i] + (em ? Z * n0.N_e[i] * dA0[i] : 0.);
+    for (int z = 0; z < mesh->LocalNz; ++z) {
+      const auto j = mesh->ind2Dto3D(i, z);
+      dNV[j] += dmomentum;
+      dVort[j] += dvort - rVort[i];
+    }
+  }
+
+  if (precondition_n0_check) {
+    Field2D f{0.0};
+    BOUT_FOR_SERIAL(i, index.getRegionNobndry()) {
+      const BoutReal gx = mesh->getGlobalXIndex(i.x());
+      const BoutReal gy = mesh->getGlobalYIndex(i.y());
+      f[i] = sin(0.37 * gx + 1.3) * cos(0.23 * gy) + 0.2 * sin(2.9 * gx * gy + 0.5);
+    }
+    mesh->communicate(f);
+    const BoutReal fmax = max(abs(f), true, "RGN_NOBNDRY");
+    auto error = [&](const Field2D& a, const Field2D& expected) {
+      return max(abs(a - expected), true, "RGN_NOBNDRY") / fmax;
+    };
+    Field2D Lf{0.0};
+    Field2D grad_f{0.0};
+    Field2D div_f{0.0};
+    Field3D guarded_grad{f};
+    Field3D guarded_div{f};
+    BOUT_FOR_SERIAL(i, index.getRegionNobndry()) {
+      const Parallel s = parallel(i);
+      Lf[i] = n0.La[i] * f[i.xm()] + n0.Lb[i] * f[i] + n0.Lc[i] * f[i.xp()]
+              + n0.Lym[i] * f[i.ym()] + n0.Lyp[i] * f[i.yp()];
+      grad_f[i] = s.grad[0] * f[i.ym()] + s.grad[1] * f[i] + s.grad[2] * f[i.yp()];
+      div_f[i] = s.div[0] * f[i.ym()] + s.div[1] * f[i] + s.div[2] * f[i.yp()];
+      for (int z = 0; z < mesh->LocalNz; z++) {
+        if (s.lower) {
+          guarded_grad(i.x(), i.y() - 1, z) = 2 * f[i] - f[i.yp()];
+          guarded_div(i.x(), i.y() - 1, z) = -f[i];
+        }
+        if (s.upper) {
+          guarded_grad(i.x(), i.y() + 1, z) = 2 * f[i] - f[i.ym()];
+          guarded_div(i.x(), i.y() + 1, z) = -f[i];
+        }
+      }
+    }
+    const Field2D L_error =
+        split_n0
+            ? laplacexy->solve(Lf, Field2D{0.0})
+            : DC(phiSolver->solve(Field3D{Lf * Bsq / average_atomic_mass}, Field3D{0.0}));
+    const BoutReal err_L = error(L_error, f);
+    const BoutReal err_grad = error(DC(Grad_par(guarded_grad)), grad_f);
+    const BoutReal err_div = error(DC(Div_par(guarded_div)), div_f);
+    BoutReal err_H = -1.0;
+    if (momentum_viscosity) {
+      const Field2D& A = momentum_viscosity->mass;
+      const Field2D& Bc = momentum_viscosity->diffusion;
+      Field2D Pf{0.0};
+      BOUT_FOR_SERIAL(i, index.getRegionNobndry()) {
+        const Parallel s = parallel(i);
+        auto left = [&](const Field2D& v) { return 0.5 * (v[i] + v[i.ym()]); };
+        auto right = [&](const Field2D& v) { return 0.5 * (v[i] + v[i.yp()]); };
+        const BoutReal bL = left(Bc) * left(J) / (left(dy) * left(g_22) * J[i] * dy[i]);
+        const BoutReal bR =
+            right(Bc) * right(J) / (right(dy) * right(g_22) * J[i] * dy[i]);
+        Pf[i] = A[i] * f[i] + (s.lower ? 0.0 : bL * (f[i.ym()] - f[i]))
+                + (s.upper ? 0.0 : bR * (f[i.yp()] - f[i]));
+        Pf[i] += momentum_viscosity->sheath_diagonal[i] * f[i];
+      }
+      err_H = error(DC(momentum_viscosity->solve(Field3D{Pf})), f);
+    }
+    BoutReal err_A = -1.0;
+    if (em) {
+      // A unit Helmholtz shift also makes the all-Neumann check invertible.
+      n0.apar_radial->setCoefA(-1.0);
+      Field2D LAf{0.0};
+      BOUT_FOR_SERIAL(i, index.getRegionNobndry()) {
+        LAf[i] = n0.LaA[i] * f[i.xm()] + n0.LbA[i] * f[i] + n0.LcA[i] * f[i.xp()];
+      }
+      err_A = error(DC(n0.apar_radial->solve(Field3D{LAf - f}, Field3D{0.0})), f);
+    }
+    Vec residual{nullptr};
+    PetscReal rnorm = 0.0;
+    PetscReal bnorm = 0.0;
+    BOUT_DO_PETSC(VecDuplicate(n0.rhs, &residual));
+    BOUT_DO_PETSC(MatMult(n0.matrix, n0.solution, residual));
+    BOUT_DO_PETSC(VecAXPY(residual, -1.0, n0.rhs));
+    BOUT_DO_PETSC(VecNorm(residual, NORM_2, &rnorm));
+    BOUT_DO_PETSC(VecNorm(n0.rhs, NORM_2, &bnorm));
+    BOUT_DO_PETSC(VecDestroy(&residual));
+    output_info.write("precondition_n0 check t={} gamma={}: L {:.2e}, Grad_par {:.2e}, "
+                      "Div_par {:.2e}, H_m {:.2e}, Apar {:.2e}, solve residual {:.2e}\n",
+                      time, gamma, err_L, err_grad, err_div, err_H, err_A,
+                      bnorm > 0 ? rnorm / bnorm : rnorm);
+  }
+#endif
 }
 
 void Vorticity::outputVars(Options& state) {

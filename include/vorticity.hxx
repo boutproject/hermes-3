@@ -6,9 +6,16 @@
 #include <bout/invert_laplace.hxx>
 #include <bout/vectormetric.hxx>
 
+#include <memory>
+#include <string>
+#include <vector>
+
 #include "component.hxx"
 
-/// Evolve electron density in time
+struct EvolveMomentum;
+struct Electromagnetic;
+
+/// Evolve vorticity in time
 ///
 struct Vorticity : public NamedComponent<Vorticity> {
   /// Options
@@ -52,8 +59,11 @@ struct Vorticity : public NamedComponent<Vorticity> {
   ///     Parallel dissipation of vorticity?
   ///   - damp_core_vorticity: bool, default false
   ///     Damp axisymmetric component of vorticity in cell next to core boundary
+  ///   - precondition_n0: bool, default false
+  ///     Exact X-Y PETSc direct solve of the axisymmetric (n=0) block
   ///
   Vorticity(std::string name, Options& options, Solver* solver);
+  ~Vorticity() override;
 
   /// Optional inputs
   /// - fields
@@ -61,6 +71,10 @@ struct Vorticity : public NamedComponent<Vorticity> {
   ///                  Not including diamagnetic or polarisation currents
   ///
   void finally(const Options& state) override;
+
+  /// Bind the n=0 correction to the selected momentum and boundary operators.
+  PreconCorrection makePreconCorrection(
+      const std::vector<std::unique_ptr<Component>>& components) override;
 
   void outputVars(Options& state) override;
 
@@ -126,6 +140,20 @@ private:
 
   bool split_n0;                        // Split phi into n=0 and n!=0 components
   std::unique_ptr<LaplaceXY> laplacexy; // Laplacian solver in X-Y (n=0)
+
+  bool precondition_n0{false};             ///< Exact X-Y solve of the n=0 block?
+  std::string wave_species{"e"};           ///< Species whose momentum carries the current
+  bool precondition_n0_sheath{true};       ///< Include the linearised sheath current?
+  BoutReal precondition_n0_dissipation{1}; ///< Factor on linearised phi_dissipation
+  bool precondition_n0_check{false};       ///< Check the n=0 operator against BOUT++?
+  int precondition_n0_reuse_steps{20};     ///< Further steps to keep the factorisation
+  EvolveMomentum* wave_momentum{nullptr};
+  Electromagnetic* electromagnetic{nullptr};
+  std::vector<const Field2D*>
+      sheath_responses; ///< d(NVe_face)/d(phi_face) on each target
+  struct N0Solver;      ///< PETSc matrix and direct solver
+  std::unique_ptr<N0Solver> n0_solver;
+  void preconN0(const Options& state, BoutReal gamma);
 
   Coordinates::FieldMetric Bsq;       // SQ(coord->Bxy())
   VectorMetric Curlb_B;               // Curvature vector Curl(b/B)

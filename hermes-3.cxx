@@ -300,7 +300,7 @@ int Hermes::rhs(BoutReal time, bool linear) {
 }
 
 /*!
- * Preconditioner. Solves the heat conduction
+ * Apply the configured component preconditioners to the solver residuals.
  *
  * @param[in] t  The simulation time
  * @param[in] gamma   Factor in front of the Jacobian in (I - gamma*J). Related

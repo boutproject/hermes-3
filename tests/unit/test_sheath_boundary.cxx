@@ -439,3 +439,49 @@ TEST_F(SheathBoundaryTest, SmoothBohmSetsVelocityClosure) {
     EXPECT_FALSE(state["species"]["e"].isSet("sheath_velocity_closure"));
   }
 }
+
+TEST_F(SheathBoundaryTest, ElectronMomentumResponseAtBiasedWall) {
+  for (bool floor_potential : {true, false}) {
+    Options options;
+    options["units"]["eV"] = 1.0;
+    auto& input = options["test"];
+    input["wall_potential"] = 2.0;
+    input["floor_potential"] = floor_potential;
+    input["ion_ee_gamma_max"] = 0.2;
+    input["ion_ee_E_th"] = 1.;
+    input["ion_ee_E_max"] = 5.;
+    SheathBoundary sheath("test", options, nullptr);
+    sheath.declareAllSpecies({"e", "h+"});
+    const Field2D& response = sheath.enableCurrentResponse();
+    auto momentum = [&](BoutReal phi) {
+      Options state{
+          {"fields", {{"phi", Field3D{phi}}}},
+          {"species",
+           {{"e",
+             {{"density", 1.}, {"temperature", 2.}, {"velocity", 0.}, {"momentum", 0.}}},
+            {"h+",
+             {{"density", 1.},
+              {"temperature", 2.},
+              {"AA", 1.},
+              {"charge", 1.},
+              {"velocity", 0.}}}}}};
+      sheath.transform(state);
+      return state["species"]["e"]["momentum"].as<Field3D>();
+    };
+    for (BoutReal phi : {-0.25, 1.0, 3.0}) {
+      const BoutReal eps = 1e-5;
+      Field3D plus = momentum(phi + eps);
+      Field3D minus = momentum(phi - eps);
+      momentum(phi);
+      // Only the guard momentum varies, and the face is the midpoint.
+      for (auto r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
+        const auto i = plus.indexAt(r.ind, mesh->ystart, 0);
+        EXPECT_NEAR(response[i], (plus[i.ym()] - minus[i.ym()]) / (4 * eps), 1e-9);
+      }
+      for (auto r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
+        const auto i = plus.indexAt(r.ind, mesh->yend, 0);
+        EXPECT_NEAR(response[i], (plus[i.yp()] - minus[i.yp()]) / (4 * eps), 1e-9);
+      }
+    }
+  }
+}

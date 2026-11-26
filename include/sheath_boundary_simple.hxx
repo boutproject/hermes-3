@@ -3,6 +3,7 @@
 #define SHEATH_BOUNDARY_SIMPLE_H
 
 #include "component.hxx"
+#include "sheath_current_response.hxx"
 
 /// Boundary condition at the wall in Y
 ///
@@ -15,7 +16,8 @@
 ///   - It is recommended to use SheathBoundary rather than SheathBoundarySimple;
 ///     this is here for comparison to that more complete model.
 ///
-struct SheathBoundarySimple : public NamedComponent<SheathBoundarySimple> {
+struct SheathBoundarySimple : public NamedComponent<SheathBoundarySimple>,
+                              public SheathCurrentResponse {
   /// # Input options
   /// - <name>  e.g. "sheath_boundary_simple"
   ///   - lower_y                  Boundary on lower y?

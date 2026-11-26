@@ -4,13 +4,32 @@
 
 #include "component.hxx"
 
+#include <bout/field2d.hxx>
+#include <bout/field3d.hxx>
 #include <bout/invert_pardiv.hxx>
 
 #include <memory>
+#include <optional>
+#include <string>
 
 /// Evolve parallel momentum
 struct EvolveMomentum : public NamedComponent<EvolveMomentum> {
   EvolveMomentum(std::string name, Options& options, Solver* solver);
+
+  /// Viscous operator on g = sqrt(B) dV: (mass + sheath_diagonal) g
+  /// + Div_par(diffusion Grad_par(g)), with zero flux at the targets.
+  struct ViscosityOperator {
+    Field2D mass, diffusion, sheath_diagonal;
+    Field3D solve(Field3D rhs) const;
+
+  private:
+    friend struct EvolveMomentum;
+    std::unique_ptr<InvertParDiv> solver{InvertParDiv::create()};
+  };
+
+  /// Valid for the current preconditioner callback. Empty for the identity.
+  const std::optional<ViscosityOperator>& viscosityOperator() const { return viscosity; }
+  Field3D& momentumResidual() { return ddt(NV); }
 
   /// Calculate ddt(NV).
   ///
@@ -62,7 +81,7 @@ private:
   bool diagnose;                   ///< Output additional diagnostics?
   bool fix_momentum_boundary_flux; ///< Fix momentum flux to boundary condition?
 
-  std::unique_ptr<InvertParDiv> viscosity_inverse;
+  std::optional<ViscosityOperator> viscosity;
 
   /// Per target guard cell (field-aligned): d(V_guard) / d(V_end). Uses
   /// species:<name>:sheath_velocity_closure if set by sheath_boundary (smooth Bohm

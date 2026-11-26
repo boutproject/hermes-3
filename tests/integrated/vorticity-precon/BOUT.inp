@@ -1,0 +1,52 @@
+[mesh]
+calcParallelSlices_on_communicate = false
+nx = 12
+ny = 8
+nz = 4
+ixseps1 = -1
+ixseps2 = -1
+dx = 1
+dy = 1
+dz = 1
+Bxy = 1
+J = 1 + 0.1*x
+
+[mesh:paralleltransform]
+type = identity
+
+[e]
+type = evolve_momentum
+AA = 0.2
+charge = -1
+
+[vorticity]
+precondition_n0 = true
+diamagnetic = false
+diamagnetic_polarisation = false
+phi_dissipation = false
+exb_advection = false
+average_atomic_mass = 1
+
+[em]
+type = electromagnetic
+apar_core_neumann = false
+
+[em:laplacian]
+type = naulin
+
+[em:laplacian:delp2solver]
+all_terms = false
+
+[Vort]
+evolve_bndry = true
+
+[test_phi]
+bndry_all = dirichlet
+bndry_lower_target = free_o2
+bndry_upper_target = free_o2
+
+[i]
+type = fixed_density
+AA = 1
+charge = 1
+density = 2e-6 * units:inv_meters_cubed

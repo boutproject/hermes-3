@@ -409,6 +409,29 @@ if(HERMES_TESTS)
   hermes_add_integrated_test(evolve_density)
   hermes_add_integrated_test(neutral_mixed)
   hermes_add_integrated_test(vorticity CONFLICTS BOUT_USE_METRIC_3D)
+  if((BOUT_USE_PETSC OR BOUT_HAS_PETSC) AND NOT (BOUT_ENABLE_METRIC_3D
+                                                 OR BOUT_USE_METRIC_3D))
+    find_package(MPI REQUIRED COMPONENTS CXX)
+    add_executable(vorticity_precon_test
+                   tests/integrated/vorticity-precon/test_precon.cxx)
+    target_link_libraries(vorticity_precon_test PRIVATE bout++::bout++
+                                                        hermes-3-lib)
+    foreach(ranks 1 2)
+      set(test_dir
+          "${CMAKE_CURRENT_BINARY_DIR}/tests/integrated/vorticity-precon/${ranks}"
+      )
+      configure_file(tests/integrated/vorticity-precon/BOUT.inp
+                     "${test_dir}/BOUT.inp" COPYONLY)
+      add_test(
+        NAME vorticity_precon_${ranks}
+        COMMAND
+          ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} ${ranks}
+          ${MPIEXEC_PREFLAGS} $<TARGET_FILE:vorticity_precon_test>
+          ${MPIEXEC_POSTFLAGS} -d "${test_dir}" NXPE=1)
+      set_tests_properties(vorticity_precon_${ranks}
+                           PROPERTIES LABELS integration PROCESSORS ${ranks})
+    endforeach()
+  endif()
   hermes_add_integrated_test(sod-shock)
   hermes_add_integrated_test(sod-shock-energy)
   hermes_add_integrated_test(drift-wave CONFLICTS BOUT_USE_METRIC_3D)

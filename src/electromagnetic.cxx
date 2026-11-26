@@ -30,7 +30,8 @@ Electromagnetic::Electromagnetic(std::string name, Options& alloptions, Solver* 
                       writeFinal("species:{all_species}:velocity", Regions::Interior),
                       readOnly("time"), readOnly("species:{all_species}:AA"),
                       readOnly("species:{all_species}:density", Regions::Interior),
-                      readWrite("fields:Apar")}) {
+                      readWrite("fields:Apar")}),
+      laplacian_options(alloptions[name]["laplacian"]) {
 
   Options& units = alloptions["units"];
   BoutReal Bnorm = units["Tesla"];
@@ -47,7 +48,7 @@ Electromagnetic::Electromagnetic(std::string name, Options& alloptions, Solver* 
 
   // Use the "Naulin" solver because we need to include toroidal
   // variations of the density (A coefficient)
-  aparSolver = Laplacian::create(&options["laplacian"]);
+  aparSolver = Laplacian::create(&laplacian_options);
   if (solver != nullptr) {
     // solver may be null in unit testing
     aparSolver->savePerformance(*solver, "AparSolver");
@@ -98,6 +99,21 @@ Electromagnetic::Electromagnetic(std::string name, Options& alloptions, Solver* 
   if (magnetic_flutter) {
     setPermissions(readWrite("fields:Apar_flutter"));
   }
+}
+
+std::unique_ptr<Laplacian> Electromagnetic::makeAxisymmetricLaplacian() const {
+  if (const_gradient) {
+    throw BoutException("precondition_n0 does not support time-dependent Apar gradients");
+  }
+  // Naulin delegates its toroidally constant part to its configured FFT solver.
+  Options& radial = laplacian_options["type"].as<std::string>() == "naulin"
+                        ? laplacian_options["delp2solver"]
+                        : laplacian_options;
+  auto result = Laplacian::create(&radial);
+  result->setInnerBoundaryFlags(aparSolver->getInnerBoundaryFlags());
+  result->setOuterBoundaryFlags(aparSolver->getOuterBoundaryFlags());
+  result->setGlobalFlags(aparSolver->getGlobalFlags());
+  return result;
 }
 
 void Electromagnetic::restartVars(Options& state) {

@@ -150,6 +150,9 @@ SheathBoundarySimple::SheathBoundarySimple(std::string name, Options& alloptions
 }
 
 void SheathBoundarySimple::transform_impl(GuardedOptions& state) {
+  if (current_response.isAllocated()) {
+    current_response = 0.0;
+  }
 
   GuardedOptions allspecies = state["species"];
   GuardedOptions electrons = allspecies["e"];
@@ -380,6 +383,10 @@ void SheathBoundarySimple::transform_impl(GuardedOptions& state) {
           vesheath = 0.0;
         }
 
+        if (current_response.isAllocated() and phisheath > phi_wall) {
+          current_response[i] -=
+              Me * nesheath * vesheath / (floor(tesheath, 1e-5) * mesh->LocalNz);
+        }
         Ve[im] = 2 * vesheath - Ve[i];
         NVe[im] = 2 * Me * nesheath * vesheath - NVe[i];
 
@@ -446,6 +453,10 @@ void SheathBoundarySimple::transform_impl(GuardedOptions& state) {
           vesheath = 0.0;
         }
 
+        if (current_response.isAllocated() and phisheath > phi_wall) {
+          current_response[i] -=
+              Me * nesheath * vesheath / (floor(tesheath, 1e-5) * mesh->LocalNz);
+        }
         Ve[ip] = 2 * vesheath - Ve[i];
         NVe[ip] = 2. * Me * nesheath * vesheath - NVe[i];
 

@@ -3,6 +3,7 @@
 #define HERMES_COMPONENT_H
 
 #include <cmath>
+#include <functional>
 #include <initializer_list>
 #include <map>
 #include <memory>
@@ -108,8 +109,16 @@ struct Component {
   /// Add extra fields to restart files
   virtual void restartVars(Options& UNUSED(state)) {}
 
-  /// Preconditioning
+  /// Apply the component's local preconditioner to its residuals.
   virtual void precon(const Options& UNUSED(state), BoutReal UNUSED(gamma)) {}
+
+  using PreconCorrection = std::function<void(const Options&, BoutReal)>;
+  /// Called once after all components exist. An optional correction runs after
+  /// every component has applied its local preconditioner for the same callback.
+  virtual PreconCorrection makePreconCorrection(
+      const std::vector<std::unique_ptr<Component>>& UNUSED(components)) {
+    return {};
+  }
 
   /// Create a Component
   ///

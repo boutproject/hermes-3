@@ -48,6 +48,11 @@ struct Electromagnetic : public NamedComponent<Electromagnetic> {
 
   void outputVars(Options& state) override;
 
+  /// Homogeneous radial operator for the n=0 part of Ampère's law.
+  std::unique_ptr<Laplacian> makeAxisymmetricLaplacian() const;
+  BoutReal beta() const { return beta_em; }
+  const Field3D& helmholtzDensity() const { return alpha_em; }
+
   static constexpr auto type = "electromagnetic";
 
 private:
@@ -56,6 +61,7 @@ private:
   Field3D alpha_em; // Coefficient
   BoutReal beta_em; // Normalisation coefficient mu_0 e T n / B^2
 
+  Options& laplacian_options;
   std::unique_ptr<Laplacian> aparSolver; // Laplacian solver in X-Z
 
   bool const_gradient;              // Set neumann boundaries by extrapolation

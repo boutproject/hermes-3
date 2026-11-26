@@ -92,6 +92,16 @@ BoutReal SheathBoundary::ionSecondaryElectronEmissionGamma(BoutReal ion_energy) 
          * std::exp(ion_ee_p * (1. - (ion_energy / ion_ee_E_max)));
 }
 
+// Derivative of the threshold, power and exponential factors in the emission yield.
+BoutReal SheathBoundary::ionEmissionSlope(BoutReal energy, BoutReal yield) const {
+  if (energy <= 0.0 || yield == 0.0) {
+    return 0.0;
+  }
+  const BoutReal width = 0.3 * ion_ee_E_th;
+  const BoutReal threshold_slope = (1.0 - tanh((energy - ion_ee_E_th) / width)) / width;
+  return yield * (threshold_slope + ion_ee_p * (1.0 / energy - 1.0 / ion_ee_E_max));
+}
+
 SheathBoundary::SheathBoundary(std::string name, Options& alloptions, Solver*)
     : NamedComponent(name, {
                                readIfSet("species:{all_species}:charge"),
@@ -195,6 +205,9 @@ SheathBoundary::SheathBoundary(std::string name, Options& alloptions, Solver*)
 }
 
 void SheathBoundary::transform_impl(GuardedOptions& state) {
+  if (current_response.isAllocated()) {
+    current_response = 0.0;
+  }
 
   GuardedOptions allspecies = state["species"];
   GuardedOptions electrons = allspecies["e"];
@@ -609,6 +622,10 @@ void SheathBoundary::transform_impl(GuardedOptions& state) {
                                       : -sqrt(tesheath / (TWOPI * Me)) * (1. - Ge)
                                             * exp(-(phisheath - phi_wall) / tesheath);
 
+        if (current_response.isAllocated() and tesheath >= 1e-10
+            and (!floor_potential or phisheath > phi_wall)) {
+          current_response[i] -= Me * nesheath * vesheath / (tesheath * mesh->LocalNz);
+        }
         Ve[im] = 2 * vesheath - Ve[i];
         NVe[im] = 2. * Me * nesheath * vesheath - NVe[i];
 
@@ -677,6 +694,10 @@ void SheathBoundary::transform_impl(GuardedOptions& state) {
                                       : sqrt(tesheath / (TWOPI * Me)) * (1. - Ge)
                                             * exp(-(phisheath - phi_wall) / tesheath);
 
+        if (current_response.isAllocated() and tesheath >= 1e-10
+            and (!floor_potential or phisheath > phi_wall)) {
+          current_response[i] -= Me * nesheath * vesheath / (tesheath * mesh->LocalNz);
+        }
         Ve[ip] = 2 * vesheath - Ve[i];
         NVe[ip] = 2. * Me * nesheath * vesheath - NVe[i];
 
@@ -859,6 +880,11 @@ void SheathBoundary::transform_impl(GuardedOptions& state) {
                 (0.5 * (tisheath + (Mi * SQ(visheath)))) + (Zi * (phisheath - phi_wall));
 
             const BoutReal ion_ee_gamma = ionSecondaryElectronEmissionGamma(Ei);
+            if (current_response.isAllocated()
+                and (!floor_potential or phisheath > phi_wall)) {
+              current_response[i] -= Me * nisheath * visheath * Zi
+                                     * ionEmissionSlope(Ei, ion_ee_gamma) / mesh->LocalNz;
+            }
 
             // Add flow of cold electrons into plasma
             BoutReal vesheath = 0.5 * (Ve[im] + Ve[i]);
@@ -964,6 +990,11 @@ void SheathBoundary::transform_impl(GuardedOptions& state) {
                 (0.5 * (tisheath + Mi * SQ(visheath))) + (Zi * (phisheath - phi_wall));
 
             const BoutReal ion_ee_gamma = ionSecondaryElectronEmissionGamma(Ei);
+            if (current_response.isAllocated()
+                and (!floor_potential or phisheath > phi_wall)) {
+              current_response[i] -= Me * nisheath * visheath * Zi
+                                     * ionEmissionSlope(Ei, ion_ee_gamma) / mesh->LocalNz;
+            }
 
             // Add flow of cold electrons into plasma
             BoutReal vesheath = 0.5 * (Ve[ip] + Ve[i]);

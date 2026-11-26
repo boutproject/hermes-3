@@ -55,12 +55,13 @@ public:
   /// Add variables to restart files
   void restartVars(Options& state);
 
-  /// Preconditioning
+  /// Apply local preconditioners, followed by their registered coupled corrections.
   void precon(const Options& state, BoutReal gamma);
 
 private:
   /// The components to be executed in order
   std::vector<std::unique_ptr<Component>> components;
+  std::vector<Component::PreconCorrection> precon_corrections;
 };
 
 #endif // COMPONENT_SCHEDULER_H

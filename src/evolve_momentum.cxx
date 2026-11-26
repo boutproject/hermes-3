@@ -301,16 +301,18 @@ void EvolveMomentum::finally(const Options& state) {
   NV = NV_solver;
 }
 
+Field3D EvolveMomentum::ViscosityOperator::solve(Field3D rhs) const {
+  rhs.allocate(); // Detach a shared input before setting guard cells.
+  rhs.applyBoundary("neumann");
+  return solver->solve(rhs);
+}
+
 void EvolveMomentum::precon(const Options& state, BoutReal gamma) {
-  // First, check whether the relevant viscosity component has set eta_par.
-  // If it hasn't (i.e. if the input file does not include viscosity in the model,
-  // or it does but precondition=false), this precon function will exit immediately.
-  // This is how the preconditioner for momentum is controlled by options in the
-  // braginskii_ion/electron_viscosity section in the input file.
-  // Note: like the conduction preconditioner in EvolvePressure, this reads a
-  // coefficient set by another component in the state from the last RHS evaluation.
+  // The viscosity component supplies eta_par on the last RHS evaluation when
+  // its preconditioner is enabled. Absence selects the identity for this call.
   const auto& species = state["species"][name];
-  if (!species.isSet("eta_par")) {
+  if (!species.isSet("eta_par") || gamma == 0.0) {
+    viscosity.reset();
     return;
   }
 
@@ -321,8 +323,8 @@ void EvolveMomentum::precon(const Options& state, BoutReal gamma) {
     // InvertParDiv has no implementation with 3D metrics (including FCI)
     return;
   }
-  if (!viscosity_inverse) {
-    viscosity_inverse = InvertParDiv::create();
+  if (!viscosity) {
+    viscosity.emplace();
   }
   const auto* coord = NV.getCoordinates();
 
@@ -335,8 +337,9 @@ void EvolveMomentum::precon(const Options& state, BoutReal gamma) {
   // sqrtB Div_par((eta/B) Grad_par(sqrtB dV)) gives
   //   (AA N / B) g - gamma Div_par((eta / B) Grad_par g) = r / sqrtB.
   // Coefficients are toroidal averages, as in the conduction preconditioner.
-  const Field2D A = AA * DC(N) / B;
-  const Field2D Bcoef = -gamma * DC(get<Field3D>(species["eta_par"])) / B;
+  viscosity->mass = AA * DC(N) / B;
+  viscosity->diffusion = -gamma * DC(get<Field3D>(species["eta_par"])) / B;
+  const Field2D& Bcoef = viscosity->diffusion;
 
   // Sheath-face closure. The sheath boundary sets V in the target guard cells, so
   // the face flux b (g_guard - g), with g = sqrtB dV and g_guard = closure rho g
@@ -345,8 +348,8 @@ void EvolveMomentum::precon(const Options& state, BoutReal gamma) {
   // flux. The recovered dNV still uses the mass term A.
   const Field3D V = get<Field3D>(species["velocity"]);
   const Field3D closure = sheathClosure(species, V);
-  Field2D A_sh{0.0, mesh};
-  A_sh.allocate();
+  auto& A_sh = viscosity->sheath_diagonal;
+  A_sh = 0.0;
   const Field2D J = DC(coord->J());
   const Field2D dy = DC(coord->dy());
   const Field2D g_22 = DC(coord->g_22());
@@ -370,14 +373,11 @@ void EvolveMomentum::precon(const Options& state, BoutReal gamma) {
   for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
     face(r.ind, mesh->yend, mesh->yend + 1);
   }
-  viscosity_inverse->setCoefA(A + A_sh);
-  viscosity_inverse->setCoefB(Bcoef);
+  viscosity->solver->setCoefA(viscosity->mass + A_sh);
+  viscosity->solver->setCoefB(Bcoef);
 
-  Field3D rhs = ddt(NV) / sqrtB;
-  rhs.applyBoundary("neumann");
-  // Use the local density (i.e. non-toroidally averaged) to reconstruct
-  // the approximate residual
-  ddt(NV) = (AA * N / sqrtB) * viscosity_inverse->solve(rhs);
+  // Reconstruct the momentum residual using the local, toroidally varying density.
+  ddt(NV) = (AA * N / sqrtB) * viscosity->solve(ddt(NV) / sqrtB);
 }
 
 Field3D EvolveMomentum::sheathClosure(const Options& species, const Field3D& V) const {
