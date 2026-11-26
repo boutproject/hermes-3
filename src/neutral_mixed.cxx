@@ -425,9 +425,7 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
 
   substitutePermissions("name", {name});
   substitutePermissions(
-      "outputs", {"AA", "density", "pressure", "temperature", "momentum", "velocity",
-                  "particle_flow_xlow", "particle_flow_ylow",
-                  "energy_flow_xlow", "energy_flow_ylow"});
+      "outputs", {"AA", "density", "pressure", "temperature", "momentum", "velocity"});
 }
 
 void NeutralMixed::transform_impl(GuardedOptions& state) {
@@ -515,19 +513,6 @@ void NeutralMixed::transform_impl(GuardedOptions& state) {
   set(localstate["momentum"], NVn);
   set(localstate["velocity"], Vn);
   set(localstate["temperature"], Tn);
-
-  if (!localstate.isSet("particle_flow_xlow")) {
-    set(localstate["particle_flow_xlow"], zeroFrom(Nn));
-  }
-  if (!localstate.isSet("particle_flow_ylow")) {
-    set(localstate["particle_flow_ylow"], zeroFrom(Nn));
-  }
-  if (!localstate.isSet("energy_flow_xlow")) {
-    set(localstate["energy_flow_xlow"], zeroFrom(Nn));
-  }
-  if (!localstate.isSet("energy_flow_ylow")) {
-    set(localstate["energy_flow_ylow"], zeroFrom(Nn));
-  }
 }
 
 void NeutralMixed::finally(const Options& state) {
@@ -1055,7 +1040,7 @@ void NeutralMixed::finally(const Options& state) {
 
   if (freeze_low_density) {
     // Apply a factor to time derivatives in low density regions.
-    // Keep the sources and rescues, so that temperature and flow
+    // Keep the sources and sinks, so that temperature and flow
     // equilibriates with the plasma through collisions.
 
     Field3D Nn_s, Pn_s, NVn_s;
@@ -1086,59 +1071,7 @@ void NeutralMixed::finally(const Options& state) {
       ddt(Pn)[i] = factor * ddt(Pn)[i] + (1. - factor) * Pn_s[i];
         ddt(NVn)[i] = factor * ddt(NVn)[i] + (1. - factor) * NVn_s[i];
       }
-    }
 
-  // NOTE: Do we need to do that?
-  // Restore NV to the value returned by the solver
-  // so that restart files contain the correct values
-  // Note: Copy boundary condition so dump file has correct boundary.
-  NVn_solver.setBoundaryTo(NVn);
-  NVn = NVn_solver;
-
-  // Update the flows in the state with the calculated values
-  auto& localstate_rw = const_cast<Options&>(state)["species"][name];
-  if (pf_adv_perp_xlow.isAllocated()) {
-    set(localstate_rw["particle_flow_xlow"], pf_adv_perp_xlow);
-  }
-  if (pf_adv_perp_ylow.isAllocated()) {
-    set(localstate_rw["particle_flow_ylow"], pf_adv_perp_ylow);
-  }
-
-  Field3D ef_total_perp_xlow;
-  bool ef_total_perp_xlow_set = false;
-  if (ef_adv_perp_xlow.isAllocated()) {
-    ef_total_perp_xlow = ef_adv_perp_xlow;
-    ef_total_perp_xlow_set = true;
-  }
-  if (neutral_conduction && ef_cond_perp_xlow.isAllocated()) {
-    if (ef_total_perp_xlow_set) {
-      ef_total_perp_xlow += ef_cond_perp_xlow;
-    } else {
-      ef_total_perp_xlow = ef_cond_perp_xlow;
-      ef_total_perp_xlow_set = true;
-    }
-  }
-
-  Field3D ef_total_perp_ylow;
-  bool ef_total_perp_ylow_set = false;
-  if (ef_adv_perp_ylow.isAllocated()) {
-    ef_total_perp_ylow = ef_adv_perp_ylow;
-    ef_total_perp_ylow_set = true;
-  }
-  if (neutral_conduction && ef_cond_perp_ylow.isAllocated()) {
-    if (ef_total_perp_ylow_set) {
-      ef_total_perp_ylow += ef_cond_perp_ylow;
-    } else {
-      ef_total_perp_ylow = ef_cond_perp_ylow;
-      ef_total_perp_ylow_set = true;
-    }
-  }
-
-  if (ef_total_perp_xlow_set) {
-    set(localstate_rw["energy_flow_xlow"], ef_total_perp_xlow);
-  }
-  if (ef_total_perp_ylow_set) {
-    set(localstate_rw["energy_flow_ylow"], ef_total_perp_ylow);
   }
 
 #if CHECKLEVEL >= 1
@@ -1498,21 +1431,6 @@ void NeutralMixed::outputVars(Options& state) {
                     {"standard_name", "pressure source"},
                     {"long_name", name + " pressure source"},
                     {"species", name},
-                    {"source", "neutral_mixed"}});
-    // Lin add
-    set_with_attrs(state[std::string("V") + name + std::string("th_pf")], Vnth_pf,
-                   {{"time_dimension", "t"},
-                    {"units", "m / s"},
-                    {"conversion", Cs0},
-                    {"standard_name", "velocity"},
-                    {"long_name", name + " thermal velocity of neutrals for advection"},
-                    {"source", "neutral_mixed"}});
-    set_with_attrs(state[std::string("V") + name + std::string("th_hf")], Vnth_hf,
-                   {{"time_dimension", "t"},
-                    {"units", "m / s"},
-                    {"conversion", Cs0},
-                    {"standard_name", "velocity"},
-                    {"long_name", name + " thermal velocity of neutrals for heat flux"},
                     {"source", "neutral_mixed"}});
 
     ///////////////////////////////////////////////////
