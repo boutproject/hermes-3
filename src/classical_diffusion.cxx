@@ -74,7 +74,8 @@ void ClassicalDiffusion::transform_impl(GuardedOptions& state) {
     Dn = floor(Ptotal, 1e-5) * me * nu_e / (floor(Ne, 1e-5) * Bsq);
   }
 
-  // Set D to zero in all guard cells
+  // Retain the coefficient treatment at inter-processor faces. Physical wall
+  // fluxes are closed explicitly, including the cross-metric contributions.
   BOUT_FOR(i, Dn.getRegion("RGN_GUARDS")) { Dn[i] = 0.0; }
 
   for (auto kv : allspecies.getChildren()) {
@@ -92,7 +93,7 @@ void ClassicalDiffusion::transform_impl(GuardedOptions& state) {
 
     // add(species["density_source"], FV::Div_a_Grad_perp(Dn, N));
     add(species["density_source"],
-        Div_a_Grad_perp_nonorthog(Dn, N, cls_pf_perp_xlow, cls_pf_perp_ylow));
+        Div_a_Grad_perp_nonorthog(Dn, N, cls_pf_perp_xlow, cls_pf_perp_ylow, false));
 
     if (IS_SET(species["velocity"])) {
       const auto V = GET_VALUE(Field3D, species["velocity"]);
@@ -100,7 +101,8 @@ void ClassicalDiffusion::transform_impl(GuardedOptions& state) {
 
       // add(species["momentum_source"], FV::Div_a_Grad_perp(Dn * AA * V, N));
       add(species["momentum_source"],
-          Div_a_Grad_perp_nonorthog(Dn * AA * V, N, cls_mf_perp_xlow, cls_mf_perp_ylow));
+          Div_a_Grad_perp_nonorthog(Dn * AA * V, N, cls_mf_perp_xlow, cls_mf_perp_ylow,
+                                    false));
     }
 
     if (IS_SET(species["temperature"])) {
@@ -108,7 +110,7 @@ void ClassicalDiffusion::transform_impl(GuardedOptions& state) {
       // add(species["energy_source"], FV::Div_a_Grad_perp(Dn * (3. / 2) * T, N));
       add(species["energy_source"],
           Div_a_Grad_perp_nonorthog(Dn * (3. / 2) * T, N, cls_nef_perp_xlow,
-                                    cls_nef_perp_ylow));
+                                    cls_nef_perp_ylow, false));
 
       // TODO: Figure out what to do with the below
       if (custom_D < 0) {
@@ -122,7 +124,7 @@ void ClassicalDiffusion::transform_impl(GuardedOptions& state) {
         // / Bsq, T));
         add(species["energy_source"],
             Div_a_Grad_perp_nonorthog(2. * floor(P, 1e-5) * nu * AA / Bsq, T,
-                                      cls_tef_perp_xlow, cls_tef_perp_ylow));
+                                      cls_tef_perp_xlow, cls_tef_perp_ylow, false));
       }
     }
   }

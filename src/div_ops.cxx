@@ -1091,7 +1091,7 @@ Field3D Div_a_Grad_perp_upwind(const Field3D& a, const Field3D& f) {
 // Includes nonorthogonal X-Y and X-Z metric corrections
 //
 Field3D Div_a_Grad_perp_nonorthog(const Field3D& a, const Field3D& f, Field3D& flow_xlow,
-                                  Field3D& flow_ylow) {
+                                  Field3D& flow_ylow, bool bndry_flux) {
   ASSERT2(a.getLocation() == f.getLocation());
 
   Mesh* mesh = a.getMesh();
@@ -1270,6 +1270,9 @@ Field3D Div_a_Grad_perp_nonorthog(const Field3D& a, const Field3D& f, Field3D& f
                 + (Jc(i, j, k) * g12c(i, j, k) + Jup(i, j + 1, k) * g12up(i, j + 1, k))
                       * (dfdx - coef_xy * dfdy));
 
+        if (!bndry_flux && !mesh->periodicY(i) && mesh->lastY(i) && j == mesh->yend) {
+          fout = 0.0;
+        }
         yzresult(i, j, k) = fout / (dyc(i, j, k) * Jc(i, j, k));
 
         // Calculate flux between j and j-1
@@ -1305,6 +1308,9 @@ Field3D Div_a_Grad_perp_nonorthog(const Field3D& a, const Field3D& f, Field3D& f
                    + Jdown(i, j - 1, k) * g12down(i, j - 1, k))
                       * (dfdx - coef_xy * dfdy));
 
+        if (!bndry_flux && !mesh->periodicY(i) && mesh->firstY(i) && j == mesh->ystart) {
+          fout = 0.0;
+        }
         yzresult(i, j, k) -= fout / (dyc(i, j, k) * Jc(i, j, k));
 
         // Flow will be positive in the positive coordinate direction
@@ -1393,6 +1399,11 @@ Field3D Div_a_Grad_perp_nonorthog(const Field3D& a, const Field3D& f, Field3D& f
   // Flux in X
 
   for (int i = mesh->xstart - 1; i <= mesh->xend; i++) {
+    if (!bndry_flux && !mesh->periodicX
+        && ((i == mesh->xstart - 1 && mesh->firstX())
+            || (i == mesh->xend && mesh->lastX()))) {
+      continue;
+    }
     for (int j = mesh->ystart; j <= mesh->yend; j++) {
       for (int k = 0; k < mesh->LocalNz; k++) {
         // Calculate flux from i to i+1
