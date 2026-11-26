@@ -7,14 +7,14 @@ using bout::globals::mesh;
 
 NeutralBoundary::NeutralBoundary(std::string name, Options& alloptions,
                                  [[maybe_unused]] Solver* solver)
-    : NamedComponent(name, {writeBoundary("species:{name}:{outputs}"),
-                            writeBoundaryIfSet("species:{name}:{conditional_outputs}"),
+  : NamedComponent(name, {writeBoundaryFinal("species:{name}:{boundary_outputs}"),
+                            writeBoundaryFinalIfSet("species:{name}:{conditional_outputs}"),
                             readWrite("species:{name}:energy_source"),
                             readOnly("species:{name}:AA"),
                             readOnly("species:{from}:{from_inputs}"),
                             readOnly("species:{to}:{to_inputs}"),
-                            readWrite("species:{to}:{outputs}"),
-                            readWrite("species:{from}:{outputs}"),
+                            readWrite("species:{to}:{source_outputs}"),
+                            readWrite("species:{from}:{source_outputs}"),
                             readWrite("species:e:energy_source")}) {
 
   auto& options = alloptions[name];
@@ -115,7 +115,7 @@ NeutralBoundary::NeutralBoundary(std::string name, Options& alloptions,
       "from", std::vector<std::string>(from_species.begin(), from_species.end()));
   substitutePermissions("to_inputs", {"AA", "density", "pressure", "temperature"});
   substitutePermissions("from_inputs", {"density", "velocity", "temperature"});
-  substitutePermissions("outputs", {"density_source", "momentum_source", "energy_source"});
+  substitutePermissions("source_outputs", {"density_source", "momentum_source", "energy_source"});
 }
 
 
@@ -426,10 +426,10 @@ void NeutralBoundary::transform_impl(GuardedOptions& state) {
       const Field3D Tnlim = Pnlim / Nnlim;
 
       const GuardedOptions species_to = state["species"][channel.to];
-      const Field3D N = get<Field3D>(species_to["density"]);
-      const Field3D V = get<Field3D>(species_to["velocity"]);    // Parallel flow velocity
-      const Field3D T = get<Field3D>(species_to["temperature"]); // Ion temperature
-      const Field3D NV = get<Field3D>(species_to["momentum"]); // Parallel momentum 
+      // // const Field3D N = get<Field3D>(species_to["density"]);
+      // const Field3D V = get<Field3D>(species_to["velocity"]);    // Parallel flow velocity
+      // const Field3D T = get<Field3D>(species_to["temperature"]); // Ion temperature
+      // const Field3D NV = get<Field3D>(species_to["momentum"]); // Parallel momentum 
 
       GuardedOptions electron = state["species"][channel.electron];
       // const Field3D Pe = get<Field3D>(species_to["energy"]); // energy
