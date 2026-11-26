@@ -1528,9 +1528,11 @@ Boundaries and diagnostics
 Both modes close the physical X wall and Y target face fluxes of particles,
 momentum and energy, including nonorthogonal cross-metric contributions.
 Closure is applied to the complete face flux and therefore holds even with
-nonzero wall gradients. Periodic faces remain open to transport. The particle,
-momentum and energy sources from this component each have zero volume integral
-on a closed domain.
+nonzero wall gradients. Coefficients retain the guard values calculated from
+the communicated state, so periodic and processor faces use the same
+coefficient average as interior faces. Periodic faces remain open to transport.
+The particle, momentum and energy sources from this component each have zero
+volume integral on a closed domain.
 
 With ``diagnose = true``, ``D_classical`` records the realised normalised
 particle diffusivity, including a custom override. Its ``conversion``

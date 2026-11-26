@@ -85,10 +85,6 @@ void ClassicalDiffusion::transform_impl(GuardedOptions& state) {
     Dn = floor(Ptotal, 1e-5) * me * nu_e / (floor(Ne, 1e-5) * Bsq);
   }
 
-  // Retain the coefficient treatment at inter-processor faces. Physical wall
-  // fluxes are closed explicitly, including the cross-metric contributions.
-  BOUT_FOR(i, Dn.getRegion("RGN_GUARDS")) { Dn[i] = 0.0; }
-
   for (auto kv : allspecies.getChildren()) {
     GuardedOptions species = allspecies[kv.first]; // Note: Need non-const
     if (!(custom_D > 0)) {
