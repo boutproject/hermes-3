@@ -142,10 +142,10 @@ void NeutralBoundary::transform_impl(GuardedOptions& state) {
           : zeroFrom(Nn);
 
   Coordinates* coord = mesh->getCoordinates();
-  // const Field2D& J = coord->J;
-  // const Field2D& dy = coord->dy;
-  // const Field2D& dx = coord->dx;
-  // const Field2D& dz = coord->dz;
+  // const Field2D& J = coord->J();
+  // const Field2D& dy = coord->dy();
+  // const Field2D& dx = coord->dx();
+  // const Field2D& dz = coord->dz();
   target_energy_source = 0;
   wall_energy_source = 0;
 
@@ -349,7 +349,7 @@ void NeutralBoundary::transform_impl(GuardedOptions& state) {
           const BoutReal nnsheath = 0.5 * (Nn[ig] + Nn[i]);
           const BoutReal tnsheath = 0.5 * (Tn[ig] + Tn[i]);
 
-          // Thermal speed of static Maxwellian in one direction
+          // Thermal speed of static Maxwellian in one direction/
           const BoutReal v_th =
               0.25 * sqrt(8 * tnsheath / (PI * AA)); // Stangeby p.69 eqns. 2.21, 2.24
 
@@ -497,10 +497,10 @@ void NeutralBoundary::transform_impl(GuardedOptions& state) {
             // Calculate radial wall area in [m^2]
             // Calculate final cell volume [m^3]
             BoutReal dpolcore =
-                0.5 * (coord->dy[i] + coord->dy[ig]) * 1
-                / (0.5 * (sqrt(coord->g22[i]) + sqrt(coord->g22[ig])));
-            BoutReal dtorcore = 0.5 * (coord->dz[i] + coord->dz[ig]) * 0.5
-                                  * (sqrt(coord->g_33[i]) + sqrt(coord->g_33[ig]));
+                0.5 * (coord->dy()[i] + coord->dy()[ig]) * 1
+                / (0.5 * (sqrt(coord->g22()[i]) + sqrt(coord->g22()[ig])));
+            BoutReal dtorcore = 0.5 * (coord->dz()[i] + coord->dz()[ig]) * 0.5
+                                  * (sqrt(coord->g_33()[i]) + sqrt(coord->g_33()[ig]));
             BoutReal dacore = dpolcore * dtorcore; // [m^2]
 
             // Particle flow (one way particle flow)
