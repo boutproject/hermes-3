@@ -1496,8 +1496,9 @@ particle diffusion.
 Custom mode
 ^^^^^^^^^^^
 
-For ``custom_D > 0``, :math:`D_n=\mathtt{custom\_D}` is a constant normalised
-diffusivity. No collision-frequency provider is required. The thermal-energy
+For ``custom_D > 0``, a constant scalar diffusivity is entered in
+:math:`\mathrm{m^2\,s^{-1}}` and converted to normalised units. No
+collision-frequency provider is required. The thermal-energy
 source is a single pressure-diffusion term,
 
 .. math::
@@ -1511,17 +1512,15 @@ receives :math:`(2/3)Q_s`, this term diffuses pressure with the same coefficient
 as density. The custom energy source replaces the classical carried-energy
 and temperature-conduction terms.
 
-``custom_D`` is entered in normalised units. Its physical value is
+The normalised coefficient is
 
 .. math::
 
-   D_{\mathrm{physical}}
-   = \mathtt{custom\_D}\,\rho_{s0}^2\Omega_{ci}
-   \quad [\mathrm{m^2\,s^{-1}}],
+   D_n = \frac{\mathtt{custom\_D}}{\rho_{s0}^2\Omega_{ci}},
 
 where :math:`\rho_{s0}` and :math:`\Omega_{ci}` are the simulation's reference
 length and ion cyclotron frequency. For example, ``custom_D = 0.01`` sets
-:math:`D_{\mathrm{physical}}=0.01\rho_{s0}^2\Omega_{ci}`.
+a physical diffusivity of :math:`0.01\,\mathrm{m^2\,s^{-1}}`.
 
 Boundaries and diagnostics
 ^^^^^^^^^^^^^^^^^^^^^^^^^

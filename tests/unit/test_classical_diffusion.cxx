@@ -12,9 +12,15 @@ using bout::globals::mesh;
 
 class ClassicalDiffusionTest : public FakeMeshFixture_tmpl<7, 5, 8> {
 protected:
-  Options options() {
+  Options options(BoutReal meters = 1.0, BoutReal seconds = 1.0) {
     return Options{
-        {"units", {{"meters", 1.0}, {"seconds", 1.0}, {"inv_meters_cubed", 1e19}}}};
+        {"units",
+         {{"meters", meters}, {"seconds", seconds}, {"inv_meters_cubed", 1e19}}}};
+  }
+
+  Options diagnostics(BoutReal rho_s0 = 1.0, BoutReal Omega_ci = 1.0) {
+    return Options{
+        {"rho_s0", rho_s0}, {"Omega_ci", Omega_ci}, {"Nnorm", 1e19}, {"Tnorm", 1.0}};
   }
 
   BoutReal integral(const Field3D& field) {
@@ -66,8 +72,9 @@ TEST_F(ClassicalDiffusionTest, ClosedWallsConserveParticlesMomentumAndEnergy) {
 }
 
 TEST_F(ClassicalDiffusionTest, CustomDiffusionDampsThermalEnergyAtConstantDensity) {
-  auto config = options();
-  config["classical_diffusion"]["custom_D"] = 0.4;
+  auto config = options(2.0, 0.5);
+  config["classical_diffusion"]["custom_D"] = 3.2; // 0.4 in normalised units
+  config["classical_diffusion"]["diagnose"] = true;
   const auto pressure =
       makeField<Field3D>([](const Ind3D& i) { return 2.0 + cos(2.0 * PI * i.z() / nz); });
   const Field3D expected_energy = -1.5 * 0.4 * 4.0 * SQ(sin(PI / nz)) * (pressure - 2.0);
@@ -86,6 +93,9 @@ TEST_F(ClassicalDiffusionTest, CustomDiffusionDampsThermalEnergyAtConstantDensit
       species["pressure"] = pressure;
     }
     component.transform(state);
+    auto output = diagnostics(2.0, 2.0);
+    component.outputVars(output);
+    EXPECT_DOUBLE_EQ(output["D_classical"].attributes["conversion"].as<BoutReal>(), 8.0);
 
     EXPECT_TRUE(
         IsFieldEqual(get<Field3D>(species["density_source"]), 0.0, "RGN_NOBNDRY"));

@@ -8,8 +8,9 @@
 
 /// Perpendicular diffusion of particles, carried parallel momentum and energy.
 ///
-/// A positive custom_D sets the normalised particle and thermal-energy
-/// diffusivity. The energy source is Div(1.5 D Grad_perp P), using the species
+/// A positive scalar custom_D sets the particle and thermal-energy diffusivity
+/// in m^2/s, converted to normalised units. The energy source is
+/// Div(1.5 D Grad_perp P), using the species
 /// pressure or N*T when only temperature is supplied. No collision frequencies
 /// are required in this mode.
 ///

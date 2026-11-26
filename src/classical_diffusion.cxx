@@ -20,12 +20,17 @@ ClassicalDiffusion::ClassicalDiffusion(std::string name, Options& alloptions, So
                       "any custom override?")
                  .withDefault<bool>(false);
   custom_D = options["custom_D"]
-                 .doc("Normalised particle and thermal-energy diffusivity override. "
+                 .doc("Particle and thermal-energy diffusivity override [m^2/s]. "
                       ">0: constant diffusion; <0: classical diffusion and conduction "
                       "(default -1); 0: collision-derived particle and carried-energy "
-                      "diffusion without conduction. Multiply positive values by "
-                      "rho_s0^2 * Omega_ci to obtain m^2/s.")
+                      "diffusion without conduction.")
                  .withDefault<BoutReal>(-1);
+  if (custom_D > 0.0) {
+    const Options& units = alloptions["units"];
+    const BoutReal rho_s0 = units["meters"];
+    const BoutReal Omega_ci = 1.0 / units["seconds"].as<BoutReal>();
+    custom_D /= SQ(rho_s0) * Omega_ci;
+  }
 
   substitutePermissions("optional",
                         {"charge", "pressure", "density", "velocity", "temperature"});
