@@ -7,6 +7,7 @@
 #include "../../include/adas_carbon.hxx"
 #include "../../include/adas_lithium.hxx"
 #include "../../include/adas_neon.hxx"
+
 #include <cstddef>
 
 /**
@@ -23,6 +24,58 @@ class ADASIznRecReactionTest : public hermes::IznRecReactionTest<RTYPE> {
 public:
   ADASIznRecReactionTest(std::string lbl, std::string reaction_str)
       : hermes::IznRecReactionTest<RTYPE>(lbl, reaction_str) {}
+
+protected:
+  /**
+   * @brief Check radiated power in SI units against an ADAS radiation table node
+   */
+  void radiated_power_si_test() {
+    // Non-trivial normalisations, so that the unit conversion is tested
+    const BoutReal Tnorm = 5.0;  // eV
+    const BoutReal Nnorm = 1e18; // m^-3
+    const BoutReal tnorm = 1e-6; // s
+
+    // Set up the state and overwrite the units with the test-specific values
+    Options state = this->generate_state();
+    state["units"]["eV"].force(Tnorm);
+    state["units"]["inv_meters_cubed"].force(Nnorm);
+    state["units"]["seconds"].force(tnorm);
+
+    // Create the component
+    hermes::ReactionBase::reset_instance_counter();
+    RTYPE component("test" + this->lbl, state, nullptr);
+
+    /* Use nodal values of ne,Te in the radiation coefficient table to avoid interpolation errors.
+       Choose the node closest to Te = 10 eV, ne = 1e19 m^-3.
+    */
+    const auto [Te_SI, ne_SI, radiation_coefficient] =
+        component.nearest_radiation_coef_node(10., 1e19);
+    const BoutReal n1_SI = 1e17; // m^-3
+
+    // Overwrite the species densities and temperatures in the state with the test-specific values
+    state["species"]["e"]["density"].force(Field3D(ne_SI / Nnorm));
+    state["species"]["e"]["temperature"].force(Field3D(Te_SI / Tnorm));
+    state["species"][this->heavy_reactant]["density"].force(Field3D(n1_SI / Nnorm));
+
+    // Apply the reaction transform
+    component.transform(state);
+
+    // Check that the radiated power matches the expected value
+    const Field3D rate =
+        get<Field3D>(state["species"][this->heavy_product]["density_source"]);
+    const Field3D energy = get<Field3D>(state["species"]["e"]["energy_source"]);
+    const BoutReal rate_to_SI = Nnorm / tnorm;                   // m^-3 s^-1
+    const BoutReal power_to_SI = SI::qe * Tnorm * Nnorm / tnorm; // W m^-3
+
+    // Electron energy loss = radiated power - electron heating * reaction rate
+    const BoutReal expected = ne_SI * n1_SI * radiation_coefficient; // W m^-3
+    const BoutReal electron_heating = component.get_electron_heating();
+    BOUT_FOR_SERIAL(i, energy.getRegion("RGN_NOBNDRY")) {
+      const BoutReal radiated =
+          -energy[i] * power_to_SI + SI::qe * electron_heating * rate[i] * rate_to_SI;
+      ASSERT_NEAR(radiated, expected, 1e-8 * expected);
+    }
+  }
 };
 
 // C izn

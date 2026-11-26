@@ -2,11 +2,6 @@
 #include "test_cx_reactions.hxx"
 #include "test_izn_rec_reactions.hxx"
 
-#include <algorithm>
-#include <cmath>
-#include <iterator>
-#include <vector>
-
 namespace hermes {
 
 //======================== General reaction class tests =======================
@@ -190,56 +185,12 @@ TEST_F(ADASNeRecTest, SourcesRegression) { sources_regression_test(); }
 TEST_F(ADASNepRecTest, SourcesRegression) { sources_regression_test(); }
 TEST_F(ADASNe9pRecTest, SourcesRegression) { sources_regression_test(); }
 
-// Ne ionisation: radiated power in SI units at a node of the PLT table (W m^3)
-TEST_F(ADASNeIznTest, RadiatedPowerSI) {
-  // Non-trivial normalisations, so that the unit conversion is tested
-  const BoutReal Tnorm = 5.0;  // eV
-  const BoutReal Nnorm = 1e18; // m^-3
-  const BoutReal tnorm = 1e-6; // s
-
-  Options state = generate_state();
-  state["units"]["eV"].force(Tnorm);
-  state["units"]["inv_meters_cubed"].force(Nnorm);
-  state["units"]["seconds"].force(tnorm);
-
-  // PLT table node closest to Te = 10 eV, ne = 1e19 m^-3
-  OpenADASRateCoefficient plt(get_json_db_dir(state) / "plt96_ne.json", 0);
-  const auto closest = [](const std::vector<BoutReal>& v, BoutReal x) {
-    return static_cast<std::size_t>(std::distance(
-        v.begin(), std::min_element(v.begin(), v.end(), [x](BoutReal a, BoutReal b) {
-          return std::abs(a - x) < std::abs(b - x);
-        })));
-  };
-  const std::size_t iT = closest(plt.log_temperature, 1.0);
-  const std::size_t in = closest(plt.log_density, 19.0);
-  const BoutReal Te_SI = std::pow(10., plt.log_temperature[iT]);  // eV
-  const BoutReal ne_SI = std::pow(10., plt.log_density[in]);      // m^-3
-  const BoutReal n1_SI = 1e17;                                    // m^-3
-  const BoutReal plt_node = std::pow(10., plt.log_coeff[iT][in]); // W m^3
-
-  state["species"]["e"]["density"].force(Field3D(ne_SI / Nnorm));
-  state["species"]["e"]["temperature"].force(Field3D(Te_SI / Tnorm));
-  state["species"]["ne"]["density"].force(Field3D(n1_SI / Nnorm));
-
-  hermes::ReactionBase::reset_instance_counter();
-  ADASNeonIonisation<0> component("test" + lbl, state, nullptr);
-  component.transform(state);
-
-  const Field3D rate = get<Field3D>(state["species"]["ne+"]["density_source"]);
-  const Field3D energy = get<Field3D>(state["species"]["e"]["energy_source"]);
-  const BoutReal rate_to_SI = Nnorm / tnorm;                   // m^-3 s^-1
-  const BoutReal power_to_SI = SI::qe * Tnorm * Nnorm / tnorm; // W m^-3
-
-  // Electron energy loss = radiated power + ionisation energy * ionisation rate
-  const BoutReal expected = ne_SI * n1_SI * plt_node; // W m^-3
-  BOUT_FOR_SERIAL(i, energy.getRegion("RGN_NOBNDRY")) {
-    const BoutReal radiated = -energy[i] * power_to_SI
-                              - SI::qe * neon_ionisation_energy[0] * rate[i] * rate_to_SI;
-    ASSERT_NEAR(radiated, expected, 1e-8 * expected);
-  }
-}
-
 // Ne ions CX  (non-exhaustive)
 TEST_F(ADASNepHCXTest, SourcesRegression) { sources_regression_test(); }
 TEST_F(ADASNep5DCXTest, SourcesRegression) { sources_regression_test(); }
 TEST_F(ADASNep9TCXTest, SourcesRegression) { sources_regression_test(); }
+
+// =========================== Radiated power tests ===========================
+
+// Ne ionisation: radiated power in SI units at a node of the PLT table (W m^3)
+TEST_F(ADASNeIznTest, RadiatedPowerSI) { radiated_power_si_test(); }
