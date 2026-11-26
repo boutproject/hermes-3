@@ -1280,13 +1280,6 @@ void NeutralMixed::outputVars(Options& state) {
          {"source", "neutral_mixed"}});
   }
   if (diagnose) {
-    set_with_attrs(state["debug"], debug,
-                   {{"time_dimension", "t"},
-                    {"units", "-"},
-                    {"conversion", 1},
-                    {"standard_name", "debug"},
-                    {"long_name", "debug"},
-                    {"source", "neutral_mixed"}});
     set_with_attrs(state[std::string("T") + name], Tn,
                    {{"time_dimension", "t"},
                     {"units", "eV"},
