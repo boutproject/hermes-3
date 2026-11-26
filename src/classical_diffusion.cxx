@@ -20,12 +20,41 @@ ClassicalDiffusion::ClassicalDiffusion(std::string name, Options& alloptions, So
                       "any custom override?")
                  .withDefault<bool>(false);
   custom_D = options["custom_D"]
-                 .doc("Normalised particle and thermal-energy diffusivity override. "
+                 .doc("Particle and thermal-energy diffusivity override [m^2/s]. "
                       ">0: constant diffusion; <0: classical diffusion and conduction "
                       "(default -1); 0: collision-derived particle and carried-energy "
-                      "diffusion without conduction. Multiply positive values by "
-                      "rho_s0^2 * Omega_ci to obtain m^2/s.")
+                      "diffusion without conduction.")
                  .withDefault<BoutReal>(-1);
+  if (custom_D > 0.0) {
+    const Options& units = alloptions["units"];
+    const BoutReal rho_s0 = units["meters"];
+    const BoutReal Omega_ci = 1.0 / units["seconds"].as<BoutReal>();
+    custom_D /= SQ(rho_s0) * Omega_ci;
+  }
+
+  low_density_enhance = options["low_density_enhance"]
+                            .doc("Smoothly enhance Dn at low electron density in "
+                                 "both custom and classical modes?")
+                            .withDefault(false);
+  if (low_density_enhance) {
+    low_density_floor = options["low_density_floor"]
+                            .doc("Electron density below which Dn is enhanced [m^-3]. "
+                                 "Must be finite and positive.")
+                            .withDefault<BoutReal>(1e14);
+    low_density_max_multiplier = options["low_density_max_multiplier"]
+                                     .doc("Smooth upper bound on the Dn enhancement "
+                                          "multiplier. Must be finite and >= 1; "
+                                          "1 leaves Dn unchanged.")
+                                     .withDefault<BoutReal>(1000.0);
+    if (!(low_density_floor > 0.0) || !std::isfinite(low_density_floor)) {
+      throw BoutException("{}: low_density_floor must be finite and positive", name);
+    }
+    if (!(low_density_max_multiplier >= 1.0)
+        || !std::isfinite(low_density_max_multiplier)) {
+      throw BoutException("{}: low_density_max_multiplier must be finite and >= 1", name);
+    }
+    low_density_floor /= get<BoutReal>(alloptions["units"]["inv_meters_cubed"]);
+  }
 
   substitutePermissions("optional",
                         {"charge", "pressure", "density", "velocity", "temperature"});
@@ -81,9 +110,18 @@ void ClassicalDiffusion::transform_impl(GuardedOptions& state) {
     Dn = floor(Ptotal, 1e-5) * me * nu_e / (floor(Ne, 1e-5) * Bsq);
   }
 
-  // Retain the coefficient treatment at inter-processor faces. Physical wall
-  // fluxes are closed explicitly, including the cross-metric contributions.
-  BOUT_FOR(i, Dn.getRegion("RGN_GUARDS")) { Dn[i] = 0.0; }
+  if (low_density_enhance && low_density_max_multiplier > 1.0) {
+    const Field3D Ne = GET_VALUE(Field3D, allspecies["e"]["density"]);
+    const Field3D fraction = clamp(Field3D{Ne / low_density_floor}, 0.0, 1.0);
+    const Field3D activation = SQ(1.0 - fraction);
+    const BoutReal inverse_boost = 1.0 / (low_density_max_multiplier - 1.0);
+    // Flatten the onset at the density floor and saturation at zero density.
+    // Retain coefficients in guards using the already communicated state.
+    Dn *=
+        1.0
+        + activation
+              / (activation * inverse_boost + SQ(fraction) / (fraction + inverse_boost));
+  }
 
   for (auto kv : allspecies.getChildren()) {
     GuardedOptions species = allspecies[kv.first]; // Note: Need non-const
