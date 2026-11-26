@@ -8,6 +8,12 @@
 #include <bout/constants.hxx>
 #include <bout/field_factory.hxx>
 
+#include <array>
+#include <limits>
+#include <map>
+#include <utility>
+#include <vector>
+
 using bout::globals::mesh;
 
 class ClassicalDiffusionTest : public FakeMeshFixture_tmpl<7, 5, 8> {
@@ -151,5 +157,133 @@ TEST_F(ClassicalDiffusionTest, PeriodicTransportIsConservativeAndTranslationInva
         }
       }
     }
+  }
+}
+
+TEST_F(ClassicalDiffusionTest, LowDensityEnhancementIsSmoothBoundedAndNormalised) {
+  constexpr BoutReal density_floor = 1e-5; // 1e14 m^-3 with Nnorm = 1e19 m^-3
+  const std::array<BoutReal, nz> fractions = {-0.1, 0.0,        1e-7, 0.1,
+                                              0.5,  1.0 - 1e-7, 1.0,  10.0};
+  for (const BoutReal custom_D : {-1.0, 4.0}) {
+    for (const BoutReal maximum : {1.0, 10.0, 1000.0}) {
+      SCOPED_TRACE(custom_D);
+      SCOPED_TRACE(maximum);
+      auto config = options();
+      config["classical_diffusion"]["custom_D"] = custom_D;
+      config["classical_diffusion"]["diagnose"] = true;
+      config["classical_diffusion"]["low_density_enhance"] = true;
+      config["classical_diffusion"]["low_density_max_multiplier"] = maximum;
+      ClassicalDiffusion component("classical_diffusion", config, nullptr);
+      component.declareAllSpecies({"e"});
+      const auto density = makeField<Field3D>(
+          [&](const Ind3D& i) { return density_floor * fractions[i.z()]; });
+      Options state;
+      auto& electrons = state["species"]["e"];
+      electrons["density"] = density;
+      // This pressure gives a constant collision-derived Dn = 4, including
+      // negative trial densities. Both branches start from the same Dn.
+      electrons["pressure"] = 4.0 * floor(density, density_floor);
+      electrons["charge"] = -1.0;
+      electrons["AA"] = 0.5;
+      electrons["collision_frequency"] = Field3D{2.0};
+      component.transform(state);
+      auto output = diagnostics();
+      component.outputVars(output);
+      const Field3D multiplier = get<Field3D>(output["D_classical"]) / 4.0;
+
+      std::array<BoutReal, nz> values;
+      for (int z = 0; z < nz; ++z) {
+        values[z] = multiplier(mesh->xstart, mesh->ystart, z);
+        EXPECT_TRUE(std::isfinite(values[z]));
+        EXPECT_GE(values[z], 1.0);
+        EXPECT_LE(values[z], maximum + 1e-12);
+        if (z > 0) {
+          EXPECT_LE(values[z], values[z - 1] + 1e-12);
+        }
+      }
+      EXPECT_NEAR(values[0], maximum, 1e-12);
+      EXPECT_NEAR(values[1], maximum, 1e-12);
+      EXPECT_DOUBLE_EQ(values[6], 1.0);
+      EXPECT_DOUBLE_EQ(values[7], 1.0);
+      if (maximum > 1.0) {
+        // Flat limits at zero density and at the onset, rather than kinks
+        // introduced by a hard maximum or a sharp activation threshold.
+        EXPECT_LT(maximum - values[2], (maximum - 1.0) * 1e-6);
+        EXPECT_LT(values[5] - 1.0, 1e-10);
+        EXPECT_GT(values[4], 1.0);
+      }
+    }
+  }
+}
+
+TEST_F(ClassicalDiffusionTest, EnhancementSharesParticleMomentumAndThermalTransport) {
+  const auto density =
+      makeField<Field3D>([](const Ind3D& i) { return 2.0 + cos(TWOPI * i.z() / nz); });
+  const auto electron_density = makeField<Field3D>(
+      [](const Ind3D& i) { return i.y() == mesh->ystart ? 0.0 : 1e-3; });
+  const auto multiplier = makeField<Field3D>(
+      [](const Ind3D& i) { return i.y() == mesh->ystart ? 10.0 : 1.0; });
+
+  for (const BoutReal custom_D : {-1.0, 0.4}) {
+    SCOPED_TRACE(custom_D);
+    Field3D baseline;
+    for (const bool enhance : {false, true}) {
+      auto config = options();
+      config["classical_diffusion"]["custom_D"] = custom_D;
+      if (enhance) {
+        config["classical_diffusion"]["low_density_enhance"] = true;
+        config["classical_diffusion"]["low_density_floor"] = 1e14;
+        config["classical_diffusion"]["low_density_max_multiplier"] = 10.0;
+      }
+      ClassicalDiffusion component("classical_diffusion", config, nullptr);
+      component.declareAllSpecies({"e", "d+"});
+      Options state;
+      auto& electrons = state["species"]["e"];
+      electrons["density"] = electron_density;
+      electrons["pressure"] = 2.0 * electron_density;
+      electrons["charge"] = -1.0;
+      electrons["AA"] = 0.5;
+      electrons["collision_frequency"] = Field3D{0.2};
+      auto& ions = state["species"]["d+"];
+      ions["density"] = density;
+      ions["pressure"] = 2.0 * density;
+      ions["temperature"] = Field3D{2.0};
+      ions["velocity"] = Field3D{3.0};
+      ions["charge"] = 1.0;
+      ions["AA"] = 2.0;
+      ions["collision_frequency"] = Field3D{0.2};
+      component.transform(state);
+      const auto source = get<Field3D>(ions["density_source"]);
+      EXPECT_GT(max(abs(source), false, "RGN_NOBNDRY"), 0.0);
+      const BoutReal tolerance = 1e-12 * max(abs(source), false, "RGN_NOBNDRY");
+      EXPECT_TRUE(IsFieldEqual(get<Field3D>(ions["momentum_source"]),
+                               Field3D{6.0 * source}, "RGN_NOBNDRY", 6.0 * tolerance));
+      EXPECT_TRUE(IsFieldEqual(get<Field3D>(ions["energy_source"]), Field3D{3.0 * source},
+                               "RGN_NOBNDRY", 3.0 * tolerance));
+      if (enhance) {
+        EXPECT_TRUE(IsFieldEqual(source, Field3D{multiplier * baseline}, "RGN_NOBNDRY",
+                                 tolerance));
+      } else {
+        baseline = source;
+      }
+    }
+  }
+}
+
+TEST_F(ClassicalDiffusionTest, InvalidEnhancementSettingsAreRejected) {
+  for (const auto& invalid : std::vector<std::pair<std::string, BoutReal>>{
+           {"low_density_floor", 0.0},
+           {"low_density_floor", -1.0},
+           {"low_density_floor", std::numeric_limits<BoutReal>::infinity()},
+           {"low_density_max_multiplier", 0.5},
+           {"low_density_max_multiplier", std::numeric_limits<BoutReal>::infinity()}}) {
+    SCOPED_TRACE(invalid.first);
+    SCOPED_TRACE(invalid.second);
+    auto config = options();
+    config["classical_diffusion"]["custom_D"] = 0.4;
+    config["classical_diffusion"]["low_density_enhance"] = true;
+    config["classical_diffusion"][invalid.first] = invalid.second;
+    EXPECT_THROW(ClassicalDiffusion component("classical_diffusion", config, nullptr),
+                 BoutException);
   }
 }

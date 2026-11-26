@@ -1522,6 +1522,51 @@ where :math:`\rho_{s0}` and :math:`\Omega_{ci}` are the simulation's reference
 length and ion cyclotron frequency. For example, ``custom_D = 0.01`` sets
 a physical diffusivity of :math:`0.01\,\mathrm{m^2\,s^{-1}}`.
 
+Low-density enhancement
+^^^^^^^^^^^^^^^^^^^^^^^
+
+``low_density_enhance = true`` enhances the common :math:`D_n` after it has
+been assigned from ``custom_D`` or calculated from collisions. The default is
+false. The electron density controls the enhancement for every transported
+species, retaining a common coefficient for ambipolar particle transport.
+
+.. code-block:: ini
+
+   [classical_diffusion]
+   custom_D = 0.01                 # Scalar diffusivity [m^2/s]
+   low_density_enhance = true
+   low_density_floor = 1e14        # Enhancement onset density [m^-3]
+   low_density_max_multiplier = 1000
+
+The density floor is converted to normalised units using ``Nnorm``. Densities
+at or above this floor leave :math:`D_n` unchanged. Below it, the multiplier
+increases continuously to ``low_density_max_multiplier`` at zero density;
+negative trial densities receive the same finite maximum. The multiplier has
+zero slope at both endpoints, so the transitions are continuously
+differentiable. Setting the maximum to 1 leaves :math:`D_n` unchanged.
+
+Specifically, for a maximum :math:`M>1`, define
+
+.. math::
+
+   r = \min\left(1,\max\left(0,\frac{N_e}{N_{\mathrm{floor}}}\right)\right),
+   \qquad a=(1-r)^2, \qquad b=\frac{1}{M-1}.
+
+The enhancement is
+
+.. math::
+
+   D_n \leftarrow D_n\left(1+\frac{a}{ab+r^2/(r+b)}\right).
+
+This gives approximately inverse-density enhancement well below the floor
+and above the saturation region. It bounds the multiplier rather than the
+final diffusivity or cell loss rate. Damping therefore still depends on the
+physical mesh spacing. The enhanced coefficient enters particle transport,
+carried momentum and the thermal-energy terms containing :math:`D_n`;
+classical temperature conduction through :math:`\kappa_{\perp s}` is unchanged.
+No additional communication is needed to calculate the enhancement from
+valid electron-density guards.
+
 Boundaries and diagnostics
 ^^^^^^^^^^^^^^^^^^^^^^^^^
 

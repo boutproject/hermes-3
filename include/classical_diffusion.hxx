@@ -21,6 +21,8 @@
 ///
 /// All physical X and Y boundary face fluxes are closed, including mixed-metric
 /// contributions. Periodic and inter-processor faces are retained.
+/// Optional low_density_enhance multiplies Dn smoothly below an electron
+/// density floor supplied in m^-3, with a bounded enhancement multiplier.
 struct ClassicalDiffusion : public NamedComponent<ClassicalDiffusion> {
   /// Options: custom_D selects the transport model; diagnose outputs the
   /// normalised particle diffusivity as D_classical with SI conversion metadata.
@@ -36,6 +38,9 @@ private:
   bool diagnose;     ///< Output additional diagnostics?
   Field3D Dn;        ///< Realised normalised perpendicular particle diffusivity
   BoutReal custom_D; ///< Normalised diffusivity override; positive selects custom mode
+  bool low_density_enhance;        ///< Enhance Dn below the electron density floor?
+  BoutReal low_density_floor{0.0}; ///< Normalised electron density for enhancement onset
+  BoutReal low_density_max_multiplier{1.0}; ///< Upper bound on the enhancement
 
   // Flow diagnostics
   Field3D cls_pf_perp_xlow, cls_pf_perp_ylow;
