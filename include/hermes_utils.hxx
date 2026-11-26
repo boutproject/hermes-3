@@ -18,6 +18,36 @@ inline BoutReal softFloor(BoutReal value, BoutReal min) {
   return value + min * exp(-value / min);
 }
 
+/// Clamp \p value to [\p lo, \p hi] with continuously differentiable
+/// transitions of total width \p width, centred on \p lo and \p hi.
+/// Within a transition the result is quadratic in \p value; outside the
+/// transitions it is exactly \p lo, \p value or \p hi, as for std::clamp.
+/// The result is monotonic in \p value and always within [lo, hi].
+///
+/// @param width  Width of each transition, 0 <= width <= hi - lo.
+///               width = 0 is std::clamp(value, lo, hi).
+inline BoutReal smoothClamp(BoutReal value, BoutReal lo, BoutReal hi, BoutReal width) {
+  if (width <= 0.0) {
+    return std::clamp(value, lo, hi);
+  }
+  const BoutReal half = 0.5 * width;
+  if (value <= lo - half) {
+    return lo;
+  }
+  if (value >= hi + half) {
+    return hi;
+  }
+  if (value < lo + half) {
+    const BoutReal d = value - (lo - half);
+    return lo + d * d / (2. * width);
+  }
+  if (value > hi - half) {
+    const BoutReal d = (hi + half) - value;
+    return hi - d * d / (2. * width);
+  }
+  return value;
+}
+
 /// Apply a soft floor value \p f to a field \p var. Any value lower than
 /// the floor is set to the floor.
 ///

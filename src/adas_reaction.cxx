@@ -24,7 +24,9 @@
 #include <iterator>
 
 OpenADASRateCoefficient::OpenADASRateCoefficient(const std::string& filename,
-                                                 std::size_t level) {
+                                                 std::size_t level,
+                                                 BoutReal smooth_clamp_width)
+    : smooth_clamp_width(smooth_clamp_width) {
 
   // Read the rate file
   std::ifstream json_file(filename);
@@ -51,6 +53,22 @@ OpenADASRateCoefficient::OpenADASRateCoefficient(const std::string& filename,
 
   nmin = pow(10, log_density.front());
   nmax = pow(10, log_density.back());
+
+  // The transitions at the lower and upper table edge must not overlap
+  if (!(smooth_clamp_width >= 0.0) or (smooth_clamp_width > log10(Tmax) - log10(Tmin))
+      or (smooth_clamp_width > log10(nmax) - log10(nmin))) {
+    throw BoutException("ADAS smooth clamp width {} must be between 0 and the "
+                        "range of the table '{}' in log10(T) and log10(n)",
+                        smooth_clamp_width, filename);
+  }
+}
+
+BoutReal adas_smooth_clamp_width(Options& options) {
+  return options["reactions"]["adas_smooth_clamp_width"]
+      .doc("Width [decades of T and n] of the smooth transitions to the "
+           "constant values outside the range of OpenADAS tables. "
+           "0 is a hard clamp to the table range.")
+      .withDefault<BoutReal>(0.1);
 }
 
 namespace {
@@ -71,13 +89,25 @@ auto get_high_index(const std::vector<BoutReal>& vec, BoutReal value) {
   return static_cast<std::size_t>(high_index);
 }
 
+/// log10 of \p value, clamped to [log10(vmin), log10(vmax)]. With width > 0
+/// the clamp is smooth (continuously differentiable) in log10(value).
+BoutReal log10_clamp(BoutReal value, BoutReal vmin, BoutReal vmax, BoutReal width) {
+  if (width <= 0.0) {
+    return log10(std::clamp(value, vmin, vmax));
+  }
+  if (value <= 0.0) {
+    return log10(vmin);
+  }
+  return smoothClamp(log10(value), log10(vmin), log10(vmax), width);
+}
+
 } // namespace
 
 BoutReal OpenADASRateCoefficient::evaluate(BoutReal T, BoutReal n) {
 
   // Ensure that the inputs are in range
-  BoutReal log10T = log10(std::clamp(T, Tmin, Tmax));
-  BoutReal log10n = log10(std::clamp(n, nmin, nmax));
+  BoutReal log10T = log10_clamp(T, Tmin, Tmax, smooth_clamp_width);
+  BoutReal log10n = log10_clamp(n, nmin, nmax, smooth_clamp_width);
 
   // Get the upper index. Between 1 and size-1 inclusive
   const auto high_T_index = get_high_index(log_temperature, log10T);

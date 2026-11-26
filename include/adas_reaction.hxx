@@ -18,7 +18,11 @@ struct OpenADASRateCoefficient {
   /// @param filename   The file to read. Path relative to json_folder
   /// @param level      The first index in the log coefficient array
   ///                   (ionisation level)
-  OpenADASRateCoefficient(const std::string& filename, std::size_t level);
+  /// @param smooth_clamp_width  Width [decades of T and n] of the smooth
+  ///                   transitions at the table edges, see smoothClamp().
+  ///                   0 is a hard clamp to the table range.
+  OpenADASRateCoefficient(const std::string& filename, std::size_t level,
+                          BoutReal smooth_clamp_width = 0.0);
 
   std::vector<std::vector<BoutReal>> log_coeff;
   std::vector<BoutReal> log_temperature;
@@ -27,6 +31,10 @@ struct OpenADASRateCoefficient {
   BoutReal Tmin, Tmax; ///< Range of T  [eV]
   BoutReal nmin, nmax; ///< Range of density [m^-3]
 
+  /// Width [decades] of the smooth clamp of log10(T) and log10(n)
+  /// to the table range. 0 is a hard clamp.
+  BoutReal smooth_clamp_width;
+
   /// Inputs:
   /// @param  n  Electron density in m^-3
   /// @param  T  Electron temperature in eV
@@ -34,6 +42,10 @@ struct OpenADASRateCoefficient {
   /// @returns rate in units of m^3/s or eV m^3/s
   BoutReal evaluate(BoutReal T, BoutReal n);
 };
+
+/// Read the option [reactions] adas_smooth_clamp_width: the width, in decades
+/// of T and n, of the smooth transitions at the edges of the OpenADAS tables.
+BoutReal adas_smooth_clamp_width(Options& options);
 
 /// Read in and perform calculations with OpenADAS data
 /// https://open.adas.ac.uk/
@@ -65,8 +77,10 @@ struct OpenADAS : public hermes::ReactionBase {
             {readIfSet("species:{sp}:charge"), readOnly("species:{sp}:AA"),
              readOnly("species:{from_ion}:{val}"), readOnly("species:e:{e_val}"),
              readWrite("species:{sp}:{w_val}"), readWrite("species:e:{ew_val}")}),
-        json_db_dir(get_json_db_dir(options)), rate_coef(json_db_dir / rate_file, level),
-        radiation_coef(json_db_dir / radiation_file, level),
+        json_db_dir(get_json_db_dir(options)),
+        rate_coef(json_db_dir / rate_file, level, adas_smooth_clamp_width(options)),
+        radiation_coef(json_db_dir / radiation_file, level,
+                       adas_smooth_clamp_width(options)),
         electron_heating(electron_heating) {
     // Get the units
     auto& units = options["units"];
@@ -111,7 +125,8 @@ struct OpenADASChargeExchange : public hermes::ReactionBase {
                                                readOnly("species:{from_ion}:{val}"),
                                                readOnly("species:e:{e_val}"),
                                                readWrite("species:{sp}:{w_val}")}),
-        rate_coef(get_json_db_dir(options) / rate_file, level) {
+        rate_coef(get_json_db_dir(options) / rate_file, level,
+                  adas_smooth_clamp_width(options)) {
 
     // Get the units
     auto& units = options["units"];

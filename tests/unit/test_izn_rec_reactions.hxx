@@ -67,6 +67,9 @@ protected:
                        {"diagnose", true},
                    }},
                   {"units", {{"eV", 1.0}, {"inv_meters_cubed", 1.0}, {"seconds", 1.0}}},
+                  // The ADAS reference data were generated with a hard clamp to
+                  // the table range, and some input values are near table edges
+                  {"reactions", {{"adas_smooth_clamp_width", 0.0}}},
                   {"species",
                    {{"e", {{"AA", 1. / 1836}, {"velocity", e_vel}}},
                     {this->heavy_reactant, {{"AA", 1.0}, {"charge", hr_q}}},

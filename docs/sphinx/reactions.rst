@@ -11,7 +11,7 @@ Please see the :ref:`sec-postprocessing` section for related diagnostics.
    For a more detailed description of how reaction source terms are handled in
    the code, please see the :ref:`'Reactions' section of the developer
    manual<sec-reactions-dev>`.
-   
+
 Reaction basics
 ------------------------------
 
@@ -67,7 +67,7 @@ of events per second per volume) we have transfers:
    \frac{\partial}{\partial t}\left( \frac{3}{2} p_a \right) =& \ldots - F_{ab}u_a + E_{ab} - \frac{1}{2}mSu_a^2 \\
    \frac{\partial}{\partial t}\left( \frac{3}{2} p_b \right) =& \ldots - F_{ba}u_b + E_{ba} + \frac{1}{2}mSu_b^2
    \end{aligned}
-   
+
 where both species have the same mass: :math:`m_a = m_b = m`. In the
 pressure equations the :math:`-F_{ab}u_a` comes from splitting the
 kinetic and thermal energies; :math:`E_{ab}=-E_{ba}` is the energy
@@ -105,8 +105,8 @@ and hydrogen charge exchange.
 Adjusting reactions
 -------------------
 
-The reaction rates can be adjusted by a user-specified arbitrary multiplier. This can be useful for 
-the analysis of the impact of individual reactions. The multiplier setting must be placed under the 
+The reaction rates can be adjusted by a user-specified arbitrary multiplier. This can be useful for
+the analysis of the impact of individual reactions. The multiplier setting must be placed under the
 neutral species corresponding to the reaction, e.g. under ``[d]`` when adjusting deuterium ionisation, recombination or charge exchange.
 The multiplier for the fixed fraction impurity radiation must be placed under the impurity species header, e.g. under ``[ar]`` for argon.
 This functionality is not yet currently implemented for helium or neon reactions.
@@ -128,7 +128,7 @@ This functionality is not yet currently implemented for helium or neon reactions
 +-----------------------+------------------+---------------------------------------+
 
 The charge exchange reaction can also be modified so that the momentum transfer channel is disabled. This can be useful when
-testing the impact of the full neutral momentum equation equation compared to purely diffusive neutrals. A diffusive only model 
+testing the impact of the full neutral momentum equation equation compared to purely diffusive neutrals. A diffusive only model
 leads to all of the ion momentum being lost during charge exchange due to the lack of a neutral momentum equation.
 Enabling neutral momentum introduces a more accurate transport model but also prevents CX momentum from being lost, which
 can have a significant impact on the solution and may be difficult to analyse.
@@ -175,19 +175,19 @@ Several ADAS rates are provided: nitrogen, neon, argon, krypton, xenon and tungs
 The component names are ``fixed_fraction_carbon``, ``fixed_fraction_nitrogen``, ``fixed_fraction_neon``,
 ``fixed_fraction_argon``, ``fixed_fraction_krypton``, ``fixed_fraction_xenon`` and ``fixed_fraction_tungsten``.
 
-Each rate is in the form of a 10 coefficient 
+Each rate is in the form of a 10 coefficient
 log-log polynomial fit of data obtained using the open source tool `radas <https://github.com/cfs-energy/radas>`_, except
 xenon and tungsten that use 15 and 20 coefficients respectively.
-The :math:`n {\tau}` parameter representing the density and residence time assumed in the radas 
+The :math:`n {\tau}` parameter representing the density and residence time assumed in the radas
 collisional-radiative model has been set to :math:`1\times 10^{20} \times 0.5ms` based on `David Moulton et al 2017 PPCF 59(6) <https://doi.org10.1088/1361-6587/aa6b13>`_.
 
-Each rate has an upper and lower bound beyond which the rate remains constant. 
+Each rate has an upper and lower bound beyond which the rate remains constant.
 Please refer to the source code in :file:`fixed_fraction_radiation.hxx` for the coefficients and bounds used for each rate.
 
 In addition to the above rates, there are three simplified cooling curves for Argon: ``fixed_fraction_argon_simplified1``,
-``fixed_fraction_argon_simplified2`` and ``fixed_fraction_argon_simplified3``. They progressively reduce the nonlinearity in the 
+``fixed_fraction_argon_simplified2`` and ``fixed_fraction_argon_simplified3``. They progressively reduce the nonlinearity in the
 rate by taking out the curvature from the slopes, taking out the RHS shoulder and taking out the LHS-RHS asymmetry, respectively.
-These rates may be useful in investigating the impact of the different kinds of curve nonlinearities on the solution. 
+These rates may be useful in investigating the impact of the different kinds of curve nonlinearities on the solution.
 
 There is also a very simple carbon radiation function ``fixed_fraction_hutchinson_carbon`` which is
 in coronal equilibrium, using a simple formula from `I.H.Hutchinson Nucl. Fusion 34 (10) 1337 - 1348 (1994) <https://doi.org/10.1088/0029-5515/34/10/I04>`_:
@@ -200,12 +200,12 @@ which has units of :math:`Wm^3` with :math:`T_e` in eV.
 
 NOTE:
    By default, fixed fraction radiation is disabled in the core region. This represents the fact that
-   the impurity will likely be coronal on closed field lines and feature reduced radiation. This 
+   the impurity will likely be coronal on closed field lines and feature reduced radiation. This
    can prevent unphysical MARFE-like behaviour in deep detachment. This behaviour can be disabled
    by setting ``no_core_radiation=false`` in the impurity options block.
 
-     
-Implemented reactions 
+
+Implemented reactions
 ----------------------
 
 Hydrogen and Helium
@@ -220,7 +220,7 @@ Multiple isotopes of Hydrogen can be evolved and are kept track of using species
 and Tritium in the configuration file:
 
 .. code-block:: ini
-  
+
   [hermes]
   components = d, t, reactions
 
@@ -308,6 +308,24 @@ The available charge exchange reactions for Hydrogen isotopes are:
       +----------------------+------------------------------------------------------------+
       | t + d+ -> t+ + d     |                             "                              |
       +----------------------+------------------------------------------------------------+
+
+
+OpenADAS tables
+~~~~~~~~~~~~~~~
+
+The OpenADAS reactions (carbon, lithium and neon) interpolate tabulated rate and
+radiation coefficients bilinearly in :math:`\log_{10} T_e` and :math:`\log_{10} n_e`.
+Outside the tabulated range, :math:`\log_{10} T_e` and :math:`\log_{10} n_e` are
+clamped to the table edges, so the coefficients keep their edge values. The clamp
+is smooth (continuously differentiable): within half the width
+``adas_smooth_clamp_width`` (in decades) on either side of each table edge, the
+clamp is replaced by a quadratic transition. Further from the edges the
+coefficients are not changed. A width of 0 gives a hard clamp:
+
+.. code-block:: ini
+
+   [reactions]
+   adas_smooth_clamp_width = 0.1  # Default, decades of T and n. 0: hard clamp
 
 
 Lithium
@@ -474,7 +492,7 @@ for the electrons.
 | ne+10 + t -> ne+9 + t+ |                                     |
 +------------------------+-------------------------------------+
 
-The implementation of these rates is in `ADASNeonIonisation`, 
+The implementation of these rates is in `ADASNeonIonisation`,
 `ADASNeonRecombination` and `ADASNeonCX` template classes:
 
 .. doxygenstruct:: ADASNeonIonisation
@@ -485,6 +503,3 @@ The implementation of these rates is in `ADASNeonIonisation`,
 
 .. doxygenstruct:: ADASNeonCX
    :members:
-
-
-
