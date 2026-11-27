@@ -472,6 +472,10 @@ void NeutralMixed::transform_impl(GuardedOptions& state) {
   Tn = Pn / Nnlim;
   Vn = NVn / (AA * Nnlim);
 
+  if (!mesh->isFci()) {
+    Tn.applyBoundary();
+  }
+
   /////////////////////////////////////////////////////
   // Parallel boundary conditions
   TRACE("Neutral boundary conditions");
