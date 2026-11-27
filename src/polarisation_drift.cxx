@@ -688,7 +688,8 @@ void PolarisationDrift::transformConservative(GuardedOptions& state) {
   const Field3D vorticity = GET_NOBOUNDARY(Field3D, fields["vorticity"]);
   boussinesq_coeff = get<Coordinates::FieldMetric>(fields["ion_boussinesq_coefficient"]);
   phiSolver->setCoefC(boussinesq_coeff);
-  Field3D mass_density = GET_NOBOUNDARY(Field3D, fields["ion_mass_density"]);
+  Field3D mass_density = copy(GET_NOBOUNDARY(Field3D, fields["ion_mass_density"]));
+  mesh->communicate(mass_density);
   const Field3D DivJReynolds = GET_NOBOUNDARY(Field3D, fields["DivJReynolds"]);
   const Field3D DivJdia = GET_NOBOUNDARY(Field3D, fields["DivJdia"]);
   const bout::ion_energy::XZFaceFluxes reynolds{
@@ -738,10 +739,39 @@ void PolarisationDrift::transformConservative(GuardedOptions& state) {
   // Use the same geometric chi currents as the residual, including wall faces.
   const auto chi_faces = bout::ion_energy::perpendicularFaces(boussinesq_coeff, chi);
   polarisation_flux = {-reynolds.x - chi_faces.x, -reynolds.z - chi_faces.z};
-  const auto divPol = [&](const Field3D& weight) -> Field3D {
-    Field3D result = bout::ion_energy::divergence(polarisation_flux, &weight);
+  Field3D limiter = zeroFrom(phi);
+  BOUT_FOR(i, limiter.getRegion("RGN_ALL")) {
+    limiter[i] = densityLimiter(mass_density[i]);
+  }
+  bout::ion_energy::XZFaceFluxes particle_flux = polarisation_flux;
+  if (polarisation_density_threshold > 0.0) {
+    particle_flux = {copy(polarisation_flux.x), copy(polarisation_flux.z)};
+    // The donor changes only at zero current, so the limited flux is continuous.
+    // A physical wall always uses its adjacent boundary cell as the donor.
+    for (int x = mesh->xstart - 1; x <= mesh->xend; ++x) {
+      for (int y = mesh->ystart; y <= mesh->yend; ++y) {
+        for (int z = mesh->zstart; z <= mesh->zend; ++z) {
+          int donor = polarisation_flux.x(x, y, z) >= 0.0 ? x : x + 1;
+          if (!mesh->periodicX && x == mesh->xstart - 1 && mesh->firstX()) {
+            donor = x + 1;
+          } else if (!mesh->periodicX && x == mesh->xend && mesh->lastX()) {
+            donor = x;
+          }
+          particle_flux.x(x, y, z) *= limiter(donor, y, z);
+        }
+      }
+    }
+    BOUT_FOR(i, phi.getRegion("RGN_NOBNDRY")) {
+      particle_flux.z[i] *= polarisation_flux.z[i] >= 0.0 ? limiter[i] : limiter[i.zp()];
+    }
+  }
+  const auto divPol = [&](const Field3D& weight, bool particles = false) -> Field3D {
+    Field3D result = bout::ion_energy::divergence(
+        particles ? particle_flux : polarisation_flux, &weight);
     if (poloidal_flows) {
-      Field3D w = copy(weight);
+      // The optional X-Y operator uses a cell-based limiter; it cannot accept
+      // the donor factors used on the X-Z faces. Work retains its full weight.
+      Field3D w = particles ? weight * limiter : copy(weight);
       fillRadialGuards(w, [&](int x, int, int, int y, int z) { return w(x, y, z); });
       result -= Div_n_bxGrad_f_B_XPPM(vorticity, phi, false, true, false, &w)
                 - Div_n_bxGrad_f_B_XPPM(vorticity, phi, false, false, false, &w);
@@ -761,7 +791,7 @@ void PolarisationDrift::transformConservative(GuardedOptions& state) {
   Field3D wall_pressure_mismatch = zeroFrom(phi);
   const auto wallWeighted = [&](const Field3D& weight,
                                 const Field3D* prescribed = nullptr) -> Field3D {
-    Field3D result = divPol(weight);
+    Field3D result = divPol(weight, true);
     for (int x : {mesh->xstart - 1, mesh->xend}) {
       const bool inner = x == mesh->xstart - 1;
       if (mesh->periodicX || (inner && !mesh->firstX()) || (!inner && !mesh->lastX())) {
@@ -774,7 +804,7 @@ void PolarisationDrift::transformConservative(GuardedOptions& state) {
               prescribed ? (*prescribed)(x, y, z) : midpoint(weight, x, y, z);
           const BoutReal volume = coord->J()(cell, y, z) * coord->dx()(cell, y, z)
                                   * coord->dy()(cell, y, z) * coord->dz()(cell, y, z);
-          result(cell, y, z) += (inner ? -1.0 : 1.0) * polarisation_flux.x(x, y, z)
+          result(cell, y, z) += (inner ? -1.0 : 1.0) * particle_flux.x(x, y, z)
                                 * (revised - weight(cell, y, z)) / volume;
         }
       }
@@ -791,7 +821,7 @@ void PolarisationDrift::transformConservative(GuardedOptions& state) {
               || (x == mesh->xend && mesh->lastX()))) {
         for (int y = mesh->ystart; y <= mesh->yend; ++y) {
           for (int z = 0; z < mesh->LocalNz; ++z) {
-            wall_flux.x(x, y, z) = polarisation_flux.x(x, y, z);
+            wall_flux.x(x, y, z) = particle_flux.x(x, y, z);
           }
         }
       }
@@ -799,7 +829,7 @@ void PolarisationDrift::transformConservative(GuardedOptions& state) {
   }
 
   // Jps = (A_s n_s / rho) Jpol, Gamma_ps = Jps / Z_s. Use the actual
-  // mass density, so the species currents sum to Jpol above the floor.
+  // mass density. Limited particle charge flux can differ from Jpol.
   mass_density = floor(mass_density, average_atomic_mass * density_floor);
   const auto wallFraction = [&](const Field3D& density, BoutReal mass, int x, int y,
                                 int z) {
@@ -812,7 +842,8 @@ void PolarisationDrift::transformConservative(GuardedOptions& state) {
   // partition independent of a constant potential gauge up to the auxiliary
   // current residual. Thermal and parallel kinetic weights below retain the
   // actual species mass-density partition.
-  Field3D E_adv = phi + psi;
+  const Field3D work_weight = phi + psi;
+  Field3D transported_weight = zeroFrom(phi);
   diagnostics = Options{};
   forAllIons(allspecies, [&](GuardedOptions species) {
     const BoutReal AA = get<BoutReal>(species["AA"]);
@@ -827,13 +858,13 @@ void PolarisationDrift::transformConservative(GuardedOptions& state) {
     if (diagnose) {
       const Field3D weight = coefficient * N;
       diagnostics[species.name()]["wall_loss"] =
-          wallWeighted(weight) - divPol(weight)
+          wallWeighted(weight) - divPol(weight, true)
           + bout::ion_energy::divergence(wall_flux, &weight);
     }
-    E_adv += coefficient * (3. / 2) * P;
+    transported_weight += coefficient * (3. / 2) * P;
     if (species.isSet("velocity")) {
       const Field3D V = GET_NOBOUNDARY(Field3D, species["velocity"]);
-      E_adv += coefficient * 0.5 * AA * N * SQ(V);
+      transported_weight += coefficient * 0.5 * AA * N * SQ(V);
     }
     if (species.isSet("momentum")) {
       const Field3D NV = GET_NOBOUNDARY(Field3D, species["momentum"]);
@@ -858,8 +889,9 @@ void PolarisationDrift::transformConservative(GuardedOptions& state) {
       set(species["polarisation_momentum_source"], momentum_source);
     }
   });
-  // Phi + sum_s[(3/2 p_s + K_parallel_s) A_s/(Z_s rho)].
-  DivEpol = divPol(E_adv);
+  // Work is tied to the current; thermal and parallel kinetic energy follow
+  // the particle flux. Both divergences remain conservative.
+  DivEpol = divPol(work_weight) + divPol(transported_weight, true);
   balance.add("ion_energy", "radial_polarisation_inner", 0.0);
   balance.add("ion_energy", "radial_polarisation_outer", 0.0);
   for (int x : {mesh->xstart - 1, mesh->xend}) {
@@ -898,15 +930,19 @@ void PolarisationDrift::transformConservative(GuardedOptions& state) {
             0.5 * (phi(x, y, z) + phi(x + 1, y, z) + psi(x, y, z) + psi(x + 1, y, z));
         const BoutReal pressure_mid = 0.5 * (psi(x, y, z) + psi(x + 1, y, z));
         const BoutReal transported = thermal[index] + kinetic_parallel[index];
-        const BoutReal revised = work + transported;
+        const BoutReal revised =
+            polarisation_flux.x(x, y, z) * work + particle_flux.x(x, y, z) * transported;
         balance.add("ion_energy",
                     inner ? "radial_polarisation_inner" : "radial_polarisation_outer",
-                    (inner ? -1.0 : 1.0) * polarisation_flux.x(x, y, z) * revised);
+                    (inner ? -1.0 : 1.0) * revised);
         const BoutReal volume = coord->J()(cell, y, z) * coord->dx()(cell, y, z)
                                 * coord->dy()(cell, y, z) * coord->dz()(cell, y, z);
-        DivEpol(cell, y, z) += (inner ? -1.0 : 1.0) * polarisation_flux.x(x, y, z)
-                               * (revised - E_adv(cell, y, z)) / volume;
-        wall_energy_weight(x, y, z) = revised;
+        DivEpol(cell, y, z) +=
+            (inner ? -1.0 : 1.0)
+            * (revised - polarisation_flux.x(x, y, z) * work_weight(cell, y, z)
+               - particle_flux.x(x, y, z) * transported_weight(cell, y, z))
+            / volume;
+        wall_energy_weight(x, y, z) = work + transported;
         wall_work_weight(x, y, z) = work;
         wall_thermal_weight(x, y, z) = transported;
         wall_pressure_mismatch(x, y, z) = pressure_transport[index] - pressure_mid;
