@@ -753,7 +753,7 @@ void PolarisationDrift::transformConservative(GuardedOptions& state) {
     }
     return polarisation_flux.x(x, y, z) >= 0.0 ? x : x + 1;
   };
-  Field3D limiter = zeroFrom(phi);
+  limiter = zeroFrom(phi);
   BOUT_FOR(i, limiter.getRegion("RGN_ALL")) {
     limiter[i] = densityLimiter(mass_density[i]);
   }
@@ -844,6 +844,18 @@ void PolarisationDrift::transformConservative(GuardedOptions& state) {
     return result;
   };
   DivJpol = divPol(Field3D{1.0});
+  charge_mismatch = copy(DivJpol);
+  const auto radialTerm = [&](bool inner) {
+    return inner ? (mesh->periodicY(mesh->xstart) ? "radial_polarisation_core"
+                                                  : "radial_polarisation_pf")
+                 : "radial_polarisation_outer";
+  };
+  const auto initRadial = [&](const std::string& quantity) {
+    for (const auto* term : {"radial_polarisation_core", "radial_polarisation_pf",
+                             "radial_polarisation_outer"}) {
+      balance.add(quantity, term, 0.0);
+    }
+  };
   bout::ion_energy::XZFaceFluxes wall_flux;
   if (diagnose) {
     wall_flux = {zeroFrom(phi), zeroFrom(phi)};
@@ -888,7 +900,24 @@ void PolarisationDrift::transformConservative(GuardedOptions& state) {
     const Field3D P = GET_NOBOUNDARY(Field3D, species["pressure"]);
     const Field3D coefficient = (AA / Z) / mass_density;
     const Field3D density_source = -wallWeighted(coefficient * N);
-    balance.set("particles_" + species.name(), "out_polarisation", -density_source);
+    charge_mismatch += Z * density_source;
+    const std::string quantity = "particles_" + species.name();
+    balance.set(quantity, "out_polarisation", -density_source);
+    initRadial(quantity);
+    const Field3D particle_weight = coefficient * N;
+    for (int x : {mesh->xstart - 1, mesh->xend}) {
+      const bool inner = x == mesh->xstart - 1;
+      if (mesh->periodicX || (inner && !mesh->firstX()) || (!inner && !mesh->lastX())) {
+        continue;
+      }
+      for (int y = mesh->ystart; y <= mesh->yend; ++y) {
+        for (int z = mesh->zstart; z <= mesh->zend; ++z) {
+          balance.add(quantity, radialTerm(inner),
+                      (inner ? -1.0 : 1.0) * particle_flux.x(x, y, z)
+                          * wallValue(particle_weight, x, y, z));
+        }
+      }
+    }
     add(species["density_source"], density_source);
     set(species["polarisation_density_source"], density_source);
     if (diagnose) {
@@ -928,8 +957,7 @@ void PolarisationDrift::transformConservative(GuardedOptions& state) {
   // Work is tied to the current; thermal and parallel kinetic energy follow
   // the particle flux. Both divergences remain conservative.
   DivEpol = divPol(work_weight) + divPol(transported_weight, true);
-  balance.add("ion_energy", "radial_polarisation_inner", 0.0);
-  balance.add("ion_energy", "radial_polarisation_outer", 0.0);
+  initRadial("ion_energy");
   for (int x : {mesh->xstart - 1, mesh->xend}) {
     const bool inner = x == mesh->xstart - 1;
     if (mesh->periodicX || (inner && !mesh->firstX()) || (!inner && !mesh->lastX())) {
@@ -968,9 +996,7 @@ void PolarisationDrift::transformConservative(GuardedOptions& state) {
         const BoutReal transported = thermal[index] + kinetic_parallel[index];
         const BoutReal revised =
             polarisation_flux.x(x, y, z) * work + particle_flux.x(x, y, z) * transported;
-        balance.add("ion_energy",
-                    inner ? "radial_polarisation_inner" : "radial_polarisation_outer",
-                    (inner ? -1.0 : 1.0) * revised);
+        balance.add("ion_energy", radialTerm(inner), (inner ? -1.0 : 1.0) * revised);
         const BoutReal volume = coord->J()(cell, y, z) * coord->dx()(cell, y, z)
                                 * coord->dy()(cell, y, z) * coord->dz()(cell, y, z);
         DivEpol(cell, y, z) +=
@@ -1007,7 +1033,56 @@ void PolarisationDrift::outputConservative(Options& state) {
   const auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
   const auto rho_s0 = get<BoutReal>(state["rho_s0"]);
   const BoutReal Pnorm = SI::qe * Tnorm * Nnorm;
-  set_with_attrs(state["polarisation_drift_version"], 1,
+  // Cache fields at each RHS call, but reduce their diagnostics only at output.
+  BoutReal totals[4]{0.0, 0.0, 0.0, 0.0};
+  BoutReal mismatch_max = 0.0;
+  const auto* coord = charge_mismatch.getCoordinates();
+  for (const auto& i : charge_mismatch.getRegion("RGN_NOBNDRY")) {
+    const BoutReal volume =
+        coord->J()[i] * coord->dx()[i] * coord->dy()[i] * coord->dz()[i];
+    totals[0] += volume;
+    totals[1] += volume * SQ(charge_mismatch[i]);
+    totals[2] += volume * SQ(DivJpol[i]);
+    totals[3] += limiter[i] < 0.5 ? volume : 0.0;
+    mismatch_max = std::max(mismatch_max, std::abs(charge_mismatch[i]));
+  }
+  MPI_Allreduce(MPI_IN_PLACE, totals, 4, MPI_DOUBLE, MPI_SUM, BoutComm::get());
+  MPI_Allreduce(MPI_IN_PLACE, &mismatch_max, 1, MPI_DOUBLE, MPI_MAX, BoutComm::get());
+  const BoutReal current_conversion = SI::qe * Nnorm * Omega_ci;
+  for (const auto& [name, value, description] :
+       {std::tuple{"polarisation_charge_mismatch_l2", std::sqrt(totals[1] / totals[0]),
+                   "Volume-weighted RMS of DivJpol minus transported charge divergence"},
+        std::tuple{"polarisation_charge_mismatch_linf", mismatch_max,
+                   "Maximum absolute charge-divergence mismatch over physical cells"}}) {
+    set_with_attrs(state[name], value,
+                   {{"time_dimension", "t"},
+                    {"units", "A m^-3"},
+                    {"conversion", current_conversion},
+                    {"description", description},
+                    {"source", "polarisation_drift"}});
+  }
+  set_with_attrs(state["polarisation_charge_mismatch_rel"],
+                 totals[2] > 0.0 ? std::sqrt(totals[1] / totals[2]) : 0.0,
+                 {{"time_dimension", "t"},
+                  {"units", "1"},
+                  {"description", "RMS charge mismatch divided by RMS DivJpol; "
+                                  "zero when DivJpol is identically zero"},
+                  {"source", "polarisation_drift"}});
+  set_with_attrs(state["polarisation_limiter_volume_fraction"], totals[3] / totals[0],
+                 {{"time_dimension", "t"},
+                  {"units", "1"},
+                  {"description", "Physical volume fraction with particle limiter < 0.5"},
+                  {"source", "polarisation_drift"}});
+  if (diagnose) {
+    set_with_attrs(state["polarisation_charge_mismatch"], charge_mismatch,
+                   {{"time_dimension", "t"},
+                    {"units", "A m^-3"},
+                    {"conversion", current_conversion},
+                    {"description", "DivJpol minus sum of ion charge times particle "
+                                    "flux divergence"},
+                    {"source", "polarisation_drift"}});
+  }
+  set_with_attrs(state["polarisation_drift_version"], 2,
                  {{"description", "Conservative polarisation transport with local "
                                   "Phi wall work and local species transport weights"}});
   set_with_attrs(state["ion_chi"], chi,
