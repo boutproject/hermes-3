@@ -1034,9 +1034,12 @@ void PolarisationDrift::transformConservative(GuardedOptions& state) {
                 : revised - polarisation_flux.x(x, y, z) * work_weight(cell, y, z)
                       - particle_flux.x(x, y, z) * transported_weight(cell, y, z);
         DivEpol(cell, y, z) += (inner ? -1.0 : 1.0) * correction / volume;
-        wall_energy_weight(x, y, z) = work + transported;
+        // Effective weights per unit current also reconstruct the limited wall
+        // power from the saved current faces when diagnostic readers need it.
+        const BoutReal limited_transport = limiter(cell, y, z) * transported;
+        wall_energy_weight(x, y, z) = work + limited_transport;
         wall_work_weight(x, y, z) = work;
-        wall_thermal_weight(x, y, z) = transported;
+        wall_thermal_weight(x, y, z) = limited_transport;
         wall_pressure_mismatch(x, y, z) = pressure_transport[index] - pressure_mid;
       }
     }
@@ -1146,13 +1149,13 @@ void PolarisationDrift::outputConservative(Options& state) {
     for (const auto& [species, sources] : diagnostics.getChildren()) {
       for (const auto& [name, description] :
            {std::pair{"wall_energy_weight",
-                      "Physical X-wall face weight: local Phi plus local "
-                      "thermal and parallel kinetic energy"},
+                      "Physical X-wall effective weight per unit current: local "
+                      "Phi plus density-limited thermal and parallel kinetic energy"},
             std::pair{"wall_work_weight", "Physical X-wall face work weight: local Phi "
                                           "midpoint, including pressure work"},
             std::pair{"wall_thermal_weight",
-                      "Physical X-wall face weight: local thermal and "
-                      "parallel kinetic energy"},
+                      "Physical X-wall transported weight per unit current: "
+                      "density-limited thermal and parallel kinetic energy"},
             std::pair{"wall_pressure_mismatch",
                       "Local species pressure transport weight minus the "
                       "local pressure-potential midpoint"}}) {

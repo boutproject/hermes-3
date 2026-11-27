@@ -42,6 +42,9 @@ Four scalars are saved even with `diagnose = false`:
 
 With `diagnose = true`, `polarisation_charge_mismatch` saves the corresponding
 3D field. Reductions use physical cells and run only at output times.
+The wall energy and thermal weights include the density limiter, so multiplying
+the saved wall energy weight by `polarisation_flux_x` reconstructs wall power.
+The wall work weight retains the full local potential midpoint.
 
 Energy and each species' particle wall losses are saved as
 `balance_polarisation_drift_<quantity>_radial_polarisation_<region>`, where
