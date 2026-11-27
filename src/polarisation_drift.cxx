@@ -1,6 +1,7 @@
 #include "../include/polarisation_drift.hxx"
 #include "../include/component.hxx"
 #include "../include/guarded_options.hxx"
+#include "../include/hermes_utils.hxx"
 #include "../include/permissions.hxx"
 
 #include <bout/bout_types.hxx>
@@ -71,6 +72,15 @@ PolarisationDrift::PolarisationDrift(std::string name, Options& alloptions,
     }
     average_atomic_mass = ion["average_atomic_mass"].withDefault<BoutReal>(2.0);
     density_floor = ion["density_floor"].withDefault<BoutReal>(1e-7);
+    polarisation_density_threshold =
+        options["polarisation_density_threshold"]
+            .doc("Density threshold in units of Nnorm for polarisation particle "
+                 "transport; zero disables the limiter")
+            .withDefault<BoutReal>(0.0);
+    if (!std::isfinite(polarisation_density_threshold)
+        || polarisation_density_threshold < 0.0) {
+      throw BoutException("polarisation_density_threshold must be finite and >= 0");
+    }
     poloidal_flows = ion["poloidal_flows"].withDefault<bool>(false);
     diagnose = options["diagnose"].withDefault(ion["diagnose"].withDefault<bool>(false));
     radial_model.walls = !mesh->periodicX;
@@ -659,6 +669,14 @@ void PolarisationDrift::solveConservativePotential(const Field3D& rhs) {
   // Diagnostic only: residual against the finite-volume operator
   auxiliary_residual = rhs - bout::ion_energy::Div_a_Grad_perp_XZ(boussinesq_coeff, chi);
   chi_residual = max(abs(auxiliary_residual), true);
+}
+
+BoutReal PolarisationDrift::densityLimiter(BoutReal mass_density) const {
+  if (polarisation_density_threshold == 0.0) {
+    return 1.0; // softFloor requires a strictly positive threshold.
+  }
+  const BoutReal rho = std::max(mass_density, 0.0);
+  return rho / softFloor(rho, average_atomic_mass * polarisation_density_threshold);
 }
 
 void PolarisationDrift::transformConservative(GuardedOptions& state) {

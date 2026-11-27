@@ -88,6 +88,8 @@ private:
   bout::ion_energy::RadialBoundaryModel radial_model;
   Coordinates::FieldMetric boussinesq_coeff;
   bool poloidal_flows{false};
+  BoutReal polarisation_density_threshold{0.0};
+  BoutReal densityLimiter(BoutReal mass_density) const;
   int polarisation_corrections{10}, chi_iterations{0};
   BoutReal chi_residual{0.0};
   Field3D chi{0.0}, DivJpol, DivEpol;
