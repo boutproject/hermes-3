@@ -56,6 +56,9 @@ if(HERMES_BUILD_BOUT)
       CACHE FILEPATH "BOUT++ build directory" FORCE)
 
   add_subdirectory(${HERMES_BOUT_SRC} ${bout++_DIR} SYSTEM)
+  # BOUT_USE_METRIC_3D is only set in the BOUT++ directory scope; mirror it
+  # here, as bout++Config.cmake does when using `find_package`
+  set(BOUT_USE_METRIC_3D ${BOUT_ENABLE_METRIC_3D})
 else()
   find_package(bout++ REQUIRED)
 endif()
