@@ -815,3 +815,52 @@ TCV-X21
 An example based on the TCV validation in `Oliveira, Body et al. 2022
 <https://iopscience.iop.org/article/10.1088/1741-4326/ac4cde/meta>`_,
 located in located in ``examples\tcv-x21``.
+
+
+Stellarators
+-------------
+
+
+Helically Symmetric eXperiment (HSX)
+~~~~~~~~~~~~
+
+`HSX <https://www.hsx.wisc.edu/>`_ is an optimized stellarator at UW-Madison. It is a 4-field period device with a magnetic field that can run around 1T. This example features the grid generation for one field period and uses the approximate wall geometry of the device. The implementation of the magnetic field is sufficiently adjustable to cover different configurations, as they take the coil currents as an input. Field line tracing and the geometry is supplied by `FusionSC <https://jugit.fz-juelich.de/a.knieps/fsc>`_ and we thank Alexander Knieps and Dieter Boeyaert for their help. For further details on the device, we refer to https://iopscience.iop.org/article/10.1088/1361-6587/aec325/meta.
+
+**Grid Generation**
+
+The grid generation is no different than for any other structured Fci grid. For each cross section, we have to determine and inner and outer contour between which the grid is calculated. The outer contour is the wall and the inner contour is a flux surface. Details for the specific choices and tipps can be found in ``create_grid.py``.
+
+**Input file**
+
+The input file contains components for a standard transport simulation
+
+.. code-block:: ini
+
+   [hermes]
+   components = h+ , e, sound_speed, braginskii_collisions, braginskii_friction, braginskii_heat_exchange, sheath_boundary_fci, braginskii_ion_viscosity, braginskii_conduction
+
+It simulates hydrogen ``h+`` and electrons ``e``. ``sound_speed`` is used for the numerical dissipation in the parallel advection operators. For numerical dissipation, ``electron_dynamics`` should be avoided in the sound speed component in this setup.
+
+Then follow the typical Braginskii components and the sheath boundary component. ``sheath_boundary_fci`` is an Fci-compatible version of ``sheath_boundary_simple``.
+It takes sheath transmission coefficients as input, which is set in section:
+
+.. code-block:: ini
+
+   [sheath_boundary_fci]
+
+   gamma_e = 6.5
+   gamma_i = 4.5
+
+
+Both species are modelled using anomalous diffusion. Density and temperatures are controlled using the `selflimiting source <https://hermes3.readthedocs.io/en/latest/feedback_control.html>`_, which is further explained in the documentation.
+
+**Running the simulation**
+
+Transport simulations like these are numerically robust. The biggest problems (currently) for such a physics model are distant areas with low densities and temperatures. For this reason, it is advised to investigate if simulations stalling/crashing can be observed when the minimum density/temperature in the system is rapidly decreasing. For this, you have to reduce the timestep to really resolve the behavior.
+
+.. figure:: ../../../examples/stellarator-3D/hsx/HSX.png
+   :name: hsx-profile
+   :alt:
+   :scale: 50
+
+   Electron temperature in the HSX stellarator simulation
