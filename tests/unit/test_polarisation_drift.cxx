@@ -5,6 +5,7 @@
 
 #include "../../include/polarisation_drift.hxx"
 #include <bout/invert_laplace.hxx>
+#include <limits>
 
 /// Global mesh
 namespace bout {
@@ -18,6 +19,22 @@ using namespace bout::globals;
 
 // Reuse the "standard" fixture for FakeMesh
 using PolarisationDriftTest = FakeMeshFixture;
+
+TEST_F(PolarisationDriftTest, InvalidConservativeTransportOptions) {
+  Options base;
+  base["ion_energy"]["type"] = "evolve_vorticity_ion_energy";
+  base["polarisation_drift"]["implementation"] = "conservative";
+  for (BoutReal threshold : {-1.0, std::numeric_limits<BoutReal>::infinity(),
+                             std::numeric_limits<BoutReal>::quiet_NaN()}) {
+    auto options = base.copy();
+    options["polarisation_drift"]["polarisation_density_threshold"] = threshold;
+    EXPECT_THROW(PolarisationDrift("polarisation_drift", options, nullptr),
+                 BoutException);
+  }
+  auto options = base.copy();
+  options["polarisation_drift"]["polarisation_transport_weights"] = "invalid";
+  EXPECT_THROW(PolarisationDrift("polarisation_drift", options, nullptr), BoutException);
+}
 
 TEST_F(PolarisationDriftTest, calcDivJZero) {
   Options options;

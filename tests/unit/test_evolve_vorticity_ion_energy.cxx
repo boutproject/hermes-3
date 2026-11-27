@@ -1027,7 +1027,7 @@ TEST_F(EvolveVorticityIonEnergyTest, WallModelsPairParticleChargeAndEnergyBudget
         EXPECT_NEAR(
             output[std::string{
                        "balance_polarisation_drift_ion_energy_radial_polarisation_"}
-                   + (x == mesh->xend ? "outer" : "inner")]
+                   + (x == mesh->xend ? "outer" : "core")]
                 .as<BoutReal>(),
             boundary_power, 1e-12);
       }
@@ -1381,4 +1381,344 @@ TEST(IonEnergyReynoldsConvergence, LimitedCurrentConvergesInShearedAnnulus) {
   ASSERT_GT(finest, 0.0);
   EXPECT_GE(std::log2(coarse / fine), 1.5);
   EXPECT_GE(std::log2(fine / finest), 1.5);
+}
+
+// Sample prescribed face currents and independent cell states, then check the
+// resulting particle, momentum and energy rates against their face balances.
+TEST_F(EvolveVorticityIonEnergyTest, ConservativeTransportMatchesFaceBalances) {
+  for (bool core : {true, false}) {
+    static_cast<FakeMesh*>(mesh)->ix_separatrix = core ? 1000000 : 0;
+    for (const auto* weights : {"central", "upwind"}) {
+      for (BoutReal threshold : {0.0, 1e-5, 0.02}) {
+        SCOPED_TRACE(std::string{weights} + "/" + std::to_string(threshold));
+        FakeSolver solver;
+        auto options = makeOptions();
+        options["test"]["type"] = "evolve_vorticity_ion_energy";
+        options["polarisation_drift"]["polarisation_density_threshold"] = threshold;
+        options["polarisation_drift"]["polarisation_transport_weights"] = weights;
+        PolarisationDrift component("polarisation_drift", options, &solver);
+        component.declareAllSpecies(SpeciesInformation({"e"}, {}, {"d+", "he++"}, {}));
+        auto state = makeState();
+        Field3D rho{0.0}, thermal{0.0};
+        for (const auto* name : {"d+", "he++"}) {
+          auto& species = state["species"][name];
+          const BoutReal mass = species["AA"].as<BoutReal>();
+          const Field3D n = makeField<Field3D>([&](const Ind3D& i) {
+            const int x = std::clamp(i.x(), mesh->xstart, mesh->xend);
+            return (mass == 2.0 ? 0.001 : 0.0004)
+                   + 0.02 * SQ(x - mesh->xstart) * (1.0 + 0.2 * cos(TWOPI * i.z() / nz));
+          });
+          const Field3D t = makeField<Field3D>(
+              [&](const Ind3D& i) { return 0.4 + 0.1 * sin(TWOPI * i.z() / nz); });
+          const Field3D v = makeField<Field3D>(
+              [&](const Ind3D& i) { return 0.2 * cos(TWOPI * i.z() / nz); });
+          species["density"] = n;
+          species["temperature"] = t;
+          species["pressure"] = n * t;
+          species["velocity"] = v;
+          species["momentum"] = mass * n * v;
+          rho += mass * n;
+        }
+        for (const auto* name : {"d+", "he++"}) {
+          const auto& species = state["species"][name];
+          thermal +=
+              species["AA"].as<BoutReal>() / species["charge"].as<BoutReal>() / rho
+              * (1.5 * species["pressure"].as<Field3D>()
+                 + 0.5 * species["AA"].as<BoutReal>() * species["density"].as<Field3D>()
+                       * SQ(species["velocity"].as<Field3D>()));
+        }
+        bout::ion_energy::XZFaceFluxes reynolds{
+            makeField<Field3D>([&](const Ind3D& i) {
+              return 0.03 * cos(0.6 * i.x() + TWOPI * i.z() / nz);
+            }),
+            makeField<Field3D>([&](const Ind3D& i) {
+              return 0.02 * sin(0.4 * i.x() + TWOPI * i.z() / nz);
+            })};
+        auto& fields = state["fields"];
+        fields["phi"] = Field3D{0.0};
+        fields["ion_pressure_potential"] = Field3D{0.7};
+        fields["vorticity"] = Field3D{0.0};
+        fields["ion_boussinesq_coefficient"] = Coordinates::FieldMetric{1.5};
+        fields["ion_mass_density"] = rho;
+        fields["ion_reynolds_x"] = reynolds.x;
+        fields["ion_reynolds_z"] = reynolds.z;
+        fields["DivJReynolds"] = bout::ion_energy::divergence(reynolds);
+        fields["DivJdia"] = -bout::ion_energy::divergence(reynolds);
+        fields["ion_wall_rate"] = Field3D{0.0};
+        component.transform(state);
+        Options output{
+            {"Nnorm", 1.0}, {"Tnorm", 1.0}, {"Omega_ci", 1.0}, {"rho_s0", 1.0}};
+        component.outputVars(output);
+        const Field3D jx = output["polarisation_flux_x"].as<Field3D>();
+        const Field3D jz = output["polarisation_flux_z"].as<Field3D>();
+        EXPECT_TRUE(IsFieldEqual(jx, Field3D{-reynolds.x}, "RGN_NOY", 1e-14));
+        EXPECT_TRUE(IsFieldEqual(jz, Field3D{-reynolds.z}, "RGN_NOBNDRY", 1e-14));
+        const auto face = [&](const Field3D& weight, const Ind3D& left,
+                              const Ind3D& right, BoutReal current, bool wall) {
+          const auto donor = wall ? (left.x() < mesh->xstart ? right : left)
+                                  : (current >= 0.0 ? left : right);
+          const BoutReal r = rho[donor];
+          const BoutReal limit =
+              threshold == 0.0 ? 1.0
+                               : r / (r + 1.5 * threshold * exp(-r / (1.5 * threshold)));
+          const BoutReal w = std::string{weights} == "upwind"
+                                 ? weight[donor]
+                                 : 0.5 * (weight[left] + weight[right]);
+          return current * limit * w;
+        };
+        const auto expected = [&](const Field3D& weight, bool work = false) {
+          Field3D rate{0.0};
+          const auto* c = mesh->getCoordinates();
+          for (const auto& i : rate.getRegion("RGN_NOBNDRY")) {
+            BoutReal net = face(weight, i, i.xp(), jx[i], i.x() == mesh->xend)
+                           - face(weight, i.xm(), i, jx[i.xm()], i.x() == mesh->xstart)
+                           + face(weight, i, i.zp(), jz[i], false)
+                           - face(weight, i.zm(), i, jz[i.zm()], false);
+            if (work) {
+              net += 0.7 * (jx[i] - jx[i.xm()] + jz[i] - jz[i.zm()]);
+            }
+            rate[i] = net / (c->J()[i] * c->dx()[i] * c->dy()[i] * c->dz()[i]);
+          }
+          return rate;
+        };
+        Field3D mismatch = copy(output["DivJpol"].as<Field3D>());
+        for (const auto* name : {"d+", "he++"}) {
+          const auto& species = state["species"][name];
+          const BoutReal coefficient =
+              species["AA"].as<BoutReal>() / species["charge"].as<BoutReal>();
+          const Field3D weight = coefficient * species["density"].as<Field3D>() / rho;
+          const Field3D density_source =
+              species["polarisation_density_source"].as<Field3D>();
+          EXPECT_TRUE(IsFieldEqual(density_source, Field3D{-expected(weight)},
+                                   "RGN_NOBNDRY", 1e-12));
+          EXPECT_TRUE(IsFieldEqual(
+              species["polarisation_momentum_source"].as<Field3D>(),
+              Field3D{-expected(coefficient * species["momentum"].as<Field3D>() / rho)},
+              "RGN_NOBNDRY", 1e-12));
+          mismatch += species["charge"].as<BoutReal>() * density_source;
+          BoutReal wall_total = 0.0;
+          for (const auto* side : {"core", "pf", "outer"}) {
+            const auto term = std::string{"balance_polarisation_drift_particles_"} + name
+                              + "_radial_polarisation_" + side;
+            ASSERT_TRUE(output.isSet(term));
+            wall_total += output[term].as<BoutReal>();
+            if (std::string{side} == (core ? "pf" : "core")) {
+              EXPECT_EQ(output[term].as<BoutReal>(), 0.0);
+            }
+          }
+          EXPECT_NEAR(wall_total, -integral(density_source), 1e-12);
+          EXPECT_NEAR(
+              wall_total,
+              integral(
+                  output[std::string{"particle_pol_wall_loss_"} + name].as<Field3D>()),
+              1e-12);
+        }
+        EXPECT_TRUE(IsFieldEqual(output["DivEpol"].as<Field3D>(), expected(thermal, true),
+                                 "RGN_NOBNDRY", 1e-12));
+        BoutReal wall_power = 0.0;
+        for (const auto* side : {"core", "pf", "outer"}) {
+          wall_power +=
+              output[std::string{
+                         "balance_polarisation_drift_ion_energy_radial_polarisation_"}
+                     + side]
+                  .as<BoutReal>();
+        }
+        EXPECT_NEAR(wall_power, integral(output["DivEpol"].as<Field3D>()), 1e-12);
+        BoutReal diagnosed_wall_power = 0.0;
+        const Field3D wall_weight =
+            output["polarisation_wall_energy_weight"].as<Field3D>();
+        for (int x : {mesh->xstart - 1, mesh->xend}) {
+          for (int y = mesh->ystart; y <= mesh->yend; ++y) {
+            for (int z = 0; z < nz; ++z) {
+              diagnosed_wall_power +=
+                  (x == mesh->xend ? 1.0 : -1.0) * jx(x, y, z) * wall_weight(x, y, z);
+            }
+          }
+        }
+        EXPECT_NEAR(diagnosed_wall_power, wall_power, 1e-12);
+        EXPECT_TRUE(IsFieldEqual(output["polarisation_charge_mismatch"].as<Field3D>(),
+                                 mismatch, "RGN_NOBNDRY", 1e-14));
+        const BoutReal volume = integral(Field3D{1.0});
+        EXPECT_NEAR(output["polarisation_charge_mismatch_l2"].as<BoutReal>(),
+                    sqrt(integral(SQ(mismatch)) / volume), 1e-14);
+        EXPECT_NEAR(output["polarisation_charge_mismatch_linf"].as<BoutReal>(),
+                    max(abs(mismatch), true), 1e-14);
+        if (threshold < 1e-4) {
+          EXPECT_LT(output["polarisation_charge_mismatch_rel"].as<BoutReal>(), 1e-12);
+          EXPECT_EQ(output["polarisation_limiter_volume_fraction"].as<BoutReal>(), 0.0);
+        } else {
+          EXPECT_GT(output["polarisation_charge_mismatch_rel"].as<BoutReal>(), 0.01);
+          EXPECT_GT(output["polarisation_limiter_volume_fraction"].as<BoutReal>(), 0.0);
+          EXPECT_LT(output["polarisation_limiter_volume_fraction"].as<BoutReal>(), 1.0);
+        }
+      }
+    }
+  }
+}
+
+TEST_F(EvolveVorticityIonEnergyTest, ConservativeDiagnosticsAreOptionalFields) {
+  for (bool diagnose : {false, true}) {
+    FakeSolver solver;
+    auto options = makeOptions();
+    options["test"]["diagnose"].force(diagnose);
+    options["polarisation_drift"]["polarisation_density_threshold"] = 3.0;
+    IonEnergyTestSystem component("test", options, &solver);
+    declareSpecies(component);
+    solver.setState({{"Vort", Field3D{0.0}}, {"Eion", Field3D{3.0}}});
+    auto state = makeState();
+    component.transform(state);
+    component.finally(state);
+    const auto output = diagnostics(component);
+    for (const auto* name :
+         {"polarisation_charge_mismatch_l2", "polarisation_charge_mismatch_linf",
+          "polarisation_charge_mismatch_rel", "polarisation_limiter_volume_fraction"}) {
+      ASSERT_TRUE(output.isSet(name));
+      EXPECT_TRUE(std::isfinite(output[name].as<BoutReal>()));
+    }
+    EXPECT_EQ(output.isSet("polarisation_charge_mismatch"), diagnose);
+    EXPECT_EQ(output["polarisation_limiter_volume_fraction"].as<BoutReal>(), 1.0);
+    EXPECT_EQ(output["polarisation_charge_mismatch_rel"].as<BoutReal>(), 0.0);
+  }
+}
+
+TEST_F(IonEnergyParallelTest, PoloidalParticleWeightsUseCellLimiter) {
+  mesh->getCoordinates()->setContravariantMetricTensor(
+      ContravariantMetricTensor{1.0, 1.0, 1.0, 0.0, 0.0, 0.2});
+  static_cast<FakeMesh*>(mesh)->copy_periodic_halos = true;
+  const auto run = [&](BoutReal threshold, bool thermal) {
+    FakeSolver solver;
+    auto options = makeOptions();
+    options["test"]["type"] = "evolve_vorticity_ion_energy";
+    options["test"]["poloidal_flows"] = true;
+    options["polarisation_drift"]["polarisation_density_threshold"] = threshold;
+    PolarisationDrift component("polarisation_drift", options, &solver);
+    component.declareAllSpecies(SpeciesInformation({"e"}, {}, {"d+", "he++"}, {}));
+    auto state = makeState();
+    for (const auto* name : {"d+", "he++"}) {
+      auto& species = state["species"][name];
+      species["pressure"] =
+          thermal ? 0.2 * species["density"].as<Field3D>() : Field3D{0.0};
+      species["temperature"] = Field3D{thermal ? 0.2 : 0.0};
+    }
+    auto& fields = state["fields"];
+    fields["phi"] = makeField<Field3D>([&](const Ind3D& i) {
+      return 0.1 * sin(0.4 * i.x()) * sin(TWOPI * (i.y() - mesh->ystart) / 3)
+             * cos(TWOPI * i.z() / nz);
+    });
+    fields["ion_pressure_potential"] = Field3D{0.7};
+    fields["vorticity"] = makeField<Field3D>([&](const Ind3D& i) {
+      return 0.1 * cos(0.3 * i.x()) * cos(TWOPI * (i.y() - mesh->ystart) / 3)
+             * sin(TWOPI * i.z() / nz);
+    });
+    fields["ion_boussinesq_coefficient"] = Coordinates::FieldMetric{1.5};
+    fields["ion_mass_density"] = Field3D{2.0};
+    fields["ion_reynolds_x"] = Field3D{0.0};
+    fields["ion_reynolds_z"] = Field3D{0.0};
+    fields["DivJReynolds"] = Field3D{0.0};
+    fields["DivJdia"] = Field3D{0.0};
+    fields["ion_wall_rate"] = Field3D{0.0};
+    component.transform(state);
+    return state;
+  };
+  const auto full = run(0.0, true);
+  const auto limited = run(3.0, true);
+  const auto work = run(3.0, false);
+  const BoutReal scale = 2.0 / (2.0 + 4.5 * exp(-2.0 / 4.5));
+  for (const auto* name : {"d+", "he++"}) {
+    const Field3D full_source =
+        full["species"][name]["polarisation_density_source"].as<Field3D>();
+    EXPECT_GT(max(abs(full_source), true), 1e-8);
+    EXPECT_TRUE(IsFieldEqual(
+        limited["species"][name]["polarisation_density_source"].as<Field3D>(),
+        Field3D{scale * full_source}, "RGN_NOBNDRY", 1e-12));
+  }
+  EXPECT_TRUE(IsFieldEqual(limited["fields"]["DivJpol"].as<Field3D>(),
+                           full["fields"]["DivJpol"].as<Field3D>(), "RGN_NOBNDRY",
+                           1e-12));
+  const Field3D work_rate =
+      work["fields"]["ion_polarisation_energy_divergence"].as<Field3D>();
+  const Field3D transported =
+      full["fields"]["ion_polarisation_energy_divergence"].as<Field3D>() - work_rate;
+  EXPECT_TRUE(
+      IsFieldEqual(limited["fields"]["ion_polarisation_energy_divergence"].as<Field3D>(),
+                   Field3D{work_rate + scale * transported}, "RGN_NOBNDRY", 1e-12));
+}
+
+TEST_F(EvolveVorticityIonEnergyTest, NonpositiveDensityStopsParticleFluxButRetainsWork) {
+  for (BoutReal density : {0.0, -0.001}) {
+    FakeSolver solver;
+    auto options = makeOptions();
+    options["test"]["type"] = "evolve_vorticity_ion_energy";
+    options["polarisation_drift"]["polarisation_density_threshold"] = 0.02;
+    PolarisationDrift component("polarisation_drift", options, &solver);
+    component.declareAllSpecies(SpeciesInformation({"e"}, {}, {"d+", "he++"}, {}));
+    auto state = makeState();
+    for (const auto* name : {"d+", "he++"}) {
+      auto& species = state["species"][name];
+      species["density"].force(Field3D{density});
+      species["pressure"] = Field3D{0.0};
+      species["temperature"] = Field3D{0.0};
+    }
+    const bout::ion_energy::XZFaceFluxes reynolds{
+        makeField<Field3D>([](const Ind3D& i) { return 0.01 * i.x(); }), Field3D{0.0}};
+    auto& fields = state["fields"];
+    fields["phi"] = Field3D{0.7};
+    fields["ion_pressure_potential"] = Field3D{0.0};
+    fields["vorticity"] = Field3D{0.0};
+    fields["ion_boussinesq_coefficient"] = Coordinates::FieldMetric{1.5};
+    fields["ion_mass_density"] = Field3D{6.0 * density};
+    fields["ion_reynolds_x"] = reynolds.x;
+    fields["ion_reynolds_z"] = reynolds.z;
+    fields["DivJReynolds"] = bout::ion_energy::divergence(reynolds);
+    fields["DivJdia"] = -bout::ion_energy::divergence(reynolds);
+    fields["ion_wall_rate"] = Field3D{0.0};
+    component.transform(state);
+    for (const auto* name : {"d+", "he++"}) {
+      EXPECT_TRUE(IsFieldEqual(
+          state["species"][name]["polarisation_density_source"].as<Field3D>(), 0.0,
+          "RGN_NOBNDRY"));
+    }
+    const Field3D current = fields["DivJpol"].as<Field3D>();
+    EXPECT_GT(max(abs(current), true), 1e-8);
+    EXPECT_TRUE(IsFieldEqual(fields["ion_polarisation_energy_divergence"].as<Field3D>(),
+                             Field3D{0.7 * current}, "RGN_NOBNDRY", 1e-12));
+  }
+}
+
+TEST_F(EvolveVorticityIonEnergyTest, DivergenceFreeCurrentReportsNonzeroChargeMismatch) {
+  FakeSolver solver;
+  auto options = makeOptions();
+  options["test"]["type"] = "evolve_vorticity_ion_energy";
+  options["polarisation_drift"]["polarisation_density_threshold"] = 0.02;
+  PolarisationDrift component("polarisation_drift", options, &solver);
+  component.declareAllSpecies(SpeciesInformation({"e"}, {}, {"d+", "he++"}, {}));
+  auto state = makeState();
+  const Field3D density = makeField<Field3D>([](const Ind3D& i) {
+    const int x = std::clamp(i.x(), mesh->xstart, mesh->xend);
+    return 0.001 + 0.1 * (x - mesh->xstart);
+  });
+  for (const auto* name : {"d+", "he++"}) {
+    auto& species = state["species"][name];
+    species["density"].force(density);
+    species["pressure"] = Field3D{0.0};
+    species["temperature"] = Field3D{0.0};
+  }
+  auto& fields = state["fields"];
+  fields["phi"] = Field3D{0.7};
+  fields["ion_pressure_potential"] = Field3D{0.0};
+  fields["vorticity"] = Field3D{0.0};
+  fields["ion_boussinesq_coefficient"] = Coordinates::FieldMetric{1.5};
+  fields["ion_mass_density"] = 6.0 * density;
+  fields["ion_reynolds_x"] = Field3D{0.01};
+  fields["ion_reynolds_z"] = Field3D{0.0};
+  fields["DivJReynolds"] = Field3D{0.0};
+  fields["DivJdia"] = Field3D{0.0};
+  fields["ion_wall_rate"] = Field3D{0.0};
+  component.transform(state);
+  Options output{{"Nnorm", 1.0}, {"Tnorm", 1.0}, {"Omega_ci", 1.0}, {"rho_s0", 1.0}};
+  component.outputVars(output);
+  EXPECT_TRUE(IsFieldEqual(output["DivJpol"].as<Field3D>(), 0.0, "RGN_NOBNDRY"));
+  EXPECT_GT(output["polarisation_charge_mismatch_l2"].as<BoutReal>(), 1e-5);
+  EXPECT_EQ(output["polarisation_charge_mismatch_rel"].as<BoutReal>(),
+            std::numeric_limits<BoutReal>::infinity());
 }

@@ -452,6 +452,19 @@ if(HERMES_TESTS)
       set_tests_properties(
         ion-energy-closed PROPERTIES PROCESSORS 2 TIMEOUT 60 LABELS
                                      "integration;energy;ci")
+      hermes_add_integrated_test(
+        polarisation-density-limit
+        INTERPRETER
+        ${HERMES_ENERGY_PYTHON}
+        FILES
+        ../ion_energy_test.py
+        ../ion-energy-closed/data/BOUT.inp
+        ARGUMENTS
+        --exe
+        $<TARGET_FILE:${PROJECT_NAME}>)
+      set_tests_properties(
+        polarisation-density-limit PROPERTIES PROCESSORS 2 TIMEOUT 300 LABELS
+                                              "integration;energy;ci")
       if(HERMES_ION_ENERGY_MMS)
         hermes_add_integrated_test(
           ion-energy-mms

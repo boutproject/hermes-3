@@ -1,0 +1,169 @@
+#!/usr/bin/env python3
+"""Density-limited conservative transport, wall balances and MPI invariance."""
+
+import sys
+from pathlib import Path
+
+import numpy as np
+import xhermes
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from ion_energy_test import launch, parser
+
+HERE = Path(__file__).resolve().parent
+cli = parser(__doc__)
+cli.add_argument("--baseline-directory", type=Path)
+args = cli.parse_args()
+
+
+def read(path):
+    with xhermes.open(
+        path, unnormalise=False, keep_xboundaries=False, keep_yboundaries=False
+    ) as ds:
+        return ds.load(scheduler="synchronous")
+
+
+def check_outputs(ds, diagnose):
+    for name in (
+        "polarisation_charge_mismatch_l2",
+        "polarisation_charge_mismatch_linf",
+        "polarisation_charge_mismatch_rel",
+        "polarisation_limiter_volume_fraction",
+    ):
+        assert name in ds and np.isfinite(ds[name]).all(), name
+    assert ("polarisation_charge_mismatch" in ds) == diagnose
+    for quantity in ("ion_energy", "particles_d+", "particles_impurity"):
+        for side in ("core", "pf", "outer"):
+            assert (
+                f"balance_polarisation_drift_{quantity}_radial_polarisation_{side}"
+                in ds
+            )
+
+
+states = {}
+for threshold in (0, 1e-5):
+    ds = read(
+        launch(
+            args,
+            f"closed-{threshold}",
+            HERE.parent / "ion-energy-closed/data/BOUT.inp",
+            [
+                "solver:nout=20",
+                "solver:output_step=1",
+                "evolve_vorticity_ion_energy:diagnose=true",
+                f"polarisation_drift:polarisation_density_threshold={threshold}",
+            ],
+        )
+    )
+    check_outputs(ds, True)
+    assert float(ds.polarisation_charge_mismatch_rel.max()) < 1e-11
+    states[threshold] = ds
+fields = ("Eion", "Pe", "Nd+", "Nimpurity", "NVd+", "NVimpurity", "Vort", "phi")
+for name in fields:
+    np.testing.assert_allclose(states[0][name], states[1e-5][name], rtol=0, atol=1e-10)
+if args.baseline_directory:
+    baseline = read(args.baseline_directory)
+    for name in fields:
+        np.testing.assert_allclose(states[0][name], baseline[name], rtol=0, atol=1e-10)
+    print("Disabled limiter matches baseline to absolute 1e-10")
+
+
+def wall_run(label, threshold, *, diagnose=True, weights="central", nproc=None):
+    ds = read(
+        launch(
+            args,
+            label,
+            HERE / "data/BOUT.inp",
+            [
+                f"polarisation_drift:polarisation_density_threshold={threshold}",
+                f"polarisation_drift:polarisation_transport_weights={weights}",
+                f"evolve_vorticity_ion_energy:diagnose={str(diagnose).lower()}",
+                f"polarisation_drift:diagnose={str(diagnose).lower()}",
+                f"NXPE={nproc or args.nproc}",
+                # Keep the same periodic Y extent for radial decomposition.
+                "mesh:ny=4",
+            ],
+            nproc=nproc,
+        )
+    )
+    check_outputs(ds, diagnose)
+    if threshold:
+        assert float(ds.polarisation_charge_mismatch_rel.max()) > 1e-3
+        fraction = ds.polarisation_limiter_volume_fraction
+        assert float(fraction.min()) > 0 and float(fraction.max()) < 1
+    if diagnose:
+        volume = ds.J * ds.dx * ds.dy * ds.dz
+        for quantity in ("ion_energy", "particles_d+", "particles_impurity"):
+            radial = sum(
+                ds[f"balance_polarisation_drift_{quantity}_radial_polarisation_{side}"]
+                for side in ("core", "pf", "outer")
+            )
+            component = (
+                "ion_energy" if quantity == "ion_energy" else "polarisation_drift"
+            )
+            net = ds[f"balance_{component}_{quantity}_out_polarisation"]
+            rounding = 1e-12
+            if quantity == "ion_energy":
+                rounding += (
+                    128
+                    * np.finfo(float).eps
+                    * float((abs(ds.DivEpol) * volume).sum(("x", "y", "z")).max())
+                )
+            np.testing.assert_allclose(radial, net, rtol=1e-10, atol=rounding)
+        energy = ((ds.Eion + 1.5 * ds.Pe) * volume).sum(("x", "y", "z"))
+        wall_power = sum(
+            ds[f"balance_polarisation_drift_ion_energy_radial_polarisation_{side}"]
+            for side in ("core", "pf", "outer")
+        )
+        closure = float(energy.isel(t=-1) - energy.isel(t=0)) + np.trapezoid(
+            wall_power, ds.t
+        )
+        relative = abs(closure) / float(energy.isel(t=0))
+        assert relative < 1e-8, (label, "energy", relative)
+        print(f"{label}: integrated energy closure {relative:.3g}")
+        for name in ("d+", "impurity"):
+            content = (ds["N" + name] * volume).sum(("x", "y", "z"))
+            wall_loss = ds[
+                f"balance_polarisation_drift_particles_{name}_out_polarisation"
+            ]
+            closure = float(content.isel(t=-1) - content.isel(t=0)) + np.trapezoid(
+                wall_loss, ds.t
+            )
+            assert abs(closure) / float(content.isel(t=0)) < 1e-8, (label, name)
+        # Check the saved energy equation using its independent RHS integral.
+        prefix = "balance_ion_energy_ion_energy_"
+        rate = (
+            ds[prefix + "input"] + ds[prefix + "sources"] + ds[prefix + "electron_work"]
+        )
+        for term in ("out_exb", "out_electric", "out_parallel", "out_polarisation"):
+            rate -= ds[prefix + term]
+        np.testing.assert_allclose(rate, ds[prefix + "rhs"], rtol=1e-10, atol=1e-12)
+    return ds
+
+
+unlimited = wall_run("wall-off", 0)
+limited = wall_run("wall-on", 0.02)
+for name in ("Nd+", "Nimpurity"):
+    off, on = float(unlimited[name].min()), float(limited[name].min())
+    # Include the initial state in the positivity check, and compare the final
+    # wall minima separately so a shared initial minimum cannot mask a loss.
+    assert on > 0 and on >= off - 1e-12, (name, off, on)
+    wall_off = float(unlimited[name].isel(t=-1, x=0).min())
+    wall_on = float(limited[name].isel(t=-1, x=0).min())
+    assert wall_on >= wall_off - 1e-12, (name, wall_off, wall_on)
+    print(
+        f"{name}: minimum off/on {off:.8g}/{on:.8g}; final inner wall {wall_off:.8g}/{wall_on:.8g}"
+    )
+
+quiet = wall_run("wall-quiet", 0.02, diagnose=False)
+for name in fields:
+    np.testing.assert_allclose(limited[name], quiet[name], rtol=0, atol=1e-10)
+other = wall_run("wall-decomposition", 0.02, nproc=1 if args.nproc > 1 else 2)
+for name in (
+    *fields,
+    "polarisation_charge_mismatch_rel",
+    "polarisation_limiter_volume_fraction",
+):
+    np.testing.assert_allclose(limited[name], other[name], rtol=0, atol=1e-10)
+wall_run("wall-upwind", 0.02, weights="upwind")
+print("Transport regression, wall conservation, positivity and output checks passed")
