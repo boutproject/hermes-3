@@ -824,7 +824,7 @@ Stellarators
 Helically Symmetric eXperiment (HSX)
 ~~~~~~~~~~~~
 
-`HSX <https://www.hsx.wisc.edu/>`_ is an optimized stellarator at UW-Madison. It is a 4-field period device with a magnetic field that can run around 1T. This example features the grid generation for one field period and uses the approximate wall geometry of the device. The implementation of the magnetic field is sufficiently adjustable to cover different configurations, as they take the coil currents as an input. Field line tracing and the geometry is supplied by `FusionSC <https://jugit.fz-juelich.de/a.knieps/fsc>`_ and we thank Alexander Knieps and Dieter Boeyaert for their help.
+`HSX <https://www.hsx.wisc.edu/>`_ is an optimized stellarator at UW-Madison. It is a 4-field period device with a magnetic field that can run around 1T. This example features the grid generation for one field period and uses the approximate wall geometry of the device. The implementation of the magnetic field is sufficiently adjustable to cover different configurations, as they take the coil currents as an input. Field line tracing and the geometry is supplied by `FusionSC <https://jugit.fz-juelich.de/a.knieps/fsc>`_ and we thank Alexander Knieps and Dieter Boeyaert for their help. For further details on the device, we refer to https://iopscience.iop.org/article/10.1088/1361-6587/aec325/meta.
 
 **Grid Generation**
 
