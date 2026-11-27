@@ -474,6 +474,7 @@ void NeutralMixed::transform_impl(GuardedOptions& state) {
 
   if (!mesh->isFci()) {
     Tn.applyBoundary();
+    Vn.applyBoundary();
   }
 
   /////////////////////////////////////////////////////
