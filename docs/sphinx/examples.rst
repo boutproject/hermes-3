@@ -839,7 +839,7 @@ The input file contains components for a standard transport simulation
    [hermes]
    components = h+ , e, sound_speed, braginskii_collisions, braginskii_friction, braginskii_heat_exchange, sheath_boundary_fci, braginskii_ion_viscosity, braginskii_conduction
 
-It simulations hydrogen ``h+`` and electrons ``e``. ``sound_speed`` is used for the numerical dissipation in the parallel advection operators. For numerical dissipation, ``electron_dynamics`` should be avoided in the sound speed component in this setup.
+It simulates hydrogen ``h+`` and electrons ``e``. ``sound_speed`` is used for the numerical dissipation in the parallel advection operators. For numerical dissipation, ``electron_dynamics`` should be avoided in the sound speed component in this setup.
 
 Then follow the typical Braginskii components and the sheath boundary component. ``sheath_boundary_fci`` is an Fci-compatible version of ``sheath_boundary_simple``. 
 It takes sheath transmission coefficients as input, which is set in section:
@@ -852,7 +852,7 @@ It takes sheath transmission coefficients as input, which is set in section:
    gamma_i = 4.5
 
 
-Both species are modelled using anomalous diffusion. Both density and temperatures are controlled using the `selflimiting source <https://hermes3.readthedocs.io/en/latest/feedback_control.html>`_, which is further explained in the documentation. 
+Both species are modelled using anomalous diffusion. Density and temperatures are controlled using the `selflimiting source <https://hermes3.readthedocs.io/en/latest/feedback_control.html>`_, which is further explained in the documentation. 
 
 **Running the simulation**
 
