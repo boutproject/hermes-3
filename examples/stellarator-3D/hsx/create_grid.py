@@ -2,6 +2,10 @@ import fusionsc
 import numpy as np
 import zoidberg
 
+# Grid generation for HSX
+# Website: https://www.hsx.wisc.edu
+# For further details, see https://iopscience.iop.org/article/10.1088/1361-6587/aec325/meta
+
 # Number of guard cells
 MXG = 2
 
