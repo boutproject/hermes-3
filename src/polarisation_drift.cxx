@@ -774,6 +774,21 @@ void PolarisationDrift::transformConservative(GuardedOptions& state) {
     }
   }
   const bool upwind = transport_weights == bout::polarisation::TransportWeights::upwind;
+  bool unchanged_particle_flux = !upwind;
+  for (int x = mesh->xstart - 1; x <= mesh->xend; ++x) {
+    for (int y = mesh->ystart; y <= mesh->yend; ++y) {
+      for (int z = mesh->zstart; z <= mesh->zend; ++z) {
+        unchanged_particle_flux =
+            unchanged_particle_flux
+            && particle_flux.x(x, y, z) == polarisation_flux.x(x, y, z);
+      }
+    }
+  }
+  for (const auto& i : phi.getRegion("RGN_NOBNDRY")) {
+    unchanged_particle_flux = unchanged_particle_flux
+                              && particle_flux.z[i] == polarisation_flux.z[i]
+                              && (!poloidal_flows || limiter[i] == 1.0);
+  }
   const auto particleDivergence = [&](const bout::ion_energy::XZFaceFluxes& flux,
                                       const Field3D& weight) {
     if (!upwind) {
@@ -892,6 +907,7 @@ void PolarisationDrift::transformConservative(GuardedOptions& state) {
   // actual species mass-density partition.
   const Field3D work_weight = phi + psi;
   Field3D transported_weight = zeroFrom(phi);
+  Field3D combined_weight = copy(work_weight);
   diagnostics = Options{};
   forAllIons(allspecies, [&](GuardedOptions species) {
     const BoutReal AA = get<BoutReal>(species["AA"]);
@@ -927,9 +943,15 @@ void PolarisationDrift::transformConservative(GuardedOptions& state) {
                                                  + particleDivergence(wall_flux, weight);
     }
     transported_weight += coefficient * (3. / 2) * P;
+    if (unchanged_particle_flux) {
+      combined_weight += coefficient * (3. / 2) * P;
+    }
     if (species.isSet("velocity")) {
       const Field3D V = GET_NOBOUNDARY(Field3D, species["velocity"]);
       transported_weight += coefficient * 0.5 * AA * N * SQ(V);
+      if (unchanged_particle_flux) {
+        combined_weight += coefficient * 0.5 * AA * N * SQ(V);
+      }
     }
     if (species.isSet("momentum")) {
       const Field3D NV = GET_NOBOUNDARY(Field3D, species["momentum"]);
@@ -956,7 +978,11 @@ void PolarisationDrift::transformConservative(GuardedOptions& state) {
   });
   // Work is tied to the current; thermal and parallel kinetic energy follow
   // the particle flux. Both divergences remain conservative.
-  DivEpol = divPol(work_weight) + divPol(transported_weight, true);
+  // Preserve the original operation order when transport is unchanged, so
+  // roundoff does not perturb an adaptive time integrator's later steps.
+  DivEpol = unchanged_particle_flux
+                ? divPol(combined_weight)
+                : divPol(work_weight) + divPol(transported_weight, true);
   initRadial("ion_energy");
   for (int x : {mesh->xstart - 1, mesh->xend}) {
     const bool inner = x == mesh->xstart - 1;
@@ -994,16 +1020,20 @@ void PolarisationDrift::transformConservative(GuardedOptions& state) {
             0.5 * (phi(x, y, z) + phi(x + 1, y, z) + psi(x, y, z) + psi(x + 1, y, z));
         const BoutReal pressure_mid = 0.5 * (psi(x, y, z) + psi(x + 1, y, z));
         const BoutReal transported = thermal[index] + kinetic_parallel[index];
-        const BoutReal revised =
-            polarisation_flux.x(x, y, z) * work + particle_flux.x(x, y, z) * transported;
+        const BoutReal revised = unchanged_particle_flux
+                                     ? polarisation_flux.x(x, y, z) * (work + transported)
+                                     : polarisation_flux.x(x, y, z) * work
+                                           + particle_flux.x(x, y, z) * transported;
         balance.add("ion_energy", radialTerm(inner), (inner ? -1.0 : 1.0) * revised);
         const BoutReal volume = coord->J()(cell, y, z) * coord->dx()(cell, y, z)
                                 * coord->dy()(cell, y, z) * coord->dz()(cell, y, z);
-        DivEpol(cell, y, z) +=
-            (inner ? -1.0 : 1.0)
-            * (revised - polarisation_flux.x(x, y, z) * work_weight(cell, y, z)
-               - particle_flux.x(x, y, z) * transported_weight(cell, y, z))
-            / volume;
+        const BoutReal correction =
+            unchanged_particle_flux
+                ? polarisation_flux.x(x, y, z)
+                      * (work + transported - combined_weight(cell, y, z))
+                : revised - polarisation_flux.x(x, y, z) * work_weight(cell, y, z)
+                      - particle_flux.x(x, y, z) * transported_weight(cell, y, z);
+        DivEpol(cell, y, z) += (inner ? -1.0 : 1.0) * correction / volume;
         wall_energy_weight(x, y, z) = work + transported;
         wall_work_weight(x, y, z) = work;
         wall_thermal_weight(x, y, z) = transported;
