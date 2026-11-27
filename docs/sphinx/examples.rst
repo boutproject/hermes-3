@@ -832,7 +832,7 @@ The grid generation is no different than for any other structured Fci grid. For 
 
 **Input file**
 
-The input file contains components for a standard transport simulation 
+The input file contains components for a standard transport simulation
 
 .. code-block:: ini
 
@@ -841,7 +841,7 @@ The input file contains components for a standard transport simulation
 
 It simulates hydrogen ``h+`` and electrons ``e``. ``sound_speed`` is used for the numerical dissipation in the parallel advection operators. For numerical dissipation, ``electron_dynamics`` should be avoided in the sound speed component in this setup.
 
-Then follow the typical Braginskii components and the sheath boundary component. ``sheath_boundary_fci`` is an Fci-compatible version of ``sheath_boundary_simple``. 
+Then follow the typical Braginskii components and the sheath boundary component. ``sheath_boundary_fci`` is an Fci-compatible version of ``sheath_boundary_simple``.
 It takes sheath transmission coefficients as input, which is set in section:
 
 .. code-block:: ini
@@ -852,10 +852,8 @@ It takes sheath transmission coefficients as input, which is set in section:
    gamma_i = 4.5
 
 
-Both species are modelled using anomalous diffusion. Density and temperatures are controlled using the `selflimiting source <https://hermes3.readthedocs.io/en/latest/feedback_control.html>`_, which is further explained in the documentation. 
+Both species are modelled using anomalous diffusion. Density and temperatures are controlled using the `selflimiting source <https://hermes3.readthedocs.io/en/latest/feedback_control.html>`_, which is further explained in the documentation.
 
 **Running the simulation**
 
-Transport simulations like these are numerically robust. The biggest problems (currently) for such a physics model are distant areas with low densities and temperatures. For this reason, it is advised to investigate if simulations stalling/crashing can be observed when the minimum density/temperature in the system is rapidly decreasing. For this, you have to reduce the timestep to really resolve the behavior. 
-
-
+Transport simulations like these are numerically robust. The biggest problems (currently) for such a physics model are distant areas with low densities and temperatures. For this reason, it is advised to investigate if simulations stalling/crashing can be observed when the minimum density/temperature in the system is rapidly decreasing. For this, you have to reduce the timestep to really resolve the behavior.
