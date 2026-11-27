@@ -10,6 +10,9 @@ BOUT.settings
 __pycache__
 *.bk
 
+# OpenADAS files created by json_database/download_openadas.py
+/json_database/*89_ar.json
+
 # Docs
 /docs/build
 /docs/doxygen

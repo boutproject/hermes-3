@@ -185,6 +185,27 @@ TEST_F(ADASNeRecTest, SourcesRegression) { sources_regression_test(); }
 TEST_F(ADASNepRecTest, SourcesRegression) { sources_regression_test(); }
 TEST_F(ADASNe9pRecTest, SourcesRegression) { sources_regression_test(); }
 
+// Ar ions ionization (non-exhaustive). No reference data: the argon OpenADAS
+// files are not included in Hermes-3, and these tests are skipped without them
+TEST_F(ADASArIznTest, FiniteSourcesPositiveRate) { sources_finite_test(); }
+TEST_F(ADASArpIznTest, FiniteSourcesPositiveRate) { sources_finite_test(); }
+TEST_F(ADASAr17pIznTest, FiniteSourcesPositiveRate) { sources_finite_test(); }
+TEST_F(ADASArIznTest, RateAtTableNode) { rate_at_table_node_test("scd89_ar.json", 0); }
+TEST_F(ADASArpIznTest, RateAtTableNode) { rate_at_table_node_test("scd89_ar.json", 1); }
+TEST_F(ADASAr17pIznTest, RateAtTableNode) {
+  rate_at_table_node_test("scd89_ar.json", 17);
+}
+
+// Ar ions recombination (non-exhaustive)
+TEST_F(ADASArRecTest, FiniteSourcesPositiveRate) { sources_finite_test(); }
+TEST_F(ADASArpRecTest, FiniteSourcesPositiveRate) { sources_finite_test(); }
+TEST_F(ADASAr17pRecTest, FiniteSourcesPositiveRate) { sources_finite_test(); }
+TEST_F(ADASArRecTest, RateAtTableNode) { rate_at_table_node_test("acd89_ar.json", 0); }
+TEST_F(ADASArpRecTest, RateAtTableNode) { rate_at_table_node_test("acd89_ar.json", 1); }
+TEST_F(ADASAr17pRecTest, RateAtTableNode) {
+  rate_at_table_node_test("acd89_ar.json", 17);
+}
+
 // Ne ions CX  (non-exhaustive)
 TEST_F(ADASNepHCXTest, SourcesRegression) { sources_regression_test(); }
 TEST_F(ADASNep5DCXTest, SourcesRegression) { sources_regression_test(); }

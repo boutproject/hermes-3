@@ -12,6 +12,8 @@
 #include <bout/field_factory.hxx> // For generating functions
 
 #include <algorithm> // std::any_of
+#include <memory>
+#include <string_view>
 
 struct ComponentTest : public FakeMeshFixture {
   ComponentTest() : FakeMeshFixture() {
@@ -805,8 +807,19 @@ const Options ConcreteComponentTests::required_params{
 // Check the result of the Component::typeName() function is the
 // same as the type name used to create the component.
 TEST_P(ConcreteComponentTests, CheckComponentTypeName) {
-  auto component =
-      ComponentFactory::getInstance().create(typname, objname, options, &solver);
+  std::unique_ptr<Component> component;
+  try {
+    component =
+        ComponentFactory::getInstance().create(typname, objname, options, &solver);
+  } catch (const BoutException& error) {
+    // OpenADAS files that are not included in Hermes-3 (e.g. argon) have to be
+    // created with json_database/download_openadas.py first
+    if (std::string_view(error.what()).find("Could not read ADAS file")
+        != std::string_view::npos) {
+      GTEST_SKIP() << error.what();
+    }
+    throw;
+  }
   EXPECT_EQ(component->typeName(), typname);
 }
 
