@@ -72,6 +72,11 @@ PolarisationDrift::PolarisationDrift(std::string name, Options& alloptions,
     }
     average_atomic_mass = ion["average_atomic_mass"].withDefault<BoutReal>(2.0);
     density_floor = ion["density_floor"].withDefault<BoutReal>(1e-7);
+    transport_weights = options["polarisation_transport_weights"]
+                            .doc("Particle-carried face weights: central or upwind; "
+                                 "upwind uses the current donor's composition, "
+                                 "temperature and velocity")
+                            .withDefault(bout::polarisation::TransportWeights::central);
     polarisation_density_threshold =
         options["polarisation_density_threshold"]
             .doc("Density threshold in units of Nnorm for polarisation particle "
@@ -739,6 +744,15 @@ void PolarisationDrift::transformConservative(GuardedOptions& state) {
   // Use the same geometric chi currents as the residual, including wall faces.
   const auto chi_faces = bout::ion_energy::perpendicularFaces(boussinesq_coeff, chi);
   polarisation_flux = {-reynolds.x - chi_faces.x, -reynolds.z - chi_faces.z};
+  const auto xDonor = [&](int x, int y, int z) {
+    if (!mesh->periodicX && x == mesh->xstart - 1 && mesh->firstX()) {
+      return x + 1;
+    }
+    if (!mesh->periodicX && x == mesh->xend && mesh->lastX()) {
+      return x;
+    }
+    return polarisation_flux.x(x, y, z) >= 0.0 ? x : x + 1;
+  };
   Field3D limiter = zeroFrom(phi);
   BOUT_FOR(i, limiter.getRegion("RGN_ALL")) {
     limiter[i] = densityLimiter(mass_density[i]);
@@ -751,13 +765,7 @@ void PolarisationDrift::transformConservative(GuardedOptions& state) {
     for (int x = mesh->xstart - 1; x <= mesh->xend; ++x) {
       for (int y = mesh->ystart; y <= mesh->yend; ++y) {
         for (int z = mesh->zstart; z <= mesh->zend; ++z) {
-          int donor = polarisation_flux.x(x, y, z) >= 0.0 ? x : x + 1;
-          if (!mesh->periodicX && x == mesh->xstart - 1 && mesh->firstX()) {
-            donor = x + 1;
-          } else if (!mesh->periodicX && x == mesh->xend && mesh->lastX()) {
-            donor = x;
-          }
-          particle_flux.x(x, y, z) *= limiter(donor, y, z);
+          particle_flux.x(x, y, z) *= limiter(xDonor(x, y, z), y, z);
         }
       }
     }
@@ -765,9 +773,30 @@ void PolarisationDrift::transformConservative(GuardedOptions& state) {
       particle_flux.z[i] *= polarisation_flux.z[i] >= 0.0 ? limiter[i] : limiter[i.zp()];
     }
   }
+  const bool upwind = transport_weights == bout::polarisation::TransportWeights::upwind;
+  const auto particleDivergence = [&](const bout::ion_energy::XZFaceFluxes& flux,
+                                      const Field3D& weight) {
+    if (!upwind) {
+      return bout::ion_energy::divergence(flux, &weight);
+    }
+    Field3D w = copy(weight);
+    mesh->communicate(w);
+    bout::ion_energy::XZFaceFluxes weighted{zeroFrom(phi), zeroFrom(phi)};
+    for (int x = mesh->xstart - 1; x <= mesh->xend; ++x) {
+      for (int y = mesh->ystart; y <= mesh->yend; ++y) {
+        for (int z = mesh->zstart; z <= mesh->zend; ++z) {
+          weighted.x(x, y, z) = flux.x(x, y, z) * w(xDonor(x, y, z), y, z);
+        }
+      }
+    }
+    BOUT_FOR(i, phi.getRegion("RGN_NOBNDRY")) {
+      weighted.z[i] = flux.z[i] * (polarisation_flux.z[i] >= 0.0 ? w[i] : w[i.zp()]);
+    }
+    return bout::ion_energy::divergence(weighted);
+  };
   const auto divPol = [&](const Field3D& weight, bool particles = false) -> Field3D {
-    Field3D result = bout::ion_energy::divergence(
-        particles ? particle_flux : polarisation_flux, &weight);
+    Field3D result = particles ? particleDivergence(particle_flux, weight)
+                               : bout::ion_energy::divergence(polarisation_flux, &weight);
     if (poloidal_flows) {
       // The optional X-Y operator uses a cell-based limiter; it cannot accept
       // the donor factors used on the X-Z faces. Work retains its full weight.
@@ -783,6 +812,9 @@ void PolarisationDrift::transformConservative(GuardedOptions& state) {
   // Work uses the local Phi midpoint, including conducting-wall pressure work.
   const auto midpoint = [](const Field3D& value, int x, int y, int z) {
     return 0.5 * (value(x, y, z) + value(x + 1, y, z));
+  };
+  const auto wallValue = [&](const Field3D& value, int x, int y, int z) {
+    return upwind ? value(xDonor(x, y, z), y, z) : midpoint(value, x, y, z);
   };
   const auto* coord = phi.getCoordinates();
   Field3D wall_energy_weight = zeroFrom(phi);
@@ -801,7 +833,7 @@ void PolarisationDrift::transformConservative(GuardedOptions& state) {
       for (int y = mesh->ystart; y <= mesh->yend; ++y) {
         for (int z = 0; z < mesh->LocalNz; ++z) {
           const BoutReal revised =
-              prescribed ? (*prescribed)(x, y, z) : midpoint(weight, x, y, z);
+              prescribed ? (*prescribed)(x, y, z) : wallValue(weight, x, y, z);
           const BoutReal volume = coord->J()(cell, y, z) * coord->dx()(cell, y, z)
                                   * coord->dy()(cell, y, z) * coord->dz()(cell, y, z);
           result(cell, y, z) += (inner ? -1.0 : 1.0) * particle_flux.x(x, y, z)
@@ -833,6 +865,10 @@ void PolarisationDrift::transformConservative(GuardedOptions& state) {
   mass_density = floor(mass_density, average_atomic_mass * density_floor);
   const auto wallFraction = [&](const Field3D& density, BoutReal mass, int x, int y,
                                 int z) {
+    if (upwind) {
+      const int donor = xDonor(x, y, z);
+      return mass * density(donor, y, z) / mass_density(donor, y, z);
+    }
     return 0.5
            * (mass * density(x, y, z) / mass_density(x, y, z)
               + mass * density(x + 1, y, z) / mass_density(x + 1, y, z));
@@ -857,9 +893,9 @@ void PolarisationDrift::transformConservative(GuardedOptions& state) {
     set(species["polarisation_density_source"], density_source);
     if (diagnose) {
       const Field3D weight = coefficient * N;
-      diagnostics[species.name()]["wall_loss"] =
-          wallWeighted(weight) - divPol(weight, true)
-          + bout::ion_energy::divergence(wall_flux, &weight);
+      diagnostics[species.name()]["wall_loss"] = wallWeighted(weight)
+                                                 - divPol(weight, true)
+                                                 + particleDivergence(wall_flux, weight);
     }
     transported_weight += coefficient * (3. / 2) * P;
     if (species.isSet("velocity")) {
@@ -878,7 +914,7 @@ void PolarisationDrift::transformConservative(GuardedOptions& state) {
         for (int y = mesh->ystart; y <= mesh->yend; ++y) {
           for (int z = 0; z < mesh->LocalNz; ++z) {
             wall_momentum_weight(x, y, z) =
-                AA * wallFraction(N, AA, x, y, z) * midpoint(V, x, y, z) / Z;
+                AA * wallFraction(N, AA, x, y, z) * wallValue(V, x, y, z) / Z;
           }
         }
       }
@@ -917,8 +953,8 @@ void PolarisationDrift::transformConservative(GuardedOptions& state) {
         for (int z = 0; z < mesh->LocalNz; ++z) {
           const auto index = static_cast<size_t>(z);
           const BoutReal partition = wallFraction(N, AA, x, y, z);
-          const BoutReal temp = midpoint(T, x, y, z);
-          const BoutReal velocity = has_velocity ? midpoint(V, x, y, z) : 0.0;
+          const BoutReal temp = wallValue(T, x, y, z);
+          const BoutReal velocity = has_velocity ? wallValue(V, x, y, z) : 0.0;
           pressure_transport[index] += partition * temp / Z;
           thermal[index] += 1.5 * partition * temp / Z;
           kinetic_parallel[index] += 0.5 * AA * partition * velocity * velocity / Z;

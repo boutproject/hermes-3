@@ -17,6 +17,7 @@
 class Laplacian;
 
 BOUT_ENUM_CLASS_NS(bout::polarisation, Implementation, legacy, conservative);
+BOUT_ENUM_CLASS_NS(bout::polarisation, TransportWeights, central, upwind);
 
 /// Selects legacy potential-flow or conservative total-ion-energy transport.
 /// Conservative mode requires evolve_vorticity_ion_energy and consumes its
@@ -89,6 +90,7 @@ private:
   Coordinates::FieldMetric boussinesq_coeff;
   bool poloidal_flows{false};
   BoutReal polarisation_density_threshold{0.0};
+  bout::polarisation::TransportWeights transport_weights;
   BoutReal densityLimiter(BoutReal mass_density) const;
   int polarisation_corrections{10}, chi_iterations{0};
   BoutReal chi_residual{0.0};
