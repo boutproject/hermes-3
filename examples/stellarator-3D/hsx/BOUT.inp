@@ -1,10 +1,15 @@
 
+
 nout = 100
-timestep = 10000
+timestep = 5000.0
 
 [mesh]
 
-file = "dommaschk_68_8_512.fci.grid.nc"
+file = "hsx_260_10_768.fci.grid.nc"
+
+[input]
+
+error_on_unused_options = false
 
 [mesh:paralleltransform]
 type = fci
@@ -12,45 +17,126 @@ type = fci
 [solver]
 mxstep = 10000
 type = cvode
+atol = 1e-9
 rtol = 1e-5
-atol = 1e-10
-
+cvode_max_order = 3
+max_timestep = 75.0
+maxl = 6
 [hermes]
-# Note: collisions are needed to be able to calculate parallel conduction
-components = (h+, e, braginskii_collisions, braginskii_conduction)
+
+components = h+ , e, sound_speed, braginskii_collisions, braginskii_friction, braginskii_heat_exchange, sheath_boundary_fci, braginskii_ion_viscosity, braginskii_conduction
 
 Nnorm = 1e19  # Reference density [m^-3]
-Bnorm = 1   # Reference magnetic field [T]
-Tnorm = 150   # Reference temperature [eV]
+Bnorm = 2.5   # Reference magnetic field [T]
+Tnorm = 100   # Reference temperature [eV]
 
-################################################################
-# Ions
+[collisions]
+electron_ion = true
+neutral_neutral = false
+ion_neutral = false
+electron_neutral = false
+
+[sheath_boundary_fci]
+
+gamma_e = 6.5
+gamma_i = 4.5
+
+[sound_speed]
+electron_dynamics = false
 
 [h+]
-type = fixed_density, evolve_pressure, anomalous_diffusion
+type = evolve_density, evolve_momentum, evolve_pressure, anomalous_diffusion, selflimiting_source
 
 AA = 1
 charge = 1
-anomalous_chi = 0.1
-thermal_conduction = true
-density = hermes:Nnorm
+anomalous_D = 1.0
+anomalous_nu = 1.0
+anomalous_chi = 1.0
+diagnose = false
+
+p_div_v = true
+
+[h+:selflimiting_source]
+density_setpoint = 1e19
+density_overshoot = 1e18
+flux = 2.5 * 5e21
+density_form = flux * gauss(x, 0.08)
+
+
+temperature_setpoint = 120
+temperature_overshoot = 5.0
+heating = 5.0e5
+T_source = heating / (flux * 1.602e-19 * 1.5)
+pressure_form = density_form * T_source * 1.602176634e-19
+
+[Nh+]
+Ninner = 1e19
+Nouter = 1e18
+function = (Ninner - (Ninner-Nouter)* x) / hermes:Nnorm
+source = 0.0
+
+bndry_all = neumann   # All other boundaries low density
+bndry_par_all = parallel_neumann_o1
+bndry_xout = neumann
+bndry_xin = neumann
 
 [Ph+]
-function = 1.0 - 0.9 * x
-bndry_xin = dirichlet(1.0)  # Core boundary high density
-bndry_xout = dirichlet(0.1)   # All other boundaries low density
+Tinner = 120
+Touter = 20
+Tprofile = (Tinner - (Tinner - Touter) * x) / hermes:Tnorm
+
+function = Tprofile * `Nh+`:function
+source = 0.0
+
+bndry_all = neumann   # All other boundaries low density
+bndry_par_all = parallel_neumann_o1
+bndry_xout = neumann
+bndry_xin = neumann
+
+
+[NVh+]
+bndry_all = neumann
+bndry_xin = dirichlet
+bndry_xout = neumann
+bndry_par_all = parallel_neumann_o1
+
+[Vh+]
+bndry_all = neumann
+bndry_xin = dirichlet
+bndry_xout = neumann
+bndry_par_all = parallel_neumann_o1
+
 
 
 [e]
-type = fixed_density, evolve_pressure, anomalous_diffusion
+type = quasineutral, zero_current, evolve_pressure, anomalous_diffusion, selflimiting_source
 
-AA = 1.0 / 1836.0
+AA = 1 / 1836
 charge = -1
-anomalous_chi = 0.1
-thermal_conduction = true
-density = hermes:Nnorm
+anomalous_D = 1.0
+anomalous_chi = 1.0
+
+[e:selflimiting_source]
+
+flux = 2.5 * 5e21
+heating = 5.0e5
+T_source = heating / (flux * 1.602e-19 * 1.5)
+
+temperature_setpoint = 120
+temperature_overshoot = 5.0
+pressure_form = flux * gauss(x, 0.08) * T_source * 1.602176634e-19
+
+
+
 
 [Pe]
-function = 1.0 - 0.9 * x
-bndry_xin = dirichlet(1.0)  # Core boundary high density
-bndry_xout = dirichlet(0.1)   # All other boundaries low density
+
+function = `Ph+:function`  # Same as ion pressure initially
+
+
+source = 0.0
+
+bndry_all = neumann   # All other boundaries low density
+bndry_par_all = parallel_neumann_o1
+bndry_xout = neumann
+bndry_xin = neumann
