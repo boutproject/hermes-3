@@ -36,7 +36,8 @@ Four scalars are saved even with `diagnose = false`:
   `DivJpol + sum(Z_s polarisation_density_source_s)`, in A m⁻³.
 - `polarisation_charge_mismatch_linf`: maximum absolute mismatch, in A m⁻³.
 - `polarisation_charge_mismatch_rel`: RMS mismatch divided by RMS `DivJpol`;
-  reported as zero when `DivJpol` is identically zero.
+  reported as zero when both norms vanish, or infinity when the mismatch is
+  nonzero and `DivJpol` vanishes.
 - `polarisation_limiter_volume_fraction`: volume fraction where `s < 0.5`.
 
 With `diagnose = true`, `polarisation_charge_mismatch` saves the corresponding

@@ -1091,13 +1091,17 @@ void PolarisationDrift::outputConservative(Options& state) {
                     {"description", description},
                     {"source", "polarisation_drift"}});
   }
-  set_with_attrs(state["polarisation_charge_mismatch_rel"],
-                 totals[2] > 0.0 ? std::sqrt(totals[1] / totals[2]) : 0.0,
-                 {{"time_dimension", "t"},
-                  {"units", "1"},
-                  {"description", "RMS charge mismatch divided by RMS DivJpol; "
-                                  "zero when DivJpol is identically zero"},
-                  {"source", "polarisation_drift"}});
+  set_with_attrs(
+      state["polarisation_charge_mismatch_rel"],
+      totals[2] > 0.0
+          ? std::sqrt(totals[1] / totals[2])
+          : (totals[1] > 0.0 ? std::numeric_limits<BoutReal>::infinity() : 0.0),
+      {{"time_dimension", "t"},
+       {"units", "1"},
+       {"description", "RMS charge mismatch divided by RMS DivJpol; "
+                       "zero when both vanish, infinity for nonzero "
+                       "mismatch and zero DivJpol"},
+       {"source", "polarisation_drift"}});
   set_with_attrs(state["polarisation_limiter_volume_fraction"], totals[3] / totals[0],
                  {{"time_dimension", "t"},
                   {"units", "1"},
