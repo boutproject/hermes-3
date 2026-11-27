@@ -20,6 +20,7 @@
 #include "../include/hermes_utils.hxx"
 #include "../include/neutral_mixed.hxx"
 #include "../include/permissions.hxx"
+#include <bout/yboundary_regions.hxx>
 
 #include <algorithm>
 #include <string>
@@ -62,6 +63,15 @@ BoutReal apply_limiter(BoutReal unlimited, BoutReal max,
            * pow(1.0 + pow(unlimited / max, flux_limiter_sharpness),
                  -1.0 / flux_limiter_sharpness);
   }
+}
+
+Field3D Div_a_Grad_perp_all(Field3D& a, Field3D& f, Field3D& flow_xlow,
+                            Field3D& flow_ylow, std::shared_ptr<FCI::dagp_fv> dagpop) {
+
+  if (a.isFci()) {
+    return (*dagpop)(a, f, flow_xlow, flow_ylow, false);
+  }
+  return Div_a_Grad_perp_upwind_flows(a, f, flow_xlow, flow_ylow);
 }
 } // namespace
 
@@ -423,6 +433,10 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
     setPermissions(readOnly("time"));
   }
 
+  if (mesh->isFci()) {
+    dagp_op = FCI::getDagp_fv(mesh, meters);
+  }
+
   substitutePermissions("name", {name});
   substitutePermissions(
       "outputs", {"AA", "density", "pressure", "temperature", "momentum", "velocity"});
@@ -430,77 +444,118 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
 
 void NeutralMixed::transform_impl(GuardedOptions& state) {
 
-  mesh->communicate(Nn, Pn, NVn);
-
-  Nn.clearParallelSlices();
-  Pn.clearParallelSlices();
-  NVn.clearParallelSlices();
+  // Set boundary conditions and flooring before communication
+  // Otherwise the interpolation is potentially wrong
 
   Nn = floor(Nn, 0.0);
   Pn = floor(Pn, 0.0);
 
   // Nnlim Used where division by neutral density is needed
   Nnlim = softFloor(Nn, density_floor);
-  Tn = Pn / Nnlim;
-  Tn.applyBoundary();
 
-  Vn = NVn / (AA * Nnlim);
-  Vn.applyBoundary();
+  Nn.applyBoundary();
   NVn.applyBoundary();
+  Pn.applyBoundary();
+
+  mesh->communicate(Nn, Pn, NVn);
+
+  if (!mesh->isFci()) {
+    Nn.clearParallelSlices();
+    Pn.clearParallelSlices();
+    NVn.clearParallelSlices();
+  } else {
+    Nn.applyParallelBoundary();
+    Pn.applyParallelBoundary();
+    NVn.applyParallelBoundary();
+  }
+
+  Tn = Pn / Nnlim;
+  Vn = NVn / (AA * Nnlim);
+
+  if (!mesh->isFci()) {
+    Tn.applyBoundary();
+    Vn.applyBoundary();
+  }
 
   /////////////////////////////////////////////////////
   // Parallel boundary conditions
   TRACE("Neutral boundary conditions");
 
-  if (sheath_ydown) {
-    for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
-      for (int jz = 0; jz < mesh->LocalNz; jz++) {
-        // Free boundary (constant gradient) density
-        const BoutReal nnwall = std::max(
-            0.5 * (3. * Nn(r.ind, mesh->ystart, jz) - Nn(r.ind, mesh->ystart + 1, jz)),
-            0.0);
+  // Fci version
+  if (mesh->isFci()) {
+    // Translate FA one-to-one to Fci
+    mesh->getCoordinates()->getYBoundary().iter([&](auto& pnt) {
+      const BoutReal nnwall = std::max(0.5 * (3.0 * pnt.current(Nn) - pnt.prev(Nn)), 0.0);
+      const BoutReal tnwall = pnt.current(Tn);
 
-        const BoutReal tnwall = Tn(r.ind, mesh->ystart, jz);
+      pnt.next(Nn) = 2.0 * nnwall - pnt.current(Nn);
 
-        Nn(r.ind, mesh->ystart - 1, jz) = 2 * nnwall - Nn(r.ind, mesh->ystart, jz);
+      // Zero gradient temperature, heat flux added later
+      pnt.next(Tn) = tnwall;
 
-        // Zero gradient temperature, heat flux added later
-        Tn(r.ind, mesh->ystart - 1, jz) = tnwall;
+      // Set pressure consistent at the boundary
+      // Pn(r.ind, mesh->ystart - 1, jz) =
+      //     2. * nnwall * tnwall - Pn(r.ind, mesh->ystart, jz);
 
-        // Set pressure consistent at the boundary
-        // Pn(r.ind, mesh->ystart - 1, jz) =
-        //     2. * nnwall * tnwall - Pn(r.ind, mesh->ystart, jz);
+      // Zero-gradient pressure
+      pnt.next(Pn) = pnt.current(Pn);
 
-        // Zero-gradient pressure
-        Pn(r.ind, mesh->ystart - 1, jz) = Pn(r.ind, mesh->ystart, jz);
+      // No flow into wall
+      pnt.next(Vn) = -pnt.current(Vn);
+      pnt.next(NVn) = -pnt.current(NVn);
+    });
+  } else { // Non-Fci version
+    if (sheath_ydown) {
+      for (RangeIterator r = mesh->iterateBndryLowerY(); !r.isDone(); r++) {
+        for (int jz = 0; jz < mesh->LocalNz; jz++) {
+          // Free boundary (constant gradient) density
+          const BoutReal nnwall = std::max(
+              0.5 * (3. * Nn(r.ind, mesh->ystart, jz) - Nn(r.ind, mesh->ystart + 1, jz)),
+              0.0);
 
-        // No flow into wall
-        Vn(r.ind, mesh->ystart - 1, jz) = -Vn(r.ind, mesh->ystart, jz);
-        NVn(r.ind, mesh->ystart - 1, jz) = -NVn(r.ind, mesh->ystart, jz);
+          const BoutReal tnwall = Tn(r.ind, mesh->ystart, jz);
+
+          Nn(r.ind, mesh->ystart - 1, jz) = 2 * nnwall - Nn(r.ind, mesh->ystart, jz);
+
+          // Zero gradient temperature, heat flux added later
+          Tn(r.ind, mesh->ystart - 1, jz) = tnwall;
+
+          // Set pressure consistent at the boundary
+          // Pn(r.ind, mesh->ystart - 1, jz) =
+          //     2. * nnwall * tnwall - Pn(r.ind, mesh->ystart, jz);
+
+          // Zero-gradient pressure
+          Pn(r.ind, mesh->ystart - 1, jz) = Pn(r.ind, mesh->ystart, jz);
+
+          // No flow into wall
+          Vn(r.ind, mesh->ystart - 1, jz) = -Vn(r.ind, mesh->ystart, jz);
+          NVn(r.ind, mesh->ystart - 1, jz) = -NVn(r.ind, mesh->ystart, jz);
+        }
       }
     }
-  }
 
-  if (sheath_yup) {
-    for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
-      for (int jz = 0; jz < mesh->LocalNz; jz++) {
-        // Free boundary (constant gradient) density
-        const BoutReal nnwall = std::max(
-            0.5 * (3. * Nn(r.ind, mesh->yend, jz) - Nn(r.ind, mesh->yend - 1, jz)), 0.0);
+    if (sheath_yup) {
+      for (RangeIterator r = mesh->iterateBndryUpperY(); !r.isDone(); r++) {
+        for (int jz = 0; jz < mesh->LocalNz; jz++) {
+          // Free boundary (constant gradient) density
+          const BoutReal nnwall = std::max(
+              0.5 * (3. * Nn(r.ind, mesh->yend, jz) - Nn(r.ind, mesh->yend - 1, jz)),
+              0.0);
 
-        const BoutReal tnwall = Tn(r.ind, mesh->yend, jz);
+          const BoutReal tnwall = Tn(r.ind, mesh->yend, jz);
 
-        Nn(r.ind, mesh->yend + 1, jz) = 2 * nnwall - Nn(r.ind, mesh->yend, jz);
+          Nn(r.ind, mesh->yend + 1, jz) = 2 * nnwall - Nn(r.ind, mesh->yend, jz);
 
-        // Zero gradient temperature, heat flux added later
-        Tn(r.ind, mesh->yend + 1, jz) = tnwall;
+          // Zero gradient temperature, heat flux added later
+          Tn(r.ind, mesh->yend + 1, jz) = tnwall;
 
-        // Zero-gradient pressure
-        Pn(r.ind, mesh->yend + 1, jz) = Pn(r.ind, mesh->yend, jz);
+          // Zero-gradient pressure
+          Pn(r.ind, mesh->yend + 1, jz) = Pn(r.ind, mesh->yend, jz);
 
-        // No flow into wall
-        Vn(r.ind, mesh->yend + 1, jz) = -Vn(r.ind, mesh->yend, jz);
-        NVn(r.ind, mesh->yend + 1, jz) = -NVn(r.ind, mesh->yend, jz);
+          // No flow into wall
+          Vn(r.ind, mesh->yend + 1, jz) = -Vn(r.ind, mesh->yend, jz);
+          NVn(r.ind, mesh->yend + 1, jz) = -NVn(r.ind, mesh->yend, jz);
+        }
       }
     }
   }
@@ -892,7 +947,8 @@ void NeutralMixed::finally(const Options& state) {
     ddt(Nn) +=
         Div_a_Grad_perp_nonorthog(DnnNn, logPnlim, pf_adv_perp_xlow, pf_adv_perp_ylow);
   } else {
-    ddt(Nn) += Div_a_Grad_perp_flows(DnnNn, logPnlim, pf_adv_perp_xlow, pf_adv_perp_ylow);
+    ddt(Nn) +=
+        Div_a_Grad_perp_all(DnnNn, logPnlim, pf_adv_perp_xlow, pf_adv_perp_ylow, dagp_op);
   }
 
   Sn = density_source; // Save for possible output
@@ -916,9 +972,9 @@ void NeutralMixed::finally(const Options& state) {
         (5. / 3)
         * Div_a_Grad_perp_nonorthog(DnnPn, logPnlim, ef_adv_perp_xlow, ef_adv_perp_ylow);
   } else {
-    ddt(Pn) +=
-        (5. / 3)
-        * Div_a_Grad_perp_flows(DnnPn, logPnlim, ef_adv_perp_xlow, ef_adv_perp_ylow);
+    ddt(Pn) += (5. / 3)
+               * Div_a_Grad_perp_all(DnnPn, logPnlim, ef_adv_perp_xlow, ef_adv_perp_ylow,
+                                     dagp_op);
   }
 
   // The factor here is 5/2 as we're advecting internal energy and pressure.
@@ -939,9 +995,9 @@ void NeutralMixed::finally(const Options& state) {
                  * Div_a_Grad_perp_nonorthog(kappa_n_perp, Tn, ef_cond_perp_xlow,
                                              ef_cond_perp_ylow);
     } else {
-      ddt(Pn) +=
-          (2. / 3)
-          * Div_a_Grad_perp_flows(kappa_n_perp, Tn, ef_cond_perp_xlow, ef_cond_perp_ylow);
+      ddt(Pn) += (2. / 3)
+                 * Div_a_Grad_perp_all(kappa_n_perp, Tn, ef_cond_perp_xlow,
+                                       ef_cond_perp_ylow, dagp_op);
     }
 
     // The factor here is likely 3/2 as this is pure energy flow, but needs checking.
@@ -973,8 +1029,8 @@ void NeutralMixed::finally(const Options& state) {
       ddt(NVn) +=
           Div_a_Grad_perp_nonorthog(DnnNVn, logPnlim, mf_adv_perp_xlow, mf_adv_perp_ylow);
     } else {
-      ddt(NVn) +=
-          Div_a_Grad_perp_flows(DnnNVn, logPnlim, mf_adv_perp_xlow, mf_adv_perp_ylow);
+      ddt(NVn) += Div_a_Grad_perp_all(DnnNVn, logPnlim, mf_adv_perp_xlow,
+                                      mf_adv_perp_ylow, dagp_op);
     }
 
     if (neutral_viscosity) {
@@ -996,8 +1052,8 @@ void NeutralMixed::finally(const Options& state) {
         viscosity_source += Div_a_Grad_perp_nonorthog(eta_n_perp, Vn, mf_visc_perp_xlow,
                                                       mf_visc_perp_ylow);
       } else {
-        viscosity_source +=
-            Div_a_Grad_perp_flows(eta_n_perp, Vn, mf_visc_perp_xlow, mf_visc_perp_ylow);
+        viscosity_source += Div_a_Grad_perp_all(eta_n_perp, Vn, mf_visc_perp_xlow,
+                                                mf_visc_perp_ylow, dagp_op);
       }
 
       ddt(NVn) += viscosity_source;
