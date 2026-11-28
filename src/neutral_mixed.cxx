@@ -129,7 +129,7 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
   density_floor = options["density_floor"]
                       .doc("A minimum density used when dividing NVn by Nn. "
                            "Normalised units.")
-                      .withDefault(1e-8);
+                      .withDefault(1e-7);
 
   freeze_low_density = options["freeze_low_density"]
                            .doc("Freeze evolution in low density regions?")
@@ -279,7 +279,7 @@ NeutralMixed::NeutralMixed(const std::string& name, Options& alloptions, Solver*
   neutral_viscosity = options["neutral_viscosity"]
                           .doc("Include neutral gas viscosity?")
                           .withDefault<bool>(true);
-
+  
   neutral_conduction = options["neutral_conduction"]
                            .doc("Include neutral gas heat conduction?")
                            .withDefault<bool>(true);
@@ -884,15 +884,18 @@ void NeutralMixed::finally(const Options& state) {
   /////////////////////////////////////////////////////
   // Neutral density
   TRACE("Neutral density");
-  ddt(Nn) = -FV::Div_par_mod<ParLimiter>(Nn, Vn, sound_speed,
-                                         pf_adv_par_ylow); // Parallel advection
+  ddtN_par_advection = -FV::Div_par_mod<ParLimiter>(Nn, Vn, sound_speed, pf_adv_par_ylow);
+  ddt(Nn) = ddtN_par_advection; // Parallel advection
 
   // Perpendicular diffusion
   if (nonorthogonal_operators) {
-    ddt(Nn) +=
+    ddtN_perp_diffusion =
         Div_a_Grad_perp_nonorthog(DnnNn, logPnlim, pf_adv_perp_xlow, pf_adv_perp_ylow);
+    ddt(Nn) += ddtN_perp_diffusion;
   } else {
-    ddt(Nn) += Div_a_Grad_perp_flows(DnnNn, logPnlim, pf_adv_perp_xlow, pf_adv_perp_ylow);
+    ddtN_perp_diffusion =
+        Div_a_Grad_perp_flows(DnnNn, logPnlim, pf_adv_perp_xlow, pf_adv_perp_ylow);
+    ddt(Nn) += ddtN_perp_diffusion;
   }
 
   Sn = density_source; // Save for possible output
@@ -905,20 +908,23 @@ void NeutralMixed::finally(const Options& state) {
   // Neutral pressure
   TRACE("Neutral pressure");
 
-  ddt(Pn) = -(5. / 3)
-                * FV::Div_par_mod<ParLimiter>( // Parallel advection
-                    Pn, Vn, sound_speed, ef_adv_par_ylow)
-            + (2. / 3) * Vn * Grad_par(Pn); // Work done
+  ddtPn_par_advection = -(5. / 3)
+                        * FV::Div_par_mod<ParLimiter>( // Parallel advection
+                            Pn, Vn, sound_speed, ef_adv_par_ylow);
+  ddtPn_work_done = (2. / 3) * Vn * Grad_par(Pn); // Work done
+  ddt(Pn) = ddtPn_par_advection + ddtPn_work_done;
 
   // Perpendicular advection of pressure
   if (nonorthogonal_operators) {
-    ddt(Pn) +=
+    ddtPn_perp_advection =
         (5. / 3)
         * Div_a_Grad_perp_nonorthog(DnnPn, logPnlim, ef_adv_perp_xlow, ef_adv_perp_ylow);
+    ddt(Pn) += ddtPn_perp_advection;
   } else {
-    ddt(Pn) +=
+    ddtPn_perp_advection =
         (5. / 3)
         * Div_a_Grad_perp_flows(DnnPn, logPnlim, ef_adv_perp_xlow, ef_adv_perp_ylow);
+    ddt(Pn) += ddtPn_perp_advection;
   }
 
   // The factor here is 5/2 as we're advecting internal energy and pressure.
@@ -927,21 +933,25 @@ void NeutralMixed::finally(const Options& state) {
   ef_adv_perp_ylow *= 5. / 2;
 
   if (neutral_conduction) {
-    ddt(Pn) += (2. / 3)
-               * Div_par_K_Grad_par_mod(kappa_n_par, Tn, // Parallel conduction
-                                        ef_cond_par_ylow,
-                                        false, // No conduction through target boundary
+    ddtPn_par_conduction =
+        (2. / 3)
+        * Div_par_K_Grad_par_mod(kappa_n_par, Tn, // Parallel conduction
+                                 ef_cond_par_ylow,
+                                 false, // No conduction through target boundary
                                         conduction_method);
+    ddt(Pn) += ddtPn_par_conduction;
 
     // Perpendicular conduction
     if (nonorthogonal_operators) {
-      ddt(Pn) += (2. / 3)
-                 * Div_a_Grad_perp_nonorthog(kappa_n_perp, Tn, ef_cond_perp_xlow,
-                                             ef_cond_perp_ylow);
+      ddtPn_perp_conduction = (2. / 3)
+                              * Div_a_Grad_perp_nonorthog(
+                                  kappa_n_perp, Tn, ef_cond_perp_xlow, ef_cond_perp_ylow);
+      ddt(Pn) += ddtPn_perp_conduction;
     } else {
-      ddt(Pn) +=
+      ddtPn_perp_conduction =
           (2. / 3)
           * Div_a_Grad_perp_flows(kappa_n_perp, Tn, ef_cond_perp_xlow, ef_cond_perp_ylow);
+      ddt(Pn) += ddtPn_perp_conduction;
     }
 
     // The factor here is likely 3/2 as this is pure energy flow, but needs checking.
@@ -962,19 +972,23 @@ void NeutralMixed::finally(const Options& state) {
     // Neutral momentum
     TRACE("Neutral momentum");
 
-    ddt(NVn) = -AA
-                   * FV::Div_par_fvv<ParLimiter>( // Momentum flow
-                       Nnlim, Vn, sound_speed)
+    ddtNVn_par_advection = -AA
+                           * FV::Div_par_fvv<ParLimiter>( // Momentum flow
+                               Nnlim, Vn, sound_speed);
+    ddt(NVn) = ddtNVn_par_advection;
 
-               - Grad_par(Pn); // Pressure gradient
+    ddtNVn_pressure_gradient = -Grad_par(Pn); // Pressure gradient
+    ddt(NVn) += ddtNVn_pressure_gradient;
 
     // Perpendicular advection of momentum
     if (nonorthogonal_operators) {
-      ddt(NVn) +=
+      ddtNVn_perp_advection =
           Div_a_Grad_perp_nonorthog(DnnNVn, logPnlim, mf_adv_perp_xlow, mf_adv_perp_ylow);
+      ddt(NVn) += ddtNVn_perp_advection;
     } else {
-      ddt(NVn) +=
+      ddtNVn_perp_advection =
           Div_a_Grad_perp_flows(DnnNVn, logPnlim, mf_adv_perp_xlow, mf_adv_perp_ylow);
+      ddt(NVn) += ddtNVn_perp_advection;
     }
 
     if (neutral_viscosity) {
@@ -986,22 +1000,24 @@ void NeutralMixed::finally(const Options& state) {
       // Transport Processes in Gases", 1972
       // eta_n = (2. / 5) * kappa_n;
 
-      Field3D viscosity_source = Div_par_K_Grad_par_mod( // Parallel viscosity
+      par_viscosity_source = Div_par_K_Grad_par_mod( // Parallel viscosity
           eta_n_par, Vn, mf_visc_par_ylow,
           false, // No viscosity through target boundary
           conduction_method);
 
       // Perpendicular viscosity
       if (nonorthogonal_operators) {
-        viscosity_source += Div_a_Grad_perp_nonorthog(eta_n_perp, Vn, mf_visc_perp_xlow,
-                                                      mf_visc_perp_ylow);
+        perp_viscosity_source = Div_a_Grad_perp_nonorthog(
+            eta_n_perp, Vn, mf_visc_perp_xlow, mf_visc_perp_ylow);
       } else {
-        viscosity_source +=
+        perp_viscosity_source =
             Div_a_Grad_perp_flows(eta_n_perp, Vn, mf_visc_perp_xlow, mf_visc_perp_ylow);
       }
 
-      ddt(NVn) += viscosity_source;
-      ddt(Pn) += -(2. / 3) * Vn * viscosity_source;
+      ddtNVn_viscosity = par_viscosity_source + perp_viscosity_source;
+      ddtPn_viscosity = -(2. / 3) * Vn * (par_viscosity_source + perp_viscosity_source);
+      ddt(NVn) += ddtNVn_viscosity;
+      ddt(Pn) += ddtPn_viscosity;
     }
     Snv = momentum_source;
     if (localstate.isSet("momentum_source")) {
@@ -1019,8 +1035,8 @@ void NeutralMixed::finally(const Options& state) {
     Field3D scale_timederivs = get<Field3D>(state["scale_timederivs"]);
     ddt(Nn) *= scale_timederivs;
     ddt(Pn) *= scale_timederivs;
-    ddt(NVn) *= scale_timederivs;
-  }
+      ddt(NVn) *= scale_timederivs;
+    }
 
   if (freeze_low_density) {
     // Apply a factor to time derivatives in low density regions.
@@ -1053,8 +1069,9 @@ void NeutralMixed::finally(const Options& state) {
       const BoutReal factor = exp(-density_floor / meanNn);
       ddt(Nn)[i] = factor * ddt(Nn)[i] + (1. - factor) * Nn_s[i];
       ddt(Pn)[i] = factor * ddt(Pn)[i] + (1. - factor) * Pn_s[i];
-      ddt(NVn)[i] = factor * ddt(NVn)[i] + (1. - factor) * NVn_s[i];
-    }
+        ddt(NVn)[i] = factor * ddt(NVn)[i] + (1. - factor) * NVn_s[i];
+      }
+
   }
 
 #if CHECKLEVEL >= 1
@@ -1122,16 +1139,145 @@ void NeutralMixed::outputVars(Options& state) {
          {"conversion", Nnorm * Omega_ci},
          {"long_name", std::string("Rate of change of ") + name + " number density"},
          {"source", "neutral_mixed"}});
+    set_with_attrs(state[std::string("ddtN") + name + std::string("_par_advection")],
+                   ddtN_par_advection,
+                   {{"time_dimension", "t"},
+                    {"units", "m^-3 s^-1"},
+                    {"conversion", Nnorm * Omega_ci},
+                    {"long_name", name + std::string(" density parallel advection")},
+                    {"source", "neutral_mixed"}});
+    set_with_attrs(state[std::string("ddtN") + name + std::string("_perp_diffusion")],
+                   ddtN_perp_diffusion,
+                   {{"time_dimension", "t"},
+                    {"units", "m^-3 s^-1"},
+                    {"conversion", Nnorm * Omega_ci},
+                    {"long_name", name + std::string(" density perpendicular diffusion")},
+                    {"source", "neutral_mixed"}});
+
     set_with_attrs(state[std::string("ddt(P") + name + std::string(")")], ddt(Pn),
                    {{"time_dimension", "t"},
                     {"units", "Pa s^-1"},
                     {"conversion", Pnorm * Omega_ci},
                     {"source", "neutral_mixed"}});
+    set_with_attrs(state[std::string("ddtP") + name + std::string("_par_advection")],
+                   ddtPn_par_advection,
+                   {{"time_dimension", "t"},
+                    {"units", "Pa s^-1"},
+                    {"conversion", Pnorm * Omega_ci},
+                    {"long_name", name + std::string(" pressure parallel advection")},
+                    {"source", "neutral_mixed"}});
+    set_with_attrs(state[std::string("ddtP") + name + std::string("_work_done")],
+                   ddtPn_work_done,
+                   {{"time_dimension", "t"},
+                    {"units", "Pa s^-1"},
+                    {"conversion", Pnorm * Omega_ci},
+                    {"long_name", name + std::string(" pressure work done")},
+                    {"source", "neutral_mixed"}});
+    set_with_attrs(
+        state[std::string("ddtP") + name + std::string("_perp_advection")],
+        ddtPn_perp_advection,
+        {{"time_dimension", "t"},
+         {"units", "Pa s^-1"},
+         {"conversion", Pnorm * Omega_ci},
+         {"long_name", name + std::string(" pressure perpendicular advection")},
+         {"source", "neutral_mixed"}});
+    set_with_attrs(state[std::string("ddtP") + name + std::string("_par_conduction")],
+                   ddtPn_par_conduction,
+                   {{"time_dimension", "t"},
+                    {"units", "Pa s^-1"},
+                    {"conversion", Pnorm * Omega_ci},
+                    {"long_name", name + std::string(" pressure parallel conduction")},
+                    {"source", "neutral_mixed"}});
+    set_with_attrs(
+        state[std::string("ddtP") + name + std::string("_perp_conduction")],
+        ddtPn_perp_conduction,
+        {{"time_dimension", "t"},
+         {"units", "Pa s^-1"},
+         {"conversion", Pnorm * Omega_ci},
+         {"long_name", name + std::string(" pressure perpendicular conduction")},
+         {"source", "neutral_mixed"}});
+
     set_with_attrs(state[std::string("ddt(NV") + name + std::string(")")], ddt(NVn),
                    {{"time_dimension", "t"},
                     {"units", "kg m^-2 s^-2"},
                     {"conversion", SI::Mp * Nnorm * Cs0 * Omega_ci},
                     {"source", "neutral_mixed"}});
+    set_with_attrs(state[std::string("ddtNV") + name + std::string("_par_advection")],
+                   ddtNVn_par_advection,
+                   {{"time_dimension", "t"},
+                    {"units", "kg m^-2 s^-2"},
+                    {"conversion", SI::Mp * Nnorm * Cs0 * Omega_ci},
+                    {"long_name", name + std::string(" momentum parallel advection")},
+                    {"source", "neutral_mixed"}});
+    set_with_attrs(state[std::string("ddtNV") + name + std::string("_pressure_gradient")],
+                   ddtNVn_pressure_gradient,
+                   {{"time_dimension", "t"},
+                    {"units", "kg m^-2 s^-2"},
+                    {"conversion", SI::Mp * Nnorm * Cs0 * Omega_ci},
+                    {"long_name", name + std::string(" momentum pressure gradient")},
+                    {"source", "neutral_mixed"}});
+    set_with_attrs(
+        state[std::string("ddtNV") + name + std::string("_perp_advection")],
+        ddtNVn_perp_advection,
+        {{"time_dimension", "t"},
+         {"units", "kg m^-2 s^-2"},
+         {"conversion", SI::Mp * Nnorm * Cs0 * Omega_ci},
+         {"long_name", name + std::string(" momentum perpendicular advection")},
+         {"source", "neutral_mixed"}});
+    set_with_attrs(
+        state[std::string("NV") + name + std::string("_par_visc_source")],
+        par_viscosity_source,
+        {{"time_dimension", "t"},
+         {"units", "kg m^-2 s^-2"},
+         {"conversion", SI::Mp * Nnorm * Cs0 * Omega_ci},
+         {"long_name", name + std::string(" momentum parallel viscosity source")},
+         {"source", "neutral_mixed"}});
+    set_with_attrs(
+        state[std::string("NV") + name + std::string("_perp_visc_source")],
+        perp_viscosity_source,
+        {{"time_dimension", "t"},
+         {"units", "kg m^-2 s^-2"},
+         {"conversion", SI::Mp * Nnorm * Cs0 * Omega_ci},
+         {"long_name", name + std::string(" momentum perpendicular viscosity source")},
+         {"source", "neutral_mixed"}});
+    set_with_attrs(state[std::string("ddtNV") + name + std::string("_viscosity")],
+                   ddtNVn_viscosity,
+                   {{"time_dimension", "t"},
+                    {"units", "kg m^-2 s^-2"},
+                    {"conversion", SI::Mp * Nnorm * Cs0 * Omega_ci},
+                    {"long_name", name + std::string(" momentum viscosity")},
+                    {"source", "neutral_mixed"}});
+    set_with_attrs(state[std::string("ddtPn") + name + std::string("_viscosity")],
+                   ddtPn_viscosity,
+                   {{"time_dimension", "t"},
+                    {"units", "Pa s^-1"},
+                    {"conversion", Pnorm * Omega_ci},
+                    {"long_name", name + std::string(" pressure viscosity")},
+                    {"source", "neutral_mixed"}});
+    set_with_attrs(
+        state[std::string("ddtN") + name + std::string("_anomalous_transport")],
+        ddtN_anomalous_transport,
+        {{"time_dimension", "t"},
+         {"units", "m^-3 s^-1"},
+         {"conversion", Nnorm * Omega_ci},
+         {"long_name", name + std::string(" density anomalous transport")},
+         {"source", "neutral_mixed"}});
+    set_with_attrs(
+        state[std::string("ddtNV") + name + std::string("_anomalous_transport")],
+        ddtNVn_anomalous_transport,
+        {{"time_dimension", "t"},
+         {"units", "kg m^-2 s^-2"},
+         {"conversion", SI::Mp * Nnorm * Cs0 * Omega_ci},
+         {"long_name", name + std::string(" momentum anomalous transport")},
+         {"source", "neutral_mixed"}});
+    set_with_attrs(
+        state[std::string("ddtPn") + name + std::string("_anomalous_transport")],
+        ddtPn_anomalous_transport,
+        {{"time_dimension", "t"},
+         {"units", "Pa s^-1"},
+         {"conversion", Pnorm * Omega_ci},
+         {"long_name", name + std::string(" pressure anomalous transport")},
+         {"source", "neutral_mixed"}});
   }
   if (diagnose) {
     set_with_attrs(state[std::string("T") + name], Tn,
