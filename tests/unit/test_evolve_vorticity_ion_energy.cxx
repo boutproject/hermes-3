@@ -476,6 +476,40 @@ TEST_F(EvolveVorticityIonEnergyTest, ParticleSourcesCarryTransferredEnergy) {
   }
 }
 
+TEST_F(EvolveVorticityIonEnergyTest, ComponentEnergySourcesIncludeDensityKineticWork) {
+  FakeSolver solver;
+  auto options = makeOptions();
+  IonEnergyTestSystem component("test", options, &solver);
+  declareSpecies(component);
+  solver.setState({{"Vort", Field3D{0.0}}, {"Eion", Field3D{10.0}}});
+  auto state = makeState();
+  component.transform(state);
+  auto& ion = state["species"]["d+"];
+  ion["velocity"] = Field3D{3.0};
+  ion["density_source"] = Field3D{0.75};
+  ion["momentum_source"] = Field3D{5.0};
+  ion["energy_source"] = Field3D{2.0};
+  auto& beam = state["component_sources"]["beam"]["d+"];
+  beam["density"] = Field3D{1.0};
+  beam["momentum"] = Field3D{6.0};
+  beam["thermal_energy"] = Field3D{4.0};
+  auto& cooling = state["component_sources"]["cooling"]["d+"];
+  cooling["density"] = Field3D{-0.25};
+  cooling["momentum"] = Field3D{-1.0};
+  cooling["thermal_energy"] = Field3D{-2.0};
+  component.finally(state);
+  const auto output = diagnostics(component);
+  EXPECT_TRUE(
+      IsFieldEqual(output["Eion_source_beam"].as<Field3D>(), 13.0, "RGN_NOBNDRY", 1e-12));
+  EXPECT_TRUE(IsFieldEqual(output["Eion_source_cooling"].as<Field3D>(), -2.75,
+                           "RGN_NOBNDRY", 1e-12));
+  EXPECT_TRUE(
+      IsFieldEqual(output["Eion_source_polarisation_conversion_correction"].as<Field3D>(),
+                   0.0, "RGN_NOBNDRY", 1e-12));
+  EXPECT_TRUE(
+      IsFieldEqual(output["Eion_src"].as<Field3D>(), 10.25, "RGN_NOBNDRY", 1e-12));
+}
+
 TEST_F(EvolveVorticityIonEnergyTest,
        ElectronHeatingDistinguishesCompressionAndElectricalWork) {
   for (bool curvature : {false, true}) {
@@ -1515,6 +1549,17 @@ TEST_F(EvolveVorticityIonEnergyTest, ConservativeTransportMatchesFaceBalances) {
         }
         EXPECT_TRUE(IsFieldEqual(output["DivEpol"].as<Field3D>(), expected(thermal, true),
                                  "RGN_NOBNDRY", 1e-12));
+        const Field3D work = output["DivEpol_work"].as<Field3D>();
+        const Field3D transported = output["DivEpol_transport"].as<Field3D>();
+        EXPECT_TRUE(IsFieldEqual(work, Field3D{0.7 * output["DivJpol"].as<Field3D>()},
+                                 "RGN_NOBNDRY", 1e-12));
+        EXPECT_TRUE(IsFieldEqual(transported, expected(thermal), "RGN_NOBNDRY", 1e-12));
+        EXPECT_TRUE(IsFieldEqual(output["DivEpol"].as<Field3D>(),
+                                 Field3D{work + transported}, "RGN_NOBNDRY", 1e-12));
+        EXPECT_TRUE(IsFieldEqual(output["DivEpol_phi_work"].as<Field3D>(), 0.0,
+                                 "RGN_NOBNDRY", 1e-12));
+        EXPECT_TRUE(IsFieldEqual(output["DivEpol_psi_work"].as<Field3D>(), work,
+                                 "RGN_NOBNDRY", 1e-12));
         BoutReal wall_power = 0.0;
         for (const auto* side : {"core", "pf", "outer"}) {
           wall_power +=
@@ -1576,6 +1621,10 @@ TEST_F(EvolveVorticityIonEnergyTest, ConservativeDiagnosticsAreOptionalFields) {
       EXPECT_TRUE(std::isfinite(output[name].as<BoutReal>()));
     }
     EXPECT_EQ(output.isSet("polarisation_charge_mismatch"), diagnose);
+    for (const auto* name :
+         {"DivEpol_work", "DivEpol_transport", "DivEpol_phi_work", "DivEpol_psi_work"}) {
+      EXPECT_EQ(output.isSet(name), diagnose);
+    }
     EXPECT_EQ(output["polarisation_limiter_volume_fraction"].as<BoutReal>(), 1.0);
     EXPECT_EQ(output["polarisation_charge_mismatch_rel"].as<BoutReal>(), 0.0);
   }

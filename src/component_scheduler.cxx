@@ -10,6 +10,7 @@
 
 #include <bout/bout_types.hxx>
 #include <bout/boutexception.hxx>
+#include <bout/constants.hxx>
 #include <bout/options.hxx>
 #include <bout/output.hxx>
 #include <bout/utils.hxx> // for trim, strsplit
@@ -560,6 +561,11 @@ ComponentScheduler::ComponentScheduler(Options& scheduler_options,
                             .doc("Perform a topological sort to ensure components "
                                  "executed in the right order?")
                             .withDefault<bool>(true);
+  diagnose_component_sources =
+      scheduler_options["diagnose_component_sources"]
+          .doc("Save each component's ion density, momentum and thermal-energy "
+               "source increments, with kinetic conversion using completed velocities?")
+          .withDefault(false);
 
   std::vector<std::string> electrons;
   std::vector<std::string> neutrals;
@@ -615,6 +621,7 @@ ComponentScheduler::ComponentScheduler(Options& scheduler_options,
   }
 
   const SpeciesInformation species(electrons, neutrals, positive_ions, negative_ions);
+  source_species = species.ions;
 
   for (auto& component : components) {
     component->declareAllSpecies(species);
@@ -634,13 +641,67 @@ std::unique_ptr<ComponentScheduler> ComponentScheduler::create(Options& schedule
 }
 
 void ComponentScheduler::transform(Options& state) {
+  const std::vector<std::pair<std::string, std::string>> quantities{
+      {"density", "density_source"},
+      {"momentum", "momentum_source"},
+      {"thermal_energy", "energy_source"}};
+  const auto snapshot = [&]() {
+    Options result;
+    for (const auto& name : source_species) {
+      for (const auto& [quantity, input] : quantities) {
+        const bool present = state.isSection("species")
+                             && state["species"].isSection(name)
+                             && state["species"][name].isSet(input);
+        result[name][quantity] =
+            present ? getNonFinal<Field3D>(state["species"][name][input]) : Field3D{0.0};
+      }
+    }
+    return result;
+  };
+  if (diagnose_component_sources) {
+    state["component_sources"] = Options{};
+    state["component_sources"]["initial_state"] = snapshot();
+  }
   // Run through each component
   for (auto& component : components) {
+    Options before;
+    if (diagnose_component_sources) {
+      before = snapshot();
+    }
     component->transform(state);
+    if (diagnose_component_sources) {
+      const auto after = snapshot();
+      const auto type = component->typeName();
+      const auto name = component->objectName();
+      const auto channel = type == name ? type : type + "_" + name;
+      for (const auto& species : source_species) {
+        for (const auto& [quantity, input] : quantities) {
+          state["component_sources"][channel][species][quantity] =
+              getNonFinal<Field3D>(after[species][quantity])
+              - getNonFinal<Field3D>(before[species][quantity]);
+        }
+      }
+    }
   }
   // Enable components to update themselves based on the final state
   for (auto& component : components) {
     component->finally(state);
+  }
+  if (diagnose_component_sources) {
+    source_diagnostics = state["component_sources"].copy();
+    for (const auto& [channel, species_section] : source_diagnostics.getChildren()) {
+      for (const auto& [name, values] : species_section.getChildren()) {
+        auto& sources = source_diagnostics[channel][name];
+        const auto& species = state["species"][name];
+        const Field3D V = species.isSet("velocity")
+                              ? getNonFinal<Field3D>(species["velocity"])
+                              : Field3D{0.0};
+        const BoutReal AA = getNonFinal<BoutReal>(species["AA"]);
+        sources["momentum_work"] = V * getNonFinal<Field3D>(sources["momentum"]);
+        sources["density_kinetic_work"] =
+            -0.5 * AA * SQ(V) * getNonFinal<Field3D>(sources["density"]);
+      }
+    }
   }
 }
 
@@ -648,6 +709,30 @@ void ComponentScheduler::outputVars(Options& state) {
   // Run through each component
   for (auto& component : components) {
     component->outputVars(state);
+  }
+  if (diagnose_component_sources) {
+    const BoutReal Nnorm = get<BoutReal>(state["Nnorm"]);
+    const BoutReal frequency = get<BoutReal>(state["Omega_ci"]);
+    const BoutReal power = SI::qe * Nnorm * get<BoutReal>(state["Tnorm"]) * frequency;
+    const BoutReal force = SI::Mp * Nnorm * get<BoutReal>(state["Cs0"]) * frequency;
+    for (const auto& [channel, species_section] : source_diagnostics.getChildren()) {
+      for (const auto& [species, sources] : species_section.getChildren()) {
+        for (const auto& [quantity, source] : sources.getChildren()) {
+          const bool particles = quantity == "density", momentum = quantity == "momentum";
+          set_with_attrs(
+              state["component_source_" + channel + "_" + species + "_" + quantity],
+              getNonFinal<Field3D>(source),
+              {{"time_dimension", "t"},
+               {"units",
+                particles ? "m^-3 s^-1" : (momentum ? "kg m^-2 s^-2" : "W m^-3")},
+               {"conversion", particles ? Nnorm * frequency : (momentum ? force : power)},
+               {"source", channel},
+               {"species", species},
+               {"description", "Component source increment; kinetic work uses completed "
+                               "velocity. Conservative energy fluxes are separate."}});
+        }
+      }
+    }
   }
 }
 

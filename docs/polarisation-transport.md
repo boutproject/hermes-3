@@ -46,6 +46,22 @@ The wall energy and thermal weights include the density limiter, so multiplying
 the saved wall energy weight by `polarisation_flux_x` reconstructs wall power.
 The wall work weight retains the full local potential midpoint.
 
+With `diagnose = true`, the signed energy-flux divergences are also saved as:
+
+- `DivEpol_work`: the full-current work flux `(phi + psi) Jpol`.
+- `DivEpol_transport`: thermal and parallel kinetic energy carried by the limited
+  particle flux, using the selected central or upwind weights.
+- `DivEpol_phi_work` and `DivEpol_psi_work`: the two contributions to work.
+
+Each includes the physical-wall corrections and optional poloidal contribution.
+Positive divergence removes ion energy. `DivEpol = DivEpol_work +
+DivEpol_transport` and `DivEpol_work = DivEpol_phi_work + DivEpol_psi_work`,
+up to roundoff. The psi work is already included in `DivEpol_work`.
+These diagnostics retain the original arithmetic in the evolved energy equation.
+
+For component source and momentum-work diagnostics, see
+[ion-energy-source-diagnostics.md](ion-energy-source-diagnostics.md).
+
 Energy and each species' particle wall losses are saved as
 `balance_polarisation_drift_<quantity>_radial_polarisation_<region>`, where
 `quantity` is `ion_energy` or `particles_<species>` and `region` is `core`,

@@ -61,6 +61,9 @@ public:
 private:
   /// The components to be executed in order
   std::vector<std::unique_ptr<Component>> components;
+  bool diagnose_component_sources{false};
+  std::vector<std::string> source_species;
+  Options source_diagnostics;
 };
 
 #endif // COMPONENT_SCHEDULER_H

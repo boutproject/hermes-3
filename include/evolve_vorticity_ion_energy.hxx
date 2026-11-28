@@ -270,6 +270,7 @@ private:
   Field3D electron_exb_work; ///< Thermal work -Jdia_e dot Grad(phi)
 
   Field3D Eion_src; ///< Ion energy sources from other components
+  Options energy_source_diagnostics;
 
   bool diagnose; ///< Output additional diagnostics?
 

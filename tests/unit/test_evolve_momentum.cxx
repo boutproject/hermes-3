@@ -78,7 +78,7 @@ TEST_F(EvolveMomentumTest, Finally) {
 
 using EvolveMomentumBudgetTest = FakeMeshFixture_tmpl<10, 7, 8, false, 2, 2>;
 
-TEST_F(EvolveMomentumBudgetTest, ParallelForcesApplyExpectedMomentumRate) {
+TEST_F(EvolveMomentumBudgetTest, ForceAndWorkChannelsCloseTheMomentumRate) {
   static_cast<FakeMesh*>(mesh)->ix_separatrix = -1;
   mesh->getCoordinates()->setNon_uniform(false);
   for (bool diagnose : {false, true}) {
@@ -109,7 +109,32 @@ TEST_F(EvolveMomentumBudgetTest, ParallelForcesApplyExpectedMomentumRate) {
     state["fields"]["phi"] =
         makeField<Field3D>([](const Ind3D& i) { return 0.2 * i.y(); });
     component.finally(state);
+    Options output{
+        {"Nnorm", 1.0}, {"Tnorm", 1.0}, {"Omega_ci", 1.0}, {"Cs0", 1.0}, {"rho_s0", 1.0}};
+    component.outputVars(output);
     EXPECT_TRUE(IsFieldEqual(solver.getTimeDerivs()["NVi"].as<Field3D>(), 0.2,
                              "RGN_NOBNDRY", 1e-12));
+    EXPECT_EQ(output.isSet("momentum_electric_i"), diagnose);
+    if (!diagnose) {
+      continue;
+    }
+    EXPECT_TRUE(IsFieldEqual(output["momentum_electric_i"].as<Field3D>(), -0.2,
+                             "RGN_NOBNDRY", 1e-12));
+    EXPECT_TRUE(IsFieldEqual(output["momentum_pressure_i"].as<Field3D>(), -0.1,
+                             "RGN_NOBNDRY", 1e-12));
+    EXPECT_TRUE(IsFieldEqual(output["momentum_work_electric_i"].as<Field3D>(), -0.08,
+                             "RGN_NOBNDRY", 1e-12));
+    EXPECT_TRUE(IsFieldEqual(output["momentum_work_pressure_i"].as<Field3D>(), -0.04,
+                             "RGN_NOBNDRY", 1e-12));
+    Field3D sum{0.0}, work{0.0};
+    for (const auto* channel :
+         {"exb", "electric", "parallel_advection", "pressure", "sources", "other"}) {
+      sum += output[std::string{"momentum_"} + channel + "_i"].as<Field3D>();
+      work += output[std::string{"momentum_work_"} + channel + "_i"].as<Field3D>();
+    }
+    EXPECT_TRUE(IsFieldEqual(sum, 0.2, "RGN_NOBNDRY", 1e-12));
+    EXPECT_TRUE(
+        IsFieldEqual(sum, output["ddt(NVi)"].as<Field3D>(), "RGN_NOBNDRY", 1e-12));
+    EXPECT_TRUE(IsFieldEqual(work, 0.08, "RGN_NOBNDRY", 1e-12));
   }
 }

@@ -38,6 +38,7 @@ private:
 
   Field3D momentum_source; ///< From other components. Stored for diagnostic output
   DomainBalance balance;
+  Options momentum_diagnostics;
 
   bool bndry_flux;     // Allow flows through boundaries?
   bool poloidal_flows; // Include ExB flow in Y direction?

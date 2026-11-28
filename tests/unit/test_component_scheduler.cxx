@@ -1,6 +1,8 @@
 #include "gtest/gtest.h"
 
 #include "../../include/component_scheduler.hxx"
+#include "fake_mesh_fixture.hxx"
+#include "test_extras.hxx"
 
 namespace {
 struct TestComponent : public NamedComponent<TestComponent> {
@@ -61,7 +63,79 @@ std::vector<std::string> OrderChecker::execution_order;
 RegisterComponent<TestComponent> registertestcomponent;
 RegisterComponent<TestMultiply> registertestcomponent2;
 RegisterComponent<OrderChecker> registercomponentorderchecker;
+
+struct TestIonSource : public NamedComponent<TestIonSource> {
+  TestIonSource(std::string name, Options& options, Solver*)
+      : NamedComponent(name, {readWrite("species:d+:density_source"),
+                              readWrite("species:d+:momentum_source"),
+                              readWrite("species:d+:energy_source")}),
+        replace(options[name]["replace"].withDefault(false)) {}
+  static constexpr auto type = "testionsource";
+  bool replace;
+  void transform_impl(GuardedOptions& state) override {
+    auto ion = state["species"]["d+"];
+    for (const auto& [quantity, value] :
+         {std::pair{"density_source", 1.0}, std::pair{"momentum_source", 3.0},
+          std::pair{"energy_source", 5.0}}) {
+      if (replace) {
+        ion[quantity].getWritable() = Field3D{2.0 * value};
+      } else {
+        add(ion[quantity], Field3D{value});
+      }
+    }
+  }
+};
+RegisterComponent<TestIonSource> registercomponentionsource;
 } // namespace
+
+using SchedulerSourceTest = FakeMeshFixture;
+
+TEST_F(SchedulerSourceTest, CapturesAdditiveAndReplacingSourcesWithCompletedKineticWork) {
+  for (bool diagnose : {false, true}) {
+    Options options{{"components", "d+, replacement"},
+                    {"autosort", false},
+                    {"diagnose_component_sources", diagnose},
+                    {"d+", {{"type", "testionsource"}, {"AA", 2.0}, {"charge", 1.0}}},
+                    {"replacement", {{"type", "testionsource"}, {"replace", true}}}};
+    auto scheduler = ComponentScheduler::create(options, options, nullptr);
+    for (int call = 0; call < 2; ++call) {
+      Options state{{"species",
+                     {{"d+",
+                       {{"AA", 2.0},
+                        {"velocity", Field3D{4.0}},
+                        {"density_source", Field3D{0.25}},
+                        {"momentum_source", Field3D{0.5}},
+                        {"energy_source", Field3D{0.75}}}}}}};
+      scheduler->transform(state);
+      EXPECT_TRUE(
+          IsFieldEqual(state["species"]["d+"]["density_source"].as<Field3D>(), 2.0));
+      EXPECT_TRUE(
+          IsFieldEqual(state["species"]["d+"]["momentum_source"].as<Field3D>(), 6.0));
+      EXPECT_TRUE(
+          IsFieldEqual(state["species"]["d+"]["energy_source"].as<Field3D>(), 10.0));
+      Options output{{"Nnorm", 1.0}, {"Tnorm", 1.0}, {"Omega_ci", 1.0}, {"Cs0", 1.0}};
+      scheduler->outputVars(output);
+      const std::string first = "component_source_testionsource_d+_d+_";
+      EXPECT_EQ(output.isSet(first + "momentum"), diagnose);
+      EXPECT_EQ(state.isSection("component_sources"), diagnose);
+      if (!diagnose) {
+        continue;
+      }
+      EXPECT_TRUE(IsFieldEqual(output[first + "density"].as<Field3D>(), 1.0));
+      EXPECT_TRUE(IsFieldEqual(output[first + "momentum"].as<Field3D>(), 3.0));
+      EXPECT_TRUE(IsFieldEqual(output[first + "thermal_energy"].as<Field3D>(), 5.0));
+      EXPECT_TRUE(IsFieldEqual(output[first + "momentum_work"].as<Field3D>(), 12.0));
+      EXPECT_TRUE(
+          IsFieldEqual(output[first + "density_kinetic_work"].as<Field3D>(), -16.0));
+      const std::string second = "component_source_testionsource_replacement_d+_";
+      EXPECT_TRUE(IsFieldEqual(output[second + "density"].as<Field3D>(), 0.75));
+      EXPECT_TRUE(IsFieldEqual(output[second + "momentum"].as<Field3D>(), 2.5));
+      EXPECT_TRUE(IsFieldEqual(output[second + "thermal_energy"].as<Field3D>(), 4.25));
+      EXPECT_TRUE(IsFieldEqual(
+          output["component_source_initial_state_d+_momentum"].as<Field3D>(), 0.5));
+    }
+  }
+}
 
 TEST(SchedulerTest, OneComponent) {
   Options options;

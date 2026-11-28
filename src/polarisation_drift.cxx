@@ -983,6 +983,12 @@ void PolarisationDrift::transformConservative(GuardedOptions& state) {
   DivEpol = unchanged_particle_flux
                 ? divPol(combined_weight)
                 : divPol(work_weight) + divPol(transported_weight, true);
+  if (diagnose) {
+    DivEpol_work = divPol(work_weight);
+    DivEpol_transport = divPol(transported_weight, true);
+    DivEpol_phi_work = divPol(phi);
+    DivEpol_psi_work = divPol(psi);
+  }
   initRadial("ion_energy");
   for (int x : {mesh->xstart - 1, mesh->xend}) {
     const bool inner = x == mesh->xstart - 1;
@@ -1034,6 +1040,18 @@ void PolarisationDrift::transformConservative(GuardedOptions& state) {
                 : revised - polarisation_flux.x(x, y, z) * work_weight(cell, y, z)
                       - particle_flux.x(x, y, z) * transported_weight(cell, y, z);
         DivEpol(cell, y, z) += (inner ? -1.0 : 1.0) * correction / volume;
+        if (diagnose) {
+          const BoutReal sign_over_volume = (inner ? -1.0 : 1.0) / volume;
+          DivEpol_work(cell, y, z) += sign_over_volume * polarisation_flux.x(x, y, z)
+                                      * (work - work_weight(cell, y, z));
+          DivEpol_transport(cell, y, z) +=
+              sign_over_volume * particle_flux.x(x, y, z)
+              * (transported - transported_weight(cell, y, z));
+          DivEpol_phi_work(cell, y, z) += sign_over_volume * polarisation_flux.x(x, y, z)
+                                          * (midpoint(phi, x, y, z) - phi(cell, y, z));
+          DivEpol_psi_work(cell, y, z) += sign_over_volume * polarisation_flux.x(x, y, z)
+                                          * (pressure_mid - psi(cell, y, z));
+        }
         // Effective weights per unit current also reconstruct the limited wall
         // power from the saved current faces when diagnostic readers need it.
         const BoutReal limited_transport = limiter(cell, y, z) * transported;
@@ -1131,6 +1149,20 @@ void PolarisationDrift::outputConservative(Options& state) {
                                   "the local pressure-potential wall rate is neglected, "
                                   "and AC defaults to Neumann"}});
   if (diagnose) {
+    for (const auto& [name, field] : {std::pair{"DivEpol_work", &DivEpol_work},
+                                      std::pair{"DivEpol_transport", &DivEpol_transport},
+                                      std::pair{"DivEpol_phi_work", &DivEpol_phi_work},
+                                      std::pair{"DivEpol_psi_work", &DivEpol_psi_work}}) {
+      set_with_attrs(state[name], *field,
+                     {{"time_dimension", "t"},
+                      {"units", "W m^-3"},
+                      {"conversion", SI::qe * Nnorm * Tnorm * Omega_ci},
+                      {"source", "polarisation_drift"},
+                      {"description", "Positive energy-flux divergence removes Eion; "
+                                      "work = phi_work + psi_work, and total "
+                                      "polarisation divergence = work + transport. "
+                                      "Includes physical wall corrections."}});
+    }
     set_with_attrs(state["parallel_current"], Jpar,
                    {{"time_dimension", "t"},
                     {"units", "A m^-2"},

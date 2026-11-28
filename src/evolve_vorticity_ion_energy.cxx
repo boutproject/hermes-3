@@ -1339,6 +1339,43 @@ void EvolveVorticityIonEnergy::finally(const Options& state) {
   });
 
   Eion_src = sumIonEnergySources(state["species"]);
+  if (diagnose) {
+    energy_source_diagnostics = Options{};
+    if (state.isSection("component_sources")) {
+      for (const auto& [channel, species_section] :
+           state["component_sources"].getChildren()) {
+        Field3D contribution = zeroFrom(Eion);
+        for (const auto& [name, sources] : species_section.getChildren()) {
+          const auto& species = state["species"][name];
+          contribution += getNonFinal<Field3D>(sources["thermal_energy"]);
+          if (species.isSet("velocity")) {
+            const Field3D V = getNonFinal<Field3D>(species["velocity"]);
+            contribution += V * getNonFinal<Field3D>(sources["momentum"]);
+            contribution -= 0.5 * getNonFinal<BoutReal>(species["AA"]) * SQ(V)
+                            * getNonFinal<Field3D>(sources["density"]);
+          }
+        }
+        energy_source_diagnostics[channel] = contribution;
+      }
+      // The conservative polarisation flux carries its parallel kinetic energy.
+      // This correction removes its conversion from the generic source sum.
+      Field3D correction = zeroFrom(Eion);
+      forAllIons(state["species"], [&](const Options& species) {
+        if (!species.isSet("velocity")) {
+          return;
+        }
+        const Field3D V = getNonFinal<Field3D>(species["velocity"]);
+        if (species.isSet("polarisation_momentum_source")) {
+          correction -= V * getNonFinal<Field3D>(species["polarisation_momentum_source"]);
+        }
+        if (species.isSet("polarisation_density_source")) {
+          correction += 0.5 * getNonFinal<BoutReal>(species["AA"]) * SQ(V)
+                        * getNonFinal<Field3D>(species["polarisation_density_source"]);
+        }
+      });
+      energy_source_diagnostics["polarisation_conversion_correction"] = correction;
+    }
+  }
 
   ddt(Eion) = -(DivEExB + DivEelectric + DivEparallel + DivEpol) - phi_Div_Je
               - electron_viscous_heating + Eion_src + external_heating;
@@ -1508,6 +1545,17 @@ void EvolveVorticityIonEnergy::outputVars(Options& state) {
                   {"source", "evolve_vorticity_ion_energy"}});
 
   if (diagnose) {
+    for (const auto& [channel, source] : energy_source_diagnostics.getChildren()) {
+      set_with_attrs(
+          state["Eion_source_" + channel], getNonFinal<Field3D>(source),
+          {{"time_dimension", "t"},
+           {"units", "W m^-3"},
+           {"conversion", Pnorm * Omega_ci},
+           {"source", channel},
+           {"description", "Signed ion energy source: thermal plus momentum "
+                           "and density kinetic conversion. Sum channels "
+                           "including polarisation correction gives Eion_src."}});
+    }
     set_with_attrs(state["ion_phi_dissipation"], ion_phi_dissipation,
                    {{"time_dimension", "t"},
                     {"units", "A m^-3"},

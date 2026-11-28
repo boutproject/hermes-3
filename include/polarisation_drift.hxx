@@ -95,6 +95,7 @@ private:
   int polarisation_corrections{10}, chi_iterations{0};
   BoutReal chi_residual{0.0};
   Field3D chi{0.0}, DivJpol, DivEpol;
+  Field3D DivEpol_work, DivEpol_transport, DivEpol_phi_work, DivEpol_psi_work;
   Field3D charge_mismatch, limiter;
   Field3D Jpar{0.0}, DivJpar{0.0}, current_rhs{0.0}, auxiliary_residual{0.0};
   bout::ion_energy::XZFaceFluxes polarisation_flux;

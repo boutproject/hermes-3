@@ -32,6 +32,23 @@ def check_outputs(ds, diagnose):
     ):
         assert name in ds and np.isfinite(ds[name]).all(), name
     assert ("polarisation_charge_mismatch" in ds) == diagnose
+    for name in (
+        "DivEpol_work",
+        "DivEpol_transport",
+        "DivEpol_phi_work",
+        "DivEpol_psi_work",
+    ):
+        assert (name in ds) == diagnose, name
+    if diagnose:
+        np.testing.assert_allclose(
+            ds.DivEpol_work + ds.DivEpol_transport, ds.DivEpol, rtol=1e-10, atol=1e-12
+        )
+        np.testing.assert_allclose(
+            ds.DivEpol_phi_work + ds.DivEpol_psi_work,
+            ds.DivEpol_work,
+            rtol=1e-10,
+            atol=1e-12,
+        )
     for quantity in ("ion_energy", "particles_d+", "particles_impurity"):
         for side in ("core", "pf", "outer"):
             assert (
@@ -68,7 +85,15 @@ if args.baseline_directory:
     print("Disabled limiter matches baseline to absolute 1e-10")
 
 
-def wall_run(label, threshold, *, diagnose=True, weights="central", nproc=None):
+def wall_run(
+    label,
+    threshold,
+    *,
+    diagnose=True,
+    weights="central",
+    nproc=None,
+    component_sources=False,
+):
     ds = read(
         launch(
             args,
@@ -79,6 +104,7 @@ def wall_run(label, threshold, *, diagnose=True, weights="central", nproc=None):
                 f"polarisation_drift:polarisation_transport_weights={weights}",
                 f"evolve_vorticity_ion_energy:diagnose={str(diagnose).lower()}",
                 f"polarisation_drift:diagnose={str(diagnose).lower()}",
+                f"hermes:diagnose_component_sources={str(component_sources).lower()}",
                 f"NXPE={nproc or args.nproc}",
                 # Keep the same periodic Y extent for radial decomposition.
                 "mesh:ny=4",
@@ -158,6 +184,19 @@ for name in ("Nd+", "Nimpurity"):
 quiet = wall_run("wall-quiet", 0.02, diagnose=False)
 for name in fields:
     np.testing.assert_allclose(limited[name], quiet[name], rtol=0, atol=1e-10)
+channels = wall_run("wall-component-sources", 0.02, component_sources=True)
+for name in fields:
+    np.testing.assert_array_equal(limited[name], channels[name])
+source_names = [name for name in channels.data_vars if name.startswith("Eion_source_")]
+assert source_names
+np.testing.assert_allclose(
+    sum(channels[name] for name in source_names),
+    channels.Eion_src,
+    rtol=1e-10,
+    atol=1e-12,
+)
+assert "component_source_polarisation_drift_d+_momentum_work" in channels
+assert "component_source_polarisation_drift_d+_density_kinetic_work" in channels
 other = wall_run("wall-decomposition", 0.02, nproc=1 if args.nproc > 1 else 2)
 for name in (
     *fields,

@@ -126,6 +126,13 @@ void EvolveMomentum::transform_impl(GuardedOptions& state) {
 
 void EvolveMomentum::finally(const Options& state) {
   balance.clear();
+  if (diagnose) {
+    momentum_diagnostics = Options{};
+    for (const auto* channel :
+         {"exb", "electric", "parallel_advection", "pressure", "sources"}) {
+      momentum_diagnostics[channel] = zeroFrom(NV);
+    }
+  }
 
   const auto& species = state["species"][name];
   const BoutReal AA = get<BoutReal>(species["AA"]);
@@ -163,6 +170,9 @@ void EvolveMomentum::finally(const Options& state) {
 
       ddt(NV) = -Div_n_bxGrad_f_B_XPPM(NV, phi, bndry_flux, poloidal_flows,
                                        true); // ExB drift
+      if (diagnose) {
+        momentum_diagnostics["exb"] = ddt(NV);
+      }
       if (name == "e" && diagnose) {
         balance.set("kinetic_e", "exb_work", V * ddt(NV));
       }
@@ -172,6 +182,9 @@ void EvolveMomentum::finally(const Options& state) {
       // Materialise the force: expression views cannot outlive Grad_par's result.
       const Field3D electric_force = -Z * N * Grad_par(phi);
       ddt(NV) += electric_force;
+      if (diagnose) {
+        momentum_diagnostics["electric"] = electric_force;
+      }
       if (name == "e" && diagnose) {
         balance.set("kinetic_e", "electric_work", V * electric_force);
       }
@@ -221,6 +234,9 @@ void EvolveMomentum::finally(const Options& state) {
                                                                fix_momentum_boundary_flux)
                       : -Div_par(NV * V);
   ddt(NV) += parallel_force;
+  if (diagnose) {
+    momentum_diagnostics["parallel_advection"] = parallel_force;
+  }
   if (name == "e" && diagnose) {
     balance.set("kinetic_e", "parallel_work", V * parallel_force);
   }
@@ -233,6 +249,9 @@ void EvolveMomentum::finally(const Options& state) {
     }
     const Field3D pressure_force = -Grad_par(P.asField3DParallel());
     ddt(NV) += pressure_force;
+    if (diagnose) {
+      momentum_diagnostics["pressure"] = pressure_force;
+    }
     if (name == "e" && diagnose) {
       balance.set("kinetic_e", "pressure_work", V * pressure_force);
     }
@@ -276,6 +295,9 @@ void EvolveMomentum::finally(const Options& state) {
   if (species.isSet("momentum_source")) {
     momentum_source = get<Field3D>(species["momentum_source"]);
     ddt(NV) += momentum_source;
+    if (diagnose) {
+      momentum_diagnostics["sources"] = momentum_source;
+    }
     if (name == "e" && diagnose) {
       balance.set("kinetic_e", "sources_work", V * momentum_source);
     }
@@ -301,6 +323,11 @@ void EvolveMomentum::finally(const Options& state) {
 #endif
 
   if (diagnose) {
+    Field3D accounted = zeroFrom(NV);
+    for (const auto& [channel, force] : momentum_diagnostics.getChildren()) {
+      accounted += getNonFinal<Field3D>(force);
+    }
+    momentum_diagnostics["other"] = ddt(NV) - accounted;
     // Save flows if they are set
 
     if (species.isSet("momentum_flow_xlow")) {
@@ -338,6 +365,27 @@ void EvolveMomentum::outputVars(Options& state) {
        {"source", "evolve_momentum"}});
 
   if (diagnose) {
+    for (const auto& [channel, source] : momentum_diagnostics.getChildren()) {
+      const Field3D force = getNonFinal<Field3D>(source);
+      set_with_attrs(
+          state["momentum_" + channel + "_" + name], force,
+          {{"time_dimension", "t"},
+           {"units", "kg m^-2 s^-2"},
+           {"conversion", SI::Mp * Nnorm * Cs0 * Omega_ci},
+           {"species", name},
+           {"source", "evolve_momentum"},
+           {"description", "Signed contribution to the evolved momentum rate"}});
+      set_with_attrs(
+          state["momentum_work_" + channel + "_" + name], V * force,
+          {{"time_dimension", "t"},
+           {"units", "W m^-3"},
+           {"conversion", SI::qe * Nnorm * get<BoutReal>(state["Tnorm"]) * Omega_ci},
+           {"species", name},
+           {"source", "evolve_momentum"},
+           {"description", "Completed parallel velocity times momentum "
+                           "contribution; density kinetic work and "
+                           "conservative energy transport are separate"}});
+    }
     set_with_attrs(state[std::string("V") + name], V,
                    {{"time_dimension", "t"},
                     {"units", "m / s"},
