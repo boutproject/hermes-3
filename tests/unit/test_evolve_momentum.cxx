@@ -75,3 +75,41 @@ TEST_F(EvolveMomentumTest, Finally) {
     ASSERT_DOUBLE_EQ(0.5, ddt_NVi[i]);
   }
 }
+
+using EvolveMomentumBudgetTest = FakeMeshFixture_tmpl<10, 7, 8, false, 2, 2>;
+
+TEST_F(EvolveMomentumBudgetTest, ParallelForcesApplyExpectedMomentumRate) {
+  static_cast<FakeMesh*>(mesh)->ix_separatrix = -1;
+  mesh->getCoordinates()->setNon_uniform(false);
+  for (bool diagnose : {false, true}) {
+    SCOPED_TRACE(diagnose);
+    FakeSolver solver;
+    Options options{{"units", {{"eV", 1.0}, {"inv_meters_cubed", 1.0}, {"seconds", 1.0}}},
+                    {"i",
+                     {{"AA", 2.0},
+                      {"charge", 1.0},
+                      {"diagnose", diagnose},
+                      {"poloidal_flows", false}}}};
+    EvolveMomentum component("i", options, &solver);
+    component.declareAllSpecies(SpeciesInformation({}, {}, {"i"}, {}));
+    solver.setState({{"NVi", Field3D{0.8}}});
+    Options state{{"fastest_wave", Field3D{1.0}},
+                  {"species",
+                   {{"i",
+                     {{"AA", 2.0},
+                      {"charge", 1.0},
+                      {"density", Field3D{1.0}},
+                      {"temperature", Field3D{1.0}},
+                      {"momentum_source", Field3D{0.5}}}}}}};
+    component.transform(state);
+    state["species"]["i"]["velocity"] = Field3D{0.4};
+    state["species"]["i"]["momentum"] = Field3D{0.8};
+    state["species"]["i"]["pressure"] =
+        makeField<Field3D>([](const Ind3D& i) { return 1.0 + 0.1 * i.y(); });
+    state["fields"]["phi"] =
+        makeField<Field3D>([](const Ind3D& i) { return 0.2 * i.y(); });
+    component.finally(state);
+    EXPECT_TRUE(IsFieldEqual(solver.getTimeDerivs()["NVi"].as<Field3D>(), 0.2,
+                             "RGN_NOBNDRY", 1e-12));
+  }
+}

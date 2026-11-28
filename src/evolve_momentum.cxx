@@ -169,7 +169,8 @@ void EvolveMomentum::finally(const Options& state) {
 
       // Parallel electric field
       // Force density = - Z N ∇ϕ
-      const auto electric_force = -Z * N * Grad_par(phi);
+      // Materialise the force: expression views cannot outlive Grad_par's result.
+      const Field3D electric_force = -Z * N * Grad_par(phi);
       ddt(NV) += electric_force;
       if (name == "e" && diagnose) {
         balance.set("kinetic_e", "electric_work", V * electric_force);
@@ -230,7 +231,7 @@ void EvolveMomentum::finally(const Options& state) {
     if (NV.isFci()) {
       ASSERT2(P.hasParallelSlices());
     }
-    const auto pressure_force = -Grad_par(P.asField3DParallel());
+    const Field3D pressure_force = -Grad_par(P.asField3DParallel());
     ddt(NV) += pressure_force;
     if (name == "e" && diagnose) {
       balance.set("kinetic_e", "pressure_work", V * pressure_force);
